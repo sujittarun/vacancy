@@ -564,11 +564,19 @@ let usingDemo = !load();
 if(usingDemo) generateDemo();
 recompute();
 
+/* Refuses to double-book. The UI already hides the form on an unavailable flat,
+   but a silent overlap is exactly the failure that loses a guest, so the data
+   layer enforces it too rather than trusting the screen. */
 function addBooking(fi, start, nights, guest, src){
+  if(!(fi >= 0 && fi < NF)) return false;
+  nights = Math.max(1, Math.min(nights|0, DAYS));
+  if(start < 0 || start >= DAYS) return false;
+  if(!freeRange(fi, start, start + nights)) return false;
   resv.push({ fi, start, end:start+nights, nights, manual:true,
-              guest: guest || "Guest", src: src || "Direct" });
+              guest: (guest || "").trim() || "Guest", src: src || "Direct" });
   usingDemo = false;
   recompute(); save();
+  return true;
 }
 function cancelBooking(r){
   const i = resv.indexOf(r);
@@ -1366,8 +1374,13 @@ function openSheet(fi, day){
     who.setAttribute("aria-label", `Guest name for ${fl.id}, ${span}`);
     const btn = el("button","bookbtn", `Book ${bN}n`);
     const take = ()=>{
-      addBooking(fi, bDay, bN, who.value.trim(), "Direct");
-      haptic(18); closeSheet(); refreshScreen();
+      if(addBooking(fi, bDay, bN, who.value.trim(), "Direct")){
+        haptic(18); closeSheet(); refreshScreen();
+      } else {                                   // someone took it in another tab
+        haptic(30);
+        btn.textContent = "Just taken";
+        setTimeout(()=>{ closeSheet(); refreshScreen(); }, 900);
+      }
     };
     btn.onclick = take;
     who.addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); who.blur(); take(); }});
