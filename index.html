@@ -974,68 +974,209 @@ function renderMonth(){
 
 /* ═══════════════ SCREEN 3 — ASK ═══════════════ */
 const SUGGEST = ["anything free tonight?","3 nights from friday","this weekend",
-                 "3 bhk next week","8 to 11","treetops tomorrow","2 bhk banjara"];
+                 "16 sep","15-18","3 bhk next week","2 bhk banjara","in 3 days"];
 let lastQuery = "anything free tonight?";
 
-function nextWeekend(){ let a=0; while(dateAt(a).getDay()!==5 && a<DAYS) a++; return {a, b:Math.min(a+2,DAYS)}; }
+/* ══════════════════════════════════════════════════════════════════════════
+   Query understanding
+
+   Written as a small grammar rather than a pile of special cases:
+
+       query := filters? duration? ( date ( "-" date )? )?
+
+   Each part is consumed and its tokens REMOVED before the next part runs, so
+   a number can never be read as two things at once. That single rule is what
+   kept breaking before: "3 nights from friday" read the 3 as a day of the
+   month, "2 bhk" read the 2 as a date, "16 sep" ignored the month entirely.
+
+   Anything left unrecognised is simply skipped, so filler words are harmless.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+const MONTHS = {jan:0,january:0,feb:1,february:1,mar:2,march:2,apr:3,april:3,may:4,
+  jun:5,june:5,jul:6,july:6,aug:7,august:7,sep:8,sept:8,september:8,
+  oct:9,october:9,nov:10,november:10,dec:11,december:11};
+const MONTH_ABBR = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
+const WEEKDAYS = {sun:0,sunday:0,mon:1,monday:1,tue:2,tues:2,tuesday:2,wed:3,weds:3,wednesday:3,
+  thu:4,thurs:4,thursday:4,fri:5,friday:5,sat:6,saturday:6};
+const NUMWORDS = {a:1,an:1,one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,
+  ten:10,eleven:11,twelve:12,thirteen:13,fourteen:14};
+const NIGHT_UNIT = /^(n|nt|nts|night|nights)$/;
+const WEEK_UNIT  = /^(w|wk|wks|week|weeks)$/;
+
 const ord = d => (d%10===1&&d%100!==11)?"st":(d%10===2&&d%100!==12)?"nd":(d%10===3&&d%100!==13)?"rd":"th";
-/* first day at or after `from` whose date-of-month is `dom`.
-   Searching from an offset is what makes "28-2" read as 28 Aug → 2 Sep
-   rather than collapsing onto an earlier 2nd. */
-function findDayOfMonth(dom, from){
-  for(let d = from || 0; d < DAYS; d++) if(dateAt(d).getDate() === dom) return d;
+const nextWeekend = ()=>{ let a=0; while(a<DAYS && dateAt(a).getDay()!==5) a++; return {a, b:Math.min(a+2,DAYS)}; };
+const numOf = t => /^\d{1,2}$/.test(t) ? +t : (NUMWORDS[t] ?? null);
+
+/* Offset of the next calendar date matching dom (and month, if given) that is
+   at least `minOff` days out. Rolls into next year, rejects 31 Feb, and is not
+   capped by the 63-day horizon — the caller decides what to do about that. */
+function absoluteOffset(dom, monthIdx, minOff){
+  minOff = minOff || 0;
+  const m0 = today.getMonth(), y0 = today.getFullYear();
+  for(let k = 0; k < 18; k++){
+    const m = (m0 + k) % 12, y = y0 + Math.floor((m0 + k) / 12);
+    if(monthIdx !== null && m !== monthIdx) continue;
+    const dt = new Date(y, m, dom); dt.setHours(0,0,0,0);
+    if(dt.getMonth() !== m) continue;                 // e.g. 31 Feb
+    const off = Math.round((dt - today) / 86400000);
+    if(off >= minOff) return off;
+  }
+  return null;
+}
+function nextDow(dow, minOff){
+  for(let d = minOff || 0; d < minOff + 14; d++) if(dateAt(d).getDay() === dow) return d;
+  return 0;
+}
+
+function normalize(q){
+  return q.toLowerCase()
+    .replace(/(\d+)\s*(?:st|nd|rd|th)\b/g, "$1")                                   // 15th → 15
+    .replace(/\b(\d{1,2})\s*[/.]\s*(\d{1,2})(?:\s*[/.]\s*\d{2,4})?\b/g,            // 16/9 → 16 sep
+             (_,d,mo)=> `${d} ${MONTH_ABBR[(Math.min(12,Math.max(1,+mo)) - 1)]}`)
+    .replace(/\b(?:to|till|until|thru|through|upto)\b/g, "-")                      // ranges → one token
+    .replace(/[–—]/g, "-")
+    .replace(/(\d)\s*-\s*/g, "$1 - ")
+    .replace(/[^a-z0-9 \-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/* Reads one date expression starting at token i. Returns null if there isn't one. */
+function readDate(tk, i, minOff){
+  const t = tk[i]; if(!t) return null;
+  // a day of the month must be written in digits. "a"/"one" are counts, never dates —
+  // otherwise "have a 3 bhk free from 16 sep" reads the "a" as the 1st.
+  const digit = t => /^\d{1,2}$/.test(t) ? +t : null;
+  const num = digit(t);
+  const mon = MONTHS[t] ?? null;
+
+  if(t === "today" || t === "tonight" || t === "now")
+    return {d:0, label:"tonight", next:i+1};
+  if(t === "tomorrow")
+    return {d:1, label:"tomorrow", next:i+1};
+  if(t === "day" && tk[i+1] === "after" && tk[i+2] === "tomorrow")
+    return {d:2, label:"the day after tomorrow", next:i+3};
+
+  if(t === "in" && numOf(tk[i+1]) !== null && /^days?$/.test(tk[i+2] || ""))
+    return {d:numOf(tk[i+1]), label:`in ${numOf(tk[i+1])} days`, next:i+3};
+
+  if((t === "this" || t === "next") && tk[i+1] === "weekend"){
+    const w = nextWeekend();
+    return {d: w.a + (t==="next" ? 7 : 0), label:`${t} weekend`, defaultNights:2, next:i+2};
+  }
+  if(t === "weekend"){
+    const w = nextWeekend();
+    return {d:w.a, label:"this weekend", defaultNights:2, next:i+1};
+  }
+  if((t === "this" || t === "next") && /^weeks?$/.test(tk[i+1] || "")){
+    const mon1 = nextDow(1, 1);
+    return {d: t==="next" ? (mon1 || 7) : 0, label:`${t} week`, defaultNights:7, next:i+2};
+  }
+  if((t === "this" || t === "next") && /^months?$/.test(tk[i+1] || "")){
+    const dt = new Date(today.getFullYear(), today.getMonth() + (t==="next"?1:0), 1);
+    dt.setHours(0,0,0,0);
+    const off = Math.max(0, Math.round((dt - today)/86400000));
+    return {d:off, label:`${t} month`, next:i+2};
+  }
+  if(t === "next" && WEEKDAYS[tk[i+1]] !== undefined){
+    let d = nextDow(WEEKDAYS[tk[i+1]], minOff || 0);
+    if(d < 7) d += 7;                                    // "next friday" is the one after this one
+    return {d, label:`next ${tk[i+1]}`, next:i+2};
+  }
+  if(WEEKDAYS[t] !== undefined)
+    return {d:nextDow(WEEKDAYS[t], minOff || 0), label:t, next:i+1};
+
+  // 16 sep  |  sep 16  |  sep (→ the 1st)  |  16
+  if(num !== null && MONTHS[tk[i+1]] !== undefined){
+    const M = MONTHS[tk[i+1]];
+    return {d:absoluteOffset(num, M, minOff), dom:num, month:M,
+            label:`${num}${ord(num)} ${tk[i+1]}`, next:i+2};
+  }
+  if(mon !== null && digit(tk[i+1] || "") !== null){
+    const D = digit(tk[i+1]);
+    return {d:absoluteOffset(D, mon, minOff), dom:D, month:mon,
+            label:`${D}${ord(D)} ${t}`, next:i+2};
+  }
+  if(mon !== null)
+    return {d:absoluteOffset(1, mon, minOff), dom:1, month:mon, label:t, next:i+1};
+  if(num !== null && num >= 1 && num <= 31)
+    return {d:absoluteOffset(num, null, minOff), dom:num, month:null,
+            label:`the ${num}${ord(num)}`, next:i+1};
+
   return null;
 }
 
 function parseQuery(q){
-  const s = " " + q.toLowerCase()
-    .replace(/(\d+)(?:st|nd|rd|th)\b/g, "$1")            // 15th → 15
-    .replace(/(\d)\s*[-–—/]\s*(\d)/g, "$1 to $2")        // 15-18, 15 – 18, 15/18 → 15 to 18
-    .replace(/[^a-z0-9 ]/g, " ")
-    .replace(/\s+/g, " ") + " ";
-  let start = 0, n = 1, how = "tonight";
-  const wd = ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"];
-  const words = {one:1,two:2,three:3,four:4,five:5,six:6,seven:7};
-  // "3 nights", "1n", "2nt", "4 nts", "one night" — the unit may be glued to the digit
-  const nMatch = s.match(/(?:^|\s)(\d{1,2})\s?(?:n|nt|nts|night|nights)(?:\s|$)/)
-              || s.match(/(?:^|\s)(one|two|three|four|five|six|seven)\s?(?:n|nt|nts|night|nights)(?:\s|$)/);
-  if(nMatch) n = Math.min(21, parseInt(nMatch[1]) || words[nMatch[1]] || 1);
-  // "15 to 18", and a bare "15 18" when that is the whole question
-  const range = s.match(/ (\d{1,2}) (?:to|till|until|thru|through) (\d{1,2}) /)
-             || s.match(/^ (\d{1,2}) (\d{1,2}) $/);
-  const wdHit = wd.findIndex(w=>s.includes(" "+w));
+  const tk = normalize(q).split(" ").filter(Boolean);
 
-  if(/ (tonight|today|now) /.test(s)){ start=0; how="tonight"; }
-  else if(/ tomorrow /.test(s)){ start=1; how="tomorrow"; if(!nMatch) n=1; }
-  else if(/ next weekend /.test(s)){ const w=nextWeekend(); start=w.a+7; n=nMatch?n:2; how="next weekend"; }
-  else if(/ weekend /.test(s)){ const w=nextWeekend(); start=w.a; n=nMatch?n:2; how="this weekend"; }
-  else if(/ next week /.test(s)){ let a=0; while(dateAt(a).getDay()!==1) a++; if(a===0)a=7;
-    start=a; n=nMatch?n:7; how="next week"; }
-  else if(range){
-    const d1 = +range[1], d2 = +range[2];
-    const s1 = findDayOfMonth(d1, 0);
-    // same date twice is one night, not "the next 20th, a month out"
-    const s2 = (s1 === null || d1 === d2) ? null : findDayOfMonth(d2, s1 + 1);
-    if(s1 !== null){
-      start = s1;
-      n = (s2 !== null) ? s2 - s1 : (d1 === d2 ? 1 : n);
-      how = d1 === d2 ? `the ${d1}${ord(d1)}` : `${d1}${ord(d1)} to the ${d2}${ord(d2)}`;
-    }
+  /* 1. filters — removed first so "2 bhk" never looks like the 2nd */
+  let type = null, bldg = null;
+  for(let i = tk.length - 1; i >= 0; i--){
+    const t = tk[i], two = (numOf(t) !== null && /^bhk$/.test(tk[i+1] || ""));
+    let m = null;
+    if(two) m = numOf(t);
+    else { const g = t.match(/^(\d)bhk$/); if(g) m = +g[1]; }
+    if(m !== null){ type = `${m} BHK`; tk.splice(i, two ? 2 : 1); }
+    else if(t === "studio"){ type = "Studio"; tk.splice(i,1); }
   }
-  else if(wdHit>=0){ let a=0; while(a<DAYS && dateAt(a).getDay()!==wdHit) a++; start=a; how=wd[wdHit]; }
-
-  let type=null, bldg=null;
-  if(/ (3 ?bhk|three bed) /.test(s)) type="3 BHK";
-  else if(/ (2 ?bhk|two bed) /.test(s)) type="2 BHK";
-  else if(/ studio /.test(s)) type="Studio";
   BUILDINGS.forEach(b=>{
-    const first = b.name.toLowerCase().split(" ")[0];
-    if(s.includes(" "+first) || s.includes(" "+b.code.toLowerCase()+" ")) bldg=b.code;
+    const words = b.name.toLowerCase().split(" ");
+    for(let i = 0; i < tk.length; i++){
+      if(tk[i] === words[0] || tk[i] === b.code.toLowerCase()){
+        bldg = b.code;
+        tk.splice(i, (words[1] && tk[i+1] === words[1]) ? 2 : 1);
+        return;
+      }
+    }
   });
 
-  start = Math.max(0, Math.min(DAYS-1, start));
-  n = Math.max(1, Math.min(n, DAYS-start));
-  return {start, n, how, type, bldg};
+  /* 2. duration — removed next so "3 nights" never looks like the 3rd */
+  let nights = null;
+  for(let i = 0; i < tk.length; i++){
+    const g = tk[i].match(/^(\d{1,2})(n|nt|nts|night|nights|w|wk|wks|week|weeks)$/);
+    if(g){ nights = +g[1] * (/^w/.test(g[2]) ? 7 : 1); tk.splice(i,1); break; }
+    const num = numOf(tk[i]);
+    if(num === null) continue;
+    if(NIGHT_UNIT.test(tk[i+1] || "")){ nights = num;     tk.splice(i,2); break; }
+    if(WEEK_UNIT .test(tk[i+1] || "")){ nights = num * 7; tk.splice(i,2); break; }
+  }
+  if(nights === null){
+    const f = tk.indexOf("fortnight");
+    if(f >= 0){ nights = 14; tk.splice(f,1); }
+  }
+
+  /* 3. dates */
+  let first = null;
+  for(let i = 0; i < tk.length && !first; i++){
+    const r = readDate(tk, i, 0);
+    if(r && r.d !== null) first = r;
+  }
+  let second = null;
+  if(first){
+    let j = first.next;
+    if(tk[j] === "-") j++;
+    if(j < tk.length){
+      const r = readDate(tk, j, first.d + 1);
+      // "20-20" is one night, not the 20th of next month
+      const sameBareDay = r && first.dom !== undefined && r.dom === first.dom
+                            && first.month == null && r.month == null;
+      if(r && r.d !== null && r.d > first.d && !sameBareDay) second = r;
+    }
+  }
+
+  let start = first ? first.d : 0;
+  let n = nights;
+  if(second) n = second.d - first.d;                       // an explicit range wins
+  if(n === null) n = (first && first.defaultNights) || 1;
+
+  const beyond = start >= DAYS;                            // asked about a date we can't see
+  const label  = !first ? "tonight"
+               : second ? `${first.label} to ${second.label}`
+               : first.label;
+
+  start = Math.max(0, Math.min(DAYS - 1, start));
+  n = Math.max(1, Math.min(n, DAYS - start));
+  return {start, n, how:label, type, bldg, beyond};
 }
 
 function renderAsk(focus){
@@ -1109,7 +1250,9 @@ function renderAsk(focus){
 
     ansWrap.textContent = "";
     const ans = el("p","answer");
-    ans.innerHTML = free.length
+    ans.innerHTML = p.beyond
+      ? `That's past <b class="n">${fmtL(DAYS-1)}</b> — the furthest this book goes. Showing ${when} instead.`
+      : free.length
       ? `Yes — <b class="y">${free.length} room${free.length>1?"s":""}</b> free for ${nightsTxt}, ${when}.`
       : `<b class="n">Nothing</b> covers ${nightsTxt}, ${when}.`;
     const heard = el("div","heard");

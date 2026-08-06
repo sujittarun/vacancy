@@ -77,14 +77,20 @@ night sells out. Tap a date for the rooms that are open.
 
 Type or speak the question the way the caller said it:
 
-| You type | It answers |
+| You type | It reads |
 |---|---|
-| `anything free tonight?` | count + the list |
-| `3 nights from friday` | rooms free for the whole stretch |
-| `1n this weekend` | one night, Friday |
-| `2 bhk next week` | filtered by unit type; offers nearby dates if nothing fits |
-| `8 to 11` | reads day-of-month ranges |
-| `palm court tomorrow` | filtered by building |
+| `tonight`, `tomorrow`, `in 3 days`, `day after tomorrow` | relative days |
+| `friday`, `next friday`, `next week`, `this weekend`, `next month` | named periods |
+| `16`, `16 sep`, `sep 16`, `16 september`, `16/9` | a specific date, with or without the month |
+| `15-18`, `15 to 18`, `15th–18th`, `16 sep to 19 sep` | a range; the nights are counted for you |
+| `3 nights`, `1n`, `2nt`, `a week`, `fortnight` | how long the stay is |
+| `3 bhk`, `2bhk`, `studio` | unit type |
+| `treetops`, `banjara`, `lotus pond`, `telecom` | building |
+
+These combine freely — *"do you have a 3 bhk free from 16 sep for 4 nights"* works, and so
+does *"any 2 bhk in banjara hills from 16 sep to 19 sep"*. A bare date means the **next**
+time that date comes round, so on 7 Aug `16` is 16 Aug and `2` is 2 Sep. If you ask about a
+date past the nine-week horizon it says so rather than quietly answering about a different day.
 
 Chips under the answer show what it understood, so when it misreads you, you can see why.
 **Copy for WhatsApp** puts the whole answer on the clipboard, formatted to paste.
