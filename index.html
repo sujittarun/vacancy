@@ -400,8 +400,40 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .rowend{display:flex;align-items:center;gap:8px}
 
 .dataTools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.dataNote{font-size:12px;color:var(--txt-3);line-height:1.5;margin:0 0 10px}
-.dataNote b{color:var(--now)}
+
+/* inventory editor */
+.invHead{display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+  padding:16px 20px 8px;position:sticky;top:0;background:var(--surface);z-index:2}
+.invHead b{font-size:14px;font-weight:650;letter-spacing:-.015em}
+.invAdd{font-size:12px;font-weight:600;color:var(--now);padding:5px 9px;border-radius:8px;
+  background:color-mix(in srgb,var(--now) 14%,transparent);white-space:nowrap}
+.invAdd:active{transform:scale(.94)}
+.invRow{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;
+  padding:12px 14px;border-bottom:1px solid var(--line);width:100%;text-align:left}
+.invRow:last-child{border-bottom:0}
+.invRow:active{background:var(--surface-2)}
+.invRow .fid{font-size:14px;font-weight:640;letter-spacing:-.02em}
+.invRow .fty{font-size:12px;color:var(--txt-2)}
+.invRow .fbk{font-size:11px;color:var(--txt-3)}
+.invForm{padding:14px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:10px;
+  background:var(--surface-2)}
+.invForm .r{display:flex;gap:8px}
+.invForm input{flex:1;min-width:0;background:var(--surface);border:1px solid var(--line-2);
+  border-radius:10px;padding:11px 12px;font-size:15px;color:var(--txt);outline:none}
+.invForm input:focus{border-color:color-mix(in srgb,var(--now) 60%,transparent)}
+.invForm input::placeholder{color:var(--txt-3)}
+.tyRow{display:flex;gap:6px;flex-wrap:wrap}
+.tyRow button{padding:8px 11px;border-radius:9px;background:var(--surface);border:1px solid var(--line);
+  font-size:12.5px;font-weight:600;color:var(--txt-2)}
+.tyRow button[aria-pressed="true"]{background:var(--free);color:var(--free-ink);border-color:transparent}
+.invActs{display:flex;gap:8px;align-items:center}
+.invSave{flex:1;background:var(--free);color:var(--free-ink);border-radius:10px;padding:11px;
+  font-size:13px;font-weight:650}
+.invSave:active{transform:scale(.97)}
+.invDel{padding:11px 13px;border-radius:10px;background:var(--surface);border:1px solid var(--line);
+  font-size:13px;font-weight:600;color:var(--txt-2)}
+.invDel.arm{background:var(--hot);color:#fff;border-color:transparent}
+.invWarn{font-size:12px;color:var(--hot);line-height:1.45}
 
 @media (prefers-reduced-motion:reduce){
   .sheet{transition:transform .01s}
@@ -472,23 +504,70 @@ const NAMES = ["R. Menon","S. Kulkarni","A. Fernandes","D. Iyer","K. Bhatt","M. 
   "F. Noronha","Y. Deshpande","C. Varghese","E. Pinto","U. Reddy"];
 const SRC = ["Airbnb","Direct call","Walk-in","Booking.com","Repeat guest"];
 
-const flats = [];
-BUILDINGS.forEach(b=>{
-  const types = [];
-  b.plan.forEach(([t,count])=>{ for(let k=0;k<count;k++) types.push(t); });
-  types.forEach((type,idx)=>{
-    const floor = Math.floor(idx / b.per) + 1;
-    const unit  = (idx % b.per) + 1;
-    const [lo,hi] = RATE[type];
-    flats.push({
-      id:`${b.code}-${floor}0${unit}`, code:b.code, bname:b.name, bshort:b.short,
-      floor, type, rate: lo + Math.round(rng()*(hi-lo)/100)*100,
-      pop: 0.34 + rng()*0.56,
+/* ── inventory ───────────────────────────────────────────────────────────────
+   The flats are editable and persist on the device. Bookings are held against
+   flat IDs, so renaming or removing a flat remaps them rather than corrupting
+   them.                                                                        */
+const INV_STORE = "vacancy.inventory.v1";
+const UNIT_TYPES = ["Studio","1 BHK","2 BHK","3 BHK","4 BHK"];
+
+function defaultInventory(){
+  const out = [];
+  BUILDINGS.forEach(b=>{
+    const types = [];
+    b.plan.forEach(([t,count])=>{ for(let k=0;k<count;k++) types.push(t); });
+    types.forEach((type,idx)=>{
+      const floor = Math.floor(idx / b.per) + 1;
+      const unit  = (idx % b.per) + 1;
+      const [lo,hi] = RATE[type];
+      out.push({ id:`${b.code}-${floor}0${unit}`, code:b.code, bname:b.name, bshort:b.short,
+                 floor, type, rate: lo + Math.round(rng()*(hi-lo)/100)*100 });
     });
   });
-});
-const NF = flats.length;
-const flatIndex = Object.fromEntries(flats.map((f,i)=>[f.id,i]));
+  return out;
+}
+function loadInventory(){
+  try{
+    const raw = localStorage.getItem(INV_STORE);
+    if(!raw) return null;
+    const rows = JSON.parse(raw);
+    if(!Array.isArray(rows) || !rows.length) return null;
+    return rows.filter(r => r && r.id && r.type);
+  }catch(e){ return null; }
+}
+function saveInventory(){
+  try{ localStorage.setItem(INV_STORE, JSON.stringify(
+    flats.map(f=>({id:f.id, code:f.code, bname:f.bname, bshort:f.bshort,
+                   floor:f.floor, type:f.type, rate:f.rate}))
+  )); }catch(e){}
+}
+
+let flats = loadInventory() || defaultInventory();
+flats.forEach(f=>{ f.pop = f.pop ?? (0.34 + rng()*0.56); });
+let NF = flats.length;
+let flatIndex = Object.fromEntries(flats.map((f,i)=>[f.id,i]));
+
+/* Swap the inventory and carry the bookings across by ID.
+   `renames` maps old id -> new id so a renumbered flat keeps its bookings. */
+function applyInventory(next, renames){
+  renames = renames || {};
+  const held = resv.map(r => {
+    const was = flats[r.fi] && flats[r.fi].id;
+    return {...r, _id: renames[was] || was};
+  });
+  flats = next;
+  flats.forEach(f=>{ f.pop = f.pop ?? 0.6; });
+  NF = flats.length;
+  flatIndex = Object.fromEntries(flats.map((f,i)=>[f.id,i]));
+  resv = held.filter(r => flatIndex[r._id] !== undefined)
+             .map(r => { const {_id, ...rest} = r; return {...rest, fi:flatIndex[_id]}; });
+  recompute(); saveInventory(); save();
+}
+const buildingsOf = ()=>{
+  const seen = new Map();
+  flats.forEach(f=>{ if(!seen.has(f.code)) seen.set(f.code, {code:f.code, name:f.bname, short:f.bshort}); });
+  return [...seen.values()];
+};
 
 /* ── bookings ────────────────────────────────────────────────────────────────
    `resv` is the single source of truth. occ[] and chg[] are derived from it, so
@@ -768,36 +847,15 @@ function renderRooms(){
   const tiles = el("div","tiles");
   tilesWrap.append(th, tiles);
 
-  const note = el("p");
-  note.style.cssText="margin:0;font-size:12px;line-height:1.55;color:var(--txt-3)";
-  note.innerHTML = "A lit tile is a flat you can sell. The figure on it is how many nights it stays free from that date &mdash; and an amber dot marks a single orphan night, the hardest kind to fill. <b style='color:var(--txt-2)'>The 45 flats are your real portfolio; the bookings, guests and rates are invented for this demo.</b>";
+  const note = el("div","dataTools");
 
-  /* demo vs real data — you cannot use this for real until you can clear the demo */
-  const dataBox = el("div","stack gap-s");
-  const dNote = el("p","dataNote");
-  dNote.innerHTML = usingDemo
-    ? `<b>Showing demo bookings.</b> Tap <b>Start empty</b> to clear them and enter your real ones — open any flat and book it. Everything saves on this device.`
-    : `<b>Your bookings — saved on this device.</b> ${resv.length} booking${resv.length===1?"":"s"} on the book. Clearing your browser data erases them.`;
-  const tools = el("div","dataTools");
-  const bEmpty = el("button","copybtn"), bDemo = el("button","copybtn");
-  bEmpty.textContent = "Start empty";
-  bDemo.textContent  = "Reset demo data";
-  let armed = null;
-  const arm = (btn, label, run)=>{
-    if(armed === btn){ armed = null; haptic(20); run(); refreshScreen(); return; }
-    armed = btn; haptic(10);
-    [bEmpty,bDemo].forEach(b=>{ if(b!==btn){ b.classList.remove("done"); } });
-    bEmpty.textContent = "Start empty"; bDemo.textContent = "Reset demo data";
-    btn.textContent = label; btn.classList.add("done");
-    setTimeout(()=>{ if(armed===btn){ armed=null; btn.classList.remove("done");
-      bEmpty.textContent = "Start empty"; bDemo.textContent = "Reset demo data"; } }, 3500);
-  };
-  bEmpty.onclick = ()=> arm(bEmpty, "Erase all bookings?", clearAll);
-  bDemo.onclick  = ()=> arm(bDemo,  "Replace with demo?",  resetDemo);
-  tools.append(bEmpty, bDemo);
-  dataBox.append(dNote, tools);
+  const inv = el("button","copybtn");
+  inv.innerHTML = '<svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><rect x="2.8" y="7.4" width="14.4" height="9.8" rx="2"/><path d="M2.8 11.4h14.4M7.2 7.4V4.2a1.4 1.4 0 0 1 1.4-1.4h2.8a1.4 1.4 0 0 1 1.4 1.4v3.2"/></svg>'
+    + `<span>Inventory · ${NF} flats</span>`;
+  inv.onclick = ()=>{ haptic(10); openInventory(); };
+  note.appendChild(inv);
 
-  s.append(hero, stayWrap, nightsWrap, tilesWrap, note, dataBox);
+  s.append(hero, stayWrap, nightsWrap, tilesWrap, note);
 
   function paint(){
     const d = Math.min(pickedNight, STRIP-1), n = stayNights;
@@ -1505,6 +1563,187 @@ function openOps(kind, d){
 
   sheet.classList.add("on"); scrim.classList.add("on");
   sheetB.scrollTop = 0; x.focus();
+}
+
+/* ── inventory editor ─────────────────────────────────────────────────────── */
+function openInventory(editing){
+  sheetH.textContent = ""; sheetB.textContent = "";
+
+  const t = el("div");
+  t.innerHTML = `<div class="n">Inventory</div><div class="m">${NF} flats · ${buildingsOf().length} buildings</div>`;
+  const x = el("button",null,"✕"); x.setAttribute("aria-label","Close");
+  x.onclick = ()=>{ closeSheet(); refreshScreen(); };
+  sheetH.append(t, x);
+
+  buildingsOf().forEach(b=>{
+    const mine = flats.map((f,i)=>({f,i})).filter(o=>o.f.code===b.code);
+    const head = el("div","invHead");
+    head.append(el("b",null,b.name));
+    const add = el("button","invAdd","+ Add flat");
+    add.onclick = ()=>{ haptic(9); openInventory({mode:"new", code:b.code}); };
+    head.appendChild(add);
+    sheetB.appendChild(head);
+
+    const card = el("div","card"); card.style.margin = "0 20px";
+    if(editing && editing.mode==="new" && editing.code===b.code) card.appendChild(invForm(null, b));
+    mine.forEach(o=>{
+      if(editing && editing.mode==="edit" && editing.id===o.f.id){
+        card.appendChild(invForm(o.f, b));
+        return;
+      }
+      const bookings = resv.filter(r=>r.fi===o.i).length;
+      const row = el("button","invRow");
+      row.append(el("div","fid",o.f.id));
+      row.append(el("div","fty",o.f.type));
+      row.append(el("div","fbk", bookings ? `${bookings} bkg` : "—"));
+      row.onclick = ()=>{ haptic(9); openInventory({mode:"edit", id:o.f.id}); };
+      card.appendChild(row);
+    });
+    sheetB.appendChild(card);
+  });
+
+  const bh = el("div","invHead");
+  bh.append(el("b",null,"Add a building"));
+  const bAdd = el("button","invAdd","+ New");
+  bAdd.onclick = ()=>{ haptic(9); openInventory({mode:"building"}); };
+  bh.appendChild(bAdd);
+  sheetB.appendChild(bh);
+  if(editing && editing.mode==="building"){
+    const card = el("div","card"); card.style.margin="0 20px";
+    card.appendChild(buildingForm());
+    sheetB.appendChild(card);
+  }
+
+  const foot = el("p");
+  foot.style.cssText = "margin:18px 20px 10px;font-size:12px;line-height:1.55;color:var(--txt-3)";
+  foot.textContent = "Flats and bookings are saved on this device. Removing a flat also removes its bookings.";
+  sheetB.appendChild(foot);
+
+  /* clearing the sample bookings has to live somewhere — this is the data screen */
+  const wipe = el("div","dataTools");
+  wipe.style.cssText = "padding:0 20px";
+  const bClear = el("button","copybtn", `Clear all ${resv.length} bookings`);
+  let armed = false;
+  bClear.onclick = ()=>{
+    if(!armed){ armed = true; bClear.classList.add("done");
+      bClear.textContent = "Erase every booking?"; haptic(10);
+      setTimeout(()=>{ armed=false; bClear.classList.remove("done");
+        bClear.textContent = `Clear all ${resv.length} bookings`; }, 3500);
+      return; }
+    haptic(24); clearAll(); openInventory();
+  };
+  wipe.appendChild(bClear);
+  sheetB.appendChild(wipe);
+
+  sheet.classList.add("on"); scrim.classList.add("on");
+  if(!editing) sheetB.scrollTop = 0;
+}
+
+function invForm(flat, b){
+  const wrap = el("div","invForm");
+  const isNew = !flat;
+  let type = flat ? flat.type : "2 BHK";
+
+  const r1 = el("div","r");
+  const num = el("input");
+  num.type = "text"; num.placeholder = `Flat number, e.g. ${b.code}-101`;
+  num.value = flat ? flat.id : `${b.code}-`;
+  num.setAttribute("aria-label","Flat number");
+  const rate = el("input");
+  rate.type = "number"; rate.inputMode = "numeric"; rate.placeholder = "Rate";
+  rate.value = flat ? flat.rate : 3000;
+  rate.style.maxWidth = "104px";
+  rate.setAttribute("aria-label","Nightly rate");
+  r1.append(num, rate);
+
+  const tys = el("div","tyRow");
+  UNIT_TYPES.forEach(tv=>{
+    const b2 = el("button",null,tv);
+    b2.setAttribute("aria-pressed", tv===type);
+    b2.onclick = ()=>{ type = tv; haptic(8);
+      [...tys.children].forEach(c=>c.setAttribute("aria-pressed", c.textContent===type)); };
+    tys.appendChild(b2);
+  });
+
+  const acts = el("div","invActs");
+  const saveBtn = el("button","invSave", isNew ? "Add flat" : "Save");
+  const warn = el("div","invWarn");
+  saveBtn.onclick = ()=>{
+    const id = num.value.trim().toUpperCase().replace(/\s+/g,"");
+    if(!id || id === `${b.code}-`){ warn.textContent = "Give the flat a number."; return; }
+    if(id !== (flat && flat.id) && flatIndex[id] !== undefined){
+      warn.textContent = `${id} already exists.`; return;
+    }
+    const digits = id.replace(/\D/g,"");
+    const floor = digits.length >= 2 ? Math.max(1, +digits[0]) : 1;
+    const next = flats.map(f=>({...f}));
+    if(isNew){
+      next.push({ id, code:b.code, bname:b.name, bshort:b.short, floor,
+                  type, rate:+rate.value || 3000, pop:0.6 });
+      applyInventory(next);
+    } else {
+      const k = next.findIndex(f=>f.id === flat.id);
+      next[k] = {...next[k], id, floor, type, rate:+rate.value || next[k].rate};
+      applyInventory(next, id !== flat.id ? {[flat.id]: id} : null);
+    }
+    haptic(16); openInventory();
+  };
+
+  const del = el("button","invDel","Remove");
+  let armed = false;
+  if(!isNew){
+    const count = resv.filter(r=>flats[r.fi] && flats[r.fi].id===flat.id).length;
+    del.onclick = ()=>{
+      if(!armed){
+        armed = true; del.classList.add("arm");
+        del.textContent = count ? `Remove + ${count} bkg?` : "Remove?";
+        haptic(10);
+        setTimeout(()=>{ armed=false; del.classList.remove("arm"); del.textContent="Remove"; }, 3000);
+        return;
+      }
+      haptic(24);
+      applyInventory(flats.filter(f=>f.id!==flat.id).map(f=>({...f})));
+      openInventory();
+    };
+    acts.append(saveBtn, del);
+  } else {
+    const cancel = el("button","invDel","Cancel");
+    cancel.onclick = ()=>{ haptic(8); openInventory(); };
+    acts.append(saveBtn, cancel);
+  }
+
+  wrap.append(r1, tys, acts, warn);
+  setTimeout(()=>num.focus(), 60);
+  return wrap;
+}
+
+function buildingForm(){
+  const wrap = el("div","invForm");
+  const r1 = el("div","r");
+  const name = el("input"); name.type="text"; name.placeholder="Building name";
+  name.setAttribute("aria-label","Building name");
+  const code = el("input"); code.type="text"; code.placeholder="Code"; code.style.maxWidth="92px";
+  code.setAttribute("aria-label","Building code");
+  r1.append(name, code);
+  const warn = el("div","invWarn");
+  const acts = el("div","invActs");
+  const saveBtn = el("button","invSave","Add building");
+  saveBtn.onclick = ()=>{
+    const n = name.value.trim();
+    const c = code.value.trim().toUpperCase().replace(/[^A-Z0-9]/g,"");
+    if(!n || !c){ warn.textContent = "Name and a short code are both needed."; return; }
+    if(buildingsOf().some(b=>b.code===c)){ warn.textContent = `Code ${c} is already used.`; return; }
+    const next = flats.map(f=>({...f}));
+    next.push({ id:`${c}-101`, code:c, bname:n, bshort:n, floor:1, type:"2 BHK", rate:3000, pop:0.6 });
+    applyInventory(next);
+    haptic(16); openInventory();
+  };
+  const cancel = el("button","invDel","Cancel");
+  cancel.onclick = ()=>{ haptic(8); openInventory(); };
+  acts.append(saveBtn, cancel);
+  wrap.append(r1, acts, warn);
+  setTimeout(()=>name.focus(), 60);
+  return wrap;
 }
 
 function closeSheet(){ sheet.classList.remove("on"); scrim.classList.remove("on"); }

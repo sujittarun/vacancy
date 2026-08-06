@@ -20,18 +20,26 @@ Works on any phone browser. Nothing to install, no account, no login.
 | **Total** | **45** | |
 
 Flat numbers run `TT-101`, `LP-403` and so on — building code, floor, unit. Floor layouts
-were inferred; smaller units sit on lower floors. Easy to change if the real numbering
-differs.
+were inferred; smaller units sit on lower floors. **All of it is editable in the app** —
+see *Editing the inventory* below. This table is only the starting point.
 
 ## Using it for real
 
 It opens with **demo bookings** so you can see it working. To use it properly:
 
-1. Scroll to the bottom of **Rooms** and tap **Start empty** twice (it asks once to
-   confirm) — that erases the demo bookings.
+1. Scroll to the bottom of **Rooms** and tap **Inventory**. Check the flats are right —
+   add, renumber, retype or remove any of them, and add a building if one is missing.
+   At the bottom of that sheet, **Clear all bookings** wipes the demo ones.
 2. Tap any flat, type the guest's name, tap **Book**. It books the dates currently
    selected on the Rooms tab, so set the night and stay length there first.
 3. Cancel a booking with the ✕ next to it in the flat's sheet (also two taps).
+
+### Editing the inventory
+
+**Rooms → Inventory** lists every flat under its building, with how many bookings it
+holds. Tap a flat to change its number, type or nightly rate, or remove it. Renumbering
+a flat **keeps its bookings**; removing one takes its bookings with it, and it tells you
+how many before you confirm. Duplicate flat numbers are refused.
 
 **Bookings save on the device, in the browser.** They survive closing the tab and
 reopening tomorrow. They are *not* shared between phones, *not* backed up, and *are*
