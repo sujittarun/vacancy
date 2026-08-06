@@ -20,7 +20,7 @@
   app with a blurred bottom tab bar and a shared spring-up room sheet.
 -->
 <meta charset="utf-8">
-<title>Vacancy — forty rooms, three ways to read them</title>
+<title>Vacancy — 45 apartments, three ways to read them</title>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
 <meta name="theme-color" content="#08090C">
 
@@ -216,15 +216,18 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .pill.now{background:color-mix(in srgb,var(--now) 16%,transparent);color:var(--now);border-color:transparent}
 
 /* room list row, shared by Month + Ask + sheet */
-.row{display:grid;grid-template-columns:52px 1fr auto;gap:12px;align-items:center;
+.row{display:grid;grid-template-columns:60px 1fr auto;gap:11px;align-items:center;
   padding:13px 14px;border-bottom:1px solid var(--line);width:100%;text-align:left;
   transition:background .16s}
 .row:last-child{border-bottom:0}
 .row:active{background:var(--surface-2)}
-.row .id{font-size:14px;font-weight:640;letter-spacing:-.015em}
+.row .id{font-size:13.5px;font-weight:640;letter-spacing:-.02em;white-space:nowrap}
 .row .meta{font-size:12.5px;color:var(--txt-2);line-height:1.35;min-width:0;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .row .meta em{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row.move .meta em{white-space:normal;line-height:1.4}
+.row.move{align-items:flex-start}
+.row.move .id, .row.move .pill{margin-top:2px}
 .row .meta b{color:var(--txt);font-weight:560}
 .row .meta em{font-style:normal;display:block;color:var(--txt-3);font-size:11.5px;margin-top:2px}
 
@@ -373,6 +376,33 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .strip-k{display:flex;justify-content:space-between;padding:7px 20px 16px}
 .sheet-s{padding:14px 20px 8px;display:flex;justify-content:space-between;align-items:baseline;gap:10px}
 
+/* booking entry */
+.book{margin:16px 20px 0;display:flex;gap:8px;align-items:stretch}
+.book input{flex:1;min-width:0;background:var(--surface-2);border:1px solid var(--line);
+  border-radius:11px;padding:12px 13px;font-size:15px;outline:none;color:var(--txt);
+  transition:border-color .2s}
+.book input:focus{border-color:color-mix(in srgb,var(--now) 60%,transparent)}
+.book input::placeholder{color:var(--txt-3)}
+.bookbtn{background:var(--free);color:var(--free-ink);border-radius:11px;padding:12px 15px;
+  font-size:13px;font-weight:650;letter-spacing:-.01em;white-space:nowrap;flex:0 0 auto;
+  transition:transform .38s var(--spring)}
+.bookbtn:active{transform:scale(.94)}
+.blocked{margin:16px 20px 0;padding:13px 15px;border-radius:12px;background:var(--surface-2);
+  border:1px solid var(--line);font-size:13px;line-height:1.5;color:var(--txt-2)}
+.blocked b{color:var(--txt)}
+
+/* two-tap destructive confirm — no modal, no accidental deletes */
+.rowx{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;color:var(--txt-3);
+  background:var(--surface-2);border:1px solid var(--line);flex:0 0 auto;font-size:15px;
+  transition:background .2s, color .2s}
+.rowx.arm{width:auto;padding:0 11px;background:var(--hot);color:#fff;border-color:transparent;
+  font-size:12px;font-weight:650}
+.rowend{display:flex;align-items:center;gap:8px}
+
+.dataTools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.dataNote{font-size:12px;color:var(--txt-3);line-height:1.5;margin:0 0 10px}
+.dataNote b{color:var(--now)}
+
 @media (prefers-reduced-motion:reduce){
   .sheet{transition:transform .01s}
   *{scroll-behavior:auto!important}
@@ -426,12 +456,17 @@ function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a
   t=t+Math.imul(t^t>>>7,61|t)^t;return ((t^t>>>14)>>>0)/4294967296}}
 const rng = mulberry32(20260806);
 
+/* The real portfolio. `plan` lists unit types smallest-first so studios and smaller
+   flats sit on the lower floors; `per` is units per floor. Flat numbers follow
+   <floor><unit>, e.g. TT-101, LP-403. */
 const BUILDINGS = [
-  {code:"A", name:"Palm Court",        short:"Palm Court", floors:4, per:4},
-  {code:"B", name:"Bayview Residency", short:"Bayview",    floors:4, per:3},
-  {code:"C", name:"The Mews",          short:"Mews",       floors:3, per:4},
+  {code:"TT", name:"TreeTops",      short:"TreeTops",   per:4, plan:[["Studio",1],["2 BHK",1],["3 BHK",12]]},
+  {code:"TN", name:"Telecom Nagar", short:"Telecom N",  per:1, plan:[["3 BHK",3]]},
+  {code:"MP", name:"Madhapur",      short:"Madhapur",   per:2, plan:[["Studio",1],["3 BHK",3]]},
+  {code:"BH", name:"Banjara Hills", short:"Banjara H",  per:3, plan:[["Studio",2],["2 BHK",10]]},
+  {code:"LP", name:"Lotus Pond",    short:"Lotus Pond", per:3, plan:[["2 BHK",2],["3 BHK",10]]},
 ];
-const TYPES = ["Studio","1 BHK","1 BHK","2 BHK"];
+const RATE = {"Studio":[1600,2600], "2 BHK":[3000,4400], "3 BHK":[4200,6200]};
 const NAMES = ["R. Menon","S. Kulkarni","A. Fernandes","D. Iyer","K. Bhatt","M. Sequeira","P. Rao",
   "T. Nayar","J. Dcosta","V. Shetty","N. Pillai","H. Chandra","L. Mathew","G. Saldanha","B. Kaur",
   "F. Noronha","Y. Deshpande","C. Varghese","E. Pinto","U. Reddy"];
@@ -439,36 +474,109 @@ const SRC = ["Airbnb","Direct call","Walk-in","Booking.com","Repeat guest"];
 
 const flats = [];
 BUILDINGS.forEach(b=>{
-  for(let f=1;f<=b.floors;f++) for(let u=1;u<=b.per;u++){
-    flats.push({id:`${b.code}-${f}0${u}`, code:b.code, bname:b.name, bshort:b.short, floor:f,
-      type:TYPES[Math.floor(rng()*TYPES.length)], rate:1800+Math.floor(rng()*14)*200,
-      pop:0.34+rng()*0.56});
-  }
+  const types = [];
+  b.plan.forEach(([t,count])=>{ for(let k=0;k<count;k++) types.push(t); });
+  types.forEach((type,idx)=>{
+    const floor = Math.floor(idx / b.per) + 1;
+    const unit  = (idx % b.per) + 1;
+    const [lo,hi] = RATE[type];
+    flats.push({
+      id:`${b.code}-${floor}0${unit}`, code:b.code, bname:b.name, bshort:b.short,
+      floor, type, rate: lo + Math.round(rng()*(hi-lo)/100)*100,
+      pop: 0.34 + rng()*0.56,
+    });
+  });
 });
 const NF = flats.length;
+const flatIndex = Object.fromEntries(flats.map((f,i)=>[f.id,i]));
 
-const occ = flats.map(()=>new Uint8Array(DAYS));
-const resv = [];
-flats.forEach((fl,fi)=>{
-  let d = -2 - Math.floor(rng()*8);          // stays already in progress, some checking out today
-  while(d < DAYS){
-    if(rng() > fl.pop){ d += 1; continue; }
-    const dt = dateAt(Math.max(d,0));
-    const we = dt.getDay()===5 || dt.getDay()===6;
-    let n = 1 + Math.floor(rng()*(we?5:4));
-    if(rng() < .2) n += 2 + Math.floor(rng()*4);
-    const start=d, end=d+n;
-    for(let k=Math.max(start,0);k<Math.min(end,DAYS);k++) occ[fi][k]=1;
-    // end >= 0 keeps stays that check out this morning — they are today's departures
-    if(end>=0 && start<DAYS) resv.push({fi,start,end,nights:n,
-      guest:NAMES[Math.floor(rng()*NAMES.length)], src:SRC[Math.floor(rng()*SRC.length)]});
-    // a well-run short-let re-lets back-to-back roughly a third of the time,
-    // which is exactly what creates a same-day turnaround
-    d = end + (rng() < .3 ? 0 : 1 + Math.floor(rng()*4));
-  }
-});
-const chg = flats.map(()=>new Uint8Array(DAYS));
-resv.forEach(r=>{ if(r.end>=0 && r.end<DAYS && occ[r.fi][r.end]) chg[r.fi][r.end]=1; });
+/* ── bookings ────────────────────────────────────────────────────────────────
+   `resv` is the single source of truth. occ[] and chg[] are derived from it, so
+   adding or cancelling a booking is just a mutation plus recompute().          */
+let resv = [];
+let occ = [], chg = [];
+
+function recompute(){
+  occ = flats.map(()=>new Uint8Array(DAYS));
+  chg = flats.map(()=>new Uint8Array(DAYS));
+  resv.forEach(r=>{ for(let k=Math.max(r.start,0); k<Math.min(r.end,DAYS); k++) occ[r.fi][k]=1; });
+  // a night that is booked AND is somebody's check-out morning is a same-day turnaround
+  resv.forEach(r=>{ if(r.end>=0 && r.end<DAYS && occ[r.fi][r.end]) chg[r.fi][r.end]=1; });
+}
+
+function generateDemo(){
+  resv = [];
+  flats.forEach((fl,fi)=>{
+    let d = -2 - Math.floor(rng()*8);        // stays already in progress, some checking out today
+    while(d < DAYS){
+      if(rng() > fl.pop){ d += 1; continue; }
+      const dt = dateAt(Math.max(d,0));
+      const we = dt.getDay()===5 || dt.getDay()===6;
+      let n = 1 + Math.floor(rng()*(we?5:4));
+      if(rng() < .2) n += 2 + Math.floor(rng()*4);
+      const start=d, end=d+n;
+      // end >= 0 keeps stays that check out this morning — they are today's departures
+      if(end>=0 && start<DAYS) resv.push({fi, start, end, nights:n,
+        guest:NAMES[Math.floor(rng()*NAMES.length)], src:SRC[Math.floor(rng()*SRC.length)]});
+      // a well-run short-let re-lets back-to-back roughly a third of the time,
+      // which is exactly what creates a same-day turnaround
+      d = end + (rng() < .3 ? 0 : 1 + Math.floor(rng()*4));
+    }
+  });
+}
+
+/* ── persistence ─────────────────────────────────────────────────────────────
+   Stored against flat IDs, not array indexes, so the file can gain or lose flats
+   without corrupting saved bookings. Dates are stored as offsets from the day
+   they were saved and shifted on load, so "3 days out" stays 3 days out.       */
+const STORE = "vacancy.bookings.v1";
+const isoDay = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+
+function save(){
+  try{
+    localStorage.setItem(STORE, JSON.stringify({
+      savedOn: isoDay(today),
+      rows: resv.map(r=>({ id:flats[r.fi].id, start:r.start, end:r.end,
+                           guest:r.guest, src:r.src, manual:!!r.manual }))
+    }));
+  }catch(e){ /* private browsing or storage full — the session still works */ }
+}
+
+function load(){
+  try{
+    const raw = localStorage.getItem(STORE);
+    if(!raw) return false;
+    const d = JSON.parse(raw);
+    if(!d || !Array.isArray(d.rows)) return false;
+    const savedOn = new Date(d.savedOn + "T00:00:00");
+    savedOn.setHours(0,0,0,0);
+    const shift = Math.round((savedOn - today) / 86400000);
+    resv = d.rows
+      .filter(r => flatIndex[r.id] !== undefined)
+      .map(r => ({ fi:flatIndex[r.id], start:r.start+shift, end:r.end+shift,
+                   nights:r.end-r.start, guest:r.guest, src:r.src, manual:r.manual }))
+      .filter(r => r.end >= 0 && r.start < DAYS);
+    return true;
+  }catch(e){ return false; }
+}
+
+let usingDemo = !load();
+if(usingDemo) generateDemo();
+recompute();
+
+function addBooking(fi, start, nights, guest, src){
+  resv.push({ fi, start, end:start+nights, nights, manual:true,
+              guest: guest || "Guest", src: src || "Direct" });
+  usingDemo = false;
+  recompute(); save();
+}
+function cancelBooking(r){
+  const i = resv.indexOf(r);
+  if(i >= 0) resv.splice(i,1);
+  recompute(); save();
+}
+function clearAll(){ resv = []; usingDemo = false; recompute(); save(); }
+function resetDemo(){ generateDemo(); usingDemo = true; recompute(); save(); }
 
 const freeRange = (fi,a,b)=>{ for(let d=a;d<b;d++){ if(d<0||d>=DAYS||occ[fi][d]) return false; } return true; };
 const freeCount = d => { let n=0; for(let i=0;i<NF;i++) if(!occ[i][d]) n++; return n; };
@@ -529,6 +637,39 @@ const STAYS = [1,2,3,7];
 let pickedNight = 0, stayNights = 1;
 const countFreeFor = (d, n) => { let c=0; for(let i=0;i<NF;i++) if(freeRange(i,d,d+n)) c++; return c; };
 const soonestFor = (n, from) => { for(let d=from; d<=DAYS-n; d++) if(countFreeFor(d,n)) return d; return -1; };
+
+/* ── One move away ──────────────────────────────────────────────────────────
+   When nothing is free for a stay, a hotel manager doesn't say no — they shuffle
+   a room. This finds every stay you COULD take by relocating exactly one existing
+   guest to a room that is free for their whole stay. Ranked so the move nobody
+   notices (same building, same size) comes first.                              */
+function roomMoves(a, b, pool){
+  const out = [];
+  pool.forEach(({f: fl, i: fi})=>{
+    if(freeRange(fi, a, b)) return;                      // already free, no move needed
+    const blockers = resv.filter(r => r.fi === fi && r.start < b && r.end > a);
+    if(blockers.length !== 1) return;                    // two guests to move is not "one move"
+    const B = blockers[0];
+    if(B.start < 0) return;                              // already checked in — can't move them now
+    let best = null;
+    for(let j = 0; j < NF; j++){
+      if(j === fi) continue;
+      if(!freeRange(j, B.start, B.end)) continue;        // destination must take their whole stay
+      const cand = {
+        to: j,
+        sameType: flats[j].type === fl.type,
+        sameBuilding: flats[j].code === fl.code,
+        biggerOrEqual: SIZE[flats[j].type] >= SIZE[fl.type],
+      };
+      cand.score = (cand.sameType ? 4 : 0) + (cand.sameBuilding ? 2 : 0) + (cand.biggerOrEqual ? 1 : 0);
+      if(!best || cand.score > best.score) best = cand;
+      if(cand.score === 7) break;
+    }
+    if(best) out.push({ frees: fi, booking: B, ...best });
+  });
+  return out.sort((x,y)=> y.score - x.score);
+}
+const SIZE = {"Studio":0, "1 BHK":1, "2 BHK":2, "3 BHK":3};
 
 /* The operator's real morning question isn't "how many are free" — it's
    who is arriving, who is leaving, and which rooms have to be turned around
@@ -621,9 +762,34 @@ function renderRooms(){
 
   const note = el("p");
   note.style.cssText="margin:0;font-size:12px;line-height:1.55;color:var(--txt-3)";
-  note.innerHTML = "A lit tile is a room you can sell. The figure on it is how many nights it stays free from that date &mdash; and an amber dot marks a single orphan night, the hardest kind to fill. Rooms, guests and dates are invented for this demo.";
+  note.innerHTML = "A lit tile is a flat you can sell. The figure on it is how many nights it stays free from that date &mdash; and an amber dot marks a single orphan night, the hardest kind to fill. <b style='color:var(--txt-2)'>The 45 flats are your real portfolio; the bookings, guests and rates are invented for this demo.</b>";
 
-  s.append(hero, stayWrap, nightsWrap, tilesWrap, note);
+  /* demo vs real data — you cannot use this for real until you can clear the demo */
+  const dataBox = el("div","stack gap-s");
+  const dNote = el("p","dataNote");
+  dNote.innerHTML = usingDemo
+    ? `<b>Showing demo bookings.</b> Tap <b>Start empty</b> to clear them and enter your real ones — open any flat and book it. Everything saves on this device.`
+    : `<b>Your bookings — saved on this device.</b> ${resv.length} booking${resv.length===1?"":"s"} on the book. Clearing your browser data erases them.`;
+  const tools = el("div","dataTools");
+  const bEmpty = el("button","copybtn"), bDemo = el("button","copybtn");
+  bEmpty.textContent = "Start empty";
+  bDemo.textContent  = "Reset demo data";
+  let armed = null;
+  const arm = (btn, label, run)=>{
+    if(armed === btn){ armed = null; haptic(20); run(); refreshScreen(); return; }
+    armed = btn; haptic(10);
+    [bEmpty,bDemo].forEach(b=>{ if(b!==btn){ b.classList.remove("done"); } });
+    bEmpty.textContent = "Start empty"; bDemo.textContent = "Reset demo data";
+    btn.textContent = label; btn.classList.add("done");
+    setTimeout(()=>{ if(armed===btn){ armed=null; btn.classList.remove("done");
+      bEmpty.textContent = "Start empty"; bDemo.textContent = "Reset demo data"; } }, 3500);
+  };
+  bEmpty.onclick = ()=> arm(bEmpty, "Erase all bookings?", clearAll);
+  bDemo.onclick  = ()=> arm(bDemo,  "Replace with demo?",  resetDemo);
+  tools.append(bEmpty, bDemo);
+  dataBox.append(dNote, tools);
+
+  s.append(hero, stayWrap, nightsWrap, tilesWrap, note, dataBox);
 
   function paint(){
     const d = Math.min(pickedNight, STRIP-1), n = stayNights;
@@ -678,6 +844,17 @@ function renderRooms(){
       head.style.cssText = "margin:0;font-size:15px;font-weight:600;letter-spacing:-.018em;line-height:1.4";
       head.textContent = `No room takes a ${n}-night stay arriving ${fmtL(d)}.`;
       box.appendChild(head);
+
+      const moves = roomMoves(d, d+n, flats.map((f,i)=>({f,i})));
+      if(moves.length){
+        const mv = moves[0], from = flats[mv.frees], to = flats[mv.to], B = mv.booking;
+        const p = el("p");
+        p.style.cssText = "margin:10px 0 0;font-size:13px;color:var(--txt-2);line-height:1.55";
+        p.innerHTML = `But you are <b style="color:var(--now)">one move away</b> — shift `
+          + `<b style="color:var(--txt)">${B.guest}</b> from ${from.id} to ${to.id} `
+          + `(${fmt(B.start)}–${fmt(B.end)}${mv.sameType ? ", same size" : ""}) and ${from.id} opens up.`;
+        box.appendChild(p);
+      }
       if(soon >= 0){
         const sc = countFreeFor(soon, n);
         const p = el("p");
@@ -797,7 +974,7 @@ function renderMonth(){
 
 /* ═══════════════ SCREEN 3 — ASK ═══════════════ */
 const SUGGEST = ["anything free tonight?","3 nights from friday","this weekend",
-                 "2 bhk next week","8 to 11","palm court tomorrow"];
+                 "3 bhk next week","8 to 11","treetops tomorrow","2 bhk banjara"];
 let lastQuery = "anything free tonight?";
 
 function nextWeekend(){ let a=0; while(dateAt(a).getDay()!==5 && a<DAYS) a++; return {a, b:Math.min(a+2,DAYS)}; }
@@ -829,10 +1006,13 @@ function parseQuery(q){
   else if(wdHit>=0){ let a=0; while(a<DAYS && dateAt(a).getDay()!==wdHit) a++; start=a; how=wd[wdHit]; }
 
   let type=null, bldg=null;
-  if(/ (2 ?bhk|two bed) /.test(s)) type="2 BHK";
-  else if(/ (1 ?bhk|one bed) /.test(s)) type="1 BHK";
+  if(/ (3 ?bhk|three bed) /.test(s)) type="3 BHK";
+  else if(/ (2 ?bhk|two bed) /.test(s)) type="2 BHK";
   else if(/ studio /.test(s)) type="Studio";
-  BUILDINGS.forEach(b=>{ if(s.includes(" "+b.name.toLowerCase().split(" ")[0])) bldg=b.code; });
+  BUILDINGS.forEach(b=>{
+    const first = b.name.toLowerCase().split(" ")[0];
+    if(s.includes(" "+first) || s.includes(" "+b.code.toLowerCase()+" ")) bldg=b.code;
+  });
 
   start = Math.max(0, Math.min(DAYS-1, start));
   n = Math.max(1, Math.min(n, DAYS-start));
@@ -947,7 +1127,28 @@ function renderAsk(focus){
       h.append(el("span","lbl","Read these out"), el("span","lbl", `${fmt(a)} → ${fmt(b)}`));
       free.forEach(x=> list.appendChild(roomRow(x.i, a, null)));
     } else {
-      h.append(el("span","lbl","Nearest alternatives"), el("span","lbl","move the dates"));
+      /* before offering different dates, see if one room move rescues these dates */
+      const moves = roomMoves(a, b, pool);
+      if(moves.length){
+        const mh = el("div","sect");
+        mh.append(el("span","lbl","One move away"),
+                  el("span","lbl", `${moves.length} option${moves.length>1?"s":""}`));
+        const mcard = el("div","card");
+        moves.slice(0,4).forEach(mv=>{
+          const from = flats[mv.frees], to = flats[mv.to], B = mv.booking;
+          const r = el("button","row move");
+          r.append(el("div","id", from.id));
+          const m = el("div","meta");
+          m.innerHTML = `Move <b>${B.guest}</b> to <b>${to.id}</b>`
+            + `<em>${fmt(B.start)}–${fmt(B.end)} · ${to.type}${mv.sameBuilding ? ", same building" : ` at ${to.bshort}`}`
+            + `${mv.sameType ? ", same size" : ""} · then ${from.id} is yours</em>`;
+          r.append(m, el("span","pill now","frees it"));
+          r.onclick = ()=>{ haptic(10); openSheet(mv.frees, a); };
+          mcard.appendChild(r);
+        });
+        listWrap.append(mh, mcard);
+      }
+      h.append(el("span","lbl","Or move the dates"), el("span","lbl","nearest that work"));
       const alts = [];
       for(let sh=1; sh<=8 && alts.length<6; sh++){
         [a+sh, a-sh].forEach(s2=>{
@@ -993,18 +1194,63 @@ function openSheet(fi, day){
   k.append(el("span","lbl","Today"), el("span","lbl", `${occPct(fi)}% booked`), el("span","lbl","+9 weeks"));
   sheetB.append(strip, k);
 
+  /* take a booking for the dates currently selected on the Rooms screen */
+  const bDay = Math.min(pickedNight, DAYS-1), bN = stayNights;
+  const span = bN === 1 ? fmtL(bDay) : `${fmt(bDay)} → ${fmt(bDay+bN)}`;
+  if(freeRange(fi, bDay, bDay+bN)){
+    const form = el("div","book");
+    const who = el("input");
+    who.type = "text"; who.placeholder = "Guest name"; who.autocomplete = "off";
+    who.setAttribute("aria-label", `Guest name for ${fl.id}, ${span}`);
+    const btn = el("button","bookbtn", `Book ${bN}n`);
+    const take = ()=>{
+      addBooking(fi, bDay, bN, who.value.trim(), "Direct");
+      haptic(18); closeSheet(); refreshScreen();
+    };
+    btn.onclick = take;
+    who.addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); who.blur(); take(); }});
+    form.append(who, btn);
+    sheetB.appendChild(form);
+    const hint = el("div","lbl");
+    hint.style.cssText = "margin:8px 20px 0";
+    hint.textContent = `Books ${span} · change the dates on the Rooms tab`;
+    sheetB.appendChild(hint);
+  } else {
+    const blocker = resv.find(r => r.fi===fi && r.start < bDay+bN && r.end > bDay);
+    const b = el("div","blocked");
+    b.innerHTML = blocker
+      ? `Can't take <b>${span}</b> — <b>${blocker.guest}</b> is in until ${fmt(Math.min(blocker.end,DAYS-1))}.`
+      : `Not available for <b>${span}</b>.`;
+    sheetB.appendChild(b);
+  }
+
   const s1 = el("div","sheet-s");
   s1.append(el("span","lbl","Upcoming bookings"), el("span","lbl", `specimen rate ₹${fl.rate}/night`));
   sheetB.appendChild(s1);
   const bl = el("div","card"); bl.style.margin="0 20px";
   const mine = resv.filter(r=>r.fi===fi && r.end>0 && r.start<DAYS).sort((a,b)=>a.start-b.start);
   if(!mine.length) bl.appendChild(el("div","empty","No bookings in the next nine weeks — completely open."));
-  mine.slice(0,12).forEach(r=>{
+  mine.slice(0,14).forEach(r=>{
     const row = el("div","row");
     row.append(el("div","id", Math.max(r.start,0)===0 ? "Now" : fmt(Math.max(r.start,0))));
     const m = el("div","meta");
     m.innerHTML = `<b>${r.guest}</b> · ${r.src}<em>${fmt(Math.max(r.start,0))} → ${fmt(Math.min(r.end,DAYS-1))}</em>`;
-    row.append(m, el("span","pill", `${r.nights} night${r.nights>1?"s":""}`));
+    const end = el("div","rowend");
+    end.appendChild(el("span","pill", `${r.nights}n`));
+    const x = el("button","rowx","✕");
+    x.setAttribute("aria-label", `Cancel ${r.guest}'s booking in ${fl.id}`);
+    let armed = false, t = null;
+    x.onclick = ()=>{
+      if(!armed){
+        armed = true; x.classList.add("arm"); x.textContent = "Cancel?"; haptic(10);
+        t = setTimeout(()=>{ armed=false; x.classList.remove("arm"); x.textContent="✕"; }, 3000);
+        return;
+      }
+      clearTimeout(t); haptic(20);
+      cancelBooking(r); closeSheet(); refreshScreen();
+    };
+    end.appendChild(x);
+    row.append(m, end);
     bl.appendChild(row);
   });
   sheetB.appendChild(bl);
@@ -1141,6 +1387,14 @@ const SUBS = [
   ()=> "Nine weeks ahead · tap a date",
   ()=> "Ask in plain words",
 ];
+/* re-render the current screen in place after the data changes, keeping your place */
+function refreshScreen(){
+  const s = document.getElementById("scr-" + SCREENS[curScreen].id);
+  const top = s.scrollTop;
+  SCREENS[curScreen].render();
+  s.scrollTop = top;
+}
+
 function switchTo(i, focusInput){
   curScreen = i;
   SCREENS.forEach((sc,j)=>{

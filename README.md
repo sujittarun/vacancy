@@ -1,6 +1,6 @@
 # Vacancy
 
-A phone-first way to see which of ~40 short-let apartments are free, built to replace a
+A phone-first way to see which of 45 short-let apartments are free, built to replace a
 colour-coded Excel grid without losing the thing that made the spreadsheet work — being
 able to see the whole portfolio at once.
 
@@ -8,9 +8,35 @@ able to see the whole portfolio at once.
 
 Works on any phone browser. Nothing to install, no account, no login.
 
-> **All data here is invented.** The rooms, guests, dates and rates are generated for
-> demonstration. It is not connected to Airbnb, Booking.com, a spreadsheet, or any real
-> booking system.
+## The portfolio
+
+| Building | Units | Mix |
+|---|---|---|
+| TreeTops | 14 | 12 × 3 BHK, 1 × 2 BHK, 1 × Studio |
+| Telecom Nagar | 3 | 3 × 3 BHK |
+| Madhapur | 4 | 3 × 3 BHK, 1 × Studio |
+| Banjara Hills | 12 | 10 × 2 BHK, 2 × Studio |
+| Lotus Pond | 12 | 10 × 3 BHK, 2 × 2 BHK |
+| **Total** | **45** | |
+
+Flat numbers run `TT-101`, `LP-403` and so on — building code, floor, unit. Floor layouts
+were inferred; smaller units sit on lower floors. Easy to change if the real numbering
+differs.
+
+## Using it for real
+
+It opens with **demo bookings** so you can see it working. To use it properly:
+
+1. Scroll to the bottom of **Rooms** and tap **Start empty** twice (it asks once to
+   confirm) — that erases the demo bookings.
+2. Tap any flat, type the guest's name, tap **Book**. It books the dates currently
+   selected on the Rooms tab, so set the night and stay length there first.
+3. Cancel a booking with the ✕ next to it in the flat's sheet (also two taps).
+
+**Bookings save on the device, in the browser.** They survive closing the tab and
+reopening tomorrow. They are *not* shared between phones, *not* backed up, and *are*
+erased if you clear your browser data. That is fine for a trial; it is not yet a system
+of record.
 
 ---
 
@@ -65,6 +91,18 @@ Chips under the answer show what it understood, so when it misreads you, you can
 
 There is a microphone if the browser supports speech input — useful mid-call.
 
+#### One move away
+
+When nothing fits, it does not just say no. A hotel manager in that position shuffles a
+room, so the app looks for exactly that: **every stay you could take by relocating one
+existing guest** to a flat that is free for their whole stay.
+
+> Move **T. Nayar** to TT-301 — 10 Aug–13 Aug · 3 BHK, same building, same size ·
+> then TT-204 is yours
+
+Options are ranked so the move the guest would never notice — same building, same size —
+comes first. Nothing moves automatically; it only tells you what is possible.
+
 Tap any room, anywhere, for its next nine weeks, its upcoming bookings, and its sellable
 gaps.
 
@@ -99,6 +137,14 @@ then visit `http://localhost:8000`.
 
 ## Status
 
-A working prototype for evaluating the interface. **Where the data would actually live is
-still an open decision** — nothing in the code assumes a database, a spreadsheet, or a
-channel-manager sync. All state is generated in memory at load.
+Good enough to run a real day on. Honest limits before you rely on it:
+
+- **One device, one person.** Bookings live in that browser's storage. Two phones will not
+  see each other's entries.
+- **No backup.** Clearing browser data erases everything. There is no export yet.
+- **No sync** with Airbnb, Booking.com or any channel manager. Every booking is entered by
+  hand.
+- **Rates are invented** and shown as "specimen". Nothing calculates revenue.
+
+If the trial goes well, the next step is a real backend so it works across phones and
+survives a lost device.

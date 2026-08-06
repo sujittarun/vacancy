@@ -52,18 +52,37 @@ answer a range query directly instead of making a human scan for it.
 - Bookings arrive by phone and walk-in as well as through listing platforms, so any
   system must accept fast manual marking.
 
+## Portfolio
+
+45 units across five buildings, confirmed by the user:
+
+| Building | Units | Mix |
+|---|---|---|
+| TreeTops | 14 | 12 × 3 BHK, 1 × 2 BHK, 1 × Studio |
+| Telecom Nagar | 3 | 3 × 3 BHK |
+| Madhapur | 4 | 3 × 3 BHK, 1 × Studio |
+| Banjara Hills | 12 | 10 × 2 BHK, 2 × Studio |
+| Lotus Pond | 12 | 10 × 3 BHK, 2 × 2 BHK |
+
+Flat numbering is `<building code>-<floor><unit>` (TT-101, LP-403). Floor layouts and
+unit numbers were **inferred**, not supplied — smaller units placed on lower floors.
+Correct them if the real numbering differs. "Banjara Hills" was normalised from the
+user's "Bajarahills".
+
 ## Capabilities and Constraints
 
-- Portfolio scale: ~40 units. Horizon that matters: today through roughly 60 days.
+- Portfolio scale: 45 units. Horizon that matters: today through roughly 60 days.
 - A unit on any given day is in one of a small set of states. Confirmed states:
   booked, vacant. Turnover/changeover days (check-out and check-in on the same
   calendar day) are a real occurrence in this business and are treated here as a
   distinct state; **not yet confirmed by the user.**
-- Data storage is explicitly **undecided**. The user deferred the backend question:
-  "I just need sample UI. Once I like it, then I will see where to keep the data."
-  Nothing in this project may assume a particular database, sheet, or sync source.
-- No live booking data exists yet. All portfolio content in this project is authored
-  demonstration data and must be labelled as such.
+- **Storage as of the trial:** bookings are held in the browser's `localStorage` on the
+  device, keyed by flat ID and rebased on load so relative dates stay correct. This is
+  enough for a few hours of real use by one person on one phone. It is **not** multi-user,
+  not backed up, and is erased if browser data is cleared. A real backend remains undecided.
+- The **flats are real**; the bookings, guest names and rates shipped with the app are
+  invented demonstration data and are labelled as such in the interface. The user can
+  clear them ("Start empty") and enter real bookings.
 - No commercial claims exist: no real prices, occupancy figures, guest names,
   addresses, or platform integrations may be presented as fact.
 
