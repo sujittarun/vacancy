@@ -1,0 +1,1200 @@
+<!--
+  DIRECTION CONTRACT — Vacancy
+
+  THESIS: The vacant room is the lit one. Booked is recessed material sitting close to
+  the ground; free is high-luminance and pops off it — he is hunting vacancy, so vacancy
+  glows. Refuses the ledger world shipped previously (paper, ruling, stamps) and the
+  category default of pastel booking pills on white.
+
+  OWN-WORLD: Near-monochrome instrument. #08090C ground, layered charcoal surfaces,
+  hairline structure, one amber accent (#FFA23A) reserved for now/live. Big tight-tracked
+  tabular numerals. Radii step from 22px sheets down to 2px data cells. One spring curve.
+
+  STORY: He glances and knows how full he is; a caller names dates and he answers in one
+  sentence; he checks a month and sees which weekends are gone.
+
+  FIRST VIEWPORT: Tonight — a 76px free-room count over an occupancy meter, the next
+  seven nights as a scroll-snapped strip, then all forty rooms as a tile field.
+
+  FORM: Three concepts the user selected (10 Glance, 6 Month, 9 Word) integrated as one
+  app with a blurred bottom tab bar and a shared spring-up room sheet.
+-->
+<meta charset="utf-8">
+<title>Vacancy — forty rooms, three ways to read them</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
+<meta name="theme-color" content="#08090C">
+
+<style>
+/* ══════════════════════ tokens ══════════════════════ */
+:root{
+  --bg:#08090C; --surface:#101219; --surface-2:#181B24; --surface-3:#1F2330;
+  --line:rgba(255,255,255,.08); --line-2:rgba(255,255,255,.14);
+  --txt:#FFFFFF; --txt-2:#98A1B5; --txt-3:#5C6579;
+  --free:#EAEFF9; --free-ink:#0A0C11; --held:#1B1F2A; --held-ink:#69738A;
+  --now:#FFA23A; --hot:#FF5F52;
+  --bar:rgba(12,14,20,.72);
+  --shadow:0 1px 2px rgba(0,0,0,.5), 0 12px 32px -10px rgba(0,0,0,.75);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4), 0 4px 12px -4px rgba(0,0,0,.5);
+  --spring:linear(0,.0088,.0352 2.2%,.1428 4.9%,.5106 12%,.6672,.7896,.8752,.9345 20.6%,.9707,.9955 26.2%,1.0122,1.0202 32.1%,1.0193 37.1%,1.0083 45.4%,1.0003 55.4%,.9986 71%,1);
+  --out:cubic-bezier(.22,1,.36,1);
+  --ui:-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,"Segoe UI",Roboto,sans-serif;
+  --safe-b:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:light){
+  :root{
+    --bg:#F4F5F8; --surface:#FFFFFF; --surface-2:#ECEEF3; --surface-3:#E2E5ED;
+    --line:rgba(9,11,16,.10); --line-2:rgba(9,11,16,.16);
+    --txt:#0B0D13; --txt-2:#5A6377; --txt-3:#8A93A6;
+    --free:#0B0D13; --free-ink:#FFFFFF; --held:#DDE1EA; --held-ink:#98A1B5;
+    --now:#C96A00; --hot:#D93A2B;
+    --bar:rgba(250,251,253,.78);
+    --shadow:0 1px 2px rgba(9,11,16,.07), 0 12px 32px -12px rgba(9,11,16,.18);
+    --shadow-sm:0 1px 2px rgba(9,11,16,.06), 0 4px 12px -4px rgba(9,11,16,.12);
+  }
+}
+:root[data-theme="light"]{
+  --bg:#F4F5F8; --surface:#FFFFFF; --surface-2:#ECEEF3; --surface-3:#E2E5ED;
+  --line:rgba(9,11,16,.10); --line-2:rgba(9,11,16,.16);
+  --txt:#0B0D13; --txt-2:#5A6377; --txt-3:#8A93A6;
+  --free:#0B0D13; --free-ink:#FFFFFF; --held:#DDE1EA; --held-ink:#98A1B5;
+  --now:#C96A00; --hot:#D93A2B;
+  --bar:rgba(250,251,253,.78);
+  --shadow:0 1px 2px rgba(9,11,16,.07), 0 12px 32px -12px rgba(9,11,16,.18);
+  --shadow-sm:0 1px 2px rgba(9,11,16,.06), 0 4px 12px -4px rgba(9,11,16,.12);
+}
+:root[data-theme="dark"]{
+  --bg:#08090C; --surface:#101219; --surface-2:#181B24; --surface-3:#1F2330;
+  --line:rgba(255,255,255,.08); --line-2:rgba(255,255,255,.14);
+  --txt:#FFFFFF; --txt-2:#98A1B5; --txt-3:#5C6579;
+  --free:#EAEFF9; --free-ink:#0A0C11; --held:#1B1F2A; --held-ink:#69738A;
+  --now:#FFA23A; --hot:#FF5F52;
+  --bar:rgba(12,14,20,.72);
+  --shadow:0 1px 2px rgba(0,0,0,.5), 0 12px 32px -10px rgba(0,0,0,.75);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4), 0 4px 12px -4px rgba(0,0,0,.5);
+}
+
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;height:100%;overflow:hidden}
+body{
+  background:var(--bg); color:var(--txt); font-family:var(--ui);
+  font-variant-numeric:tabular-nums; -webkit-font-smoothing:antialiased;
+  font-size:14px; line-height:1.5; overscroll-behavior:none;
+}
+button,input{font:inherit;color:inherit;font-variant-numeric:tabular-nums}
+button{background:none;border:0;padding:0;cursor:pointer}
+:focus-visible{outline:2px solid var(--now);outline-offset:2px;border-radius:4px}
+
+/* ══════════════════════ shell ══════════════════════ */
+.app{position:fixed;inset:0;display:flex;flex-direction:column}
+
+.topbar{
+  position:relative;z-index:30;flex:0 0 auto;
+  padding:calc(env(safe-area-inset-top,0px) + 14px) 20px 12px;
+  background:var(--bar);backdrop-filter:blur(20px) saturate(160%);
+  -webkit-backdrop-filter:blur(20px) saturate(160%);
+  border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:12px;
+}
+/* large title condenses on scroll — transform/opacity only, never layout */
+.topbar h1{margin:0;font-size:19px;font-weight:650;letter-spacing:-.022em;flex:1;min-width:0;
+  transform-origin:left center;transition:transform .34s var(--out);will-change:transform}
+.topbar .sub{font-size:12px;color:var(--txt-3);font-weight:450;letter-spacing:0;display:block;margin-top:1px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:opacity .26s var(--out)}
+.topbar.tight h1{transform:scale(.84)}
+.topbar.tight .sub{opacity:.5}
+@media (prefers-reduced-motion:reduce){.topbar h1,.topbar .sub{transition:none}}
+.ghost{
+  display:flex;align-items:center;gap:6px;padding:7px 12px;border-radius:9px;
+  background:var(--surface-2);font-size:12px;font-weight:550;color:var(--txt-2);
+  border:1px solid var(--line);transition:transform .35s var(--spring), background .18s;
+}
+.ghost:active{transform:scale(.94);background:var(--surface-3)}
+
+.screens{flex:1;min-height:0;position:relative}
+.screen{
+  position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;
+  -webkit-overflow-scrolling:touch;overscroll-behavior:contain;
+  padding:22px 20px calc(112px + var(--safe-b));
+  display:flex;flex-direction:column;gap:30px;
+  visibility:hidden;opacity:0;pointer-events:none;
+}
+.screen.on{visibility:visible;opacity:1;pointer-events:auto}
+/* a scrolling flex column must not shrink its sections to fit — that clips
+   any child with overflow:hidden (the calendar card) down to a sliver */
+.screen > *{flex:0 0 auto}
+
+/* staggered entry */
+.screen.on > *{animation:rise .55s var(--out) backwards}
+@keyframes rise{from{opacity:0;transform:translateY(14px)}}
+.screen.on > *:nth-child(1){animation-delay:.01s}
+.screen.on > *:nth-child(2){animation-delay:.05s}
+.screen.on > *:nth-child(3){animation-delay:.09s}
+.screen.on > *:nth-child(4){animation-delay:.13s}
+.screen.on > *:nth-child(5){animation-delay:.17s}
+@media (prefers-reduced-motion:reduce){
+  .screen.on > *{animation:fade .2s backwards}
+  @keyframes fade{from{opacity:0}}
+}
+
+.tabbar{
+  position:absolute;left:14px;right:14px;bottom:calc(12px + var(--safe-b));z-index:40;
+  display:grid;grid-template-columns:repeat(3,1fr);gap:2px;padding:4px;
+  background:var(--bar);backdrop-filter:blur(24px) saturate(180%);
+  -webkit-backdrop-filter:blur(24px) saturate(180%);
+  border:1px solid var(--line-2);border-radius:17px;box-shadow:var(--shadow);
+}
+.tabbar button{
+  padding:9px 4px 8px;border-radius:13px;display:flex;flex-direction:column;
+  align-items:center;gap:3px;color:var(--txt-3);font-size:10.5px;font-weight:600;
+  letter-spacing:.01em;transition:color .2s, background .3s var(--out);
+}
+.tabbar button .ic{width:19px;height:19px;display:block}
+.tabbar button[aria-selected="true"]{color:var(--txt);background:var(--surface-2)}
+.tabbar button:active{transform:scale(.95)}
+
+/* ══════════════════════ primitives ══════════════════════ */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;
+  box-shadow:var(--shadow-sm);overflow:hidden}
+.lbl{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.09em;color:var(--txt-3)}
+.sect{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:0 2px 11px}
+.sect .lbl:last-child, .sheet-s .lbl:last-child, .strip-k .lbl:not(:first-child){
+  text-transform:none;letter-spacing:.005em;font-weight:500;font-size:11.5px}
+.stack{display:flex;flex-direction:column}
+.gap-l{gap:22px} .gap-m{gap:12px} .gap-s{gap:8px}
+
+/* room tile — the atom of the whole app */
+.tile{
+  position:relative;border-radius:9px;padding:9px 8px 8px;text-align:left;
+  background:var(--held);border:1px solid transparent;
+  transition:transform .38s var(--spring), background .2s;
+  min-height:56px;display:flex;flex-direction:column;justify-content:space-between;
+}
+.tile:active{transform:scale(.93)}
+.tile b{display:block;font-size:13px;font-weight:620;letter-spacing:-.01em;color:var(--held-ink)}
+.tile s{display:block;text-decoration:none;font-size:9px;font-weight:600;letter-spacing:.05em;
+  text-transform:uppercase;color:var(--held-ink);opacity:.62;margin-top:4px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile.free{background:var(--free)}
+.tile.free b{color:var(--free-ink)}
+.tile.free s{color:var(--free-ink);opacity:.58}
+/* a turnover room is let tonight — it just has to be cleaned first, so it reads
+   as booked and carries a corner flag rather than a split fill that eats the text */
+.tile.turn{background:var(--held)}
+.tile.turn b{color:var(--held-ink)}
+.tile.turn s{color:var(--now);opacity:1}
+.tile.turn::after{content:"";position:absolute;top:0;right:0;width:17px;height:17px;
+  background:var(--now);clip-path:polygon(100% 0,0 0,100% 100%);border-top-right-radius:9px}
+/* an orphan night — free, but wedged between two bookings, so hard to sell */
+.tile .flag{position:absolute;top:7px;right:7px;width:6px;height:6px;border-radius:50%;
+  background:var(--now);box-shadow:0 0 0 2px var(--free)}
+
+/* stay-length dial — reshapes the whole fortnight */
+.seg{position:relative;display:grid;grid-auto-flow:column;grid-auto-columns:1fr;
+  background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:3px}
+.seg-ind{position:absolute;top:3px;bottom:3px;left:3px;background:var(--surface);
+  border-radius:9px;box-shadow:var(--shadow-sm);transition:transform .44s var(--spring);
+  pointer-events:none}
+.seg button{position:relative;z-index:1;padding:9px 2px;font-size:12.5px;font-weight:600;
+  letter-spacing:-.008em;color:var(--txt-3);transition:color .22s}
+.seg button[aria-pressed="true"]{color:var(--txt)}
+@media (prefers-reduced-motion:reduce){.seg-ind{transition:none}}
+
+/* month key */
+.key{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center}
+.keyitem{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--txt-2);line-height:1.4}
+.keychip{flex:0 0 auto;width:34px;height:38px;border-radius:8px;background:var(--surface);
+  border:1px solid var(--line);position:relative;display:grid;place-items:center}
+.keychip u{text-decoration:none;font-size:15px;font-weight:680;letter-spacing:-.03em}
+.keychip i{position:absolute;left:5px;right:5px;bottom:5px;height:3px;border-radius:2px;background:var(--surface-3)}
+.keychip i b{display:block;height:100%;width:58%;border-radius:2px;background:var(--free)}
+
+.pill{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:7px;
+  font-size:11px;font-weight:600;letter-spacing:.01em;background:var(--surface-2);color:var(--txt-2);
+  border:1px solid var(--line);white-space:nowrap}
+.pill.good{background:color-mix(in srgb,var(--free) 14%,transparent);color:var(--txt);border-color:var(--line-2)}
+.pill.warn{background:color-mix(in srgb,var(--hot) 15%,transparent);color:var(--hot);border-color:transparent}
+.pill.now{background:color-mix(in srgb,var(--now) 16%,transparent);color:var(--now);border-color:transparent}
+
+/* room list row, shared by Month + Ask + sheet */
+.row{display:grid;grid-template-columns:52px 1fr auto;gap:12px;align-items:center;
+  padding:13px 14px;border-bottom:1px solid var(--line);width:100%;text-align:left;
+  transition:background .16s}
+.row:last-child{border-bottom:0}
+.row:active{background:var(--surface-2)}
+.row .id{font-size:14px;font-weight:640;letter-spacing:-.015em}
+.row .meta{font-size:12.5px;color:var(--txt-2);line-height:1.35;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .meta em{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .meta b{color:var(--txt);font-weight:560}
+.row .meta em{font-style:normal;display:block;color:var(--txt-3);font-size:11.5px;margin-top:2px}
+
+.empty{padding:30px 20px;text-align:center;color:var(--txt-3);font-size:13px;line-height:1.55}
+
+/* ══════════════════════ TONIGHT ══════════════════════ */
+/* the day's operations — what actually has to happen, not another copy of the free count */
+.ops{padding:2px 2px 0}
+.ops-date{display:flex;align-items:baseline;gap:8px;margin-bottom:14px}
+.ops-date b{font-size:23px;font-weight:680;letter-spacing:-.032em}
+.ops-date s{text-decoration:none;font-size:12.5px;color:var(--txt-3);font-weight:500}
+.ops-row{display:grid;grid-template-columns:repeat(3,1fr);background:var(--surface);
+  border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow-sm);overflow:hidden}
+.op{padding:14px 8px 13px;text-align:left;position:relative;border-right:1px solid var(--line);
+  transition:background .16s}
+.op:last-child{border-right:0}
+.op:active{background:var(--surface-2)}
+.op b{display:block;font-size:30px;font-weight:690;letter-spacing:-.04em;line-height:1}
+.op s{display:block;text-decoration:none;font-size:10.5px;font-weight:600;letter-spacing:.055em;
+  text-transform:uppercase;color:var(--txt-3);margin-top:6px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.op.zero b{color:var(--txt-3)}
+.op.alert b{color:var(--now)}
+.op.alert s{color:var(--now)}
+.op .dot{position:absolute;top:12px;right:10px;width:6px;height:6px;border-radius:50%;background:var(--now)}
+
+.nights{display:flex;gap:8px;overflow-x:auto;scroll-snap-type:x mandatory;
+  padding:2px 20px 2px 0;margin:0 -20px 0 0;scrollbar-width:none}
+.nights::-webkit-scrollbar{display:none}
+.night{flex:0 0 78px;scroll-snap-align:start;background:var(--surface);border:1px solid var(--line);
+  border-radius:13px;padding:10px 10px 11px;display:flex;flex-direction:column;gap:9px;
+  transition:transform .38s var(--spring)}
+.night:active{transform:scale(.95)}
+.night .d{display:flex;align-items:baseline;justify-content:space-between;gap:4px;
+  font-size:10.5px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--txt-3)}
+.night .d em{font-style:normal;font-size:11.5px;font-weight:650;letter-spacing:-.01em;
+  text-transform:none;color:var(--txt-2);flex:0 0 auto}
+.night.today .d em{color:var(--now)}
+.night .n{font-size:25px;font-weight:680;letter-spacing:-.035em;line-height:1}
+.night .t{height:3px;border-radius:2px;background:var(--surface-3);overflow:hidden}
+.night .t i{display:block;height:100%;background:var(--free);border-radius:2px}
+.night.today{border-color:color-mix(in srgb,var(--now) 55%,transparent);
+  background:color-mix(in srgb,var(--now) 8%,var(--surface))}
+.night.today .d{color:var(--now)}
+.night.full .n{color:var(--hot)}
+.night.full .t i{background:var(--hot)}
+.night.sel{border-color:var(--free);box-shadow:0 0 0 1px var(--free)}
+
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:7px}
+
+/* ══════════════════════ MONTH ══════════════════════ */
+.mnav{display:flex;align-items:center;gap:8px;margin-bottom:14px}
+.mnav .t{flex:1;font-size:17px;font-weight:640;letter-spacing:-.02em}
+.mnav button{width:36px;height:36px;border-radius:10px;background:var(--surface-2);
+  border:1px solid var(--line);display:grid;place-items:center;
+  transition:transform .38s var(--spring)}
+.mnav button:active{transform:scale(.9)}
+.mnav button[disabled]{opacity:.32;pointer-events:none}
+
+.dow{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:6px}
+.dow span{text-align:center;font-size:10px;font-weight:600;letter-spacing:.08em;color:var(--txt-3)}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.day{
+  aspect-ratio:1/1.14;border-radius:11px;background:var(--surface);border:1px solid var(--line);
+  padding:7px 6px 12px;display:flex;flex-direction:column;justify-content:space-between;
+  position:relative;overflow:hidden;
+  transition:transform .38s var(--spring), border-color .2s;
+}
+.day:active{transform:scale(.92)}
+.day.pad{background:transparent;border-color:transparent;pointer-events:none}
+.day .dd{font-size:10px;font-weight:600;color:var(--txt-3);line-height:1}
+.day .fn{font-size:clamp(16px,4.8vw,21px);font-weight:680;letter-spacing:-.035em;line-height:1}
+.day .gg{position:absolute;left:6px;right:6px;bottom:6px;height:3px;border-radius:2px;
+  background:var(--surface-3);overflow:hidden}
+.day .gg i{display:block;height:100%;background:var(--free);border-radius:2px}
+.day.today{border-color:color-mix(in srgb,var(--now) 60%,transparent)}
+.day.today .dd{color:var(--now)}
+.day.none .fn{color:var(--hot)}
+.day.none .gg i{background:var(--hot)}
+.day.sel{border-color:var(--free);box-shadow:0 0 0 1px var(--free), var(--shadow-sm)}
+
+/* ══════════════════════ ASK ══════════════════════ */
+.field{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line-2);
+  border-radius:14px;padding:4px 4px 4px 15px;box-shadow:var(--shadow-sm);
+  transition:border-color .2s}
+.field:focus-within{border-color:color-mix(in srgb,var(--now) 65%,transparent)}
+.field input{flex:1;min-width:0;border:0;background:none;outline:none;padding:13px 0;font-size:16px;
+  font-weight:450;letter-spacing:-.011em}
+.field input::placeholder{color:var(--txt-3)}
+.field button.go{background:var(--free);color:var(--free-ink);padding:11px 15px;border-radius:11px;
+  font-size:13px;font-weight:640;letter-spacing:-.01em;transition:transform .38s var(--spring)}
+.field button:active{transform:scale(.93)}
+.field button.mic{width:38px;height:38px;border-radius:11px;background:var(--surface-2);
+  border:1px solid var(--line);display:grid;place-items:center;color:var(--txt-2);flex:0 0 auto;
+  transition:transform .38s var(--spring), background .2s, color .2s}
+.field.hear button.mic{background:var(--now);color:#12100c;border-color:transparent;
+  animation:pulse 1.5s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--now) 55%,transparent)}
+  60%{box-shadow:0 0 0 9px transparent}}
+@media (prefers-reduced-motion:reduce){.field.hear button.mic{animation:none}}
+
+.copybar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.copybtn{display:inline-flex;align-items:center;gap:6px;padding:9px 13px;border-radius:10px;
+  background:var(--surface-2);border:1px solid var(--line);font-size:12.5px;font-weight:600;
+  color:var(--txt-2);transition:transform .38s var(--spring), color .2s, background .2s}
+.copybtn:active{transform:scale(.95)}
+.copybtn.done{background:var(--free);color:var(--free-ink);border-color:transparent}
+
+.chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}
+.chips button{padding:8px 12px;border-radius:10px;background:var(--surface-2);border:1px solid var(--line);
+  font-size:12.5px;font-weight:500;color:var(--txt-2);transition:transform .38s var(--spring), color .18s}
+.chips button:active{transform:scale(.94);color:var(--txt)}
+
+.answer{font-size:22px;font-weight:600;letter-spacing:-.028em;line-height:1.32;margin:0}
+.answer b{font-weight:700}
+.answer .y{color:var(--free)}
+.answer .n{color:var(--hot)}
+.heard{display:flex;gap:6px;flex-wrap:wrap;margin-top:13px}
+
+/* ══════════════════════ room sheet ══════════════════════ */
+.scrim{position:absolute;inset:0;z-index:50;background:rgba(0,0,0,.55);
+  opacity:0;pointer-events:none;transition:opacity .3s var(--out)}
+.scrim.on{opacity:1;pointer-events:auto}
+.sheet{
+  position:absolute;left:0;right:0;bottom:0;z-index:51;max-height:86%;
+  background:var(--surface);border:1px solid var(--line-2);border-bottom:0;
+  border-radius:22px 22px 0 0;box-shadow:var(--shadow);
+  display:flex;flex-direction:column;
+  transform:translateY(101%);transition:transform .58s var(--spring);
+}
+.sheet.on{transform:translateY(0)}
+.grab{padding:9px 0 3px;display:grid;place-items:center;flex:0 0 auto;touch-action:none;cursor:grab}
+.grab i{width:38px;height:4px;border-radius:2px;background:var(--line-2);display:block}
+.sheet-h{padding:6px 20px 14px;border-bottom:1px solid var(--line);flex:0 0 auto;
+  display:flex;align-items:flex-start;gap:12px}
+.sheet-h .n{font-size:24px;font-weight:680;letter-spacing:-.03em;line-height:1.1}
+.sheet-h .m{font-size:12.5px;color:var(--txt-2);margin-top:3px}
+.sheet-h button{margin-left:auto;width:30px;height:30px;border-radius:9px;background:var(--surface-2);
+  display:grid;place-items:center;color:var(--txt-2);flex:0 0 auto}
+.sheet-b{overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
+  padding-bottom:calc(20px + var(--safe-b))}
+.strip{display:flex;gap:1px;height:22px;padding:16px 20px 0}
+.strip i{flex:1;border-radius:1px;background:var(--held)}
+.strip i.f{background:var(--free)}
+.strip i.td{box-shadow:inset 0 0 0 1px var(--now)}
+.strip-k{display:flex;justify-content:space-between;padding:7px 20px 16px}
+.sheet-s{padding:14px 20px 8px;display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+
+@media (prefers-reduced-motion:reduce){
+  .sheet{transition:transform .01s}
+  *{scroll-behavior:auto!important}
+}
+@media (min-width:720px){
+  .screen{padding:26px max(20px,calc((100% - 640px)/2)) calc(110px + var(--safe-b))}
+  .topbar{padding-left:max(20px,calc((100% - 640px)/2));padding-right:max(20px,calc((100% - 640px)/2))}
+  .tabbar{left:50%;right:auto;transform:translateX(-50%);width:360px}
+  .sheet{left:50%;transform:translate(-50%,101%);width:min(560px,100%);border-radius:22px 22px 0 0}
+  .sheet.on{transform:translate(-50%,0)}
+}
+</style>
+
+<div class="app">
+  <header class="topbar">
+    <h1 id="scrTitle">Rooms<span class="sub" id="scrSub"></span></h1>
+    <button class="ghost" id="themeBtn" aria-label="Switch theme"><span id="themeIc">◐</span></button>
+  </header>
+
+  <div class="screens">
+    <section class="screen on" id="scr-rooms"></section>
+    <section class="screen" id="scr-month"></section>
+    <section class="screen" id="scr-ask"></section>
+
+    <div class="scrim" id="scrim"></div>
+    <aside class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Room detail">
+      <div class="grab" id="grab"><i></i></div>
+      <div class="sheet-h" id="sheetH"></div>
+      <div class="sheet-b" id="sheetB"></div>
+    </aside>
+
+    <nav class="tabbar" id="tabbar" role="tablist"></nav>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ═══════════════ demonstration data — invented, not real ═══════════════ */
+const DAYS = 63;
+const DOW  = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const DOWF = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+const MON  = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const MONF = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+const today = new Date(); today.setHours(0,0,0,0);
+const dateAt = i => { const d = new Date(today); d.setDate(d.getDate()+i); return d; };
+const fmt  = i => { const d=dateAt(i); return `${d.getDate()} ${MON[d.getMonth()]}`; };
+const fmtL = i => { const d=dateAt(i); return `${DOW[d.getDay()]} ${d.getDate()} ${MON[d.getMonth()]}`; };
+
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);
+  t=t+Math.imul(t^t>>>7,61|t)^t;return ((t^t>>>14)>>>0)/4294967296}}
+const rng = mulberry32(20260806);
+
+const BUILDINGS = [
+  {code:"A", name:"Palm Court",        short:"Palm Court", floors:4, per:4},
+  {code:"B", name:"Bayview Residency", short:"Bayview",    floors:4, per:3},
+  {code:"C", name:"The Mews",          short:"Mews",       floors:3, per:4},
+];
+const TYPES = ["Studio","1 BHK","1 BHK","2 BHK"];
+const NAMES = ["R. Menon","S. Kulkarni","A. Fernandes","D. Iyer","K. Bhatt","M. Sequeira","P. Rao",
+  "T. Nayar","J. Dcosta","V. Shetty","N. Pillai","H. Chandra","L. Mathew","G. Saldanha","B. Kaur",
+  "F. Noronha","Y. Deshpande","C. Varghese","E. Pinto","U. Reddy"];
+const SRC = ["Airbnb","Direct call","Walk-in","Booking.com","Repeat guest"];
+
+const flats = [];
+BUILDINGS.forEach(b=>{
+  for(let f=1;f<=b.floors;f++) for(let u=1;u<=b.per;u++){
+    flats.push({id:`${b.code}-${f}0${u}`, code:b.code, bname:b.name, bshort:b.short, floor:f,
+      type:TYPES[Math.floor(rng()*TYPES.length)], rate:1800+Math.floor(rng()*14)*200,
+      pop:0.34+rng()*0.56});
+  }
+});
+const NF = flats.length;
+
+const occ = flats.map(()=>new Uint8Array(DAYS));
+const resv = [];
+flats.forEach((fl,fi)=>{
+  let d = -2 - Math.floor(rng()*8);          // stays already in progress, some checking out today
+  while(d < DAYS){
+    if(rng() > fl.pop){ d += 1; continue; }
+    const dt = dateAt(Math.max(d,0));
+    const we = dt.getDay()===5 || dt.getDay()===6;
+    let n = 1 + Math.floor(rng()*(we?5:4));
+    if(rng() < .2) n += 2 + Math.floor(rng()*4);
+    const start=d, end=d+n;
+    for(let k=Math.max(start,0);k<Math.min(end,DAYS);k++) occ[fi][k]=1;
+    // end >= 0 keeps stays that check out this morning — they are today's departures
+    if(end>=0 && start<DAYS) resv.push({fi,start,end,nights:n,
+      guest:NAMES[Math.floor(rng()*NAMES.length)], src:SRC[Math.floor(rng()*SRC.length)]});
+    // a well-run short-let re-lets back-to-back roughly a third of the time,
+    // which is exactly what creates a same-day turnaround
+    d = end + (rng() < .3 ? 0 : 1 + Math.floor(rng()*4));
+  }
+});
+const chg = flats.map(()=>new Uint8Array(DAYS));
+resv.forEach(r=>{ if(r.end>=0 && r.end<DAYS && occ[r.fi][r.end]) chg[r.fi][r.end]=1; });
+
+const freeRange = (fi,a,b)=>{ for(let d=a;d<b;d++){ if(d<0||d>=DAYS||occ[fi][d]) return false; } return true; };
+const freeCount = d => { let n=0; for(let i=0;i<NF;i++) if(!occ[i][d]) n++; return n; };
+const runFrom   = (fi,d)=>{ let n=0; while(d+n<DAYS && !occ[fi][d+n]) n++; return n; };
+const occPct    = fi => Math.round(occ[fi].reduce((a,b)=>a+b,0)/DAYS*100);
+
+const haptic = ms => { try{ navigator.vibrate && navigator.vibrate(ms); }catch(e){} };
+const el = (t,c,x)=>{const n=document.createElement(t); if(c)n.className=c; if(x!=null)n.textContent=x; return n;};
+const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+async function copyText(t){
+  try{ await navigator.clipboard.writeText(t); return true; }
+  catch(e){
+    try{
+      const ta = document.createElement("textarea");
+      ta.value = t; ta.setAttribute("readonly","");
+      ta.style.cssText = "position:fixed;top:0;left:0;opacity:0;pointer-events:none";
+      document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, t.length);
+      const ok = document.execCommand("copy"); ta.remove(); return ok;
+    }catch(e2){ return false; }
+  }
+}
+
+/* ═══════════════ shared: room tile + list row ═══════════════ */
+function roomTile(fi, day, stay){
+  const fl = flats[fi];
+  const nights = stay || 1;
+  const open = freeRange(fi, day, day + nights);
+  const turn = chg[fi][day] && !open;
+  const run = open ? runFrom(fi, day) : 0;
+  const b = el("button","tile" + (open ? " free" : (turn ? " turn" : "")));
+  const note = open
+    ? (run >= DAYS-day ? `Free ${run}+n` : `Free ${run}n`)
+    : (turn ? "Turnaround" : "Booked");
+  b.append(el("b",null,fl.id), el("s",null,note));
+  if(open && run === 1) b.appendChild(el("i","flag"));   // orphan night
+  b.setAttribute("aria-label",
+    `${fl.id}, ${fl.type}, ${open ? `free for ${run} night${run>1?"s":""} from` : "not available on"} ${fmtL(day)}`);
+  b.onclick = ()=>{ haptic(9); openSheet(fi, day); };
+  return b;
+}
+function roomRow(fi, day, tail){
+  const fl = flats[fi];
+  const r = el("button","row");
+  r.append(el("div","id",fl.id));
+  const m = el("div","meta");
+  m.innerHTML = `<b>${fl.type}</b> · ${fl.bshort}<em>Floor ${fl.floor}${tail ? " · " + tail : ""}</em>`;
+  r.appendChild(m);
+  const run = runFrom(fi, day);
+  r.appendChild(el("span","pill good", run>=DAYS-day ? `${run}+ nights` : `${run} night${run>1?"s":""} free`));
+  r.onclick = ()=>{ haptic(9); openSheet(fi, day); };
+  return r;
+}
+
+/* ═══════════════ SCREEN 1 — ROOMS ═══════════════ */
+const STRIP = 14;              // nights answerable without leaving this tab
+const STAYS = [1,2,3,7];
+let pickedNight = 0, stayNights = 1;
+const countFreeFor = (d, n) => { let c=0; for(let i=0;i<NF;i++) if(freeRange(i,d,d+n)) c++; return c; };
+const soonestFor = (n, from) => { for(let d=from; d<=DAYS-n; d++) if(countFreeFor(d,n)) return d; return -1; };
+
+/* The operator's real morning question isn't "how many are free" — it's
+   who is arriving, who is leaving, and which rooms have to be turned around
+   between a checkout and a check-in on the same day. */
+function dayOps(d){
+  const arrivals = resv.filter(r => r.start === d).sort((a,b)=> a.fi - b.fi);
+  const departures = resv.filter(r => r.end === d).sort((a,b)=> a.fi - b.fi);
+  const arrivingIn = new Set(arrivals.map(r => r.fi));
+  const turnovers = departures.filter(r => arrivingIn.has(r.fi))
+    .map(r => ({ fi:r.fi, out:r, in:arrivals.find(a => a.fi === r.fi) }));
+  return { arrivals, departures, turnovers };
+}
+
+function renderRooms(){
+  const s = document.getElementById("scr-rooms");
+  s.textContent = "";
+
+  /* the day's operations board — arrivals, departures, and same-day turnarounds */
+  const hero = el("div","ops");
+  const opsDate = el("div","ops-date");
+  const opsDateB = el("b"), opsDateS = el("s");
+  opsDate.append(opsDateB, opsDateS);
+  const opsRow = el("div","ops-row");
+  const OPS = [
+    {key:"arrivals",   label:"Arriving"},
+    {key:"departures", label:"Leaving"},
+    {key:"turnovers",  label:"Turnaround"},
+  ];
+  const opEls = OPS.map(o=>{
+    const b = el("button","op");
+    const nEl = el("b"), sEl = el("s",null,o.label);
+    b.append(nEl, sEl);
+    b.onclick = ()=>{ haptic(10); openOps(o.key, Math.min(pickedNight, STRIP-1)); };
+    opsRow.appendChild(b);
+    return {b, nEl, key:o.key};
+  });
+  hero.append(opsDate, opsRow);
+
+  /* stay-length dial: every night in the strip re-counts for a stay of this many nights */
+  const stayWrap = el("div","stack gap-s");
+  const sh = el("div","sect");
+  sh.append(el("span","lbl","How long a stay"), el("span","lbl","re-counts every night below"));
+  const seg = el("div","seg");
+  const ind = el("span","seg-ind");
+  seg.appendChild(ind);
+  STAYS.forEach((v,i)=>{
+    const b = el("button",null, v===1 ? "1 night" : `${v} nights`);
+    b.onclick = ()=>{ haptic(9); stayNights = v; paint(); };
+    seg.appendChild(b);
+  });
+  stayWrap.append(sh, seg);
+
+  const nightsWrap = el("div","stack gap-s");
+  const nh = el("div","sect");
+  nh.append(el("span","lbl","The next two weeks"), el("span","lbl","tap an arrival night"));
+  const nights = el("div","nights");
+  for(let d=0; d<STRIP; d++){
+    const dt = dateAt(d);
+    const c = el("button","night" + (d===0?" today":""));
+    c.dataset.d = d;
+    const lab = el("div","d");
+    // on the 1st the month replaces the weekday, so a month boundary never reads as a bare number
+    lab.append(el("span",null,
+      d===0 ? "TDY" : dt.getDate()===1 ? MON[dt.getMonth()].toUpperCase() : DOW[dt.getDay()].toUpperCase()));
+    lab.append(el("em",null, String(dt.getDate())));
+    c.append(lab, el("div","n","0"));
+    const t = el("div","t"); t.appendChild(el("i"));
+    c.appendChild(t);
+    c.onclick = ()=>{ haptic(9); pickedNight = d; paint(); };
+    nights.appendChild(c);
+  }
+  nightsWrap.append(nh, nights);
+
+  const tilesWrap = el("div","stack gap-s");
+  const th = el("div","sect");
+  const thLeft = el("span","lbl"), thRight = el("span","lbl");
+  const reset = el("button","pill");
+  reset.textContent = "Today";
+  reset.style.cssText = "display:none;margin-left:8px;flex:0 0 auto";
+  reset.setAttribute("aria-label","Back to tonight");
+  reset.onclick = ()=>{ haptic(9); pickedNight = 0; paint(); };
+  thLeft.style.cssText = "white-space:nowrap;overflow:hidden;text-overflow:ellipsis";
+  thRight.style.cssText = "white-space:nowrap;flex:0 0 auto";
+  const leftBox = el("div");
+  leftBox.style.cssText = "display:flex;align-items:center;min-width:0;flex:1";
+  leftBox.append(thLeft, reset);
+  th.append(leftBox, thRight);
+  const tiles = el("div","tiles");
+  tilesWrap.append(th, tiles);
+
+  const note = el("p");
+  note.style.cssText="margin:0;font-size:12px;line-height:1.55;color:var(--txt-3)";
+  note.innerHTML = "A lit tile is a room you can sell. The figure on it is how many nights it stays free from that date &mdash; and an amber dot marks a single orphan night, the hardest kind to fill. Rooms, guests and dates are invented for this demo.";
+
+  s.append(hero, stayWrap, nightsWrap, tilesWrap, note);
+
+  function paint(){
+    const d = Math.min(pickedNight, STRIP-1), n = stayNights;
+
+    // dial
+    const si = STAYS.indexOf(n);
+    ind.style.width = `calc((100% - 6px)/${STAYS.length})`;
+    ind.style.transform = `translateX(${si*100}%)`;
+    [...seg.querySelectorAll("button")].forEach((b,i)=>b.setAttribute("aria-pressed", i===si));
+
+    // every night re-counted for a stay of n nights
+    nights.querySelectorAll(".night").forEach(c=>{
+      const cd = +c.dataset.d, f = countFreeFor(cd, n);
+      c.classList.toggle("sel", cd === d);
+      c.classList.toggle("full", f === 0);
+      c.querySelector(".n").textContent = f;
+      c.querySelector(".t i").style.width = (f/NF*100).toFixed(0)+"%";
+      c.setAttribute("aria-label",
+        `Arrive ${fmtL(cd)}, ${f} of ${NF} rooms free for ${n} night${n>1?"s":""}`);
+    });
+
+    const f = countFreeFor(d, n);
+
+    // the day's board follows the selection, like everything else on this screen
+    const dt = dateAt(d), ops = dayOps(d);
+    opsDateB.textContent = `${DOWF[dt.getDay()]} ${dt.getDate()} ${MONF[dt.getMonth()]}`;
+    opsDateS.textContent = d===0 ? "today" : d===1 ? "tomorrow" : `in ${d} days`;
+    opEls.forEach(o=>{
+      const list = ops[o.key], c = list.length;
+      o.nEl.textContent = c;
+      o.b.classList.toggle("zero", c === 0);
+      o.b.classList.toggle("alert", o.key === "turnovers" && c > 0);
+      o.b.setAttribute("aria-label",
+        `${c} ${o.key === "turnovers" ? "same-day turnarounds" : o.key} on ${fmtL(d)}`);
+    });
+
+    scrSub.textContent = n === 1
+      ? `${f} of ${NF} free · ${d===0 ? "tonight" : fmtL(d)}`
+      : `${f} of ${NF} free · ${fmt(d)} → ${fmt(d+n)}`;
+
+    thLeft.textContent = "Every room";
+    thRight.textContent = n === 1 ? fmtL(d) : `${fmt(d)} → ${fmt(d+n)}`;
+    reset.style.display = d===0 ? "none" : "inline-flex";
+
+    tiles.textContent = "";
+    if(f === 0){
+      // a dead end is still a question worth answering: when *is* this stay possible?
+      tiles.style.display = "block";
+      const box = el("div","card"); box.style.padding = "20px 18px";
+      const soon = soonestFor(n, d+1);
+      const head = el("p");
+      head.style.cssText = "margin:0;font-size:15px;font-weight:600;letter-spacing:-.018em;line-height:1.4";
+      head.textContent = `No room takes a ${n}-night stay arriving ${fmtL(d)}.`;
+      box.appendChild(head);
+      if(soon >= 0){
+        const sc = countFreeFor(soon, n);
+        const p = el("p");
+        p.style.cssText = "margin:8px 0 14px;font-size:13px;color:var(--txt-2);line-height:1.5";
+        p.innerHTML = `Soonest it works is <b style="color:var(--txt)">${fmtL(soon)}</b> — ${sc} room${sc>1?"s":""}.`;
+        const jump = el("button","copybtn");
+        jump.textContent = soon < STRIP ? `Jump to ${fmt(soon)}` : `Open ${fmt(soon)} in Month`;
+        jump.onclick = ()=>{ haptic(10);
+          if(soon < STRIP){ pickedNight = soon; paint(); } else goMonth(soon); };
+        box.append(p, jump);
+      } else {
+        const p = el("p");
+        p.style.cssText = "margin:8px 0 0;font-size:13px;color:var(--txt-2);line-height:1.5";
+        p.textContent = `Nothing in the next nine weeks has ${n} consecutive nights open. Try a shorter stay.`;
+        box.appendChild(p);
+      }
+      tiles.appendChild(box);
+    } else {
+      tiles.style.display = "";
+      flats.forEach((fl,fi)=> tiles.appendChild(roomTile(fi, d, n)));
+    }
+
+    const sel = nights.querySelector(".night.sel");
+    if(sel) sel.scrollIntoView({behavior: calm?"auto":"smooth", block:"nearest", inline:"nearest"});
+  }
+  paint();
+}
+
+/* ═══════════════ SCREEN 2 — MONTH ═══════════════ */
+let monthOffset = 0, selDay = 0, revealPanel = false;
+function monthList(){
+  const out = [];
+  for(let d=0; d<DAYS; d++){
+    const dt = dateAt(d), k = dt.getFullYear()+"-"+dt.getMonth();
+    if(!out.length || out[out.length-1].k!==k) out.push({k, y:dt.getFullYear(), m:dt.getMonth(), days:[]});
+    out[out.length-1].days.push(d);
+  }
+  return out;
+}
+function goMonth(day){
+  const ms = monthList();
+  const dt = dateAt(day);
+  const i = ms.findIndex(m=>m.y===dt.getFullYear() && m.m===dt.getMonth());
+  if(i>=0) monthOffset = i;
+  selDay = day;
+  switchTo(1);
+}
+function renderMonth(){
+  const s = document.getElementById("scr-month");
+  s.textContent = "";
+  const ms = monthList();
+  const mo = ms[Math.max(0,Math.min(ms.length-1,monthOffset))];
+
+  const nav = el("div","mnav");
+  const prev = el("button",null,"‹"), next = el("button",null,"›");
+  prev.setAttribute("aria-label","Previous month"); next.setAttribute("aria-label","Next month");
+  if(monthOffset<=0) prev.setAttribute("disabled","");
+  if(monthOffset>=ms.length-1) next.setAttribute("disabled","");
+  prev.onclick = ()=>{ monthOffset--; selDay=ms[monthOffset].days[0]; haptic(8); renderMonth(); };
+  next.onclick = ()=>{ monthOffset++; selDay=ms[monthOffset].days[0]; haptic(8); renderMonth(); };
+  nav.append(el("div","t", `${MONF[mo.m]} ${mo.y}`), prev, next);
+
+  const cal = el("div","card");
+  cal.style.cssText = "padding:14px;background:transparent;border:0;box-shadow:none";
+  const dow = el("div","dow");
+  ["M","T","W","T","F","S","S"].forEach(d=>dow.appendChild(el("span",null,d)));
+  const grid = el("div","cal");
+  const lead = (dateAt(mo.days[0]).getDay()+6)%7;
+  for(let i=0;i<lead;i++) grid.appendChild(el("div","day pad"));
+  mo.days.forEach(d=>{
+    const dt = dateAt(d), f = freeCount(d);
+    const c = el("button","day");
+    if(d===0) c.classList.add("today");
+    if(f===0) c.classList.add("none");
+    if(selDay===d) c.classList.add("sel");
+    c.append(el("div","dd",String(dt.getDate())), el("div","fn",String(f)));
+    const g = el("div","gg"); const i = el("i"); i.style.width=(f/NF*100).toFixed(0)+"%";
+    g.appendChild(i); c.appendChild(g);
+    c.setAttribute("aria-label", `${fmtL(d)}, ${f} of ${NF} rooms free`);
+    c.onclick = ()=>{ selDay = d; revealPanel = true; haptic(9); renderMonth(); };
+    grid.appendChild(c);
+  });
+  cal.style.padding = "0";
+  cal.append(dow, grid);
+
+  const key = el("div","key");
+  const k1 = el("div","keyitem");
+  const c1 = el("div","keychip"); c1.appendChild(el("u",null,"23"));
+  const c1b = el("i"); c1b.appendChild(el("b")); c1.appendChild(c1b);
+  k1.append(c1, el("span",null,"Rooms still free that night — not rooms booked"));
+  const k2 = el("div","keyitem");
+  const c2 = el("div","keychip"); const c2b = el("i");
+  const c2f = el("b"); c2f.style.width="58%"; c2b.appendChild(c2f); c2.appendChild(c2b);
+  k2.append(c2, el("span",null,"The bar is that same figure as a share of all 40 — it shrinks as the night sells out"));
+  key.append(k1, k2);
+
+  s.append(nav, cal, key);
+
+  if(selDay !== null){
+    const free = []; flats.forEach((fl,fi)=>{ if(!occ[fi][selDay]) free.push(fi); });
+    const panel = el("div","stack gap-s");
+    panel.style.marginTop = "22px";
+    const h = el("div","sect");
+    h.append(el("span","lbl", fmtL(selDay)),
+             el("span","lbl", `${free.length} of ${NF} free`));
+    const list = el("div","card");
+    if(!free.length) list.appendChild(el("div","empty","Fully booked that night. Nothing left to sell."));
+    free.forEach(fi=> list.appendChild(roomRow(fi, selDay, null)));
+    panel.append(h, list);
+    s.appendChild(panel);
+    if(revealPanel){
+      revealPanel = false;
+      requestAnimationFrame(()=> panel.scrollIntoView({behavior: calm?"auto":"smooth", block:"nearest"}));
+    }
+  }
+}
+
+/* ═══════════════ SCREEN 3 — ASK ═══════════════ */
+const SUGGEST = ["anything free tonight?","3 nights from friday","this weekend",
+                 "2 bhk next week","8 to 11","palm court tomorrow"];
+let lastQuery = "anything free tonight?";
+
+function nextWeekend(){ let a=0; while(dateAt(a).getDay()!==5 && a<DAYS) a++; return {a, b:Math.min(a+2,DAYS)}; }
+const ord = d => (d%10===1&&d%100!==11)?"st":(d%10===2&&d%100!==12)?"nd":(d%10===3&&d%100!==13)?"rd":"th";
+function findDayOfMonth(dom){ for(let d=0;d<DAYS;d++) if(dateAt(d).getDate()===dom) return d; return null; }
+
+function parseQuery(q){
+  const s = " " + q.toLowerCase().replace(/[^a-z0-9 ]/g," ").replace(/\s+/g," ") + " ";
+  let start = 0, n = 1, how = "tonight";
+  const wd = ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"];
+  const words = {one:1,two:2,three:3,four:4,five:5,six:6,seven:7};
+  // "3 nights", "1n", "2nt", "4 nts", "one night" — the unit may be glued to the digit
+  const nMatch = s.match(/(?:^|\s)(\d{1,2})\s?(?:n|nt|nts|night|nights)(?:\s|$)/)
+              || s.match(/(?:^|\s)(one|two|three|four|five|six|seven)\s?(?:n|nt|nts|night|nights)(?:\s|$)/);
+  if(nMatch) n = Math.min(21, parseInt(nMatch[1]) || words[nMatch[1]] || 1);
+  const range = s.match(/ (\d{1,2})\s*(?:to|till|until|thru|through|-)\s*(\d{1,2}) /);
+  const wdHit = wd.findIndex(w=>s.includes(" "+w));
+
+  if(/ (tonight|today|now) /.test(s)){ start=0; how="tonight"; }
+  else if(/ tomorrow /.test(s)){ start=1; how="tomorrow"; if(!nMatch) n=1; }
+  else if(/ next weekend /.test(s)){ const w=nextWeekend(); start=w.a+7; n=nMatch?n:2; how="next weekend"; }
+  else if(/ weekend /.test(s)){ const w=nextWeekend(); start=w.a; n=nMatch?n:2; how="this weekend"; }
+  else if(/ next week /.test(s)){ let a=0; while(dateAt(a).getDay()!==1) a++; if(a===0)a=7;
+    start=a; n=nMatch?n:7; how="next week"; }
+  else if(range){
+    const d1=+range[1], d2=+range[2], s1=findDayOfMonth(d1), s2=findDayOfMonth(d2);
+    if(s1!==null){ start=s1; n=(s2!==null && s2>s1)?s2-s1:n; how=`the ${d1}${ord(d1)} to the ${d2}${ord(d2)}`; }
+  }
+  else if(wdHit>=0){ let a=0; while(a<DAYS && dateAt(a).getDay()!==wdHit) a++; start=a; how=wd[wdHit]; }
+
+  let type=null, bldg=null;
+  if(/ (2 ?bhk|two bed) /.test(s)) type="2 BHK";
+  else if(/ (1 ?bhk|one bed) /.test(s)) type="1 BHK";
+  else if(/ studio /.test(s)) type="Studio";
+  BUILDINGS.forEach(b=>{ if(s.includes(" "+b.name.toLowerCase().split(" ")[0])) bldg=b.code; });
+
+  start = Math.max(0, Math.min(DAYS-1, start));
+  n = Math.max(1, Math.min(n, DAYS-start));
+  return {start, n, how, type, bldg};
+}
+
+function renderAsk(focus){
+  const s = document.getElementById("scr-ask");
+  s.textContent = "";
+
+  const top = el("div","stack");
+  const field = el("div","field");
+  const input = el("input");
+  input.type="text"; input.value = lastQuery; input.autocomplete="off";
+  input.placeholder = "anything free this weekend?";
+  input.setAttribute("enterkeyhint","search");
+  input.setAttribute("aria-label","Ask about availability in plain words");
+  const go = el("button","go","Ask");
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let mic = null, rec = null;
+  if(SR){
+    mic = el("button","mic");
+    mic.setAttribute("aria-label","Speak the question");
+    mic.innerHTML = '<svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="7.4" y="2.2" width="5.2" height="9.4" rx="2.6"/><path d="M4.4 9.2a5.6 5.6 0 0 0 11.2 0M10 14.8v3"/></svg>';
+    mic.onclick = ()=>{
+      if(rec){ rec.stop(); return; }
+      try{
+        rec = new SR();
+        rec.lang = navigator.language || "en-US";
+        rec.interimResults = true;
+        rec.continuous = false;
+        rec.onresult = e=>{
+          const txt = [...e.results].map(r=>r[0].transcript).join("");
+          input.value = txt;
+          if(e.results[e.results.length-1].isFinal){ run(); }
+        };
+        rec.onerror = ev=>{
+          field.classList.remove("hear"); rec = null;
+          input.placeholder = ev.error==="not-allowed"
+            ? "Microphone blocked here — type instead" : "Didn't catch that — type instead";
+        };
+        rec.onend = ()=>{ field.classList.remove("hear"); rec = null; };
+        rec.start(); field.classList.add("hear"); haptic(14);
+      }catch(err){ field.classList.remove("hear"); rec = null; }
+    };
+  }
+  field.append(input);
+  if(mic) field.append(mic);
+  field.append(go);
+  const chips = el("div","chips");
+  SUGGEST.forEach(q=>{ const b=el("button",null,q);
+    b.onclick=()=>{ input.value=q; run(); }; chips.appendChild(b); });
+  top.append(field, chips);
+
+  const ansWrap = el("div","stack gap-m");
+  const listWrap = el("div","stack gap-s");
+  s.append(top, ansWrap, listWrap);
+
+  go.onclick = run;
+  input.addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); input.blur(); run(); }});
+  if(focus) setTimeout(()=>input.focus(),120);
+  run();
+
+  function run(){
+    haptic(10);
+    lastQuery = input.value.trim() || "anything free tonight?";
+    const p = parseQuery(lastQuery);
+    const a = p.start, b = p.start + p.n;
+    let pool = flats.map((f,i)=>({f,i}));
+    if(p.type) pool = pool.filter(x=>x.f.type===p.type);
+    if(p.bldg) pool = pool.filter(x=>x.f.code===p.bldg);
+    const free = pool.filter(x=>freeRange(x.i,a,b));
+    const when = p.n===1 ? fmtL(a) : `${fmtL(a)} → ${fmtL(b)}`;
+    const nightsTxt = p.n===1 ? "that night" : p.n===2 ? "both nights" : `all ${p.n} nights`;
+
+    ansWrap.textContent = "";
+    const ans = el("p","answer");
+    ans.innerHTML = free.length
+      ? `Yes — <b class="y">${free.length} room${free.length>1?"s":""}</b> free for ${nightsTxt}, ${when}.`
+      : `<b class="n">Nothing</b> covers ${nightsTxt}, ${when}.`;
+    const heard = el("div","heard");
+    heard.append(el("span","pill now", p.how));
+    heard.append(el("span","pill", `${p.n} night${p.n>1?"s":""}`));
+    if(p.type) heard.append(el("span","pill", p.type));
+    if(p.bldg) heard.append(el("span","pill", BUILDINGS.find(z=>z.code===p.bldg).name));
+    ansWrap.append(ans, heard);
+
+    if(free.length){
+      const bar = el("div","copybar");
+      const cp = el("button","copybtn");
+      cp.innerHTML = '<svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><rect x="6.6" y="6.6" width="10.4" height="10.4" rx="2.4"/><path d="M13.4 3.4H4.6a1.2 1.2 0 0 0-1.2 1.2v8.8"/></svg><span>Copy for WhatsApp</span>';
+      cp.onclick = async ()=>{
+        const lines = free.map(x=>`${x.f.id} (${x.f.type}, ${x.f.bshort})`).join("\n");
+        const text = p.n===1
+          ? `Free on ${fmtL(a)} — ${free.length} room${free.length>1?"s":""}:\n${lines}`
+          : `Free ${fmtL(a)} → ${fmtL(b)} (${p.n} nights) — ${free.length} room${free.length>1?"s":""}:\n${lines}`;
+        const ok = await copyText(text);
+        haptic(12);
+        cp.querySelector("span").textContent = ok ? "Copied" : "Press and hold to copy";
+        cp.classList.toggle("done", ok);
+        setTimeout(()=>{ cp.querySelector("span").textContent = "Copy for WhatsApp";
+                         cp.classList.remove("done"); }, 1800);
+      };
+      bar.append(cp, el("span","lbl", `${free.length} room${free.length>1?"s":""} · ${p.n} night${p.n>1?"s":""}`));
+      ansWrap.append(bar);
+    }
+
+    listWrap.textContent = "";
+    const h = el("div","sect");
+    const list = el("div","card");
+    if(free.length){
+      h.append(el("span","lbl","Read these out"), el("span","lbl", `${fmt(a)} → ${fmt(b)}`));
+      free.forEach(x=> list.appendChild(roomRow(x.i, a, null)));
+    } else {
+      h.append(el("span","lbl","Nearest alternatives"), el("span","lbl","move the dates"));
+      const alts = [];
+      for(let sh=1; sh<=8 && alts.length<6; sh++){
+        [a+sh, a-sh].forEach(s2=>{
+          if(s2<0 || s2+p.n>DAYS) return;
+          const c = pool.filter(x=>freeRange(x.i,s2,s2+p.n));
+          if(c.length) alts.push({d:s2, c:c.length});
+        });
+      }
+      if(!alts.length) list.appendChild(el("div","empty","Nothing nearby either — try a shorter stay."));
+      alts.slice(0,6).forEach(alt=>{
+        const r = el("button","row");
+        r.append(el("div","id", (alt.d>a?"+":"−")+Math.abs(alt.d-a)+"d"));
+        const m = el("div","meta");
+        m.innerHTML = `Arrive <b>${fmtL(alt.d)}</b> instead<em>${alt.c} room${alt.c>1?"s":""} open up</em>`;
+        r.append(m, el("span","pill good", `${alt.c} free`));
+        r.onclick = ()=>{ haptic(9); goMonth(alt.d); };
+        list.appendChild(r);
+      });
+    }
+    listWrap.append(h, list);
+  }
+}
+
+/* ═══════════════ room sheet ═══════════════ */
+const sheet = document.getElementById("sheet");
+const scrim = document.getElementById("scrim");
+const sheetH = document.getElementById("sheetH");
+const sheetB = document.getElementById("sheetB");
+
+function openSheet(fi, day){
+  const fl = flats[fi];
+  sheetH.textContent = ""; sheetB.textContent = "";
+
+  const t = el("div");
+  t.innerHTML = `<div class="n">${fl.id}</div><div class="m">${fl.type} · ${fl.bname} · floor ${fl.floor}</div>`;
+  const x = el("button",null,"✕"); x.setAttribute("aria-label","Close");
+  x.onclick = closeSheet;
+  sheetH.append(t, x);
+
+  const strip = el("div","strip");
+  for(let d=0;d<DAYS;d++){ const i=el("i"); if(!occ[fi][d]) i.className="f"; if(d===0) i.classList.add("td"); strip.appendChild(i); }
+  const k = el("div","strip-k");
+  k.append(el("span","lbl","Today"), el("span","lbl", `${occPct(fi)}% booked`), el("span","lbl","+9 weeks"));
+  sheetB.append(strip, k);
+
+  const s1 = el("div","sheet-s");
+  s1.append(el("span","lbl","Upcoming bookings"), el("span","lbl", `specimen rate ₹${fl.rate}/night`));
+  sheetB.appendChild(s1);
+  const bl = el("div","card"); bl.style.margin="0 20px";
+  const mine = resv.filter(r=>r.fi===fi && r.end>0 && r.start<DAYS).sort((a,b)=>a.start-b.start);
+  if(!mine.length) bl.appendChild(el("div","empty","No bookings in the next nine weeks — completely open."));
+  mine.slice(0,12).forEach(r=>{
+    const row = el("div","row");
+    row.append(el("div","id", Math.max(r.start,0)===0 ? "Now" : fmt(Math.max(r.start,0))));
+    const m = el("div","meta");
+    m.innerHTML = `<b>${r.guest}</b> · ${r.src}<em>${fmt(Math.max(r.start,0))} → ${fmt(Math.min(r.end,DAYS-1))}</em>`;
+    row.append(m, el("span","pill", `${r.nights} night${r.nights>1?"s":""}`));
+    bl.appendChild(row);
+  });
+  sheetB.appendChild(bl);
+
+  const s2 = el("div","sheet-s");
+  s2.append(el("span","lbl","Open stretches"), el("span","lbl","sellable"));
+  sheetB.appendChild(s2);
+  const gl = el("div","card"); gl.style.margin="0 20px";
+  let d=0, any=false;
+  while(d<DAYS){
+    if(occ[fi][d]){ d++; continue; }
+    let n=0; while(d+n<DAYS && !occ[fi][d+n]) n++;
+    const row = el("div","row"); any=true;
+    row.append(el("div","id", `${n}n`));
+    const m = el("div","meta");
+    m.innerHTML = `${fmtL(d)}<em>through ${fmtL(Math.min(d+n,DAYS-1))}</em>`;
+    row.append(m, el("span", n===1 ? "pill warn" : "pill good", n===1 ? "orphan night" : "open"));
+    gl.appendChild(row);
+    d += n;
+  }
+  if(!any) gl.appendChild(el("div","empty","Solidly booked for the whole horizon."));
+  sheetB.appendChild(gl);
+
+  sheet.classList.add("on"); scrim.classList.add("on");
+  sheetB.scrollTop = 0;
+  x.focus();
+}
+/* arrivals / departures / turnarounds for one day */
+function openOps(kind, d){
+  const ops = dayOps(d);
+  const list = ops[kind];
+  const TITLE = {arrivals:"Arriving", departures:"Leaving", turnovers:"Same-day turnaround"};
+  const BLANK = {
+    arrivals:"Nobody is checking in.",
+    departures:"Nobody is checking out.",
+    turnovers:"No room has a check-out and a check-in on the same day — no rush cleans."
+  };
+  sheetH.textContent = ""; sheetB.textContent = "";
+
+  const t = el("div");
+  t.innerHTML = `<div class="n">${TITLE[kind]}</div><div class="m">${fmtL(d)}${d===0?" · today":""}</div>`;
+  const x = el("button",null,"✕"); x.setAttribute("aria-label","Close"); x.onclick = closeSheet;
+  sheetH.append(t, x);
+
+  if(kind === "turnovers" && list.length){
+    const warn = el("p");
+    warn.style.cssText = "margin:16px 20px 0;font-size:13px;line-height:1.55;color:var(--txt-2)";
+    warn.innerHTML = `<b style="color:var(--now)">${list.length} room${list.length>1?"s":""} must be cleaned between a check-out and a check-in on the same day.</b> These are the ones that go wrong.`;
+    sheetB.appendChild(warn);
+  }
+
+  const card = el("div","card");
+  card.style.margin = "16px 20px 0";
+  if(!list.length) card.appendChild(el("div","empty", BLANK[kind]));
+
+  list.forEach(item=>{
+    const fi = kind === "turnovers" ? item.fi : item.fi;
+    const fl = flats[fi];
+    const row = el("button","row");
+    row.append(el("div","id", fl.id));
+    const m = el("div","meta");
+    if(kind === "arrivals"){
+      m.innerHTML = `<b>${item.guest}</b> · ${item.nights} night${item.nights>1?"s":""}<em>${fl.type} · ${fl.bshort} · out ${fmt(Math.min(item.end,DAYS-1))}</em>`;
+      row.append(m, el("span","pill", item.src));
+    } else if(kind === "departures"){
+      m.innerHTML = `<b>${item.guest}</b> · stayed ${item.nights} night${item.nights>1?"s":""}<em>${fl.type} · ${fl.bshort}</em>`;
+      const next = runFrom(fi, d);
+      row.append(m, el("span", next ? "pill good" : "pill", next ? `${next} nt open` : "re-let same day"));
+    } else {
+      m.innerHTML = `<b>${item.out.guest}</b> out → <b>${item.in.guest}</b> in<em>${fl.type} · ${fl.bshort} · ${item.in.nights} night${item.in.nights>1?"s":""}</em>`;
+      row.append(m, el("span","pill warn","clean today"));
+    }
+    row.onclick = ()=>{ haptic(9); openSheet(fi, d); };
+    card.appendChild(row);
+  });
+  sheetB.appendChild(card);
+
+  sheet.classList.add("on"); scrim.classList.add("on");
+  sheetB.scrollTop = 0; x.focus();
+}
+
+function closeSheet(){ sheet.classList.remove("on"); scrim.classList.remove("on"); }
+scrim.onclick = closeSheet;
+document.addEventListener("keydown", e=>{ if(e.key==="Escape") closeSheet(); });
+
+/* drag the sheet down to dismiss */
+(function(){
+  const grab = document.getElementById("grab");
+  let y0=null, dy=0;
+  const start = e=>{ y0=(e.touches?e.touches[0]:e).clientY; dy=0; sheet.style.transition="none"; };
+  const move  = e=>{ if(y0===null) return;
+    dy = Math.max(0,(e.touches?e.touches[0]:e).clientY - y0);
+    sheet.style.transform = `translateY(${dy}px)`;
+    if(window.innerWidth>=720) sheet.style.transform = `translate(-50%,${dy}px)`; };
+  const end   = ()=>{ if(y0===null) return;
+    sheet.style.transition=""; sheet.style.transform="";
+    if(dy>90){ haptic(9); closeSheet(); }
+    y0=null; };
+  grab.addEventListener("touchstart",start,{passive:true});
+  grab.addEventListener("touchmove",move,{passive:true});
+  grab.addEventListener("touchend",end,{passive:true});
+  grab.addEventListener("mousedown",e=>{ start(e);
+    const mm=ev=>move(ev), mu=()=>{ end(); removeEventListener("mousemove",mm); removeEventListener("mouseup",mu); };
+    addEventListener("mousemove",mm); addEventListener("mouseup",mu); });
+})();
+
+/* ═══════════════ tabs ═══════════════ */
+const ICON = {
+  rooms:'<svg class="ic" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2.6" y="3.4" width="6" height="6" rx="1.4"/><rect x="11.4" y="3.4" width="6" height="6" rx="1.4" fill="currentColor" stroke="none"/><rect x="2.6" y="11.4" width="6" height="6" rx="1.4" fill="currentColor" stroke="none"/><rect x="11.4" y="11.4" width="6" height="6" rx="1.4"/></svg>',
+  month:'<svg class="ic" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="2.6" y="3.8" width="14.8" height="13.4" rx="2.6"/><path d="M2.6 8.2h14.8M6.6 2.4v2.8M13.4 2.4v2.8"/><circle cx="10" cy="12.6" r="1.5" fill="currentColor" stroke="none"/></svg>',
+  ask:'<svg class="ic" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M17 9.6c0 3.4-3.1 6.2-7 6.2a8 8 0 0 1-2.2-.3L3.4 17l1-3.1A5.9 5.9 0 0 1 3 9.6C3 6.2 6.1 3.4 10 3.4s7 2.8 7 6.2Z"/><path d="M8.2 8.1a1.9 1.9 0 0 1 3.7.6c0 1.3-1.9 1.6-1.9 2.7"/><circle cx="10" cy="13.4" r=".85" fill="currentColor" stroke="none"/></svg>',
+};
+const SCREENS = [
+  {id:"rooms", label:"Rooms", title:"Rooms", render:renderRooms},
+  {id:"month", label:"Month", title:"Month", render:renderMonth},
+  {id:"ask",   label:"Ask",   title:"Ask",   render:renderAsk},
+];
+const tabbar = document.getElementById("tabbar");
+const scrTitle = document.getElementById("scrTitle");
+const scrSub = document.getElementById("scrSub");
+let curScreen = 0;
+
+SCREENS.forEach((sc,i)=>{
+  const b = el("button");
+  b.setAttribute("role","tab");
+  b.innerHTML = ICON[sc.id];
+  b.appendChild(el("span",null,sc.label));
+  b.onclick = ()=>{ haptic(10); switchTo(i, i===2); };
+  tabbar.appendChild(b);
+});
+
+const SUBS = [
+  ()=> "",                       // Rooms writes its own live subtitle in paint()
+  ()=> "Nine weeks ahead · tap a date",
+  ()=> "Ask in plain words",
+];
+function switchTo(i, focusInput){
+  curScreen = i;
+  SCREENS.forEach((sc,j)=>{
+    document.getElementById("scr-"+sc.id).classList.toggle("on", j===i);
+    tabbar.children[j].setAttribute("aria-selected", j===i);
+  });
+  scrTitle.firstChild.nodeValue = SCREENS[i].title;
+  scrSub.textContent = SUBS[i]();
+  SCREENS[i].render(focusInput);
+  const s = document.getElementById("scr-"+SCREENS[i].id);
+  s.scrollTop = 0;
+  closeSheet();
+  history.replaceState(null, "", "#" + SCREENS[i].id);
+}
+
+/* the large title condenses as you scroll away from it */
+(function(){
+  const bar = document.querySelector(".topbar");
+  SCREENS.forEach(sc=>{
+    const s = document.getElementById("scr-"+sc.id);
+    s.addEventListener("scroll", ()=>{
+      if(!s.classList.contains("on")) return;
+      bar.classList.toggle("tight", s.scrollTop > 56);
+    }, {passive:true});
+  });
+})();
+
+/* horizontal swipe between screens */
+(function(){
+  let x0=null,y0=null;
+  document.querySelector(".screens").addEventListener("touchstart",e=>{
+    if(sheet.classList.contains("on")) return;
+    x0=e.touches[0].clientX; y0=e.touches[0].clientY;
+  },{passive:true});
+  document.querySelector(".screens").addEventListener("touchend",e=>{
+    if(x0===null) return;
+    const dx=e.changedTouches[0].clientX-x0, dy=e.changedTouches[0].clientY-y0;
+    if(Math.abs(dx)>62 && Math.abs(dx)>Math.abs(dy)*1.6){
+      const nx = Math.max(0, Math.min(2, curScreen + (dx<0?1:-1)));
+      if(nx!==curScreen){ haptic(9); switchTo(nx); }
+    }
+    x0=null;
+  },{passive:true});
+})();
+
+/* theme toggle */
+const themeBtn = document.getElementById("themeBtn");
+themeBtn.onclick = ()=>{
+  const now = document.documentElement.getAttribute("data-theme")
+    || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  document.documentElement.setAttribute("data-theme", now==="dark" ? "light" : "dark");
+  haptic(8);
+};
+
+const deep = SCREENS.findIndex(s=>s.id === location.hash.replace("#",""));
+switchTo(deep >= 0 ? deep : 0);
+</script>
