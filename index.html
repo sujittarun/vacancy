@@ -979,10 +979,20 @@ let lastQuery = "anything free tonight?";
 
 function nextWeekend(){ let a=0; while(dateAt(a).getDay()!==5 && a<DAYS) a++; return {a, b:Math.min(a+2,DAYS)}; }
 const ord = d => (d%10===1&&d%100!==11)?"st":(d%10===2&&d%100!==12)?"nd":(d%10===3&&d%100!==13)?"rd":"th";
-function findDayOfMonth(dom){ for(let d=0;d<DAYS;d++) if(dateAt(d).getDate()===dom) return d; return null; }
+/* first day at or after `from` whose date-of-month is `dom`.
+   Searching from an offset is what makes "28-2" read as 28 Aug → 2 Sep
+   rather than collapsing onto an earlier 2nd. */
+function findDayOfMonth(dom, from){
+  for(let d = from || 0; d < DAYS; d++) if(dateAt(d).getDate() === dom) return d;
+  return null;
+}
 
 function parseQuery(q){
-  const s = " " + q.toLowerCase().replace(/[^a-z0-9 ]/g," ").replace(/\s+/g," ") + " ";
+  const s = " " + q.toLowerCase()
+    .replace(/(\d+)(?:st|nd|rd|th)\b/g, "$1")            // 15th → 15
+    .replace(/(\d)\s*[-–—/]\s*(\d)/g, "$1 to $2")        // 15-18, 15 – 18, 15/18 → 15 to 18
+    .replace(/[^a-z0-9 ]/g, " ")
+    .replace(/\s+/g, " ") + " ";
   let start = 0, n = 1, how = "tonight";
   const wd = ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"];
   const words = {one:1,two:2,three:3,four:4,five:5,six:6,seven:7};
@@ -990,7 +1000,9 @@ function parseQuery(q){
   const nMatch = s.match(/(?:^|\s)(\d{1,2})\s?(?:n|nt|nts|night|nights)(?:\s|$)/)
               || s.match(/(?:^|\s)(one|two|three|four|five|six|seven)\s?(?:n|nt|nts|night|nights)(?:\s|$)/);
   if(nMatch) n = Math.min(21, parseInt(nMatch[1]) || words[nMatch[1]] || 1);
-  const range = s.match(/ (\d{1,2})\s*(?:to|till|until|thru|through|-)\s*(\d{1,2}) /);
+  // "15 to 18", and a bare "15 18" when that is the whole question
+  const range = s.match(/ (\d{1,2}) (?:to|till|until|thru|through) (\d{1,2}) /)
+             || s.match(/^ (\d{1,2}) (\d{1,2}) $/);
   const wdHit = wd.findIndex(w=>s.includes(" "+w));
 
   if(/ (tonight|today|now) /.test(s)){ start=0; how="tonight"; }
@@ -1000,8 +1012,15 @@ function parseQuery(q){
   else if(/ next week /.test(s)){ let a=0; while(dateAt(a).getDay()!==1) a++; if(a===0)a=7;
     start=a; n=nMatch?n:7; how="next week"; }
   else if(range){
-    const d1=+range[1], d2=+range[2], s1=findDayOfMonth(d1), s2=findDayOfMonth(d2);
-    if(s1!==null){ start=s1; n=(s2!==null && s2>s1)?s2-s1:n; how=`the ${d1}${ord(d1)} to the ${d2}${ord(d2)}`; }
+    const d1 = +range[1], d2 = +range[2];
+    const s1 = findDayOfMonth(d1, 0);
+    // same date twice is one night, not "the next 20th, a month out"
+    const s2 = (s1 === null || d1 === d2) ? null : findDayOfMonth(d2, s1 + 1);
+    if(s1 !== null){
+      start = s1;
+      n = (s2 !== null) ? s2 - s1 : (d1 === d2 ? 1 : n);
+      how = d1 === d2 ? `the ${d1}${ord(d1)}` : `${d1}${ord(d1)} to the ${d2}${ord(d2)}`;
+    }
   }
   else if(wdHit>=0){ let a=0; while(a<DAYS && dateAt(a).getDay()!==wdHit) a++; start=a; how=wd[wdHit]; }
 
