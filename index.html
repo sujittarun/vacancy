@@ -1200,8 +1200,11 @@ function renderRooms(){
 }
 
 /* ═══════════════ SCREEN 2 — MONTH ═══════════════ */
-let monthOffset = 0, selDay = 0, revealPanel = false;
-let sweep = null, sweptJustNow = false, sweepLive = false;
+let monthOffset = 0, revealPanel = false;
+/* One selection, always: `sel.a` is the arrival, `sel.n` the nights. A single
+   night is just n = 1. `pendingStart` is set after the first of two taps. */
+let sel = {a:0, n:1}, pendingStart = null;
+let sweptJustNow = false, sweepLive = false;
 
 /* Press-and-hold on a date, then drag: the calendar becomes a range picker and
    the readout above it counts rooms free for the WHOLE span as you move. This
@@ -1242,14 +1245,19 @@ function attachSweep(grid, hud){
     const cell = cellAt(x,y);
     if(cell){ const d = +cell.dataset.d; if(d !== b){ b = d; haptic(5); paint(); } }
   };
-  const end = ()=>{
+  /* Never leave the page in a half-swept state — a stuck `live` means every
+     later touchmove calls preventDefault and the page stops scrolling. */
+  const reset = ()=>{
     clearTimeout(hold);
-    grid.classList.remove("sweeping");
-    if(!live){ sweepLive = false; return; }
     live = false; sweepLive = false;
-    const lo = Math.min(a,b), hi = Math.max(a,b);
-    sweep = {a: lo, n: Math.max(1, hi - lo)};
-    selDay = null; sweptJustNow = true; revealPanel = true;
+    grid.classList.remove("sweeping");
+  };
+  const end = ()=>{
+    const was = live, lo = Math.min(a,b), hi = Math.max(a,b);
+    reset();
+    if(!was) return;
+    sel = {a: lo, n: Math.max(1, hi - lo)};
+    pendingStart = null; sweptJustNow = true; revealPanel = true;
     haptic(16);
     setTimeout(()=>{ sweptJustNow = false; }, 350);
     renderMonth();
@@ -1262,13 +1270,13 @@ function attachSweep(grid, hud){
     hold = setTimeout(()=>begin(cell), 260);
   }, {passive:true});
   grid.addEventListener("touchmove", e=>{
-    if(!live){ clearTimeout(hold); return; }
+    if(!live){ clearTimeout(hold); return; }   // a real scroll — let it through
     e.preventDefault();
     move(e.touches[0].clientX, e.touches[0].clientY);
   }, {passive:false});
-  grid.addEventListener("touchend", end, {passive:true});
-  grid.addEventListener("touchcancel", ()=>{ clearTimeout(hold); live=false;
-    grid.classList.remove("sweeping"); clear(); hud.classList.remove("on"); }, {passive:true});
+  // bound on the window as well: a touch that ends off the grid must still clean up
+  addEventListener("touchend", end, {passive:true});
+  addEventListener("touchcancel", ()=>{ reset(); clear(); hud.classList.remove("on"); }, {passive:true});
 
   // desktop: hold the mouse down and drag
   grid.addEventListener("mousedown", e=>{
@@ -1295,7 +1303,7 @@ function goMonth(day){
   const dt = dateAt(day);
   const i = ms.findIndex(m=>m.y===dt.getFullYear() && m.m===dt.getMonth());
   if(i>=0) monthOffset = i;
-  selDay = day;
+  sel = {a:day, n:1}; pendingStart = null;
   switchTo(1);
 }
 function renderMonth(){
@@ -1309,8 +1317,8 @@ function renderMonth(){
   prev.setAttribute("aria-label","Previous month"); next.setAttribute("aria-label","Next month");
   if(monthOffset<=0) prev.setAttribute("disabled","");
   if(monthOffset>=ms.length-1) next.setAttribute("disabled","");
-  prev.onclick = ()=>{ monthOffset--; selDay=ms[monthOffset].days[0]; haptic(8); renderMonth(); };
-  next.onclick = ()=>{ monthOffset++; selDay=ms[monthOffset].days[0]; haptic(8); renderMonth(); };
+  prev.onclick = ()=>{ monthOffset--; sel={a:ms[monthOffset].days[0],n:1}; pendingStart=null; haptic(8); renderMonth(); };
+  next.onclick = ()=>{ monthOffset++; sel={a:ms[monthOffset].days[0],n:1}; pendingStart=null; haptic(8); renderMonth(); };
   nav.append(el("div","t", `${MONF[mo.m]} ${mo.y}`), prev, next);
 
   /* ── the shape of the month ───────────────────────────────────────────── */
@@ -1350,7 +1358,14 @@ function renderMonth(){
     const c = el("button","day");
     if(d===0) c.classList.add("today");
     if(f===0) c.classList.add("none");
-    if(selDay===d) c.classList.add("sel");
+    const lo = sel.a, hi = sel.a + sel.n;
+    if(pendingStart === d)      c.classList.add("rngA");     // first of two taps
+    else if(sel.n > 1){
+      if(d === lo)              c.classList.add("rngA");
+      else if(d === hi)         c.classList.add("rngB");
+      else if(d > lo && d < hi) c.classList.add("rng");
+    }
+    else if(d === lo)           c.classList.add("sel");
     if(softSet.has(d)) c.classList.add("soft");
     c.append(el("div","dd",String(dt.getDate())), el("div","fn",String(f)));
     const g = el("div","gg"); const i = el("i");
@@ -1359,8 +1374,19 @@ function renderMonth(){
     c.setAttribute("aria-label", `${fmtL(d)}, ${f} of ${NF} rooms free`
       + (softSet.has(d) ? `, emptier than a typical ${DOWF[dt.getDay()]}` : ""));
     c.dataset.d = d;
-    c.onclick = ()=>{ if(sweptJustNow) return; selDay = d; sweep = null;
-                      revealPanel = true; haptic(9); renderMonth(); };
+    /* Two taps make a range, the way every booking site works: first tap is the
+       arrival and shows that night, second tap sets the departure. */
+    c.onclick = ()=>{
+      if(sweptJustNow) return;
+      if(pendingStart !== null && d > pendingStart){
+        sel = {a: pendingStart, n: d - pendingStart};
+        pendingStart = null;
+      } else {
+        sel = {a: d, n: 1};
+        pendingStart = d;
+      }
+      revealPanel = true; haptic(9); renderMonth();
+    };
     grid.appendChild(c);
   });
   cal.style.padding = "0";
@@ -1376,21 +1402,26 @@ function renderMonth(){
        : ` Nothing in the next few weeks is running unusually empty for its weekday.`);
 
   const hint = el("p","sweephint");
-  hint.innerHTML = "Tap a date for that night. <b>Press and hold, then drag</b> across the calendar to sweep out a whole stay.";
+  hint.innerHTML = pendingStart !== null
+    ? `Arriving <b>${fmtL(pendingStart)}</b> — now tap the departure date. Tap an earlier one to start again.`
+    : "<b>Tap arrival, then tap departure</b> to check a whole stay. One tap shows that night alone. You can also press and hold, then drag.";
 
   s.append(nav, shape, hud, cal, key, hint);
 
-  /* a swept range answers immediately, above the analysis */
-  if(sweep){
-    const {a, n} = sweep;
+  /* one panel for whatever is selected — a single night is just n = 1 */
+  {
+    const {a, n} = sel;
     const free = flats.map((f,i)=>i).filter(i=>freeRange(i, a, a+n));
     const panel = el("div","stack gap-s");
     const h = el("div","sect");
-    h.append(el("span","lbl", `${fmt(a)} → ${fmt(a+n)}`),
-             el("span","lbl", `${n} night${n>1?"s":""} · ${free.length} free`));
+    h.append(el("span","lbl", n === 1 ? fmtL(a) : `${fmt(a)} → ${fmt(a+n)}`),
+             el("span","lbl", n === 1 ? `${free.length} of ${NF} free`
+                                      : `${n} nights · ${free.length} free`));
     const list = el("div","card");
     if(!free.length){
-      list.appendChild(el("div","empty",`No flat is free for all ${n} nights. Try Ask — it will suggest moving one guest to open one up.`));
+      list.appendChild(el("div","empty", n === 1
+        ? "Fully booked that night. Nothing left to sell."
+        : `No flat is free for all ${n} nights. Ask can suggest moving one guest to open one up.`));
     }
     free.forEach(fi=> list.appendChild(roomRow(fi, a, null)));
     panel.append(h, list);
@@ -1400,24 +1431,6 @@ function renderMonth(){
       requestAnimationFrame(()=> panel.scrollIntoView({behavior: calm?"auto":"smooth", block:"nearest"}));
     }
   }
-
-  /* the tapped date answers immediately, above the analysis */
-  if(selDay !== null){
-    const free = []; flats.forEach((fl,fi)=>{ if(!occ[fi][selDay]) free.push(fi); });
-    const panel = el("div","stack gap-s");
-    const h = el("div","sect");
-    h.append(el("span","lbl", fmtL(selDay)), el("span","lbl", `${free.length} of ${NF} free`));
-    const list = el("div","card");
-    if(!free.length) list.appendChild(el("div","empty","Fully booked that night. Nothing left to sell."));
-    free.forEach(fi=> list.appendChild(roomRow(fi, selDay, null)));
-    panel.append(h, list);
-    s.appendChild(panel);
-    if(revealPanel){
-      revealPanel = false;
-      requestAnimationFrame(()=> panel.scrollIntoView({behavior: calm?"auto":"smooth", block:"nearest"}));
-    }
-  }
-
 }
 
 /* ═══════════════ SCREEN 4 — TRENDS ═══════════════ */

@@ -81,9 +81,13 @@ A calendar where each date carries **rooms still free that night** — not rooms
 The bar under each date is that same figure as a share of all 45, so it shrinks as the
 night sells out. Tap a date for the rooms that are open.
 
-- **Press and hold a date, then drag** to sweep out a whole stay. A readout follows
-  above the calendar counting rooms free for the *entire* span as your finger moves, and
-  releasing lists them. The range question, answered by dragging a finger.
+Two ways to pick a stay, because a gesture should never be the only route in:
+
+- **Tap arrival, then tap departure** — the way every booking site works. One tap alone
+  shows that night by itself; tapping an earlier date starts the range again. Works across
+  months and needs no gesture.
+- **Press and hold, then drag** — the shortcut. A readout above the calendar counts rooms
+  free for the *entire* span as your finger moves, and releasing lists them.
 - **An amber dot** marks a date running emptier than that weekday normally does. This is
   the one thing the raw count cannot tell you: a Friday showing 20 free gets flagged while
   a Saturday showing 15 does not, because Fridays usually sit at 16 and Saturdays at 15.
