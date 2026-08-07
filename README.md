@@ -84,9 +84,10 @@ night sells out. Tap a date for the rooms that are open.
 - **Press and hold a date, then drag** to sweep out a whole stay. A readout follows
   above the calendar counting rooms free for the *entire* span as your finger moves, and
   releasing lists them. The range question, answered by dragging a finger.
-- **What needs attention** re-colours the calendar by exposure rather than status: empty
-  *and* close. A wide-open date five weeks out is ordinary; the same date on Friday is
-  not. Amber is worth watching, red wants doing something today.
+- **An amber dot** marks a date running emptier than that weekday normally does. This is
+  the one thing the raw count cannot tell you: a Friday showing 20 free gets flagged while
+  a Saturday showing 15 does not, because Fridays usually sit at 16 and Saturdays at 15.
+  A low number can still be a bad night, and a high one can be perfectly ordinary.
 - **Which nights sell** shows the week's shape and names the weak night — the single most
   actionable thing in the whole app if one weekday is dragging the month down.
 - **How each building is doing** ranks the five blocks and calls out any that is lagging

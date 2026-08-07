@@ -288,15 +288,11 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .mcap b{color:var(--txt);font-weight:650}
 .mcap em{font-style:normal;color:var(--now)}
 
-/* free / pressure lens */
-.lens{display:flex;gap:6px;margin-bottom:10px}
-.lens button{flex:1;padding:8px 6px;border-radius:10px;background:var(--surface-2);
-  border:1px solid var(--line);font-size:12px;font-weight:600;color:var(--txt-3);
-  transition:background .2s,color .2s}
-.lens button[aria-pressed="true"]{background:var(--surface);color:var(--txt);border-color:var(--line-2)}
-.day.watch .fn{color:var(--now)} .day.watch .gg i{background:var(--now)}
-.day.hot   .fn{color:var(--hot)} .day.hot   .gg i{background:var(--hot)}
-.day.hot{border-color:color-mix(in srgb,var(--hot) 45%,transparent)}
+/* a date running emptier than its own weekday usually does */
+.day.soft .fn{color:var(--now)}
+.day.soft .gg i{background:var(--now)}
+.day.soft::after{content:"";position:absolute;top:6px;right:6px;width:5px;height:5px;
+  border-radius:50%;background:var(--now)}
 
 /* pattern bars, shared by weekday and building */
 .pat{display:flex;flex-direction:column;gap:9px;padding:14px 16px}
@@ -370,7 +366,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
   background:var(--bar);backdrop-filter:blur(20px) saturate(160%);
   -webkit-backdrop-filter:blur(20px) saturate(160%);
   border:1px solid var(--line-2);box-shadow:var(--shadow);pointer-events:none;
-  animation:hudIn .34s var(--spring)}
+  animation:hudIn .3s var(--out)}
 @keyframes hudIn{from{opacity:0;transform:translateY(-8px)}}
 @media (prefers-reduced-motion:reduce){.hud.on{animation:none}}
 .hud .n{font-size:24px;font-weight:690;letter-spacing:-.035em;line-height:1}
@@ -652,14 +648,23 @@ function monthStats(days){
   return {total, sold, open, openValue, soon, soonValue, pct: total ? sold/total : 0};
 }
 
-/* How exposed a date is: empty AND close. 20 flats free three weeks out is
-   ordinary; 20 free on Saturday is a problem. */
-function pressure(d){
-  const empty = freeCount(d) / NF;
-  const near  = Math.max(0, 1 - d / 21);
-  return empty * near;
+/* "22 free" tells you nothing on its own — is that a bad Saturday or a normal
+   Tuesday? This compares each date against how that weekday usually runs, which
+   is the one thing you cannot read off the raw count. */
+function weekdayFreeNorm(){
+  const acc = Array.from({length:7}, ()=>({sum:0,n:0}));
+  for(let d=0; d<DAYS; d++){ const w = dateAt(d).getDay(); acc[w].sum += freeCount(d); acc[w].n++; }
+  return acc.map(a => a.n ? a.sum/a.n : 0);
 }
-const pressureBand = p => p > .45 ? "hot" : p > .22 ? "watch" : "";
+function softDates(norm){
+  const out = [];
+  const margin = Math.max(3, NF*0.09);
+  for(let d=0; d<Math.min(DAYS,25); d++){          // only what there is still time to act on
+    const f = freeCount(d), m = norm[dateAt(d).getDay()];
+    if(f - m >= margin) out.push({d, free:f, norm:m, over:f-m});
+  }
+  return out.sort((a,b)=> b.over - a.over);
+}
 
 function weekdayPattern(days){
   const acc = Array.from({length:7}, ()=>({sold:0,total:0}));
@@ -1077,7 +1082,7 @@ function renderRooms(){
 }
 
 /* ═══════════════ SCREEN 2 — MONTH ═══════════════ */
-let monthOffset = 0, selDay = 0, revealPanel = false, monthLens = "free";
+let monthOffset = 0, selDay = 0, revealPanel = false;
 let sweep = null, sweptJustNow = false;
 
 /* Press-and-hold on a date, then drag: the calendar becomes a range picker and
@@ -1211,14 +1216,9 @@ function renderMonth(){
   const hud = el("div","hud");
   hud.append(el("div","n"), el("div","t"));
 
-  /* ── lens ─────────────────────────────────────────────────────────────── */
-  const lens = el("div","lens");
-  [["free","Rooms free"],["pressure","What needs attention"]].forEach(([k,label])=>{
-    const b2 = el("button",null,label);
-    b2.setAttribute("aria-pressed", monthLens===k);
-    b2.onclick = ()=>{ monthLens = k; haptic(9); renderMonth(); };
-    lens.appendChild(b2);
-  });
+  const norm = weekdayFreeNorm();
+  const soft = softDates(norm);
+  const softSet = new Set(soft.map(x=>x.d));
 
   const cal = el("div","card");
   cal.style.cssText = "padding:14px;background:transparent;border:0;box-shadow:none";
@@ -1233,17 +1233,13 @@ function renderMonth(){
     if(d===0) c.classList.add("today");
     if(f===0) c.classList.add("none");
     if(selDay===d) c.classList.add("sel");
-    const band = pressureBand(pressure(d));
-    if(monthLens === "pressure" && band) c.classList.add(band);
+    if(softSet.has(d)) c.classList.add("soft");
     c.append(el("div","dd",String(dt.getDate())), el("div","fn",String(f)));
     const g = el("div","gg"); const i = el("i");
-    i.style.width = monthLens === "pressure"
-      ? (pressure(d)*100/0.6).toFixed(0)+"%"                 // 0.6 pressure fills the bar
-      : (f/NF*100).toFixed(0)+"%";
+    i.style.width = (f/NF*100).toFixed(0)+"%";
     g.appendChild(i); c.appendChild(g);
-    c.setAttribute("aria-label", monthLens === "pressure"
-      ? `${fmtL(d)}, ${f} of ${NF} free, ${band==="hot"?"needs attention":band==="watch"?"worth watching":"comfortable"}`
-      : `${fmtL(d)}, ${f} of ${NF} rooms free`);
+    c.setAttribute("aria-label", `${fmtL(d)}, ${f} of ${NF} rooms free`
+      + (softSet.has(d) ? `, emptier than a typical ${DOWF[dt.getDay()]}` : ""));
     c.dataset.d = d;
     c.onclick = ()=>{ if(sweptJustNow) return; selDay = d; sweep = null;
                       revealPanel = true; haptic(9); renderMonth(); };
@@ -1255,14 +1251,16 @@ function renderMonth(){
 
   const key = el("p","insight");
   key.style.padding = "0 2px";
-  key.innerHTML = monthLens === "pressure"
-    ? `Every date still shows rooms free, but coloured by how exposed it is — empty <em>and</em> close. <span class="hi">Amber needs watching, red needs doing something today.</span> A wide-open date five weeks out is normal; the same date on Friday is not.`
-    : `The figure is rooms <b>still free</b> that night — not rooms booked. The bar beneath is the same number as a share of all ${NF}, so it shrinks as the night sells out.`;
+  const worst = soft[0];
+  key.innerHTML = `The figure is rooms <b>still free</b> that night — not rooms booked.`
+    + (worst
+       ? ` <span class="hi">An amber dot marks a date running emptier than that weekday normally does</span> — ${fmtL(worst.d)} has ${worst.free} free against about ${Math.round(worst.norm)} on a typical ${DOWF[dateAt(worst.d).getDay()]}. That is the part a count alone cannot tell you: a low number can still be a bad night, and a high one can be perfectly ordinary.`
+       : ` Nothing in the next few weeks is running unusually empty for its weekday.`);
 
   const hint = el("p","sweephint");
   hint.innerHTML = "Tap a date for that night. <b>Press and hold, then drag</b> across the calendar to sweep out a whole stay.";
 
-  s.append(nav, shape, hud, lens, cal, key, hint);
+  s.append(nav, shape, hud, cal, key, hint);
 
   /* a swept range answers immediately, above the analysis */
   if(sweep){
