@@ -634,8 +634,6 @@ function applyInventory(next, renames){
    An unsold night is perishable stock: once the date passes it can never be
    sold again. These turn the calendar from "what is" into "what is about to be
    lost", which is the thing an operator can still act on.                     */
-const inr = n => "₹" + Math.round(n).toLocaleString("en-IN");
-
 function monthStats(days){
   let sold = 0, open = 0, openValue = 0, soon = 0, soonValue = 0;
   days.forEach(d=>{
@@ -1780,7 +1778,9 @@ function openSheet(fi, day){
   }
 
   const s1 = el("div","sheet-s");
-  s1.append(el("span","lbl","Upcoming bookings"), el("span","lbl", `specimen rate ₹${fl.rate}/night`));
+  // the rate is whatever was set in Inventory — no longer a number this app invented
+  s1.append(el("span","lbl","Upcoming bookings"),
+            el("span","lbl", `₹${fl.rate.toLocaleString("en-IN")} / night`));
   sheetB.appendChild(s1);
   const bl = el("div","card"); bl.style.margin="0 20px";
   const mine = resv.filter(r=>r.fi===fi && r.end>0 && r.start<DAYS).sort((a,b)=>a.start-b.start);
