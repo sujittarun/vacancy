@@ -1944,20 +1944,42 @@ function renderAsk(focus){
         listWrap.append(mh, mcard);
       }
       h.append(el("span","lbl","Or move the dates"), el("span","lbl","nearest that work"));
+      /* Search the WHOLE horizon, not a window around the asked date. A long
+         stay often only fits weeks out, and "try a shorter stay" is a wrong
+         answer when the stay is perfectly possible later. */
       const alts = [];
-      for(let sh=1; sh<=8 && alts.length<6; sh++){
-        [a+sh, a-sh].forEach(s2=>{
-          if(s2<0 || s2+p.n>DAYS) return;
-          const c = pool.filter(x=>freeRange(x.i,s2,s2+p.n));
-          if(c.length) alts.push({d:s2, c:c.length});
-        });
+      for(let s2 = 0; s2 <= DAYS - p.n; s2++){
+        if(s2 === a) continue;
+        const c = pool.filter(x=>freeRange(x.i, s2, s2+p.n)).length;
+        if(c) alts.push({d:s2, c, dist:Math.abs(s2-a)});
       }
-      if(!alts.length) list.appendChild(el("div","empty","Nothing nearby either — try a shorter stay."));
+      alts.sort((x,y)=> x.dist - y.dist);
+
+      if(!alts.length){
+        // nowhere fits — say how long the longest stretch actually is
+        let best = {n:0, at:-1, fi:-1};
+        pool.forEach(({i})=>{
+          let d = 0;
+          while(d < DAYS){
+            if(occ[i][d]){ d++; continue; }
+            let run = 0; while(d+run < DAYS && !occ[i][d+run]) run++;
+            if(run > best.n) best = {n:run, at:d, fi:i};
+            d += run;
+          }
+        });
+        const e = el("div","empty");
+        e.innerHTML = best.n
+          ? `No ${p.n}-night stretch exists anywhere in the next nine weeks. The longest is <b style="color:var(--txt)">${best.n} nights</b> in ${flats[best.fi].id} from ${fmtL(best.at)}.`
+          : "Nothing is free anywhere in the next nine weeks.";
+        list.appendChild(e);
+      }
       alts.slice(0,6).forEach(alt=>{
+        const away = alt.d - a;
         const r = el("button","row");
-        r.append(el("div","id", (alt.d>a?"+":"−")+Math.abs(alt.d-a)+"d"));
+        r.append(el("div","id", (away>0?"+":"−") + Math.abs(away) + "d"));
         const m = el("div","meta");
-        m.innerHTML = `Arrive <b>${fmtL(alt.d)}</b> instead<em>${alt.c} room${alt.c>1?"s":""} open up</em>`;
+        m.innerHTML = `Arrive <b>${fmtL(alt.d)}</b> instead`
+          + `<em>${alt.c} flat${alt.c>1?"s":""} free for all ${p.n} night${p.n>1?"s":""}</em>`;
         r.append(m, el("span","pill good", `${alt.c} free`));
         r.onclick = ()=>{ haptic(9); goMonth(alt.d); };
         list.appendChild(r);
