@@ -130,6 +130,26 @@ existing guest** to a flat that is free for their whole stay.
 Options are ranked so the move the guest would never notice — same building, same size —
 comes first. Nothing moves automatically; it only tells you what is possible.
 
+### Trends
+
+A deck of cards you **swipe sideways**, one metric each, all computed from the forward
+book. The uncommon ones are the point:
+
+| Card | Why it matters |
+|---|---|
+| **How your book fills** | Occupancy by week ahead. The far weeks *should* look thin — this shows where your booking window actually ends, so 30% five weeks out reads as normal rather than alarming. |
+| **Which nights sell** | Names your weakest weekday and the size of the gap. |
+| **How each building is doing** | Same city, same weeks — a large gap is pricing or listing reach, not demand. |
+| **Which sizes sell** | Studio vs 2 BHK vs 3 BHK. If the weak size is the one you hold most of, that is where nights are being lost. |
+| **How long people stay** | Average stay and the share of single nights. Every one-nighter is a full changeover for one night's income. |
+| **Where bookings come from** | Your direct share — the number platforms never show you, and the one most worth growing. |
+| **The cleaning week** | Same-day turnarounds per day for the next fortnight. Tells you which day needs extra help *before* it arrives. |
+| **How broken up the gaps are** | Ten scattered single nights are far harder to fill than one ten-night hole. The honest measure of how sellable your empty time is. |
+
+**There is no history yet**, and the app says so rather than faking it. Everything reads
+today forward. Each booking you enter records the day you took it, so lead time and
+week-on-week pace become real once it has been used for a while.
+
 Tap any room, anywhere, for its next nine weeks, its upcoming bookings, and its sellable
 gaps.
 

@@ -20,7 +20,7 @@
   app with a blurred bottom tab bar and a shared spring-up room sheet.
 -->
 <meta charset="utf-8">
-<title>Vacancy — 45 apartments, three ways to read them</title>
+<title>Vacancy — 45 apartments, four ways to read them</title>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
 <meta name="theme-color" content="#08090C">
 
@@ -138,7 +138,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
 
 .tabbar{
   position:absolute;left:14px;right:14px;bottom:calc(12px + var(--safe-b));z-index:40;
-  display:grid;grid-template-columns:repeat(3,1fr);gap:2px;padding:4px;
+  display:grid;grid-template-columns:repeat(4,1fr);gap:2px;padding:4px;
   background:var(--bar);backdrop-filter:blur(24px) saturate(180%);
   -webkit-backdrop-filter:blur(24px) saturate(180%);
   border:1px solid var(--line-2);border-radius:17px;box-shadow:var(--shadow);
@@ -293,6 +293,40 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .day.soft .gg i{background:var(--now)}
 .day.soft::after{content:"";position:absolute;top:6px;right:6px;width:5px;height:5px;
   border-radius:50%;background:var(--now)}
+
+/* ══════════════════════ TRENDS — swipeable card deck ══════════════════════ */
+.deck{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;
+  margin:0 -20px;padding:2px 20px 4px;scrollbar-width:none;touch-action:pan-x}
+.deck::-webkit-scrollbar{display:none}
+.tcard{flex:0 0 min(100%, 520px);scroll-snap-align:center;background:var(--surface);
+  border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow-sm);
+  padding:17px 16px 15px;display:flex;flex-direction:column;min-height:330px}
+.tcard h3{margin:0;font-size:15px;font-weight:650;letter-spacing:-.018em}
+.tcard .cap{margin:3px 0 15px;font-size:11.5px;color:var(--txt-3);letter-spacing:.01em}
+.tcard .body{flex:1;display:flex;flex-direction:column;justify-content:center}
+.tcard .said{margin:14px 0 0;font-size:12.5px;line-height:1.55;color:var(--txt-2)}
+.tcard .said b{color:var(--txt)}
+.tcard .said .hi{color:var(--now);font-weight:600}
+.dots{display:flex;gap:11px;justify-content:center;margin-top:14px}
+.dots i{width:6px;height:6px;border-radius:3px;background:var(--surface-3);display:block;
+  transform-origin:center;transition:background .25s var(--out), transform .3s var(--out)}
+.dots i.on{background:var(--txt-2);transform:scaleX(2.6)}
+
+.headline{display:flex;align-items:baseline;gap:10px;margin-bottom:14px}
+.headline b{font-size:clamp(30px,9.5vw,40px);font-weight:700;letter-spacing:-.04em;line-height:.9}
+.headline s{text-decoration:none;font-size:12.5px;color:var(--txt-2);line-height:1.4}
+
+/* vertical bar chart used by the booking curve and turnaround load */
+.vbars{display:flex;gap:5px;align-items:flex-end;height:132px}
+.vbar{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;
+  justify-content:flex-end}
+.vbar .col{width:100%;background:var(--surface-2);border-radius:5px;display:flex;
+  align-items:flex-end;overflow:hidden;flex:1}
+.vbar .col i{display:block;width:100%;background:var(--free);border-radius:5px}
+.vbar.acc .col i{background:var(--now)}
+.vbar .v{font-size:10.5px;font-weight:650;color:var(--txt-2)}
+.vbar .k{font-size:9.5px;font-weight:600;color:var(--txt-3);white-space:nowrap}
+.vbar.acc .v,.vbar.acc .k{color:var(--now)}
 
 /* pattern bars, shared by weekday and building */
 .pat{display:flex;flex-direction:column;gap:9px;padding:14px 16px}
@@ -525,6 +559,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
     <section class="screen on" id="scr-rooms"></section>
     <section class="screen" id="scr-month"></section>
     <section class="screen" id="scr-ask"></section>
+    <section class="screen" id="scr-trends"></section>
 
     <div class="scrim" id="scrim"></div>
     <aside class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Room detail">
@@ -649,6 +684,87 @@ function monthStats(days){
 /* "22 free" tells you nothing on its own — is that a bad Saturday or a normal
    Tuesday? This compares each date against how that weekday usually runs, which
    is the one thing you cannot read off the raw count. */
+/* ── trends ──────────────────────────────────────────────────────────────────
+   All of this reads the forward book — the app has no past yet. Manual bookings
+   now record the day they were taken (`bookedOn`), so genuine lead-time history
+   accumulates from first use rather than being invented. */
+const inHorizon = () => resv.filter(r => r.end > 0 && r.start < DAYS);
+
+/* How the book thins as you look further out. This is the honest version of
+   "pace": it shows the booking window, so 30% five weeks out reads as normal
+   rather than alarming. */
+function bookingCurve(){
+  const weeks = [];
+  for(let w = 0; w*7 < DAYS; w++){
+    let sold = 0, total = 0;
+    for(let d = w*7; d < Math.min((w+1)*7, DAYS); d++)
+      for(let i = 0; i < NF; i++){ total++; if(occ[i][d]) sold++; }
+    if(total) weeks.push({w, pct: sold/total});
+  }
+  return weeks;
+}
+
+function groupOcc(days, keyOf){
+  const acc = new Map();
+  flats.forEach((f,i)=>{
+    const k = keyOf(f);
+    if(!acc.has(k)) acc.set(k, {k, sold:0, total:0, units:0});
+    acc.get(k).units++;
+  });
+  days.forEach(d=> flats.forEach((f,i)=>{
+    const a = acc.get(keyOf(f)); a.total++; if(occ[i][d]) a.sold++;
+  }));
+  return [...acc.values()].map(a=>({...a, pct: a.total ? a.sold/a.total : 0}))
+                          .sort((x,y)=> x.pct - y.pct);
+}
+
+function stayMix(){
+  const rs = inHorizon();
+  const buckets = [{k:"1 night",lo:1,hi:1},{k:"2",lo:2,hi:2},{k:"3",lo:3,hi:3},
+                   {k:"4–6",lo:4,hi:6},{k:"7+",lo:7,hi:999}];
+  const out = buckets.map(b=>({...b, n: rs.filter(r=> r.nights>=b.lo && r.nights<=b.hi).length}));
+  const alos = rs.length ? rs.reduce((s,r)=>s+r.nights,0) / rs.length : 0;
+  return {out, alos, total: rs.length};
+}
+
+function sourceMix(){
+  const rs = inHorizon(), m = new Map();
+  rs.forEach(r=> m.set(r.src, (m.get(r.src)||0) + 1));
+  return {rows: [...m.entries()].map(([k,n])=>({k,n})).sort((a,b)=>b.n-a.n), total: rs.length};
+}
+
+/* Same-day changeovers per day — this is the cleaning crew's week, and almost
+   nothing at this scale surfaces it. */
+function turnLoad(n){
+  const out = [];
+  for(let d = 0; d < n; d++) out.push({d, n: dayOps(d).turnovers.length});
+  return out;
+}
+
+/* How broken up the empty time is. Ten scattered single nights are far harder
+   to sell than one ten-night hole, and the raw vacancy count hides that. */
+function fragmentation(){
+  let runs = 0, orphans = 0, nights = 0;
+  flats.forEach((f,fi)=>{
+    let d = 0;
+    while(d < DAYS){
+      if(occ[fi][d]){ d++; continue; }
+      let n = 0; while(d+n < DAYS && !occ[fi][d+n]) n++;
+      if(d + n < DAYS){ runs++; nights += n; if(n === 1) orphans++; }
+      d += n;
+    }
+  });
+  return {runs, orphans, nights, avg: runs ? nights/runs : 0};
+}
+
+function leadTimes(){
+  const rs = resv.filter(r => typeof r.bookedOn === "number" && r.start >= r.bookedOn);
+  if(!rs.length) return null;
+  const days = rs.map(r => r.start - r.bookedOn).sort((a,b)=>a-b);
+  return {n: days.length, median: days[Math.floor(days.length/2)],
+          avg: days.reduce((a,b)=>a+b,0)/days.length};
+}
+
 function weekdayFreeNorm(){
   const acc = Array.from({length:7}, ()=>({sum:0,n:0}));
   for(let d=0; d<DAYS; d++){ const w = dateAt(d).getDay(); acc[w].sum += freeCount(d); acc[w].n++; }
@@ -717,7 +833,9 @@ function generateDemo(){
     while(d < DAYS){
       const dt = dateAt(Math.max(d,0));
       const dw = dt.getDay();
-      if(rng() > fl.pop * bF * DOW_DEMAND[dw]){ d += 1; continue; }
+      // guests book close to the date, so the far weeks are genuinely thinner
+      const lead = 0.34 + 0.66 * Math.exp(-Math.max(0,d)/26);
+      if(rng() > fl.pop * bF * DOW_DEMAND[dw] * lead){ d += 1; continue; }
       let n;
       if(dw === 5)      n = 2 + (rng() < .35 ? 1 : 0);   // Friday arrivals cover the weekend
       else if(dw === 6) n = 1 + (rng() < .5  ? 1 : 0);
@@ -746,7 +864,8 @@ function save(){
     localStorage.setItem(STORE, JSON.stringify({
       savedOn: isoDay(today),
       rows: resv.map(r=>({ id:flats[r.fi].id, start:r.start, end:r.end,
-                           guest:r.guest, src:r.src, manual:!!r.manual }))
+                           guest:r.guest, src:r.src, manual:!!r.manual,
+                           bookedOn: typeof r.bookedOn === "number" ? r.bookedOn : undefined }))
     }));
   }catch(e){ /* private browsing or storage full — the session still works */ }
 }
@@ -763,7 +882,8 @@ function load(){
     resv = d.rows
       .filter(r => flatIndex[r.id] !== undefined)
       .map(r => ({ fi:flatIndex[r.id], start:r.start+shift, end:r.end+shift,
-                   nights:r.end-r.start, guest:r.guest, src:r.src, manual:r.manual }))
+                   nights:r.end-r.start, guest:r.guest, src:r.src, manual:r.manual,
+                   bookedOn: typeof r.bookedOn === "number" ? r.bookedOn + shift : undefined }))
       .filter(r => r.end >= 0 && r.start < DAYS);
     return true;
   }catch(e){ return false; }
@@ -781,7 +901,7 @@ function addBooking(fi, start, nights, guest, src){
   nights = Math.max(1, Math.min(nights|0, DAYS));
   if(start < 0 || start >= DAYS) return false;
   if(!freeRange(fi, start, start + nights)) return false;
-  resv.push({ fi, start, end:start+nights, nights, manual:true,
+  resv.push({ fi, start, end:start+nights, nights, manual:true, bookedOn:0,
               guest: (guest || "").trim() || "Guest", src: src || "Direct" });
   usingDemo = false;
   recompute(); save();
@@ -1081,7 +1201,7 @@ function renderRooms(){
 
 /* ═══════════════ SCREEN 2 — MONTH ═══════════════ */
 let monthOffset = 0, selDay = 0, revealPanel = false;
-let sweep = null, sweptJustNow = false;
+let sweep = null, sweptJustNow = false, sweepLive = false;
 
 /* Press-and-hold on a date, then drag: the calendar becomes a range picker and
    the readout above it counts rooms free for the WHOLE span as you move. This
@@ -1113,7 +1233,7 @@ function attachSweep(grid, hud){
     grid.querySelectorAll(".rng,.rngA,.rngB").forEach(c=>c.classList.remove("rng","rngA","rngB"));
   };
   const begin = (cell)=>{
-    live = true; a = b = +cell.dataset.d;
+    live = true; sweepLive = true; a = b = +cell.dataset.d;
     grid.classList.add("sweeping");
     haptic(18); paint();
   };
@@ -1125,8 +1245,8 @@ function attachSweep(grid, hud){
   const end = ()=>{
     clearTimeout(hold);
     grid.classList.remove("sweeping");
-    if(!live) return;
-    live = false;
+    if(!live){ sweepLive = false; return; }
+    live = false; sweepLive = false;
     const lo = Math.min(a,b), hi = Math.max(a,b);
     sweep = {a: lo, n: Math.max(1, hi - lo)};
     selDay = null; sweptJustNow = true; revealPanel = true;
@@ -1298,64 +1418,178 @@ function renderMonth(){
     }
   }
 
-  /* ── weekday pattern ──────────────────────────────────────────────────── */
-  const wk = weekdayPattern(mo.days);
-  const known = wk.map((v,i)=>({v,i})).filter(o=>o.v !== null);
-  if(known.length >= 5){
-    const worst = known.reduce((a,b)=> b.v < a.v ? b : a);
-    const best  = known.reduce((a,b)=> b.v > a.v ? b : a);
-    const wrap = el("div","stack gap-s");
-    const h = el("div","sect");
-    h.append(el("span","lbl","Which nights sell"), el("span","lbl", scope.toLowerCase()));
-    const card = el("div","card");
-    const grid = el("div","wkrow");
-    [1,2,3,4,5,6,0].forEach(dw=>{
-      const v = wk[dw];
-      const col = el("div","wkcol" + (dw===worst.i ? " low" : ""));
-      const b3 = el("div","bar"); const fill = el("i");
-      fill.style.height = v === null ? "0%" : Math.max(3, v*100).toFixed(0)+"%";
-      b3.appendChild(fill);
-      col.append(el("div","p", v === null ? "–" : Math.round(v*100)+"%"), b3,
-                 el("div","d", DOW[dw][0]));
-      grid.appendChild(col);
-    });
-    card.appendChild(grid);
-    const note = el("p","insight");
-    note.innerHTML = worst.v < best.v - 0.08
-      ? `<b>${DOWF[worst.i]}s</b> are your weakest night at <span class="hi">${Math.round(worst.v*100)}%</span>, against ${Math.round(best.v*100)}% on ${DOWF[best.i]}s. A midweek rate or a two-night minimum across the weekend is what usually moves this.`
-      : `The week is even — every night lands within a few points of ${Math.round(best.v*100)}%. Nothing to fix here.`;
-    card.appendChild(note);
-    wrap.append(h, card);
-    s.appendChild(wrap);
-  }
+}
 
-  /* ── which building is lagging ────────────────────────────────────────── */
-  const split = buildingSplit(mo.days);
-  if(split.length > 1){
-    const wrap = el("div","stack gap-s");
-    const h = el("div","sect");
-    h.append(el("span","lbl","How each building is doing"), el("span","lbl","occupied"));
-    const card = el("div","card");
-    const pat = el("div","pat");
-    const worst = split[0], top = split[split.length-1];
-    split.slice().reverse().forEach(b=>{
-      const r = el("div","patrow" + (b.code===worst.code && top.pct - worst.pct > .1 ? " low" : ""));
-      r.append(el("div","k", b.name));
-      const t = el("div","t"); const i = el("i"); i.style.width = (b.pct*100).toFixed(0)+"%";
+/* ═══════════════ SCREEN 4 — TRENDS ═══════════════ */
+function renderTrends(){
+  const s = document.getElementById("scr-trends");
+  s.textContent = "";
+  const all = []; for(let d=0; d<DAYS; d++) all.push(d);
+
+  const deck = el("div","deck");
+  const card = (title, cap)=>{
+    const c = el("div","tcard");
+    c.append(el("h3",null,title), el("div","cap",cap));
+    const b = el("div","body"); c.appendChild(b);
+    deck.appendChild(c);
+    return {c, b};
+  };
+  const said = (c, html)=>{ const p = el("p","said"); p.innerHTML = html; c.appendChild(p); };
+  const vbars = (rows, accIdx)=>{
+    const w = el("div","vbars");
+    const max = Math.max(...rows.map(r=>r.v), 0.0001);
+    rows.forEach((r,i)=>{
+      const b = el("div","vbar" + (i===accIdx ? " acc" : ""));
+      b.append(el("div","v", r.label));
+      const col = el("div","col"); const fill = el("i");
+      fill.style.height = Math.max(2, r.v/max*100) + "%";
+      col.appendChild(fill);
+      b.append(col, el("div","k", r.k));
+      w.appendChild(b);
+    });
+    return w;
+  };
+  const hbars = (rows, lowKey)=>{
+    const w = el("div","pat"); w.style.padding = "0";
+    rows.forEach(r=>{
+      const row = el("div","patrow" + (r.k===lowKey ? " low" : ""));
+      row.append(el("div","k", r.k));
+      const t = el("div","t"); const i = el("i"); i.style.width = (r.pct*100).toFixed(0)+"%";
       t.appendChild(i);
-      r.append(t, el("div","v", Math.round(b.pct*100)+"%"));
-      pat.appendChild(r);
+      row.append(t, el("div","v", r.right));
+      w.appendChild(row);
     });
-    card.appendChild(pat);
-    const note = el("p","insight");
-    note.innerHTML = top.pct - worst.pct > .1
-      ? `<b>${worst.name}</b> is running <span class="hi">${Math.round((top.pct-worst.pct)*100)} points behind</span> ${top.name} — ${Math.round(worst.pct*100)}% against ${Math.round(top.pct*100)}%. Same city, same month, so it is priced or listed differently rather than in less demand.`
-      : `All ${split.length} buildings are within ${Math.round((top.pct-worst.pct)*100)} points of each other. The portfolio is moving as one.`;
-    card.appendChild(note);
-    wrap.append(h, card);
-    s.appendChild(wrap);
+    return w;
+  };
+
+  /* 1 — the booking curve */
+  {
+    const curve = bookingCurve();
+    const {c,b} = card("How your book fills", "occupancy by week ahead");
+    const near = curve[0], far = curve[curve.length-1];
+    const head = el("div","headline");
+    head.append(el("b",null, Math.round(near.pct*100)+"%"));
+    head.append(el("s",null, `this week, falling to ${Math.round(far.pct*100)}% by week ${curve.length}`));
+    b.appendChild(head);
+    b.appendChild(vbars(curve.map((x,i)=>({v:x.pct, label:Math.round(x.pct*100)+"", k:"W"+(i+1)})), 0));
+    const halfway = curve.findIndex(x=> x.pct < near.pct/2);
+    const drop = near.pct - far.pct;
+    said(c, `Bookings arrive close to the date, so the far weeks <b>should</b> look thin — that is the shape of a healthy book, not a problem. `
+      + (halfway > 0
+          ? `Yours halves by <span class="hi">week ${halfway+1}</span>, which is where your booking window really ends.`
+          : drop > .12
+            ? `Yours falls <span class="hi">${Math.round(drop*100)} points</span> across the nine weeks without halving — a longer window than most short-lets run.`
+            : `Yours is <span class="hi">unusually flat</span> — the far weeks are filling about as well as the near ones, which usually means long stays rather than strong demand.`)
+      + ` What matters is watching this curve week to week: a week that stops filling as it approaches is the one to act on.`);
   }
 
+  /* 2 — which nights sell */
+  {
+    const wk = weekdayPattern(all);
+    const {c,b} = card("Which nights sell", "occupancy by day of week");
+    const order = [1,2,3,4,5,6,0];
+    const worst = order.reduce((a,d)=> wk[d] < wk[a] ? d : a, order[0]);
+    const best  = order.reduce((a,d)=> wk[d] > wk[a] ? d : a, order[0]);
+    b.appendChild(vbars(order.map(d=>({v:wk[d], label:Math.round(wk[d]*100)+"", k:DOW[d][0]})),
+                        order.indexOf(worst)));
+    said(c, `<b>${DOWF[worst]}s</b> run at <span class="hi">${Math.round(wk[worst]*100)}%</span> against ${Math.round(wk[best]*100)}% on ${DOWF[best]}s — a ${Math.round((wk[best]-wk[worst])*100)} point gap. Midweek pricing, or a minimum stay that forces weekend guests to take a shoulder night, is what usually closes it.`);
+  }
+
+  /* 3 — by building */
+  {
+    const rows = groupOcc(all, f=>f.bname);
+    const {c,b} = card("How each building is doing", "occupancy across the nine weeks");
+    b.appendChild(hbars(rows.slice().reverse().map(r=>({k:r.k, pct:r.pct, right:Math.round(r.pct*100)+"%"})),
+                        rows[0].k));
+    const gap = Math.round((rows[rows.length-1].pct - rows[0].pct)*100);
+    said(c, gap > 8
+      ? `<b>${rows[0].k}</b> is <span class="hi">${gap} points behind</span> ${rows[rows.length-1].k}. Same city, same weeks — a gap that size is pricing, photos or listing reach, not demand.`
+      : `All ${rows.length} buildings sit within ${gap} points of each other. Nothing here needs attention.`);
+  }
+
+  /* 4 — by unit type */
+  {
+    const rows = groupOcc(all, f=>f.type);
+    const {c,b} = card("Which sizes sell", "occupancy by unit type");
+    b.appendChild(hbars(rows.slice().reverse().map(r=>({k:`${r.k} · ${r.units} flat${r.units>1?"s":""}`,
+      pct:r.pct, right:Math.round(r.pct*100)+"%"})), null));
+    const lo = rows[0], hi = rows[rows.length-1];
+    said(c, `Your <b>${hi.k}</b> stock runs at ${Math.round(hi.pct*100)}% while <b>${lo.k}</b> sits at <span class="hi">${Math.round(lo.pct*100)}%</span>. If the weak size is also the one you hold most of, that is where the portfolio is losing nights.`);
+  }
+
+  /* 5 — length of stay */
+  {
+    const m = stayMix();
+    const {c,b} = card("How long people stay", `${m.total} bookings in the next nine weeks`);
+    const head = el("div","headline");
+    head.append(el("b",null, m.alos.toFixed(1)));
+    head.append(el("s",null, "nights, average stay"));
+    b.appendChild(head);
+    b.appendChild(vbars(m.out.map(x=>({v:x.n, label:String(x.n), k:x.k})), 0));
+    const short = m.out[0].n / Math.max(1,m.total);
+    said(c, `<span class="hi">${Math.round(short*100)}%</span> of your bookings are single nights. Every one is a full changeover — a clean, a key handover and a gap either side — for one night's income. Nudging the average from ${m.alos.toFixed(1)} to ${(m.alos+0.5).toFixed(1)} nights is usually worth more than filling extra dates.`);
+  }
+
+  /* 6 — where bookings come from */
+  {
+    const m = sourceMix();
+    const {c,b} = card("Where bookings come from", `${m.total} bookings in the next nine weeks`);
+    b.appendChild(hbars(m.rows.map(r=>({k:r.k, pct:r.n/Math.max(1,m.total),
+      right:Math.round(r.n/Math.max(1,m.total)*100)+"%"})), null));
+    const direct = m.rows.filter(r=>/direct|walk|repeat/i.test(r.k)).reduce((a,r)=>a+r.n,0);
+    said(c, `<b>${Math.round(direct/Math.max(1,m.total)*100)}%</b> come to you directly — by phone, walk-in or a returning guest — and carry no platform commission. That share is the single number most worth growing, and it is the one the listing sites never show you.`);
+  }
+
+  /* 7 — turnaround load */
+  {
+    const load = turnLoad(14);
+    const {c,b} = card("The cleaning week", "same-day turnarounds, next fortnight");
+    const peak = load.reduce((a,x)=> x.n > a.n ? x : a, load[0]);
+    const head = el("div","headline");
+    head.append(el("b",null, String(load.reduce((a,x)=>a+x.n,0))));
+    head.append(el("s",null, "rooms need a same-day turnaround in the next 14 days"));
+    b.appendChild(head);
+    b.appendChild(vbars(load.map(x=>({v:x.n, label:String(x.n),
+      k: x.d===0 ? "T" : DOW[dateAt(x.d).getDay()][0]})), load.indexOf(peak)));
+    said(c, peak.n > 0
+      ? `<span class="hi">${fmtL(peak.d)}</span> is the heaviest, with ${peak.n} room${peak.n>1?"s":""} to turn between a check-out and a check-in. That is the day to have extra help booked, and almost nothing at this scale tells you it is coming.`
+      : `No same-day turnarounds in the next fortnight — every check-out has a clear day behind it.`);
+  }
+
+  /* 8 — fragmentation */
+  {
+    const f = fragmentation();
+    const {c,b} = card("How broken up the gaps are", "empty stretches between bookings");
+    const head = el("div","headline");
+    head.append(el("b",null, String(f.orphans)));
+    head.append(el("s",null, `single orphan nights, out of ${f.runs} empty stretches`));
+    b.appendChild(head);
+    b.appendChild(hbars([
+      {k:"Orphan (1 night)", pct: f.orphans/Math.max(1,f.runs), right:String(f.orphans)},
+      {k:"Sellable stretches", pct:(f.runs-f.orphans)/Math.max(1,f.runs), right:String(f.runs-f.orphans)},
+    ], "Orphan (1 night)"));
+    said(c, `Your empty time averages <b>${f.avg.toFixed(1)} nights</b> per stretch. Ten scattered single nights are far harder to fill than one ten-night hole, so this — not the vacancy count — is the honest measure of how sellable your empty time actually is.`);
+  }
+
+  s.appendChild(deck);
+
+  const dots = el("div","dots");
+  [...deck.children].forEach(()=> dots.appendChild(el("i")));
+  const mark = ()=>{
+    const i = Math.round(deck.scrollLeft / (deck.scrollWidth / deck.children.length));
+    [...dots.children].forEach((d,j)=> d.classList.toggle("on", j === Math.min(i, dots.children.length-1)));
+  };
+  deck.addEventListener("scroll", mark, {passive:true});
+  mark();
+  s.appendChild(dots);
+
+  const lead = leadTimes();
+  const foot = el("p");
+  foot.style.cssText = "margin:20px 2px 0;font-size:12px;line-height:1.6;color:var(--txt-3)";
+  foot.innerHTML = lead
+    ? `Every booking you enter records the day you took it, so lead time is now measurable: across ${lead.n} of your own bookings the typical one arrives <b style="color:var(--txt-2)">${lead.median} days</b> before check-in.`
+    : `<b style="color:var(--txt-2)">There is no history here yet.</b> Everything above reads the forward book — today through ${fmtL(DAYS-1)} — because that is all the app truly knows. Each booking you enter from now records the day you took it, so lead time and week-on-week pace become real once it has been used for a while. Nothing on these cards is estimated or borrowed from elsewhere.`;
+  s.appendChild(foot);
 }
 
 /* ═══════════════ SCREEN 3 — ASK ═══════════════ */
@@ -2098,11 +2332,13 @@ const ICON = {
   rooms:'<svg class="ic" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2.6" y="3.4" width="6" height="6" rx="1.4"/><rect x="11.4" y="3.4" width="6" height="6" rx="1.4" fill="currentColor" stroke="none"/><rect x="2.6" y="11.4" width="6" height="6" rx="1.4" fill="currentColor" stroke="none"/><rect x="11.4" y="11.4" width="6" height="6" rx="1.4"/></svg>',
   month:'<svg class="ic" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="2.6" y="3.8" width="14.8" height="13.4" rx="2.6"/><path d="M2.6 8.2h14.8M6.6 2.4v2.8M13.4 2.4v2.8"/><circle cx="10" cy="12.6" r="1.5" fill="currentColor" stroke="none"/></svg>',
   ask:'<svg class="ic" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M17 9.6c0 3.4-3.1 6.2-7 6.2a8 8 0 0 1-2.2-.3L3.4 17l1-3.1A5.9 5.9 0 0 1 3 9.6C3 6.2 6.1 3.4 10 3.4s7 2.8 7 6.2Z"/><path d="M8.2 8.1a1.9 1.9 0 0 1 3.7.6c0 1.3-1.9 1.6-1.9 2.7"/><circle cx="10" cy="13.4" r=".85" fill="currentColor" stroke="none"/></svg>',
+  trends:'<svg class="ic" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 16.4V9.2M7.6 16.4V4.6M12.4 16.4v-8.4M17 16.4v-5"/></svg>',
 };
 const SCREENS = [
-  {id:"rooms", label:"Rooms", title:"Rooms", render:renderRooms},
-  {id:"month", label:"Month", title:"Month", render:renderMonth},
-  {id:"ask",   label:"Ask",   title:"Ask",   render:renderAsk},
+  {id:"rooms",  label:"Rooms",  title:"Rooms",  render:renderRooms},
+  {id:"month",  label:"Month",  title:"Month",  render:renderMonth},
+  {id:"ask",    label:"Ask",    title:"Ask",    render:renderAsk},
+  {id:"trends", label:"Trends", title:"Trends", render:renderTrends},
 ];
 const tabbar = document.getElementById("tabbar");
 const scrTitle = document.getElementById("scrTitle");
@@ -2122,6 +2358,7 @@ const SUBS = [
   ()=> "",                       // Rooms writes its own live subtitle in paint()
   ()=> "Nine weeks ahead · tap a date",
   ()=> "Ask in plain words",
+  ()=> "Swipe the cards · nine weeks ahead",
 ];
 /* re-render the current screen in place after the data changes, keeping your place */
 function refreshScreen(){
@@ -2163,13 +2400,16 @@ function switchTo(i, focusInput){
   let x0=null,y0=null;
   document.querySelector(".screens").addEventListener("touchstart",e=>{
     if(sheet.classList.contains("on")) return;
+    // elements that own their own horizontal gesture keep it — the calendar's
+    // press-and-sweep and the fortnight strip must not flip the tab
+    if(e.target.closest && e.target.closest(".cal, .nights, .deck")){ x0=null; return; }
     x0=e.touches[0].clientX; y0=e.touches[0].clientY;
   },{passive:true});
   document.querySelector(".screens").addEventListener("touchend",e=>{
-    if(x0===null) return;
+    if(x0===null || sweepLive) return;
     const dx=e.changedTouches[0].clientX-x0, dy=e.changedTouches[0].clientY-y0;
     if(Math.abs(dx)>62 && Math.abs(dx)>Math.abs(dy)*1.6){
-      const nx = Math.max(0, Math.min(2, curScreen + (dx<0?1:-1)));
+      const nx = Math.max(0, Math.min(SCREENS.length-1, curScreen + (dx<0?1:-1)));
       if(nx!==curScreen){ haptic(9); switchTo(nx); }
     }
     x0=null;
