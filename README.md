@@ -78,8 +78,20 @@ Opens on today's operations, because that is the first thing an operator actuall
 ### Month
 
 A calendar where each date carries **rooms still free that night** — not rooms booked.
-The bar under each date is that same figure as a share of all 40, so it shrinks as the
+The bar under each date is that same figure as a share of all 45, so it shrinks as the
 night sells out. Tap a date for the rooms that are open.
+
+- **Press and hold a date, then drag** to sweep out a whole stay. A readout follows
+  above the calendar counting rooms free for the *entire* span as your finger moves, and
+  releasing lists them. The range question, answered by dragging a finger.
+- **What needs attention** re-colours the calendar by exposure rather than status: empty
+  *and* close. A wide-open date five weeks out is ordinary; the same date on Friday is
+  not. Amber is worth watching, red wants doing something today.
+- **Which nights sell** shows the week's shape and names the weak night — the single most
+  actionable thing in the whole app if one weekday is dragging the month down.
+- **How each building is doing** ranks the five blocks and calls out any that is lagging
+  the leader by more than ten points. Same city, same month, so a gap there is pricing or
+  listing rather than demand.
 
 ### Ask
 

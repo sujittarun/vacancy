@@ -278,6 +278,48 @@ button{background:none;border:0;padding:0;cursor:pointer}
 
 .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:7px}
 
+/* ══════════════════════ MONTH — perspective panels ══════════════════════ */
+.monthbar{margin:-4px 2px 14px}
+.mbar{height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden;display:flex}
+.mbar i{display:block;height:100%}
+.mbar i.sold{background:var(--free)}
+.mbar i.soon{background:var(--now)}
+.mcap{margin-top:8px;font-size:12px;color:var(--txt-3);line-height:1.45}
+.mcap b{color:var(--txt);font-weight:650}
+.mcap em{font-style:normal;color:var(--now)}
+
+/* free / pressure lens */
+.lens{display:flex;gap:6px;margin-bottom:10px}
+.lens button{flex:1;padding:8px 6px;border-radius:10px;background:var(--surface-2);
+  border:1px solid var(--line);font-size:12px;font-weight:600;color:var(--txt-3);
+  transition:background .2s,color .2s}
+.lens button[aria-pressed="true"]{background:var(--surface);color:var(--txt);border-color:var(--line-2)}
+.day.watch .fn{color:var(--now)} .day.watch .gg i{background:var(--now)}
+.day.hot   .fn{color:var(--hot)} .day.hot   .gg i{background:var(--hot)}
+.day.hot{border-color:color-mix(in srgb,var(--hot) 45%,transparent)}
+
+/* pattern bars, shared by weekday and building */
+.pat{display:flex;flex-direction:column;gap:9px;padding:14px 16px}
+.patrow{display:grid;grid-template-columns:74px 1fr 38px;gap:10px;align-items:center}
+.patrow .k{font-size:12px;color:var(--txt-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.patrow .t{height:9px;border-radius:5px;background:var(--surface-2);overflow:hidden}
+.patrow .t i{display:block;height:100%;background:var(--free);border-radius:5px}
+.patrow .v{font-size:12px;font-weight:640;text-align:right;color:var(--txt-2)}
+.patrow.low .t i{background:var(--now)}
+.patrow.low .k, .patrow.low .v{color:var(--now)}
+.wkrow{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;padding:14px 16px 6px;align-items:end}
+.wkcol{display:flex;flex-direction:column;align-items:center;gap:6px}
+.wkcol .bar{width:100%;height:56px;background:var(--surface-2);border-radius:5px;
+  display:flex;align-items:flex-end;overflow:hidden}
+.wkcol .bar i{display:block;width:100%;background:var(--free);border-radius:5px}
+.wkcol.low .bar i{background:var(--now)}
+.wkcol .d{font-size:10px;font-weight:600;color:var(--txt-3)}
+.wkcol .p{font-size:10.5px;font-weight:650;color:var(--txt-2)}
+.wkcol.low .p, .wkcol.low .d{color:var(--now)}
+.insight{padding:0 16px 14px;font-size:12.5px;line-height:1.55;color:var(--txt-2);margin:0}
+.insight b{color:var(--txt)}
+.insight .hi{color:var(--now);font-weight:600}
+
 /* ══════════════════════ MONTH ══════════════════════ */
 .mnav{display:flex;align-items:center;gap:8px;margin-bottom:14px}
 .mnav .t{flex:1;font-size:17px;font-weight:640;letter-spacing:-.02em}
@@ -308,6 +350,35 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .day.none .fn{color:var(--hot)}
 .day.none .gg i{background:var(--hot)}
 .day.sel{border-color:var(--free);box-shadow:0 0 0 1px var(--free), var(--shadow-sm)}
+
+/* press-and-hold, then sweep across dates to pick a stay */
+.cal{touch-action:pan-y}
+.cal.sweeping{touch-action:none}
+.day.rng{background:color-mix(in srgb,var(--free) 17%,var(--surface));
+  border-color:color-mix(in srgb,var(--free) 42%,transparent)}
+.day.rngA, .day.rngB{background:var(--free);border-color:transparent}
+.day.rngA .dd, .day.rngB .dd{color:color-mix(in srgb,var(--free-ink) 62%,transparent)}
+.day.rngA .fn, .day.rngB .fn{color:var(--free-ink)}
+.day.rngA .gg, .day.rngB .gg{background:color-mix(in srgb,var(--free-ink) 18%,transparent)}
+.day.rngA .gg i, .day.rngB .gg i{background:var(--free-ink)}
+.day.rng .fn, .day.rngA .fn, .day.rngB .fn{transition:none}
+
+/* takes no layout until a sweep starts, or it leaves a hole in the page */
+.hud{display:none}
+.hud.on{position:sticky;top:0;z-index:6;display:flex;align-items:center;gap:10px;
+  margin:0 2px 12px;padding:11px 14px;border-radius:13px;
+  background:var(--bar);backdrop-filter:blur(20px) saturate(160%);
+  -webkit-backdrop-filter:blur(20px) saturate(160%);
+  border:1px solid var(--line-2);box-shadow:var(--shadow);pointer-events:none;
+  animation:hudIn .34s var(--spring)}
+@keyframes hudIn{from{opacity:0;transform:translateY(-8px)}}
+@media (prefers-reduced-motion:reduce){.hud.on{animation:none}}
+.hud .n{font-size:24px;font-weight:690;letter-spacing:-.035em;line-height:1}
+.hud .n.none{color:var(--hot)}
+.hud .t{font-size:12px;color:var(--txt-2);line-height:1.4}
+.hud .t b{color:var(--txt);font-weight:600}
+.sweephint{font-size:11.5px;color:var(--txt-3);margin:8px 2px 0;line-height:1.5}
+.sweephint b{color:var(--txt-2);font-weight:600}
 
 /* ══════════════════════ ASK ══════════════════════ */
 .field{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line-2);
@@ -543,7 +614,7 @@ function saveInventory(){
 }
 
 let flats = loadInventory() || defaultInventory();
-flats.forEach(f=>{ f.pop = f.pop ?? (0.34 + rng()*0.56); });
+flats.forEach(f=>{ f.pop = f.pop ?? (0.55 + rng()*0.45); });
 let NF = flats.length;
 let flatIndex = Object.fromEntries(flats.map((f,i)=>[f.id,i]));
 
@@ -563,6 +634,52 @@ function applyInventory(next, renames){
              .map(r => { const {_id, ...rest} = r; return {...rest, fi:flatIndex[_id]}; });
   recompute(); saveInventory(); save();
 }
+/* ── perspective ─────────────────────────────────────────────────────────────
+   An unsold night is perishable stock: once the date passes it can never be
+   sold again. These turn the calendar from "what is" into "what is about to be
+   lost", which is the thing an operator can still act on.                     */
+const inr = n => "₹" + Math.round(n).toLocaleString("en-IN");
+
+function monthStats(days){
+  let sold = 0, open = 0, openValue = 0, soon = 0, soonValue = 0;
+  days.forEach(d=>{
+    flats.forEach((f,i)=>{
+      if(occ[i][d]) sold++;
+      else { open++; openValue += f.rate; if(d < 7){ soon++; soonValue += f.rate; } }
+    });
+  });
+  const total = days.length * NF;
+  return {total, sold, open, openValue, soon, soonValue, pct: total ? sold/total : 0};
+}
+
+/* How exposed a date is: empty AND close. 20 flats free three weeks out is
+   ordinary; 20 free on Saturday is a problem. */
+function pressure(d){
+  const empty = freeCount(d) / NF;
+  const near  = Math.max(0, 1 - d / 21);
+  return empty * near;
+}
+const pressureBand = p => p > .45 ? "hot" : p > .22 ? "watch" : "";
+
+function weekdayPattern(days){
+  const acc = Array.from({length:7}, ()=>({sold:0,total:0}));
+  days.forEach(d=>{
+    const w = dateAt(d).getDay();
+    acc[w].total += NF;
+    for(let i=0;i<NF;i++) if(occ[i][d]) acc[w].sold++;
+  });
+  return acc.map(a => a.total ? a.sold/a.total : null);
+}
+
+function buildingSplit(days){
+  return buildingsOf().map(b=>{
+    const idx = flats.map((f,i)=>({f,i})).filter(o=>o.f.code===b.code).map(o=>o.i);
+    let sold = 0, total = 0;
+    days.forEach(d=> idx.forEach(i=>{ total++; if(occ[i][d]) sold++; }));
+    return {...b, units:idx.length, pct: total ? sold/total : 0};
+  }).sort((a,b)=> a.pct - b.pct);
+}
+
 const buildingsOf = ()=>{
   const seen = new Map();
   flats.forEach(f=>{ if(!seen.has(f.code)) seen.set(f.code, {code:f.code, name:f.bname, short:f.bshort}); });
@@ -583,16 +700,26 @@ function recompute(){
   resv.forEach(r=>{ if(r.end>=0 && r.end<DAYS && occ[r.fi][r.end]) chg[r.fi][r.end]=1; });
 }
 
+/* Demand is not flat, and a demo with no pattern in it makes the Month panels
+   look like they have nothing to say. Weekends carry the week and locations
+   differ — which is what the weekday and building views exist to surface. */
+const DOW_DEMAND = [0.86, 0.58, 0.55, 0.60, 0.80, 1.25, 1.20];   // Sun … Sat
+const BLD_DEMAND = {TT:1.05, TN:0.72, MP:1.35, BH:0.66, LP:1.10};
+
 function generateDemo(){
   resv = [];
   flats.forEach((fl,fi)=>{
+    const bF = BLD_DEMAND[fl.code] ?? 1;
     let d = -2 - Math.floor(rng()*8);        // stays already in progress, some checking out today
     while(d < DAYS){
-      if(rng() > fl.pop){ d += 1; continue; }
       const dt = dateAt(Math.max(d,0));
-      const we = dt.getDay()===5 || dt.getDay()===6;
-      let n = 1 + Math.floor(rng()*(we?5:4));
-      if(rng() < .2) n += 2 + Math.floor(rng()*4);
+      const dw = dt.getDay();
+      if(rng() > fl.pop * bF * DOW_DEMAND[dw]){ d += 1; continue; }
+      let n;
+      if(dw === 5)      n = 2 + (rng() < .35 ? 1 : 0);   // Friday arrivals cover the weekend
+      else if(dw === 6) n = 1 + (rng() < .5  ? 1 : 0);
+      else              n = 1 + Math.floor(rng()*3);
+      if(rng() < .12)   n += 3 + Math.floor(rng()*5);    // the occasional long stay
       const start=d, end=d+n;
       // end >= 0 keeps stays that check out this morning — they are today's departures
       if(end>=0 && start<DAYS) resv.push({fi, start, end, nights:n,
@@ -950,7 +1077,87 @@ function renderRooms(){
 }
 
 /* ═══════════════ SCREEN 2 — MONTH ═══════════════ */
-let monthOffset = 0, selDay = 0, revealPanel = false;
+let monthOffset = 0, selDay = 0, revealPanel = false, monthLens = "free";
+let sweep = null, sweptJustNow = false;
+
+/* Press-and-hold on a date, then drag: the calendar becomes a range picker and
+   the readout above it counts rooms free for the WHOLE span as you move. This
+   is the question a caller actually asks, answered by dragging a finger. */
+function attachSweep(grid, hud){
+  let hold = null, live = false, a = null, b = null;
+
+  const cellAt = (x,y)=>{
+    const e = document.elementFromPoint(x,y);
+    return e && e.closest ? e.closest(".day[data-d]") : null;
+  };
+  const paint = ()=>{
+    const lo = Math.min(a,b), hi = Math.max(a,b);
+    grid.querySelectorAll(".day[data-d]").forEach(c=>{
+      const d = +c.dataset.d;
+      c.classList.toggle("rng", d > lo && d < hi);
+      c.classList.toggle("rngA", d === lo);
+      c.classList.toggle("rngB", d === hi && hi !== lo);
+    });
+    const nights = Math.max(1, hi - lo);
+    const free = flats.filter((f,i)=>freeRange(i, lo, lo + nights)).length;
+    hud.classList.add("on");
+    const n = hud.querySelector(".n"), t = hud.querySelector(".t");
+    n.textContent = free;
+    n.classList.toggle("none", free === 0);
+    t.innerHTML = `free for <b>all ${nights} night${nights>1?"s":""}</b><br>${fmt(lo)} → ${fmt(lo+nights)}`;
+  };
+  const clear = ()=>{
+    grid.querySelectorAll(".rng,.rngA,.rngB").forEach(c=>c.classList.remove("rng","rngA","rngB"));
+  };
+  const begin = (cell)=>{
+    live = true; a = b = +cell.dataset.d;
+    grid.classList.add("sweeping");
+    haptic(18); paint();
+  };
+  const move = (x,y)=>{
+    if(!live) return;
+    const cell = cellAt(x,y);
+    if(cell){ const d = +cell.dataset.d; if(d !== b){ b = d; haptic(5); paint(); } }
+  };
+  const end = ()=>{
+    clearTimeout(hold);
+    grid.classList.remove("sweeping");
+    if(!live) return;
+    live = false;
+    const lo = Math.min(a,b), hi = Math.max(a,b);
+    sweep = {a: lo, n: Math.max(1, hi - lo)};
+    selDay = null; sweptJustNow = true; revealPanel = true;
+    haptic(16);
+    setTimeout(()=>{ sweptJustNow = false; }, 350);
+    renderMonth();
+  };
+
+  grid.addEventListener("touchstart", e=>{
+    const cell = e.target.closest && e.target.closest(".day[data-d]");
+    if(!cell) return;
+    clearTimeout(hold);
+    hold = setTimeout(()=>begin(cell), 260);
+  }, {passive:true});
+  grid.addEventListener("touchmove", e=>{
+    if(!live){ clearTimeout(hold); return; }
+    e.preventDefault();
+    move(e.touches[0].clientX, e.touches[0].clientY);
+  }, {passive:false});
+  grid.addEventListener("touchend", end, {passive:true});
+  grid.addEventListener("touchcancel", ()=>{ clearTimeout(hold); live=false;
+    grid.classList.remove("sweeping"); clear(); hud.classList.remove("on"); }, {passive:true});
+
+  // desktop: hold the mouse down and drag
+  grid.addEventListener("mousedown", e=>{
+    const cell = e.target.closest && e.target.closest(".day[data-d]");
+    if(!cell) return;
+    clearTimeout(hold);
+    hold = setTimeout(()=>begin(cell), 260);
+    const mm = ev => move(ev.clientX, ev.clientY);
+    const mu = ()=>{ end(); removeEventListener("mousemove",mm); removeEventListener("mouseup",mu); };
+    addEventListener("mousemove", mm); addEventListener("mouseup", mu);
+  });
+}
 function monthList(){
   const out = [];
   for(let d=0; d<DAYS; d++){
@@ -983,6 +1190,36 @@ function renderMonth(){
   next.onclick = ()=>{ monthOffset++; selDay=ms[monthOffset].days[0]; haptic(8); renderMonth(); };
   nav.append(el("div","t", `${MONF[mo.m]} ${mo.y}`), prev, next);
 
+  /* ── the shape of the month ───────────────────────────────────────────── */
+  const st = monthStats(mo.days);
+  const partial = mo.days[0] === 0 && dateAt(0).getDate() !== 1;
+  const scope = partial ? `Rest of ${MONF[mo.m]}` : MONF[mo.m];
+
+  /* One thin bar under the month title carries the whole month's fullness.
+     Counted in room-nights, never money — the rates are not fixed. */
+  const shape = el("div","monthbar");
+  const bar = el("div","mbar");
+  const iSold = el("i","sold"); iSold.style.width = (st.pct*100).toFixed(1)+"%";
+  const iSoon = el("i","soon"); iSoon.style.width = (st.soon/st.total*100).toFixed(1)+"%";
+  bar.append(iSold, iSoon);
+  const cap = el("div","mcap");
+  cap.innerHTML = `<b>${Math.round(st.pct*100)}%</b> occupied · ${st.open.toLocaleString("en-IN")} room-nights still open`
+    + (st.soon ? `, <em>${st.soon} of them inside a week</em>` : "");
+  shape.append(bar, cap);
+
+  /* live readout while sweeping a range across the calendar */
+  const hud = el("div","hud");
+  hud.append(el("div","n"), el("div","t"));
+
+  /* ── lens ─────────────────────────────────────────────────────────────── */
+  const lens = el("div","lens");
+  [["free","Rooms free"],["pressure","What needs attention"]].forEach(([k,label])=>{
+    const b2 = el("button",null,label);
+    b2.setAttribute("aria-pressed", monthLens===k);
+    b2.onclick = ()=>{ monthLens = k; haptic(9); renderMonth(); };
+    lens.appendChild(b2);
+  });
+
   const cal = el("div","card");
   cal.style.cssText = "padding:14px;background:transparent;border:0;box-shadow:none";
   const dow = el("div","dow");
@@ -996,36 +1233,64 @@ function renderMonth(){
     if(d===0) c.classList.add("today");
     if(f===0) c.classList.add("none");
     if(selDay===d) c.classList.add("sel");
+    const band = pressureBand(pressure(d));
+    if(monthLens === "pressure" && band) c.classList.add(band);
     c.append(el("div","dd",String(dt.getDate())), el("div","fn",String(f)));
-    const g = el("div","gg"); const i = el("i"); i.style.width=(f/NF*100).toFixed(0)+"%";
+    const g = el("div","gg"); const i = el("i");
+    i.style.width = monthLens === "pressure"
+      ? (pressure(d)*100/0.6).toFixed(0)+"%"                 // 0.6 pressure fills the bar
+      : (f/NF*100).toFixed(0)+"%";
     g.appendChild(i); c.appendChild(g);
-    c.setAttribute("aria-label", `${fmtL(d)}, ${f} of ${NF} rooms free`);
-    c.onclick = ()=>{ selDay = d; revealPanel = true; haptic(9); renderMonth(); };
+    c.setAttribute("aria-label", monthLens === "pressure"
+      ? `${fmtL(d)}, ${f} of ${NF} free, ${band==="hot"?"needs attention":band==="watch"?"worth watching":"comfortable"}`
+      : `${fmtL(d)}, ${f} of ${NF} rooms free`);
+    c.dataset.d = d;
+    c.onclick = ()=>{ if(sweptJustNow) return; selDay = d; sweep = null;
+                      revealPanel = true; haptic(9); renderMonth(); };
     grid.appendChild(c);
   });
   cal.style.padding = "0";
   cal.append(dow, grid);
+  attachSweep(grid, hud);
 
-  const key = el("div","key");
-  const k1 = el("div","keyitem");
-  const c1 = el("div","keychip"); c1.appendChild(el("u",null,"23"));
-  const c1b = el("i"); c1b.appendChild(el("b")); c1.appendChild(c1b);
-  k1.append(c1, el("span",null,"Rooms still free that night — not rooms booked"));
-  const k2 = el("div","keyitem");
-  const c2 = el("div","keychip"); const c2b = el("i");
-  const c2f = el("b"); c2f.style.width="58%"; c2b.appendChild(c2f); c2.appendChild(c2b);
-  k2.append(c2, el("span",null,"The bar is that same figure as a share of all 40 — it shrinks as the night sells out"));
-  key.append(k1, k2);
+  const key = el("p","insight");
+  key.style.padding = "0 2px";
+  key.innerHTML = monthLens === "pressure"
+    ? `Every date still shows rooms free, but coloured by how exposed it is — empty <em>and</em> close. <span class="hi">Amber needs watching, red needs doing something today.</span> A wide-open date five weeks out is normal; the same date on Friday is not.`
+    : `The figure is rooms <b>still free</b> that night — not rooms booked. The bar beneath is the same number as a share of all ${NF}, so it shrinks as the night sells out.`;
 
-  s.append(nav, cal, key);
+  const hint = el("p","sweephint");
+  hint.innerHTML = "Tap a date for that night. <b>Press and hold, then drag</b> across the calendar to sweep out a whole stay.";
 
+  s.append(nav, shape, hud, lens, cal, key, hint);
+
+  /* a swept range answers immediately, above the analysis */
+  if(sweep){
+    const {a, n} = sweep;
+    const free = flats.map((f,i)=>i).filter(i=>freeRange(i, a, a+n));
+    const panel = el("div","stack gap-s");
+    const h = el("div","sect");
+    h.append(el("span","lbl", `${fmt(a)} → ${fmt(a+n)}`),
+             el("span","lbl", `${n} night${n>1?"s":""} · ${free.length} free`));
+    const list = el("div","card");
+    if(!free.length){
+      list.appendChild(el("div","empty",`No flat is free for all ${n} nights. Try Ask — it will suggest moving one guest to open one up.`));
+    }
+    free.forEach(fi=> list.appendChild(roomRow(fi, a, null)));
+    panel.append(h, list);
+    s.appendChild(panel);
+    if(revealPanel){
+      revealPanel = false;
+      requestAnimationFrame(()=> panel.scrollIntoView({behavior: calm?"auto":"smooth", block:"nearest"}));
+    }
+  }
+
+  /* the tapped date answers immediately, above the analysis */
   if(selDay !== null){
     const free = []; flats.forEach((fl,fi)=>{ if(!occ[fi][selDay]) free.push(fi); });
     const panel = el("div","stack gap-s");
-    panel.style.marginTop = "22px";
     const h = el("div","sect");
-    h.append(el("span","lbl", fmtL(selDay)),
-             el("span","lbl", `${free.length} of ${NF} free`));
+    h.append(el("span","lbl", fmtL(selDay)), el("span","lbl", `${free.length} of ${NF} free`));
     const list = el("div","card");
     if(!free.length) list.appendChild(el("div","empty","Fully booked that night. Nothing left to sell."));
     free.forEach(fi=> list.appendChild(roomRow(fi, selDay, null)));
@@ -1036,6 +1301,65 @@ function renderMonth(){
       requestAnimationFrame(()=> panel.scrollIntoView({behavior: calm?"auto":"smooth", block:"nearest"}));
     }
   }
+
+  /* ── weekday pattern ──────────────────────────────────────────────────── */
+  const wk = weekdayPattern(mo.days);
+  const known = wk.map((v,i)=>({v,i})).filter(o=>o.v !== null);
+  if(known.length >= 5){
+    const worst = known.reduce((a,b)=> b.v < a.v ? b : a);
+    const best  = known.reduce((a,b)=> b.v > a.v ? b : a);
+    const wrap = el("div","stack gap-s");
+    const h = el("div","sect");
+    h.append(el("span","lbl","Which nights sell"), el("span","lbl", scope.toLowerCase()));
+    const card = el("div","card");
+    const grid = el("div","wkrow");
+    [1,2,3,4,5,6,0].forEach(dw=>{
+      const v = wk[dw];
+      const col = el("div","wkcol" + (dw===worst.i ? " low" : ""));
+      const b3 = el("div","bar"); const fill = el("i");
+      fill.style.height = v === null ? "0%" : Math.max(3, v*100).toFixed(0)+"%";
+      b3.appendChild(fill);
+      col.append(el("div","p", v === null ? "–" : Math.round(v*100)+"%"), b3,
+                 el("div","d", DOW[dw][0]));
+      grid.appendChild(col);
+    });
+    card.appendChild(grid);
+    const note = el("p","insight");
+    note.innerHTML = worst.v < best.v - 0.08
+      ? `<b>${DOWF[worst.i]}s</b> are your weakest night at <span class="hi">${Math.round(worst.v*100)}%</span>, against ${Math.round(best.v*100)}% on ${DOWF[best.i]}s. A midweek rate or a two-night minimum across the weekend is what usually moves this.`
+      : `The week is even — every night lands within a few points of ${Math.round(best.v*100)}%. Nothing to fix here.`;
+    card.appendChild(note);
+    wrap.append(h, card);
+    s.appendChild(wrap);
+  }
+
+  /* ── which building is lagging ────────────────────────────────────────── */
+  const split = buildingSplit(mo.days);
+  if(split.length > 1){
+    const wrap = el("div","stack gap-s");
+    const h = el("div","sect");
+    h.append(el("span","lbl","How each building is doing"), el("span","lbl","occupied"));
+    const card = el("div","card");
+    const pat = el("div","pat");
+    const worst = split[0], top = split[split.length-1];
+    split.slice().reverse().forEach(b=>{
+      const r = el("div","patrow" + (b.code===worst.code && top.pct - worst.pct > .1 ? " low" : ""));
+      r.append(el("div","k", b.name));
+      const t = el("div","t"); const i = el("i"); i.style.width = (b.pct*100).toFixed(0)+"%";
+      t.appendChild(i);
+      r.append(t, el("div","v", Math.round(b.pct*100)+"%"));
+      pat.appendChild(r);
+    });
+    card.appendChild(pat);
+    const note = el("p","insight");
+    note.innerHTML = top.pct - worst.pct > .1
+      ? `<b>${worst.name}</b> is running <span class="hi">${Math.round((top.pct-worst.pct)*100)} points behind</span> ${top.name} — ${Math.round(worst.pct*100)}% against ${Math.round(top.pct*100)}%. Same city, same month, so it is priced or listed differently rather than in less demand.`
+      : `All ${split.length} buildings are within ${Math.round((top.pct-worst.pct)*100)} points of each other. The portfolio is moving as one.`;
+    card.appendChild(note);
+    wrap.append(h, card);
+    s.appendChild(wrap);
+  }
+
 }
 
 /* ═══════════════ SCREEN 3 — ASK ═══════════════ */
