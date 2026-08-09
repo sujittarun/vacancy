@@ -162,15 +162,23 @@ comes first. Nothing moves automatically; it only tells you what is possible.
 
 ### Pulse
 
-Opens with **Worth doing now** — a ranked list of things to act on today, not charts to
-interpret. The one that matters most:
+Opens with **Worth doing now** — operations only, and only what needs a decision today:
+same-day cleans, and flats due back from maintenance (see *Out of service* above).
 
-> **Extensions.** A guest is already in the flat. The night after they leave is empty.
-> Asking them to stay costs nothing — no listing, no commission, no clean in between. When
-> that gap is a single night wedged before the next booking, the extension closes it
-> *exactly*, and a one-night orphan is the night nobody else will ever book. No small-
-> operator tool surfaces this; they all wait for demand to arrive instead of looking at
-> who is already standing in the room.
+Under it, **Worth a discount** is three numbers. Tap any for the flats:
+
+| Tile | What it is |
+|---|---|
+| **Orphan nights** | Single empty nights between two bookings. They will not sell at your normal rate — most guests want two or more — so they are the ones worth advertising cheap. The alternative is nothing. |
+| **Soft dates** | Dates running emptier than that weekday normally does, close enough that a lower price still has time to work. |
+| **Could extend** | A guest is already in the flat and the night after they leave is empty. **Offer them a discounted extra night** — it beats an empty one and costs no commission and no clean in between. |
+
+Each opens a list with a **Copy a broadcast** button, ready to paste.
+
+**Only the next fortnight appears here** (a week for extensions, since you cannot have that
+conversation about a checkout two weeks out). Further ahead there is still time to sell
+those nights properly, and discounting them now is selling cheap what would have gone at
+full price — the most expensive mistake in this business.
 
 Below it, one metric per section, scrolled vertically. The uncommon ones are the point:
 
