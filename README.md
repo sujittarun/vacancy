@@ -170,13 +170,35 @@ flats a tap away:
 |---|---|
 | *TT-104 · Maintenance* | Due back today — confirm, or push a week. One row per flat, because each is its own decision. |
 | *2 turnarounds tomorrow* | The flats needing a clean between two guests |
-| *20 unsold tonight* | Those flats, at −25%, with a broadcast ready to send |
+| *20 unsold tonight* | Those flats, at −25%, plus the words for an advert |
 | *5 one-night gaps* | Orphan nights — booked either side, so they will not sell at a full rate |
 | *18 guests leaving soon* | Offer them a discounted extra night |
 
 Five near-identical rows saying "one night only" is a scroll, not a list — so anything with
 more than one instance collapses to a single row showing the first few flat numbers.
 Maintenance is the exception: each one carries its own two answers.
+
+### Words for an advert, not a list of codes
+
+Tapping a discountable row gives you two things.
+
+**For your advert** — what you actually have to sell, in language a guest understands:
+
+> **25% off · tonight, Sun 9 Aug**
+> 10 × 3 BHK — TreeTops, Telecom Nagar, Madhapur, Lotus Pond
+> 8 × 2 BHK — TreeTops, Banjara Hills
+> 2 × Studio — Madhapur, Banjara Hills
+
+**Copy these words** puts that on the clipboard, ready to paste into an image generator or
+hand to whoever makes the creative. Grouped by size with the localities named, because that
+is what goes on a poster.
+
+**Which flats** — the same thing in your own shorthand (TT-102, BH-201) so you know which
+units to hold. That part is for you; `TT-102` means nothing to a guest and never appears in
+the advert text.
+
+Extension offers deliberately get no advert block — an extension is a conversation with one
+named guest before they check out, not something you broadcast.
 
 There is no separate card for discounts. Maintenance and the flats worth discounting
 belong in the same list, because they are the same kind of thing: something to do before

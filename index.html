@@ -353,6 +353,16 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .allclear div{font-size:12.5px;line-height:1.5;color:var(--txt-2)}
 .allclear b{color:var(--txt);font-weight:600}
 
+/* the advert summary — what you have to sell, in words a guest understands */
+.advert{margin:16px 20px 0;padding:15px 16px 16px;border-radius:15px;
+  background:color-mix(in srgb,var(--now) 9%,var(--surface));
+  border:1px solid color-mix(in srgb,var(--now) 28%,transparent)}
+.advert-head{font-size:19px;font-weight:680;letter-spacing:-.025em;color:var(--now);margin:5px 0 12px}
+.advert-list{display:flex;flex-direction:column;gap:8px}
+.advert-row{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.advert-row b{font-size:14px;font-weight:620;letter-spacing:-.012em;white-space:nowrap;flex:0 0 auto}
+.advert-row s{text-decoration:none;font-size:12.5px;color:var(--txt-2);text-align:right;min-width:0}
+
 /* the action feed — what to do, above everything you have to interpret */
 .act{display:flex;gap:10px;align-items:center;padding:11px 14px;
   border-bottom:1px solid var(--line);width:100%;text-align:left}
@@ -950,7 +960,7 @@ function todayActions(){
       tag:`−${depth}%`,
       open: ()=> openFlatList(`${free.length} unsold ${d===0?"tonight":fmt(d)}`,
               d===0 ? "gone at midnight" : "one day left to sell", rows,
-              {head:`Rooms free ${fmtL(d)} — ${depth}% off`,
+              {depth, when: d===0 ? `tonight, ${fmtL(0)}` : fmtL(d),
                lead:"These nights stop existing the morning after. Anything you take for them beats nothing."})});
   }
 
@@ -965,7 +975,7 @@ function todayActions(){
       tag:"−25%",
       open: ()=> openFlatList(`${orph.length} one-night gap${orph.length>1?"s":""}`,
               "booked either side · today and tomorrow", orph,
-              {head:"One-night stays going cheap:",
+              {depth:25, when: orph.length === 1 ? fmtL(orph[0].d) : "single nights, today and tomorrow",
                lead:"A single night between two bookings will not sell at a normal rate — most guests want two or more. The alternative is leaving it empty."})});
   }
 
@@ -981,8 +991,9 @@ function todayActions(){
       tag:"extend",
       open: ()=> openFlatList(`${ext.length} extension offer${ext.length>1?"s":""}`,
               "guests leaving today or tomorrow", ext,
-              {head:"Extend your stay at a reduced rate:",
-               lead:"A discounted extra night beats an empty one, and costs no commission and no clean in between."})});
+              // no advert block: an extension is a conversation with one named
+              // guest, not something you broadcast
+              {lead:"A discounted extra night beats an empty one, and costs no commission and no clean in between. Speak to each guest before they check out."})});
   }
 
   return acts.sort((a,b)=> a.rank - b.rank || (a.day||0) - (b.day||0));
@@ -2768,7 +2779,15 @@ function openFlatList(title, sub, rows, broadcast){
     sheetB.appendChild(p);
   }
 
-  const card2 = el("div","card"); card2.style.margin = "14px 20px 0";
+  if(broadcast && broadcast.depth && rows.length)
+    sheetB.appendChild(advertBlock(rows, broadcast.depth, broadcast.when));
+
+  if(rows.length){
+    const h = el("div","sheet-s");
+    h.append(el("span","lbl","Which flats"), el("span","lbl", `${rows.length}`));
+    sheetB.appendChild(h);
+  }
+  const card2 = el("div","card"); card2.style.margin = "0 20px";
   if(!rows.length) card2.appendChild(el("div","empty","Nothing here."));
   rows.forEach(r=>{
     const row = el("button","row");
@@ -2780,26 +2799,53 @@ function openFlatList(title, sub, rows, broadcast){
   });
   sheetB.appendChild(card2);
 
-  if(broadcast && rows.length){
-    const bar = el("div","dataTools"); bar.style.cssText = "padding:14px 20px 0";
-    const cp = el("button","copybtn");
-    cp.innerHTML = "<span>Copy a broadcast</span>";
-    cp.onclick = async ()=>{
-      const text = broadcast.head + "\n"
-        + rows.slice(0,10).map(r=>`${flats[r.fi].id} · ${flats[r.fi].type} · ${flats[r.fi].bshort}`).join("\n")
-        + (rows.length > 10 ? `\n+${rows.length - 10} more` : "");
-      const ok = await copyText(text);
-      haptic(12);
-      cp.querySelector("span").textContent = ok ? "Copied" : "Press and hold to copy";
-      cp.classList.toggle("done", ok);
-      setTimeout(()=>{ cp.querySelector("span").textContent = "Copy a broadcast";
-                       cp.classList.remove("done"); }, 1800);
-    };
-    bar.appendChild(cp);
-    sheetB.appendChild(bar);
-  }
   sheet.classList.add("on"); scrim.classList.add("on");
   sheetB.scrollTop = 0; x.focus();
+}
+
+/* What goes on an advert is not a list of flat numbers — nobody outside your
+   office knows what TT-102 means. It is what you have to sell: how many of
+   which size, in which building. */
+function advertBlock(rows, depth, when){
+  /* Group by size, and name the localities under it. An advert says "3 BHK in
+     Banjara Hills" — it never says TT-102, and it does not want eight lines. */
+  const groups = new Map();
+  rows.forEach(r=>{
+    const f = flats[r.fi];
+    if(!groups.has(f.type)) groups.set(f.type, {n:0, where:new Set()});
+    const g = groups.get(f.type);
+    g.n++; g.where.add(f.bname);
+  });
+  const lines = [...groups.entries()]
+    .map(([type,g])=>({type, n:g.n, bldg:[...g.where].join(", ")}))
+    .sort((a,b)=> b.n - a.n);
+
+  const wrap = el("div","advert");
+  wrap.append(el("div","lbl","For your advert"),
+              el("div","advert-head", `${depth}% off · ${when}`));
+  const list = el("div","advert-list");
+  lines.forEach(l=>{
+    const r = el("div","advert-row");
+    r.append(el("b",null, `${l.n} × ${l.type}`), el("s",null, l.bldg));
+    list.appendChild(r);
+  });
+  wrap.appendChild(list);
+
+  const text = `${depth}% off — ${when}\n\n`
+    + lines.map(l=>`${l.n} × ${l.type} — ${l.bldg}`).join("\n");
+  const cp = el("button","copybtn");
+  cp.style.marginTop = "13px";
+  cp.innerHTML = "<span>Copy these words</span>";
+  cp.onclick = async ()=>{
+    const ok = await copyText(text);
+    haptic(12);
+    cp.querySelector("span").textContent = ok ? "Copied" : "Press and hold to copy";
+    cp.classList.toggle("done", ok);
+    setTimeout(()=>{ cp.querySelector("span").textContent = "Copy these words";
+                     cp.classList.remove("done"); }, 1800);
+  };
+  wrap.appendChild(cp);
+  return wrap;
 }
 
 function closeSheet(){ sheet.classList.remove("on"); scrim.classList.remove("on"); }
