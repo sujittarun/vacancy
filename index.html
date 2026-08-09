@@ -2069,8 +2069,16 @@ function openAccount(){
 function openGate(){
   const g = document.getElementById("gate");
   document.getElementById("gateErr").textContent = "";
+  const e = document.getElementById("gateEmail"), p = document.getElementById("gatePass");
+  const dev = window.DEV_LOGIN;
+  if(dev){                                  // local convenience, never deployed
+    if(!e.value) e.value = dev.email || "";
+    if(!p.value) p.value = dev.password || "";
+  }
   g.classList.add("on");
-  setTimeout(()=>{ const f = document.getElementById("gateEmail"); if(f && !f.value) f.focus(); }, 260);
+  // if it is already filled in, the next thing wanted is the button, not the keyboard
+  setTimeout(()=>{ if(e.value && p.value) document.getElementById("gateGo").focus();
+                   else if(!e.value) e.focus(); }, 260);
 }
 function closeGate(){ document.getElementById("gate").classList.remove("on"); }
 
@@ -3881,6 +3889,23 @@ switchTo(deep >= 0 ? deep : 0);
 
 /* ══════════════════ wiring the cloud to the screen ════════════════════════ */
 document.getElementById("acctBtn").onclick = ()=>{ haptic(9); openAccount(); };
+
+/* ── prefilled sign-in, and why the password is not in this file ──────────────
+   index.html is served from a public URL, so a password written here would be
+   readable by anyone using view-source — it would hand the real book to the
+   internet, permanently, since git history keeps it even after a delete. The
+   details live in dev-login.js instead: gitignored, never deployed, and only
+   fetched when the app is running locally.
+
+   On a phone none of this is needed. Signing in once is remembered, and the
+   inputs carry autocomplete="username" / "current-password" so the phone's own
+   password manager fills them — which is the only place a password belongs. */
+if(location.hostname === "localhost" || location.hostname === "127.0.0.1"){
+  const s = document.createElement("script");
+  s.src = "dev-login.js";
+  s.onerror = ()=>{};                    // absent is the ordinary case
+  document.head.appendChild(s);
+}
 
 (function(){
   const form = document.getElementById("gateForm");

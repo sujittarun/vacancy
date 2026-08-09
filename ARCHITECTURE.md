@@ -151,6 +151,18 @@ cannot drift from the events it summarises.
    `.secrets/crescent-login.txt` (gitignored, `chmod 600`) and has never been printed.
    Change it in the dashboard under Authentication → Users.
 
+### Signing in without typing
+
+`index.html` is served from a public URL and lives in a public repo, so a password written
+into it would be readable by anyone using view-source — and git history would keep it even
+after a delete. It is therefore in **`dev-login.js`**: gitignored, `chmod 600`, never
+deployed, and loaded only when `location.hostname` is `localhost` or `127.0.0.1`. The sign-in
+form fills itself from it and focuses the button, so signing in locally is one tap.
+
+On a phone nothing is needed: the session is remembered after the first sign-in, and the
+inputs carry `autocomplete="username"` / `current-password` so the phone's own password
+manager fills them. Recreate the file from `.secrets/crescent-login.txt` if it is lost.
+
 ---
 
 ## How the app talks to it

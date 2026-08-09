@@ -3,3 +3,4 @@
 .secrets/
 supabase/.temp/
 supabase/.branches/
+dev-login.js
