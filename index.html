@@ -295,22 +295,51 @@ button{background:none;border:0;padding:0;cursor:pointer}
   border-radius:50%;background:var(--now)}
 
 /* ══════════════════════ TRENDS — swipeable card deck ══════════════════════ */
-.deck{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;
-  margin:0 -20px;padding:2px 20px 4px;scrollbar-width:none;touch-action:pan-x}
-.deck::-webkit-scrollbar{display:none}
-.tcard{flex:0 0 min(100%, 520px);scroll-snap-align:center;background:var(--surface);
-  border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow-sm);
-  padding:17px 16px 15px;display:flex;flex-direction:column;min-height:330px}
+/* A vertical stack, not a carousel. Horizontal decks hide their contents behind
+   a gesture with no preview — you cannot tell what is there or how much. On a
+   phone, vertical scroll is the native, discoverable motion; nothing hides. */
+.deck{display:flex;flex-direction:column;gap:14px}
+.tcard{background:var(--surface);border:1px solid var(--line);border-radius:18px;
+  box-shadow:var(--shadow-sm);padding:17px 16px 15px;display:flex;flex-direction:column;
+  transition:opacity .5s var(--out), transform .55s var(--out)}
+.tcard.pending{opacity:0;transform:translateY(12px)}
+@media (prefers-reduced-motion:reduce){
+  .tcard.pending{opacity:1;transform:none}
+  .tcard{transition:none}
+}
 .tcard h3{margin:0;font-size:15px;font-weight:650;letter-spacing:-.018em}
 .tcard .cap{margin:3px 0 15px;font-size:11.5px;color:var(--txt-3);letter-spacing:.01em}
 .tcard .body{flex:1;display:flex;flex-direction:column;justify-content:center}
+.tcard .body > .act:first-child{border-top:0}
 .tcard .said{margin:14px 0 0;font-size:12.5px;line-height:1.55;color:var(--txt-2)}
 .tcard .said b{color:var(--txt)}
 .tcard .said .hi{color:var(--now);font-weight:600}
-.dots{display:flex;gap:11px;justify-content:center;margin-top:14px}
-.dots i{width:6px;height:6px;border-radius:3px;background:var(--surface-3);display:block;
-  transform-origin:center;transition:background .25s var(--out), transform .3s var(--out)}
-.dots i.on{background:var(--txt-2);transform:scaleX(2.6)}
+/* bars grow from nothing as their section arrives — transform only, no layout */
+.vbar .col i, .patrow .t i{transition:transform .75s var(--out)}
+.vbar .col i{width:100%;transform-origin:bottom;transform:scaleY(var(--v,1))}
+.patrow .t i{width:100%;transform-origin:left center;transform:scaleX(var(--v,1))}
+.tcard.pending .vbar .col i{transform:scaleY(0)}
+.tcard.pending .patrow .t i{transform:scaleX(0)}
+@media (prefers-reduced-motion:reduce){
+  .tcard.pending .vbar .col i{transform:scaleY(var(--v,1))}
+  .tcard.pending .patrow .t i{transform:scaleX(var(--v,1))}
+  .vbar .col i, .patrow .t i{transition:none}
+}
+
+/* the action feed — what to do, above everything you have to interpret */
+.act{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;
+  border-bottom:1px solid var(--line);width:100%;text-align:left}
+.act:last-child{border-bottom:0}
+.act:active{background:var(--surface-2)}
+.act .mark{flex:0 0 auto;width:8px;height:8px;border-radius:50%;margin-top:5px;
+  background:var(--txt-3)}
+.act.warn .mark{background:var(--hot)}
+.act.good .mark{background:var(--now)}
+.act .txt{flex:1;min-width:0}
+.act > .pill{flex:0 0 auto;margin-top:1px}
+.act .txt b{display:block;font-size:13.5px;font-weight:620;letter-spacing:-.012em;line-height:1.35;\n  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.act .txt s{display:block;text-decoration:none;font-size:12px;color:var(--txt-2);
+  line-height:1.45;margin-top:3px}
 
 .headline{display:flex;align-items:baseline;gap:10px;margin-bottom:14px}
 .headline b{font-size:clamp(30px,9.5vw,40px);font-weight:700;letter-spacing:-.04em;line-height:.9}
@@ -755,6 +784,69 @@ function fragmentation(){
     }
   });
   return {runs, orphans, nights, avg: runs ? nights/runs : 0};
+}
+
+/* ── the cheapest booking you will ever take ─────────────────────────────────
+   A guest is already in the flat. The night after they leave is empty. Asking
+   them to stay one more night costs nothing — no listing, no commission, no
+   clean between. When that empty stretch is bounded by the next booking, the
+   extension fills the gap exactly, and a one-night gap is the orphan nobody
+   can sell. No small-operator tool surfaces this; they all wait for demand to
+   arrive instead of looking at who is already standing in the room.        */
+function extensionOffers(){
+  const out = [];
+  resv.forEach(r=>{
+    const e = r.end;                                  // check-out morning = first free night
+    if(e < 0 || e >= DAYS) return;
+    if(occ[r.fi][e]) return;                          // someone else already has that night
+    let n = 0; while(e+n < DAYS && !occ[r.fi][e+n]) n++;
+    if(!n) return;
+    const bounded = e + n < DAYS;                     // a later booking closes the gap
+    const inHouse = r.start <= 0 && r.end > 0;        // they are in the flat right now
+    out.push({
+      r, fi:r.fi, from:e, nights:n, bounded, inHouse,
+      orphan: bounded && n === 1,
+      score: (inHouse ? 100 : 0)
+           + (bounded && n === 1 ? 70 : bounded && n <= 3 ? 40 : 0)
+           + Math.max(0, 30 - e),                     // sooner beats later
+    });
+  });
+  return out.sort((a,b)=> b.score - a.score);
+}
+
+/* One ranked list of things worth doing, newest problem first. The app should
+   say what to do, not hand over charts to interpret. */
+function actionFeed(){
+  const acts = [];
+
+  dayOps(0).turnovers.forEach(t=>{
+    acts.push({kind:"turn", urgency:3, fi:t.fi,
+      title:`${flats[t.fi].id} · turnaround`,
+      body:`${t.out.guest} out, ${t.in.guest} in — same day. Needs a clean between.`,
+      tag:"today", tone:"warn", day:0});
+  });
+
+  extensionOffers().slice(0,4).forEach(x=>{
+    const fl = flats[x.fi];
+    acts.push({kind:"ext", urgency: x.inHouse ? 3 : 2, fi:x.fi,
+      title: `${fl.id} · ${x.r.guest}`,
+      body: (x.inHouse ? "Here now · " : "")
+        + `leaves ${fmt(x.from)}, then ${x.nights === 1 ? "1 empty night" : x.nights + " empty nights"}`
+        + (x.orphan ? " before the next guest. An extension closes it exactly."
+                    : ". Worth asking them to stay."),
+      tag: x.orphan ? "fills an orphan" : `+${x.nights} night${x.nights>1?"s":""}`,
+      tone: x.orphan ? "good" : "", day:x.from});
+  });
+
+  const norm = weekdayFreeNorm();
+  softDates(norm).slice(0,3).forEach(sd=>{
+    acts.push({kind:"soft", urgency: sd.d <= 7 ? 2 : 1,
+      title:`${fmtL(sd.d)} · soft ${DOWF[dateAt(sd.d).getDay()]}`,
+      body:`${sd.free} free, against about ${Math.round(sd.norm)} normally. ${sd.d===0?"Tonight":sd.d+" days out"}.`,
+      tag:`${sd.free} free`, tone:"", day:sd.d});
+  });
+
+  return acts.sort((a,b)=> b.urgency - a.urgency || a.day - b.day);
 }
 
 function leadTimes(){
@@ -1455,7 +1547,8 @@ function renderTrends(){
       const b = el("div","vbar" + (i===accIdx ? " acc" : ""));
       b.append(el("div","v", r.label));
       const col = el("div","col"); const fill = el("i");
-      fill.style.height = Math.max(2, r.v/max*100) + "%";
+      fill.style.height = "100%";
+      fill.style.setProperty("--v", Math.max(.02, r.v/max).toFixed(3));
       col.appendChild(fill);
       b.append(col, el("div","k", r.k));
       w.appendChild(b);
@@ -1467,13 +1560,36 @@ function renderTrends(){
     rows.forEach(r=>{
       const row = el("div","patrow" + (r.k===lowKey ? " low" : ""));
       row.append(el("div","k", r.k));
-      const t = el("div","t"); const i = el("i"); i.style.width = (r.pct*100).toFixed(0)+"%";
+      const t = el("div","t"); const i = el("i");
+      i.style.setProperty("--v", Math.max(.02, r.pct).toFixed(3));
       t.appendChild(i);
       row.append(t, el("div","v", r.right));
       w.appendChild(row);
     });
     return w;
   };
+
+  /* 0 — what to do now. The app should say what to act on before it shows you
+         anything you have to interpret. */
+  {
+    const acts = actionFeed();
+    const {c,b} = card("Worth doing now", acts.length ? `${acts.length} things` : "nothing pressing");
+    b.style.justifyContent = "flex-start";
+    if(!acts.length){
+      b.appendChild(el("div","empty","Nothing needs attention. No same-day cleans, no orphan nights, and no date running unusually empty."));
+    }
+    acts.slice(0,6).forEach(a=>{
+      const row = el("button","act" + (a.tone ? " "+a.tone : ""));
+      row.appendChild(el("div","mark"));
+      const t = el("div","txt");
+      t.append(el("b",null,a.title), el("s",null,a.body));
+      row.appendChild(t);
+      row.appendChild(el("span","pill" + (a.tone==="warn"?" warn":a.tone==="good"?" good":""), a.tag));
+      if(a.fi !== undefined) row.onclick = ()=>{ haptic(10); openSheet(a.fi, a.day || 0); };
+      b.appendChild(row);
+    });
+    said(c, `Everything here is something you can act on today, ranked by how soon it bites. Tap one to open the flat.`);
+  }
 
   /* 1 — the booking curve */
   {
@@ -1586,15 +1702,20 @@ function renderTrends(){
 
   s.appendChild(deck);
 
-  const dots = el("div","dots");
-  [...deck.children].forEach(()=> dots.appendChild(el("i")));
-  const mark = ()=>{
-    const i = Math.round(deck.scrollLeft / (deck.scrollWidth / deck.children.length));
-    [...dots.children].forEach((d,j)=> d.classList.toggle("on", j === Math.min(i, dots.children.length-1)));
-  };
-  deck.addEventListener("scroll", mark, {passive:true});
-  mark();
-  s.appendChild(dots);
+  /* reveal each section as it arrives; bars grow with it */
+  if(window.IntersectionObserver && !calm){
+    const cards = [...deck.children];
+    cards.forEach(c=> c.classList.add("pending"));
+    // root is the scrolling panel, not the viewport — these live inside an
+    // absolutely positioned scroller
+    const io = new IntersectionObserver(es=>es.forEach(e=>{
+      if(e.isIntersecting){ e.target.classList.remove("pending"); io.unobserve(e.target); }
+    }), {root:s, threshold:.12});
+    cards.forEach(c=> io.observe(c));
+    requestAnimationFrame(()=> cards[0] && cards[0].classList.remove("pending"));
+    // belt and braces: nothing stays hidden even if the observer never fires
+    setTimeout(()=>cards.forEach(c=>c.classList.remove("pending")), 2500);
+  }
 
   const lead = leadTimes();
   const foot = el("p");
@@ -2373,7 +2494,7 @@ const SCREENS = [
   {id:"rooms",  label:"Rooms",  title:"Rooms",  render:renderRooms},
   {id:"month",  label:"Month",  title:"Month",  render:renderMonth},
   {id:"ask",    label:"Ask",    title:"Ask",    render:renderAsk},
-  {id:"trends", label:"Trends", title:"Trends", render:renderTrends},
+  {id:"trends", label:"Pulse",  title:"Pulse",  render:renderTrends},
 ];
 const tabbar = document.getElementById("tabbar");
 const scrTitle = document.getElementById("scrTitle");
@@ -2393,7 +2514,7 @@ const SUBS = [
   ()=> "",                       // Rooms writes its own live subtitle in paint()
   ()=> "Nine weeks ahead · tap a date",
   ()=> "Ask in plain words",
-  ()=> "Swipe the cards · nine weeks ahead",
+  ()=> "What to act on, and how the book looks",
 ];
 /* re-render the current screen in place after the data changes, keeping your place */
 function refreshScreen(){

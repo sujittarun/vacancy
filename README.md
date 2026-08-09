@@ -134,10 +134,19 @@ existing guest** to a flat that is free for their whole stay.
 Options are ranked so the move the guest would never notice — same building, same size —
 comes first. Nothing moves automatically; it only tells you what is possible.
 
-### Trends
+### Pulse
 
-A deck of cards you **swipe sideways**, one metric each, all computed from the forward
-book. The uncommon ones are the point:
+Opens with **Worth doing now** — a ranked list of things to act on today, not charts to
+interpret. The one that matters most:
+
+> **Extensions.** A guest is already in the flat. The night after they leave is empty.
+> Asking them to stay costs nothing — no listing, no commission, no clean in between. When
+> that gap is a single night wedged before the next booking, the extension closes it
+> *exactly*, and a one-night orphan is the night nobody else will ever book. No small-
+> operator tool surfaces this; they all wait for demand to arrive instead of looking at
+> who is already standing in the room.
+
+Below it, one metric per section, scrolled vertically. The uncommon ones are the point:
 
 | Card | Why it matters |
 |---|---|
