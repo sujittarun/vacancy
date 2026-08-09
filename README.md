@@ -149,6 +149,21 @@ Chips under the answer show what it understood, so when it misreads you, you can
 
 There is a microphone if the browser supports speech input — useful mid-call.
 
+#### When nothing fits
+
+The answer is ordered by what a caller would actually accept.
+
+1. **A shorter stay from the same date.** *"The longest you can do from Sun 9 Aug is 6
+   nights, not 30"* — with the flats that offer it. Someone who wants thirty nights
+   starting now can often be sold twenty; that is a negotiating position.
+2. **A different arrival, but only within a week.** Nobody moves a trip three weeks to suit
+   your calendar.
+3. **If nothing fits within a week**, one line says when it would: *"The soonest that does
+   is Sun 6 Sep, 28 days out."* Information, not a suggestion.
+
+An earlier version searched the whole nine weeks for an alternative arrival and cheerfully
+offered "+23 days" — technically an answer, useless as one.
+
 #### One move away
 
 When nothing fits, it does not just say no. A hotel manager in that position shuffles a

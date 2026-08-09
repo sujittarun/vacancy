@@ -2534,47 +2534,75 @@ function renderAsk(focus){
         });
         listWrap.append(mh, mcard);
       }
-      h.append(el("span","lbl","Or move the dates"), el("span","lbl","nearest that work"));
-      /* Search the WHOLE horizon, not a window around the asked date. A long
-         stay often only fits weeks out, and "try a shorter stay" is a wrong
-         answer when the stay is perfectly possible later. */
+      h.append(el("span","lbl","What is possible instead"),
+               el("span","lbl", `${p.n} nights from ${fmt(a)}`));
+
+      /* 1. A shorter stay from the SAME date. If a guest wants thirty nights
+            from today, "twenty-one is possible" is a negotiating position;
+            "come back in three weeks" is a different trip and no use at all. */
+      const runs = pool.map(x=>({fi:x.i, n:runFrom(x.i, a)}))
+                       .filter(r=>r.n > 0)
+                       .sort((x,y)=> y.n - x.n);
+      if(runs.length){
+        const best = runs[0].n;
+        const sub = el("div","empty");
+        sub.style.cssText = "text-align:left;padding:13px 14px 4px";
+        sub.innerHTML = `The longest you can do from <b style="color:var(--txt)">${fmtL(a)}</b> is `
+          + `<b style="color:var(--txt)">${best} night${best>1?"s":""}</b>, not ${p.n}.`;
+        list.appendChild(sub);
+        runs.slice(0,5).forEach(r=>{
+          const fl = flats[r.fi];
+          const row = el("button","row");
+          row.append(el("div","id", fl.id));
+          const m = el("div","meta");
+          m.innerHTML = `<b>${fl.type}</b> · ${fl.bshort}`
+            + `<em>${fmt(a)} → ${fmt(a + r.n)} · ${r.n} of the ${p.n} nights</em>`;
+          row.append(m, el("span","pill good", `${r.n} nt`));
+          row.onclick = ()=>{ haptic(9); openSheet(r.fi, a); };
+          list.appendChild(row);
+        });
+      }
+
+      /* 2. A different arrival — but only within a week. Nobody moves a trip
+            three weeks to suit your calendar. */
+      const NEAR = 7;
       const alts = [];
-      for(let s2 = 0; s2 <= DAYS - p.n; s2++){
-        if(s2 === a) continue;
-        const c = pool.filter(x=>freeRange(x.i, s2, s2+p.n)).length;
-        if(c) alts.push({d:s2, c, dist:Math.abs(s2-a)});
+      for(let sh = 1; sh <= NEAR; sh++){
+        [a + sh, a - sh].forEach(s2=>{
+          if(s2 < 0 || s2 + p.n > DAYS) return;
+          const c = pool.filter(x=>freeRange(x.i, s2, s2 + p.n)).length;
+          if(c) alts.push({d:s2, c, dist:Math.abs(s2 - a)});
+        });
       }
       alts.sort((x,y)=> x.dist - y.dist);
-
-      if(!alts.length){
-        // nowhere fits — say how long the longest stretch actually is
-        let best = {n:0, at:-1, fi:-1};
-        pool.forEach(({i})=>{
-          let d = 0;
-          while(d < DAYS){
-            if(occ[i][d]){ d++; continue; }
-            let run = 0; while(d+run < DAYS && !occ[i][d+run]) run++;
-            if(run > best.n) best = {n:run, at:d, fi:i};
-            d += run;
-          }
+      if(alts.length){
+        const sh = el("div","sheet-s");
+        sh.append(el("span","lbl","Or shift the arrival"), el("span","lbl","within a week"));
+        list.appendChild(sh);
+        alts.slice(0,4).forEach(alt=>{
+          const away = alt.d - a;
+          const r = el("button","row");
+          r.append(el("div","id", (away>0?"+":"−") + Math.abs(away) + "d"));
+          const m = el("div","meta");
+          m.innerHTML = `Arrive <b>${fmtL(alt.d)}</b> instead`
+            + `<em>${alt.c} flat${alt.c>1?"s":""} free for all ${p.n} night${p.n>1?"s":""}</em>`;
+          r.append(m, el("span","pill good", `${alt.c} free`));
+          r.onclick = ()=>{ haptic(9); goMonth(alt.d); };
+          list.appendChild(r);
         });
+      } else {
+        /* 3. Nothing within a week. Mention the soonest as one line — it is
+              information, not a suggestion worth a row of its own. */
+        let soon = -1;
+        for(let s2 = a + NEAR + 1; s2 <= DAYS - p.n && soon < 0; s2++)
+          if(pool.some(x=>freeRange(x.i, s2, s2 + p.n))) soon = s2;
         const e = el("div","empty");
-        e.innerHTML = best.n
-          ? `No ${p.n}-night stretch exists anywhere in the next nine weeks. The longest is <b style="color:var(--txt)">${best.n} nights</b> in ${flats[best.fi].id} from ${fmtL(best.at)}.`
-          : "Nothing is free anywhere in the next nine weeks.";
+        e.style.cssText = "text-align:left;padding:12px 14px";
+        e.innerHTML = soon >= 0
+          ? `Nothing within a week of ${fmt(a)} takes ${p.n} nights. The soonest that does is <b style="color:var(--txt)">${fmtL(soon)}</b>, ${soon - a} days out.`
+          : `No ${p.n}-night stretch exists anywhere in the next nine weeks.`;
         list.appendChild(e);
       }
-      alts.slice(0,6).forEach(alt=>{
-        const away = alt.d - a;
-        const r = el("button","row");
-        r.append(el("div","id", (away>0?"+":"−") + Math.abs(away) + "d"));
-        const m = el("div","meta");
-        m.innerHTML = `Arrive <b>${fmtL(alt.d)}</b> instead`
-          + `<em>${alt.c} flat${alt.c>1?"s":""} free for all ${p.n} night${p.n>1?"s":""}</em>`;
-        r.append(m, el("span","pill good", `${alt.c} free`));
-        r.onclick = ()=>{ haptic(9); goMonth(alt.d); };
-        list.appendChild(r);
-      });
     }
     listWrap.append(h, list);
   }
