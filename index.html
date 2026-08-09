@@ -179,6 +179,10 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .tile.free s{color:var(--free-ink);opacity:.58}
 /* a turnover room is let tonight — it just has to be cleaned first, so it reads
    as booked and carries a corner flag rather than a split fill that eats the text */
+.tile.oos{background:repeating-linear-gradient(135deg,
+  var(--held) 0 6px, color-mix(in srgb,var(--held) 55%, var(--bg)) 6px 12px)}
+.tile.oos b, .tile.oos s{color:var(--held-ink)}
+.tile.oos s{opacity:.9}
 .tile.turn{background:var(--held)}
 .tile.turn b{color:var(--held-ink)}
 .tile.turn s{color:var(--now);opacity:1}
@@ -340,6 +344,12 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .act .txt b{display:block;font-size:13.5px;font-weight:620;letter-spacing:-.012em;line-height:1.35;\n  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .act .txt s{display:block;text-decoration:none;font-size:12px;color:var(--txt-2);
   line-height:1.45;margin-top:3px}
+.nudge{display:flex;gap:7px;margin-top:9px}
+.nudgeBtn{padding:7px 11px;border-radius:9px;background:var(--surface-2);
+  border:1px solid var(--line);font-size:12px;font-weight:600;color:var(--txt-2);
+  transition:transform .3s var(--out)}
+.nudgeBtn:active{transform:scale(.95)}
+.nudgeBtn.yes{background:var(--free);color:var(--free-ink);border-color:transparent}
 
 .headline{display:flex;align-items:baseline;gap:10px;margin-bottom:14px}
 .headline b{font-size:clamp(30px,9.5vw,40px);font-weight:700;letter-spacing:-.04em;line-height:.9}
@@ -517,6 +527,10 @@ button{background:none;border:0;padding:0;cursor:pointer}
   font-size:13px;font-weight:650;letter-spacing:-.01em;white-space:nowrap;flex:0 0 auto;
   transition:transform .38s var(--spring)}
 .bookbtn:active{transform:scale(.94)}
+.blockbtn{margin:10px 20px 0;width:calc(100% - 40px);padding:11px;border-radius:11px;
+  background:var(--surface-2);border:1px solid var(--line);font-size:13px;font-weight:600;
+  color:var(--txt-2);transition:transform .38s var(--spring)}
+.blockbtn:active{transform:scale(.97)}
 .blocked{margin:16px 20px 0;padding:13px 15px;border-radius:12px;background:var(--surface-2);
   border:1px solid var(--line);font-size:13px;line-height:1.5;color:var(--txt-2)}
 .blocked b{color:var(--txt)}
@@ -699,15 +713,17 @@ function applyInventory(next, renames){
    sold again. These turn the calendar from "what is" into "what is about to be
    lost", which is the thing an operator can still act on.                     */
 function monthStats(days){
-  let sold = 0, open = 0, openValue = 0, soon = 0, soonValue = 0;
+  let sold = 0, open = 0, openValue = 0, soon = 0, soonValue = 0, total = 0, blocked = 0;
   days.forEach(d=>{
     flats.forEach((f,i)=>{
+      if(blk[i][d]){ blocked++; return; }        // out of service — not sellable, not sold
+      total++;
       if(occ[i][d]) sold++;
       else { open++; openValue += f.rate; if(d < 7){ soon++; soonValue += f.rate; } }
     });
   });
-  const total = days.length * NF;
-  return {total, sold, open, openValue, soon, soonValue, pct: total ? sold/total : 0};
+  return {total, sold, open, openValue, soon, soonValue, blocked,
+          pct: total ? sold/total : 0};
 }
 
 /* "22 free" tells you nothing on its own — is that a bad Saturday or a normal
@@ -717,7 +733,7 @@ function monthStats(days){
    All of this reads the forward book — the app has no past yet. Manual bookings
    now record the day they were taken (`bookedOn`), so genuine lead-time history
    accumulates from first use rather than being invented. */
-const inHorizon = () => resv.filter(r => r.end > 0 && r.start < DAYS);
+const inHorizon = () => bookings().filter(r => r.end > 0 && r.start < DAYS);
 
 /* How the book thins as you look further out. This is the honest version of
    "pace": it shows the booking window, so 30% five weeks out reads as normal
@@ -727,7 +743,7 @@ function bookingCurve(){
   for(let w = 0; w*7 < DAYS; w++){
     let sold = 0, total = 0;
     for(let d = w*7; d < Math.min((w+1)*7, DAYS); d++)
-      for(let i = 0; i < NF; i++){ total++; if(occ[i][d]) sold++; }
+      for(let i = 0; i < NF; i++){ if(blk[i][d]) continue; total++; if(occ[i][d]) sold++; }
     if(total) weeks.push({w, pct: sold/total});
   }
   return weeks;
@@ -741,6 +757,7 @@ function groupOcc(days, keyOf){
     acc.get(k).units++;
   });
   days.forEach(d=> flats.forEach((f,i)=>{
+    if(blk[i][d]) return;                        // out of service leaves the denominator
     const a = acc.get(keyOf(f)); a.total++; if(occ[i][d]) a.sold++;
   }));
   return [...acc.values()].map(a=>({...a, pct: a.total ? a.sold/a.total : 0}))
@@ -795,7 +812,7 @@ function fragmentation(){
    arrive instead of looking at who is already standing in the room.        */
 function extensionOffers(){
   const out = [];
-  resv.forEach(r=>{
+  bookings().forEach(r=>{
     const e = r.end;                                  // check-out morning = first free night
     if(e < 0 || e >= DAYS) return;
     if(occ[r.fi][e]) return;                          // someone else already has that night
@@ -814,10 +831,98 @@ function extensionOffers(){
   return out.sort((a,b)=> b.score - a.score);
 }
 
+/* ── where a discount actually earns its keep ────────────────────────────────
+   Discounting is easy to get wrong in one specific way: dropping the price on
+   dates that are far out. Those are *supposed* to look empty — the booking
+   window has not reached them — so cutting the price now just sells cheap what
+   would have sold at full price later. That is the most common and most
+   expensive mistake in this business.
+
+   So this only ever proposes a discount inside the booking window, and only
+   where a date is genuinely underperforming: emptier than that weekday usually
+   runs, or an orphan night that structurally cannot be sold at full price.
+   The depth is a rule of thumb to start from, not a prediction. */
+function discountPlan(){
+  const norm = weekdayFreeNorm();
+  const curve = bookingCurve();
+  // the booking window: where the book stops filling meaningfully
+  const half = curve.findIndex(w => w.pct < curve[0].pct * 0.6);
+  const windowDays = Math.max(10, Math.min(28, (half > 0 ? half : 3) * 7));
+
+  const push = [];
+  for(let d = 0; d < windowDays; d++){
+    const free = freeCount(d);
+    if(!free) continue;
+    const m = norm[dateAt(d).getDay()];
+    const excess = free - m;                       // emptier than its own weekday
+    // orphan nights on this date: structurally unsellable at full price
+    const orphans = flats.map((f,i)=>i).filter(i=> !occ[i][d]
+      && (d===0 || occ[i][d-1]) && (d+1 < DAYS && occ[i][d+1]));
+
+    const soft = excess >= Math.max(2, NF*0.06);
+    const urgent = d <= 3 && free >= NF*0.25;
+    if(!soft && !urgent && !orphans.length) continue;
+
+    /* A date can be fuller than usual and still hold orphan nights. Discounting
+       the whole date for those would cut the price on every free flat when only
+       a handful have the problem — so an orphan-only date targets just those. */
+    const dateWide = soft || urgent;
+    const targets = dateWide ? flats.map((f,i)=>i).filter(i=>!occ[i][d]) : orphans;
+    if(!targets.length) continue;
+
+    let depth = d <= 1 ? 25 : d <= 3 ? 20 : d <= 7 ? 15 : 10;
+    if(orphans.length) depth += 5;
+    depth += Math.round(Math.min(10, Math.max(0, excess / NF) * 60));
+    depth = Math.min(30, Math.max(5, Math.round(depth/5)*5));
+
+    push.push({d, free, orphans: orphans.length, targets, dateWide,
+      excess: Math.round(excess), depth,
+      why: !dateWide
+        ? `${targets.length} flat${targets.length>1?"s":""} with a one-night gap nobody books at full price`
+        : d <= 3
+          ? `${free} free with ${d===0?"no time":d===1?"one day":d+" days"} left to sell`
+          : `${free} free against about ${Math.round(m)} on a normal ${DOWF[dateAt(d).getDay()]}`,
+      score: (orphans.length?30:0) + Math.max(0, 30-d) + Math.max(0, excess)});
+  }
+  return {push: push.sort((a,b)=> b.score - a.score), windowDays};
+}
+
+/* ── blocks that outlive their reason ────────────────────────────────────────
+   The expensive failure is not taking a flat out of service — it is forgetting
+   to put it back. A flat marked "AC repair" in March is still blocked in June
+   because nobody revisited it, quietly out of inventory the whole time. So the
+   app asks, around the date the flat was due back, whether it actually is. */
+function blockNudges(){
+  const out = [];
+  resv.filter(isBlock).forEach(r=>{
+    const due = r.end;                       // first night back on sale
+    if(due >= -7 && due <= 2){
+      out.push({r, kind:"due", due,
+        when: due < 0 ? `came back ${-due} day${-due>1?"s":""} ago`
+            : due === 0 ? "comes back today"
+            : due === 1 ? "comes back tomorrow"
+            : `comes back in ${due} days`});
+    } else if(due > 2 && r.nights >= 21){
+      out.push({r, kind:"long", due,
+        when: `out for ${r.nights} nights — ${Math.max(0, Math.min(due,DAYS))} still to come`});
+    }
+  });
+  return out.sort((a,b)=> a.due - b.due);
+}
+
 /* One ranked list of things worth doing, newest problem first. The app should
    say what to do, not hand over charts to interpret. */
 function actionFeed(){
   const acts = [];
+
+  blockNudges().forEach(n=>{
+    const fl = flats[n.r.fi];
+    acts.push({kind:"block", urgency: n.kind==="due" ? 4 : 1, fi:n.r.fi, block:n.r,
+      title:`${fl.id} · ${n.r.reason}`,
+      body:`${n.when}${n.r.note ? " · " + n.r.note : ""}. Is it ready to sell again?`,
+      tag: n.kind==="due" ? "confirm" : "long block",
+      tone: n.kind==="due" ? "warn" : "", day: Math.max(0, n.due)});
+  });
 
   dayOps(0).turnovers.forEach(t=>{
     acts.push({kind:"turn", urgency:3, fi:t.fi,
@@ -876,8 +981,7 @@ function weekdayPattern(days){
   const acc = Array.from({length:7}, ()=>({sold:0,total:0}));
   days.forEach(d=>{
     const w = dateAt(d).getDay();
-    acc[w].total += NF;
-    for(let i=0;i<NF;i++) if(occ[i][d]) acc[w].sold++;
+    for(let i=0;i<NF;i++){ if(blk[i][d]) continue; acc[w].total++; if(occ[i][d]) acc[w].sold++; }
   });
   return acc.map(a => a.total ? a.sold/a.total : null);
 }
@@ -901,14 +1005,32 @@ const buildingsOf = ()=>{
    `resv` is the single source of truth. occ[] and chg[] are derived from it, so
    adding or cancelling a booking is just a mutation plus recompute().          */
 let resv = [];
-let occ = [], chg = [];
+let occ = [], chg = [], blk = [];
+
+/* A block is an entry with kind:"block" — a flat out of service for maintenance,
+   a deep clean or owner use. It occupies nights exactly like a booking so it can
+   never be sold, but it is NOT a booking: it has no guest, it is excluded from
+   arrivals, departures, turnarounds, stay length, source mix and extensions, and
+   for occupancy it leaves the denominator rather than joining the numerator —
+   otherwise blocking a flat would flatter your occupancy figure. */
+const isBlock = r => r.kind === "block";
+const bookings = () => resv.filter(r => !isBlock(r));
 
 function recompute(){
   occ = flats.map(()=>new Uint8Array(DAYS));
   chg = flats.map(()=>new Uint8Array(DAYS));
-  resv.forEach(r=>{ for(let k=Math.max(r.start,0); k<Math.min(r.end,DAYS); k++) occ[r.fi][k]=1; });
-  // a night that is booked AND is somebody's check-out morning is a same-day turnaround
-  resv.forEach(r=>{ if(r.end>=0 && r.end<DAYS && occ[r.fi][r.end]) chg[r.fi][r.end]=1; });
+  blk = flats.map(()=>new Uint8Array(DAYS));
+  resv.forEach(r=>{
+    for(let k=Math.max(r.start,0); k<Math.min(r.end,DAYS); k++){
+      occ[r.fi][k]=1;
+      if(isBlock(r)) blk[r.fi][k]=1;
+    }
+  });
+  // a night that is booked AND is somebody's check-out morning is a same-day
+  // turnaround — blocks never create one
+  bookings().forEach(r=>{
+    if(r.end>=0 && r.end<DAYS && occ[r.fi][r.end] && !blk[r.fi][r.end]) chg[r.fi][r.end]=1;
+  });
 }
 
 /* Demand is not flat, and a demo with no pattern in it makes the Month panels
@@ -957,6 +1079,7 @@ function save(){
       savedOn: isoDay(today),
       rows: resv.map(r=>({ id:flats[r.fi].id, start:r.start, end:r.end,
                            guest:r.guest, src:r.src, manual:!!r.manual,
+                           kind:r.kind, reason:r.reason, note:r.note,
                            bookedOn: typeof r.bookedOn === "number" ? r.bookedOn : undefined }))
     }));
   }catch(e){ /* private browsing or storage full — the session still works */ }
@@ -975,8 +1098,11 @@ function load(){
       .filter(r => flatIndex[r.id] !== undefined)
       .map(r => ({ fi:flatIndex[r.id], start:r.start+shift, end:r.end+shift,
                    nights:r.end-r.start, guest:r.guest, src:r.src, manual:r.manual,
+                   kind:r.kind, reason:r.reason, note:r.note,
                    bookedOn: typeof r.bookedOn === "number" ? r.bookedOn + shift : undefined }))
-      .filter(r => r.end >= 0 && r.start < DAYS);
+      // blocks are kept a little past their end date so the app can still ask
+      // whether the flat actually came back into service
+      .filter(r => r.start < DAYS && (r.kind === "block" ? r.end >= -7 : r.end >= 0));
     return true;
   }catch(e){ return false; }
 }
@@ -999,6 +1125,46 @@ function addBooking(fi, start, nights, guest, src){
   recompute(); save();
   return true;
 }
+const BLOCK_REASONS = ["Maintenance","Deep clean","Owner use","Renovation","Not ready"];
+
+/* A block may overlap nothing else, same as a booking — you cannot take a flat
+   out of service for nights a guest already holds. */
+function addBlock(fi, start, nights, reason, note){
+  if(!(fi >= 0 && fi < NF)) return false;
+  nights = Math.max(1, Math.min(nights|0, DAYS));
+  if(start < 0 || start >= DAYS) return false;
+  if(!freeRange(fi, start, start + nights)) return false;
+  resv.push({ fi, start, end:start+nights, nights, kind:"block", manual:true,
+              reason: reason || "Maintenance", note: (note||"").trim(),
+              guest: reason || "Out of service", src:"Block", bookedOn:0 });
+  usingDemo = false;
+  recompute(); save();
+  return true;
+}
+/* Push an existing block further out — "the technician did not come". Extends
+   as far as it can and reports how many nights it managed, because a guest may
+   already hold some of them and silently doing nothing is the worst answer. */
+function extendBlock(r, extraNights){
+  if(!isBlock(r)) return 0;
+  const from = Math.max(r.end, 0);          // a block that already lapsed resumes today
+  let can = 0;
+  while(can < Math.max(1, extraNights|0) && from + can < DAYS
+        && !(occ[r.fi][from+can] && !blk[r.fi][from+can])) can++;
+  if(!can) return 0;
+  r.end = from + can;
+  r.nights = r.end - r.start;
+  recompute(); save();
+  return can;
+}
+/* Bring a flat back into service now: end the block today. */
+function releaseBlock(r){
+  if(!isBlock(r)) return false;
+  if(r.start >= 0){ cancelBooking(r); return true; }   // never started — just drop it
+  r.end = 0; r.nights = r.end - r.start;
+  recompute(); save();
+  return true;
+}
+
 function cancelBooking(r){
   const i = resv.indexOf(r);
   if(i >= 0) resv.splice(i,1);
@@ -1010,7 +1176,10 @@ function resetDemo(){ generateDemo(); usingDemo = true; recompute(); save(); }
 const freeRange = (fi,a,b)=>{ for(let d=a;d<b;d++){ if(d<0||d>=DAYS||occ[fi][d]) return false; } return true; };
 const freeCount = d => { let n=0; for(let i=0;i<NF;i++) if(!occ[i][d]) n++; return n; };
 const runFrom   = (fi,d)=>{ let n=0; while(d+n<DAYS && !occ[fi][d+n]) n++; return n; };
-const occPct    = fi => Math.round(occ[fi].reduce((a,b)=>a+b,0)/DAYS*100);
+const occPct    = fi => { let sold=0, avail=0;
+  for(let d=0;d<DAYS;d++){ if(blk[fi][d]) continue; avail++; if(occ[fi][d]) sold++; }
+  return avail ? Math.round(sold/avail*100) : 0; };
+const blockedOn = d => { let n=0; for(let i=0;i<NF;i++) if(blk[i][d]) n++; return n; };
 
 const haptic = ms => { try{ navigator.vibrate && navigator.vibrate(ms); }catch(e){} };
 const el = (t,c,x)=>{const n=document.createElement(t); if(c)n.className=c; if(x!=null)n.textContent=x; return n;};
@@ -1034,16 +1203,19 @@ function roomTile(fi, day, stay){
   const fl = flats[fi];
   const nights = stay || 1;
   const open = freeRange(fi, day, day + nights);
+  const blocked = blk[fi][day];
   const turn = chg[fi][day] && !open;
   const run = open ? runFrom(fi, day) : 0;
-  const b = el("button","tile" + (open ? " free" : (turn ? " turn" : "")));
+  const b = el("button","tile" + (open ? " free" : blocked ? " oos" : (turn ? " turn" : "")));
   const note = open
     ? (run >= DAYS-day ? `Free ${run}+n` : `Free ${run}n`)
+    : blocked ? (resv.find(r=>isBlock(r) && r.fi===fi && day>=r.start && day<r.end)?.reason || "Blocked")
     : (turn ? "Turnaround" : "Booked");
   b.append(el("b",null,fl.id), el("s",null,note));
   if(open && run === 1) b.appendChild(el("i","flag"));   // orphan night
   b.setAttribute("aria-label",
-    `${fl.id}, ${fl.type}, ${open ? `free for ${run} night${run>1?"s":""} from` : "not available on"} ${fmtL(day)}`);
+    `${fl.id}, ${fl.type}, ${open ? `free for ${run} night${run>1?"s":""} from`
+      : blocked ? "out of service on" : "not available on"} ${fmtL(day)}`);
   b.onclick = ()=>{ haptic(9); openSheet(fi, day); };
   return b;
 }
@@ -1104,8 +1276,8 @@ const SIZE = {"Studio":0, "1 BHK":1, "2 BHK":2, "3 BHK":3};
    who is arriving, who is leaving, and which rooms have to be turned around
    between a checkout and a check-in on the same day. */
 function dayOps(d){
-  const arrivals = resv.filter(r => r.start === d).sort((a,b)=> a.fi - b.fi);
-  const departures = resv.filter(r => r.end === d).sort((a,b)=> a.fi - b.fi);
+  const arrivals = bookings().filter(r => r.start === d).sort((a,b)=> a.fi - b.fi);
+  const departures = bookings().filter(r => r.end === d).sort((a,b)=> a.fi - b.fi);
   const arrivingIn = new Set(arrivals.map(r => r.fi));
   const turnovers = departures.filter(r => arrivingIn.has(r.fi))
     .map(r => ({ fi:r.fi, out:r, in:arrivals.find(a => a.fi === r.fi) }));
@@ -1585,10 +1757,69 @@ function renderTrends(){
       t.append(el("b",null,a.title), el("s",null,a.body));
       row.appendChild(t);
       row.appendChild(el("span","pill" + (a.tone==="warn"?" warn":a.tone==="good"?" good":""), a.tag));
+      if(a.block){
+        /* answer the question in place — the whole point is that it takes one tap */
+        const ans = el("div","nudge");
+        const yes = el("button","nudgeBtn yes","Back on sale");
+        yes.onclick = ev=>{ ev.stopPropagation(); haptic(18);
+          releaseBlock(a.block); refreshScreen(); };
+        const no = el("button","nudgeBtn","Still out · +7 days");
+        no.onclick = ev=>{
+          ev.stopPropagation();
+          const got = extendBlock(a.block, 7);
+          haptic(got ? 14 : 30);
+          if(got === 7){ refreshScreen(); return; }
+          // a guest holds the nights we could not take — say so instead of nothing
+          no.textContent = got
+            ? `Held ${got} night${got>1?"s":""} — a guest has the rest`
+            : "A guest already has those nights";
+          setTimeout(()=>refreshScreen(), 1800);
+        };
+        ans.append(yes, no);
+        row.querySelector(".txt").appendChild(ans);
+      }
       if(a.fi !== undefined) row.onclick = ()=>{ haptic(10); openSheet(a.fi, a.day || 0); };
       b.appendChild(row);
     });
     said(c, `Everything here is something you can act on today, ranked by how soon it bites. Tap one to open the flat.`);
+  }
+
+  /* 0b — where a discount actually pays, and where it destroys value */
+  {
+    const plan = discountPlan();
+    const {c,b} = card("Worth discounting", plan.push.length
+      ? `${plan.push.length} date${plan.push.length>1?"s":""} inside your booking window`
+      : "nothing needs a discount");
+    b.style.justifyContent = "flex-start";
+
+    if(!plan.push.length){
+      b.appendChild(el("div","empty","No date inside the booking window is running soft. Hold your prices."));
+    }
+    plan.push.slice(0,6).forEach(x=>{
+      const row = el("button","act" + (x.orphans ? " good" : ""));
+      row.appendChild(el("div","mark"));
+      const t = el("div","txt");
+      t.append(el("b",null, fmtL(x.d) + (x.d===0 ? " · tonight" : x.d===1 ? " · tomorrow" : "")),
+               el("s",null, x.why + " · tap to copy a broadcast"));
+      row.appendChild(t);
+      row.appendChild(el("span","pill now", `−${x.depth}%`));
+      row.onclick = async ()=>{
+        const ids = x.targets.slice(0,8).map(i=>flats[i]);
+        const text = `Rooms free ${fmtL(x.d)} — ${x.depth}% off\n`
+          + ids.map(f=>`${f.id} · ${f.type} · ${f.bshort}`).join("\n")
+          + (x.targets.length > ids.length ? `\n+${x.targets.length - ids.length} more` : "");
+        const ok = await copyText(text);
+        haptic(14);
+        const pill = row.querySelector(".pill");
+        const was = pill.textContent;
+        pill.textContent = ok ? "copied" : "copy failed";
+        setTimeout(()=>{ pill.textContent = was; }, 1600);
+      };
+      b.appendChild(row);
+    });
+
+    said(c, `A discount only pays inside the booking window — the next <b>${plan.windowDays} days</b>. `
+      + `<span class="hi">Do not discount the far weeks.</span> They look empty because guests have not booked them yet, not because they are failing; cutting the price now sells cheap what would have sold at full price later. That is the most expensive mistake in this business, and the reason nothing beyond ${fmtL(Math.min(DAYS-1, plan.windowDays))} appears above. Depths are a starting point, not a prediction — you know your market.`);
   }
 
   /* 1 — the booking curve */
@@ -2158,6 +2389,45 @@ function openSheet(fi, day){
     hint.style.cssText = "margin:8px 20px 0";
     hint.textContent = `Books ${span} · change the dates on the Rooms tab`;
     sheetB.appendChild(hint);
+
+    /* take the flat out of service for the same dates */
+    const blockBtn = el("button","blockbtn", `Block these nights instead`);
+    blockBtn.onclick = ()=>{
+      haptic(10);
+      blockBtn.remove();
+      const form = el("div","invForm"); form.style.margin = "10px 20px 0";
+      const chips = el("div","tyRow");
+      let reason = BLOCK_REASONS[0];
+      BLOCK_REASONS.forEach(rz=>{
+        const b2 = el("button",null,rz);
+        b2.setAttribute("aria-pressed", rz===reason);
+        b2.onclick = ()=>{ reason = rz; haptic(8);
+          [...chips.children].forEach(c=>c.setAttribute("aria-pressed", c.textContent===reason)); };
+        chips.appendChild(b2);
+      });
+      const noteRow = el("div","r");
+      const note = el("input");
+      note.type = "text"; note.placeholder = "Note — e.g. technician booked";
+      noteRow.appendChild(note);
+      const acts = el("div","invActs");
+      const go2 = el("button","invSave", `Block ${bN} night${bN>1?"s":""}`);
+      go2.onclick = ()=>{
+        if(addBlock(fi, bDay, bN, reason, note.value)){
+          haptic(18); closeSheet(); refreshScreen();
+        }
+      };
+      const cancel = el("button","invDel","Cancel");
+      cancel.onclick = ()=>{ haptic(8); openSheet(fi, day); };
+      acts.append(go2, cancel);
+      form.append(chips, noteRow, acts);
+      const hintEl = el("div","lbl");
+      hintEl.style.cssText = "margin:8px 20px 0";
+      hintEl.textContent = `Out of service ${span} — it comes back on sale the morning after.`;
+      sheetB.insertBefore(form, hint.nextSibling);
+      sheetB.insertBefore(hintEl, form.nextSibling);
+      setTimeout(()=>note.focus(), 60);
+    };
+    sheetB.appendChild(blockBtn);
   } else {
     const blocker = resv.find(r => r.fi===fi && r.start < bDay+bN && r.end > bDay);
     const b = el("div","blocked");

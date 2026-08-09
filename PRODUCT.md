@@ -72,10 +72,14 @@ user's "Bajarahills".
 ## Capabilities and Constraints
 
 - Portfolio scale: 45 units. Horizon that matters: today through roughly 60 days.
-- A unit on any given day is in one of a small set of states. Confirmed states:
-  booked, vacant. Turnover/changeover days (check-out and check-in on the same
-  calendar day) are a real occurrence in this business and are treated here as a
-  distinct state; **not yet confirmed by the user.**
+- A unit on any given day is in one of: **vacant**, **booked**, **turnaround**
+  (check-out and check-in the same day), or **blocked / out of service**
+  (maintenance, deep clean, owner use, renovation, not ready). Blocked was
+  requested by the user after an Airbnb operator reviewed the app.
+- Blocked nights are excluded from sale everywhere, and for occupancy they leave
+  the denominator rather than joining the numerator — blocking a flat must never
+  flatter the occupancy figure. A block is not a booking and is excluded from
+  arrivals, departures, turnarounds, stay length, source mix and extensions.
 - **Storage as of the trial:** bookings are held in the browser's `localStorage` on the
   device, keyed by flat ID and rebased on load so relative dates stay correct. This is
   enough for a few hours of real use by one person on one phone. It is **not** multi-user,

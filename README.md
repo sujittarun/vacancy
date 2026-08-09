@@ -34,6 +34,37 @@ It opens with **demo bookings** so you can see it working. To use it properly:
    selected on the Rooms tab, so set the night and stay length there first.
 3. Cancel a booking with the ✕ next to it in the flat's sheet (also two taps).
 
+### Out of service
+
+A flat can be **blocked** — maintenance, deep clean, owner use, renovation, not ready.
+Open the flat, tap **Block these nights instead**, pick a reason and add a note
+("technician booked"). It then cannot be sold: not offered in Ask, not in the month
+drill-in, not proposed for a discount, not shown as free anywhere. The tile turns hatched
+and reads the reason.
+
+Two details that matter and are easy to get wrong:
+
+- **A blocked night leaves the occupancy denominator; it never counts as sold.** Otherwise
+  taking a flat out of service would quietly *improve* your occupancy figure.
+- **A block is not a booking.** It is excluded from arrivals, departures, turnarounds,
+  average stay length, source mix and extension offers.
+
+#### The part that actually saves money
+
+Taking a flat out of service is easy. *Putting it back* is what gets forgotten — a flat
+marked "AC repair" in March is still blocked in June because nobody revisited it, silently
+out of inventory the whole time.
+
+So around the date the flat was due back, **Pulse asks**:
+
+> **TT-104 · Maintenance** — comes back tomorrow · AC — technician booked.
+> Is it ready to sell again?    **[ Back on sale ]  [ Still out · +7 days ]**
+
+One tap either way. *Back on sale* ends the block today; *Still out* pushes it a week — and
+if a guest already holds some of those nights it extends as far as it can and tells you,
+rather than silently doing nothing. Blocks running longer than three weeks are flagged
+separately, because those are the ones quietly costing you nights.
+
 ### Editing the inventory
 
 **Rooms → Inventory** lists every flat under its building, with how many bookings it
