@@ -342,6 +342,17 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .opp.zero b{color:var(--txt-3)}
 .opp.zero s{color:var(--txt-3)}
 
+/* When there is genuinely nothing to act on, one quiet line beats an empty
+   card. It still confirms the check happened — silence alone is ambiguous. */
+.allclear{display:flex;align-items:flex-start;gap:10px;padding:14px 16px;
+  background:var(--surface);border:1px solid var(--line);border-radius:16px;
+  box-shadow:var(--shadow-sm)}
+.allclear .tick{flex:0 0 auto;width:18px;height:18px;border-radius:50%;
+  background:color-mix(in srgb,var(--free) 18%,transparent);display:grid;place-items:center;
+  color:var(--free);font-size:11px;font-weight:700;margin-top:1px}
+.allclear div{font-size:12.5px;line-height:1.5;color:var(--txt-2)}
+.allclear b{color:var(--txt);font-weight:600}
+
 /* the action feed — what to do, above everything you have to interpret */
 .act{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;
   border-bottom:1px solid var(--line);width:100%;text-align:left}
@@ -1697,15 +1708,18 @@ function renderTrends(){
     return w;
   };
 
-  /* 0 — what to do now. The app should say what to act on before it shows you
-         anything you have to interpret. */
-  {
-    const acts = actionFeed();
-    const {c,b} = card("Worth doing now", acts.length ? `${acts.length} things` : "nothing pressing");
+  /* 0 — what to do now.
+
+     An action card is exception-driven: when there is nothing to act on it is
+     noise, so it does not render at all. The analysis sections below always
+     render, because they always have something to say and disappearing would
+     make the tab feel broken. Where both action cards are empty, one all-clear
+     line takes their place — vanishing without a word leaves you wondering
+     whether the app checked or simply failed. */
+  const acts = actionFeed();
+  if(acts.length){
+    const {c,b} = card("Worth doing now", `${acts.length} ${acts.length===1?"thing":"things"}`);
     b.style.justifyContent = "flex-start";
-    if(!acts.length){
-      b.appendChild(el("div","empty","Nothing needs attention. No same-day cleans, no orphan nights, and no date running unusually empty."));
-    }
     acts.slice(0,6).forEach(a=>{
       const row = el("button","act" + (a.tone ? " "+a.tone : ""));
       row.appendChild(el("div","mark"));
@@ -1740,27 +1754,41 @@ function renderTrends(){
     said(c, `Everything here is something you can act on today, ranked by how soon it bites. Tap one to open the flat.`);
   }
 
-  /* 0b — three numbers, detail one tap away. These replace two long cards that
-         buried the point in prose. */
-  {
-    const norm = weekdayFreeNorm();
-    const orphans = orphanNights();
-    const soft = softDates(norm).filter(sd=>sd.d < OPP_HORIZON);
-    const ext = extensionOffers();
+  /* 0b — three numbers, detail one tap away. A tile reading zero says nothing
+         worth the space, so it is dropped; if all three are zero the card goes
+         with them. */
+  const norm0 = weekdayFreeNorm();
+  const opps = [
+    {k:"orphan", n:orphanNights().length,                                  label:"orphan nights", hot:true},
+    {k:"soft",   n:softDates(norm0).filter(sd=>sd.d < OPP_HORIZON).length, label:"soft dates"},
+    {k:"extend", n:extensionOffers().length,                               label:"could extend"},
+  ].filter(o => o.n > 0);
+
+  if(opps.length){
     const {c,b} = card("Worth a discount", "next 14 days · tap for the flats");
     b.style.justifyContent = "flex-start";
+    // the track stays three wide even with fewer tiles, so a tile is always the
+    // same size and its number reads at a consistent scale
     const grid = el("div","opps");
-    [["orphan", orphans.length, "orphan nights", true],
-     ["soft",   soft.length,    "soft dates",    false],
-     ["extend", ext.length,     "could extend",  false]].forEach(([k,n,label,hot])=>{
-      const t = el("button","opp" + (n ? (hot?" hot":"") : " zero"));
-      t.append(el("b",null,String(n)), el("s",null,label));
-      t.setAttribute("aria-label", `${n} ${label} — open the list`);
-      t.onclick = ()=>{ haptic(10); openOpportunity(k); };
+    opps.forEach(o=>{
+      const t = el("button","opp" + (o.hot ? " hot" : ""));
+      t.append(el("b",null,String(o.n)), el("s",null,o.label));
+      t.setAttribute("aria-label", `${o.n} ${o.label} — open the list`);
+      t.onclick = ()=>{ haptic(10); openOpportunity(o.k); };
       grid.appendChild(t);
     });
     b.appendChild(grid);
     said(c, `A one-night gap between two bookings will not sell at your normal rate, so it is worth advertising cheap — the alternative is nothing. <span class="hi">Only the next fortnight appears here.</span> Further out there is still time to sell those nights properly, and discounting them now is selling cheap what would have gone at full price.`);
+  }
+
+  /* neither card rendered — say so once, rather than leaving a silent gap */
+  if(!acts.length && !opps.length){
+    const line = el("div","allclear");
+    line.append(el("div","tick","✓"));
+    const t = el("div");
+    t.innerHTML = `<b>Nothing needs attention.</b> No same-day cleans, no flats due back from maintenance, no orphan nights and no date running unusually empty in the next fortnight.`;
+    line.appendChild(t);
+    deck.appendChild(line);
   }
 
   /* 1 — the booking curve */

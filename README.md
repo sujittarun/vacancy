@@ -175,6 +175,20 @@ Under it, **Worth a discount** is three numbers. Tap any for the flats:
 
 Each opens a list with a **Copy a broadcast** button, ready to paste.
 
+**Cards appear only when they have something to say.** An action card is exception-driven,
+so when there is nothing to act on it does not render — an empty card is noise. A tile
+reading zero is dropped, and if all three are zero the card goes with them. The analysis
+sections below always render, because they always have something to say and vanishing
+would make the tab feel broken.
+
+When both action cards are empty you get one line rather than a silent gap:
+
+> ✓ **Nothing needs attention.** No same-day cleans, no flats due back from maintenance,
+> no orphan nights and no date running unusually empty in the next fortnight.
+
+Silence alone is ambiguous — it does not tell you whether the app checked or simply
+failed. That line does.
+
 **Only the next fortnight appears here** (a week for extensions, since you cannot have that
 conversation about a checkout two weeks out). Further ahead there is still time to sell
 those nights properly, and discounting them now is selling cheap what would have gone at
