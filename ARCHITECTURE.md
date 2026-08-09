@@ -123,6 +123,13 @@ Three operator views, `security_invoker` so they inherit the caller's RLS:
 - `ops_host_errors` — errors grouped by message and app version, with first and last seen
 - `ops_feature_use` — which features each host actually uses
 
+`app_sessions` originally carried `last_seen_at` and an UPDATE policy to maintain it. In
+Postgres an UPDATE must first SELECT the row, and the only SELECT policy on that table is
+the platform-admin one — so a host's heartbeat would have silently updated zero rows
+forever. Both are dropped. `ops_host_usage` derives last activity from
+`max(app_events.created_at)`, which needs no extra round trip from a phone on one bar and
+cannot drift from the events it summarises.
+
 ---
 
 ## Next steps, in order
@@ -139,31 +146,69 @@ Three operator views, `security_invoker` so they inherit the caller's RLS:
 
 2. **Rename the org** in the dashboard. The Management API has no endpoint for it.
 
-3. **Rewire the app.** Planned as its own piece of work — it touches every read path. See
-   *Migration plan* below.
+3. **Change the app password.** A login for `tarun.sujit@gmail.com` exists, is the owner of
+   Crescent Stays and a platform admin. Its generated password is in
+   `.secrets/crescent-login.txt` (gitignored, `chmod 600`) and has never been printed.
+   Change it in the dashboard under Authentication → Users.
 
 ---
 
-## Migration plan for the app
+## How the app talks to it
 
-The app is currently a single self-contained HTML file keeping everything in
-`localStorage`. The order below keeps it working throughout.
+Still one self-contained HTML file, no build step and no dependencies — the Supabase
+REST and auth endpoints are plain HTTP, so a client library would have meant fetching
+~50KB at boot to do what about eighty lines do here. The publishable key is embedded in
+the file, which is safe: it grants nothing on its own, and an anonymous caller holding it
+reads zero rows.
 
-1. **Auth.** Email + password sign-in. On sign-in, resolve the user's `host_id` once.
-2. **Read path.** Replace `load()` with a query for flats and stays. Keep the in-memory
-   `occ` / `blk` arrays exactly as they are — they are derived, and the derivation does not
-   care where the rows came from.
-3. **Write path.** `addBooking` / `addBlock` / `cancel` become inserts and deletes. Handle
-   the exclusion-constraint violation as a real, expected outcome: *"just taken"* — with
-   two devices this stops being theoretical.
-4. **Offline.** This is used mid-phone-call. Keep `localStorage` as a cache and read from
-   it first, so a dead signal degrades to stale data rather than a blank screen.
-5. **Telemetry.** Wire `window.onerror` and `unhandledrejection` to `app_errors`, and the
-   handful of meaningful actions to `app_events`.
+**Two modes, and the pill in the top bar always says which.** *Sample* is the public link —
+invented data, `localStorage`, no account, so it can be handed to anyone. *Live* is signed
+in, with the database as the book.
 
-### The one thing to decide before step 3
+Three rules shape the client.
 
-**What happens when two people book the same flat at once.** The database will reject the
-second write — that part is settled. What is not settled is what the second person *sees*:
-a plain error, or the app re-reading and showing them the booking that beat them. The
-second is better and costs a little more work.
+1. **Reads are cache-first.** This is used mid-call in a lift with one bar. The cached book
+   paints immediately and the network corrects it; a dead signal shows yesterday's book
+   rather than a spinner.
+2. **Writes apply locally first and travel afterwards.** Nobody holding a phone to their ear
+   waits for a round trip. The queue persists across app restarts and drains on reconnect.
+   Every insert carries a client-generated UUID that *is* the row's primary key, so a retry
+   after a flaky connection collides with itself (`23505`) and is treated as the success it
+   actually was — it cannot create the booking twice.
+3. **Because of 2, the server can still say no.** Then the local entry is rolled back and
+   the operator is told who took the room.
+
+### What the loser sees
+
+This was the open question, and the answer is: the booking that beat them.
+
+> **TT-104 was taken.** T. Nayar holds 13–16 Aug — entered on another phone. Your booking
+> for P. Rao was not saved.  **See TT-104 →**
+
+On `23P01` the client re-reads the flat's overlapping stays, names the winner and dates,
+pulls the real booking into the local book, and offers a tap through to that room. "Conflict"
+would tell an operator nothing; a name and dates let them get back on the call and offer
+something else.
+
+### The race that had to be got right
+
+A booking cancelled moments after it was made is common — a caller changes their mind
+mid-sentence. If its insert is still queued, the insert and the cancellation are torn up
+together and neither travels. If the insert is already **in flight** it is going to land
+whatever the client does, so a delete is queued behind it instead. Treating those two
+cases the same strands a phantom booking on the server that no phone remembers — the
+first version of this code did exactly that, and the test that caught it is why the
+`inflight` reference exists.
+
+### Telemetry
+
+`app_sessions` on boot, batched `app_events` every 15s and on `pagehide`, `app_errors` from
+`window.onerror` and `unhandledrejection`. Props carry counts and screen names — never a
+guest name, note or rate. A failure to report is always swallowed: telemetry must never
+cost the operator anything.
+
+## Still to do
+
+- **No export.** The data is safe but there is no download button.
+- **One login per property.** A second person is a `memberships` row, not yet a screen.
+- **No channel sync.** Airbnb and Booking.com bookings are still entered by hand.

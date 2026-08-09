@@ -6,7 +6,12 @@ able to see the whole portfolio at once.
 
 **Open it:** https://sujittarun.github.io/vacancy/
 
-Works on any phone browser. Nothing to install, no account, no login.
+Works on any phone browser. Nothing to install.
+
+It opens on **sample data**, so the link can be handed to anyone — no account, no
+login, nothing real on screen. Tap **Sample** in the top right and sign in to switch to
+the real book, which is shared across every phone and kept in a database rather than in
+one browser. The pill then reads **Live**.
 
 ## The portfolio
 
@@ -73,10 +78,32 @@ holds. Tap a flat to change its number, type or nightly rate, or remove it. Renu
 a flat **keeps its bookings**; removing one takes its bookings with it, and it tells you
 how many before you confirm. Duplicate flat numbers are refused.
 
-**Bookings save on the device, in the browser.** They survive closing the tab and
-reopening tomorrow. They are *not* shared between phones, *not* backed up, and *are*
-erased if you clear your browser data. That is fine for a trial; it is not yet a system
-of record.
+### Where the bookings actually live
+
+**Signed out — on the device.** Bookings survive closing the tab and reopening tomorrow,
+but they are not shared between phones, not backed up, and are erased if you clear your
+browser data. Fine for a trial; not a system of record.
+
+**Signed in — in the database.** The same book on every phone, kept if a phone is lost,
+and the double-booking rule enforced by Postgres rather than by the screen.
+
+Three things follow from that, and all three are visible in the app.
+
+**The pill never flatters.** *Live* means the server has it. Otherwise it says what is
+actually true: *Offline*, or *2 to send*.
+
+**Typing never waits for the network.** A booking appears the instant you enter it and
+travels afterwards, because this gets used mid-call. If the signal is gone it queues,
+survives closing the app, and sends itself when the signal returns.
+
+**When two phones take the same room, the app says who won.** The database refuses the
+second booking, and rather than a shrug, you get the answer you need on the call:
+
+> **TT-104 was taken.** T. Nayar holds 13–16 Aug — entered on another phone. Your
+> booking for P. Rao was not saved.  **See TT-104 →**
+
+Your entry is rolled back, the winning booking appears in its place, and tapping the
+message opens that room so the next thing you offer is one tap away.
 
 ---
 
@@ -271,16 +298,16 @@ then visit `http://localhost:8000`.
 
 ## Status
 
-Good enough to run a real day on. Honest limits before you rely on it:
+Good enough to run a real day on, signed in. Honest limits before you rely on it:
 
-- **One device, one person.** Bookings live in that browser's storage. Two phones will not
-  see each other's entries.
-- **No backup.** Clearing browser data erases everything. There is no export yet.
 - **No sync** with Airbnb, Booking.com or any channel manager. Every booking is entered by
   hand.
 - **Rates are invented** and shown as "specimen". Nothing calculates revenue.
+- **No export yet.** The data is safe in the database, but there is no download button.
+- **Writes need signal.** They queue and send themselves, but a booking entered on a dead
+  connection is not confirmed until the pill says *Live* — which is exactly what it says.
+- **One login for the property.** Adding a second person is a row in the database, not yet
+  a screen in the app.
 
-**The backend exists but the app does not use it yet.** A multi-tenant Supabase database is
-built, deployed and tested — tenant isolation proven, double-booking made structurally
-impossible at the database level. Connecting the app to it is the next piece of work, and
-it is what removes the first three limits above. See [ARCHITECTURE.md](ARCHITECTURE.md).
+See [ARCHITECTURE.md](ARCHITECTURE.md) for how the multi-tenant database is put together
+and why it was built as one project rather than one per host.

@@ -80,14 +80,20 @@ user's "Bajarahills".
   the denominator rather than joining the numerator — blocking a flat must never
   flatter the occupancy figure. A block is not a booking and is excluded from
   arrivals, departures, turnarounds, stay length, source mix and extensions.
-- **Storage as of the trial:** bookings are held in the browser's `localStorage` on the
-  device, keyed by flat ID and rebased on load so relative dates stay correct. This is
-  enough for a few hours of real use by one person on one phone. It is **not** multi-user,
-  not backed up, and is erased if browser data is cleared.
-- **The backend is decided and built, and the app is not yet wired to it.** One Supabase
-  project, each host a tenant inside it, isolated by Row Level Security. Crescent Stays is
-  the first tenant. See [ARCHITECTURE.md](ARCHITECTURE.md) — including why this was built
-  instead of the one-project-per-host shape that was asked for.
+- **Storage.** The app runs in one of two modes and always says which. *Sample* — no
+  account, invented bookings in `localStorage`, which is what the public link opens.
+  *Live* — signed in, with a Supabase database as the book: shared across phones, kept if
+  a phone is lost, and the double-booking rule enforced by a Postgres exclusion constraint
+  rather than by the screen. Crescent Stays is the first tenant; hosts are isolated by Row
+  Level Security. See [ARCHITECTURE.md](ARCHITECTURE.md), including why this is one
+  project rather than one per host.
+- **Writes are optimistic and reconciled.** An entry applies locally at once and travels
+  afterwards, because the operator is usually mid-call. The queue persists across app
+  restarts. When the server refuses a write because another phone got there first, the
+  local entry is rolled back and the app names the guest and dates that beat it — a
+  conflict the operator can answer on the call, not an error code.
+- **Telemetry carries counts and screen names only.** No guest names, notes or rates ever
+  reach the telemetry tables, so a crash report can never become a data breach.
 - The **flats are real**; the bookings, guest names and rates shipped with the app are
   invented demonstration data and are labelled as such in the interface. The user can
   clear them ("Start empty") and enter real bookings.

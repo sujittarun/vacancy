@@ -683,6 +683,87 @@ button{background:none;border:0;padding:0;cursor:pointer}
   .sheet{transition:transform .01s}
   *{scroll-behavior:auto!important}
 }
+/* ── account, sync state and conflicts ───────────────────────────────────────
+   The pill in the top bar is never allowed to flatter the truth: it says
+   whether this is the sample book or the real one, and whether what you just
+   typed has actually reached the server. An operator who thinks a booking
+   saved when it did not will sell the room twice.                            */
+.pill{
+  display:flex;align-items:center;gap:5px;padding:6px 10px;border-radius:8px;
+  background:var(--surface-2);border:1px solid var(--line);
+  font-size:11px;font-weight:600;color:var(--txt-2);letter-spacing:.01em;
+  transition:transform .35s var(--spring), background .18s;white-space:nowrap;
+}
+.pill:active{transform:scale(.94)}
+.pill i{width:6px;height:6px;border-radius:50%;background:var(--txt-3);flex:0 0 auto}
+.pill.live i{background:#3FBF6A}
+.pill.wait i{background:var(--now)}
+.pill.off  i{background:var(--hot)}
+/* the queue depth is the honest bit — it counts what has not landed yet */
+.pill.wait, .pill.off{color:var(--txt)}
+
+/* toast — a conflict is news, not an error, so it reads as a sentence */
+.toasts{
+  position:fixed;left:0;right:0;bottom:calc(78px + var(--safe-b));z-index:80;
+  display:flex;flex-direction:column;align-items:center;gap:8px;
+  padding:0 16px;pointer-events:none;
+}
+.toast{
+  width:100%;max-width:460px;pointer-events:auto;
+  background:var(--surface-2);border:1px solid var(--line-2);border-radius:14px;
+  box-shadow:var(--shadow);padding:12px 14px;
+  font-size:13px;line-height:1.45;color:var(--txt-2);
+  animation:toastIn .42s var(--out) both;
+}
+.toast b{color:var(--txt);font-weight:650}
+.toast.warn{border-color:color-mix(in srgb, var(--now) 55%, transparent)}
+.toast.bad{border-color:color-mix(in srgb, var(--hot) 55%, transparent)}
+.toast .tclose{
+  display:block;margin-top:9px;font-size:12px;font-weight:600;color:var(--now);
+}
+@keyframes toastIn{from{opacity:0;transform:translateY(14px) scale(.97)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){ .toast{animation:none} }
+
+/* ── sign in ─────────────────────────────────────────────────────────────────
+   One screen, done once on this phone. The session is remembered, so this is
+   not a thing the operator meets every morning.                              */
+.gate{
+  position:fixed;inset:0;z-index:120;background:var(--bg);
+  display:none;flex-direction:column;justify-content:center;
+  padding:32px max(24px,calc((100% - 420px)/2));
+  opacity:0;transition:opacity .3s var(--out);
+}
+.gate.on{display:flex;opacity:1}
+.gate h2{margin:0 0 6px;font-size:27px;font-weight:680;letter-spacing:-.028em}
+.gate p.lede{margin:0 0 26px;font-size:14px;line-height:1.5;color:var(--txt-2)}
+.gate label{display:block;font-size:11px;font-weight:650;color:var(--txt-3);
+  text-transform:uppercase;letter-spacing:.07em;margin:0 0 6px}
+.gate input{
+  width:100%;padding:13px 14px;margin:0 0 16px;border-radius:11px;
+  background:var(--surface-2);border:1px solid var(--line);color:var(--txt);
+  font-family:var(--ui);font-size:16px;   /* 16px or iOS zooms the page on focus */
+}
+.gate input:focus{outline:none;border-color:var(--line-2);background:var(--surface-3)}
+.gate .go{
+  width:100%;padding:14px;border-radius:11px;border:none;
+  background:var(--free);color:var(--free-ink);
+  font-family:var(--ui);font-size:15px;font-weight:650;
+  transition:transform .35s var(--spring), opacity .2s;
+}
+.gate .go:active{transform:scale(.98)}
+.gate .go[disabled]{opacity:.5}
+.gate .err{
+  margin:0 0 16px;padding:11px 13px;border-radius:10px;font-size:13px;line-height:1.45;
+  background:color-mix(in srgb, var(--hot) 14%, transparent);
+  border:1px solid color-mix(in srgb, var(--hot) 40%, transparent);color:var(--txt);
+}
+.gate .alt{
+  display:block;width:100%;margin-top:22px;padding:12px;text-align:center;
+  background:none;border:none;font-family:var(--ui);
+  font-size:13px;font-weight:560;color:var(--txt-3);
+}
+.gate .alt b{color:var(--txt-2)}
+
 @media (min-width:720px){
   .screen{padding:26px max(20px,calc((100% - 640px)/2)) calc(110px + var(--safe-b))}
   .topbar{padding-left:max(20px,calc((100% - 640px)/2));padding-right:max(20px,calc((100% - 640px)/2))}
@@ -695,6 +776,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
 <div class="app">
   <header class="topbar">
     <h1 id="scrTitle">Rooms<span class="sub" id="scrSub"></span></h1>
+    <button class="pill" id="acctBtn" aria-label="Account and sync"><i></i><span id="acctTxt">Sample</span></button>
     <button class="ghost" id="themeBtn" aria-label="Switch theme"><span id="themeIc">◐</span></button>
   </header>
 
@@ -714,6 +796,24 @@ button{background:none;border:0;padding:0;cursor:pointer}
     <nav class="tabbar" id="tabbar" role="tablist"></nav>
   </div>
 </div>
+
+<div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+
+<section class="gate" id="gate" aria-label="Sign in">
+  <h2>Crescent Stays</h2>
+  <p class="lede">Sign in once on this phone and the book follows you — the same
+    bookings on every device, and nothing lost if you drop it.</p>
+  <div id="gateErr"></div>
+  <form id="gateForm" novalidate>
+    <label for="gateEmail">Email</label>
+    <input id="gateEmail" type="email" inputmode="email" autocomplete="username"
+           autocapitalize="off" autocorrect="off" spellcheck="false">
+    <label for="gatePass">Password</label>
+    <input id="gatePass" type="password" autocomplete="current-password">
+    <button class="go" id="gateGo" type="submit">Sign in</button>
+  </form>
+  <button class="alt" id="gateSkip">Just looking? <b>Explore with sample data</b></button>
+</section>
 
 <script>
 "use strict";
@@ -781,6 +881,7 @@ function loadInventory(){
   }catch(e){ return null; }
 }
 function saveInventory(){
+  if(MODE === "live") return;        // signed in, the cloud cache is the store
   try{ localStorage.setItem(INV_STORE, JSON.stringify(
     flats.map(f=>({id:f.id, code:f.code, bname:f.bname, bshort:f.bshort,
                    floor:f.floor, type:f.type, rate:f.rate}))
@@ -796,6 +897,7 @@ let flatIndex = Object.fromEntries(flats.map((f,i)=>[f.id,i]));
    `renames` maps old id -> new id so a renumbered flat keeps its bookings. */
 function applyInventory(next, renames){
   renames = renames || {};
+  const prev = flats;
   const held = resv.map(r => {
     const was = flats[r.fi] && flats[r.fi].id;
     return {...r, _id: renames[was] || was};
@@ -806,7 +908,43 @@ function applyInventory(next, renames){
   flatIndex = Object.fromEntries(flats.map((f,i)=>[f.id,i]));
   resv = held.filter(r => flatIndex[r._id] !== undefined)
              .map(r => { const {_id, ...rest} = r; return {...rest, fi:flatIndex[_id]}; });
-  recompute(); saveInventory(); save();
+  if(MODE === "live") syncInventory(prev);
+  recompute(); saveInventory(); save(); cacheSave();
+  track("inventory_changed", {flats: NF});
+}
+
+/* Inventory edits are rare and small — a flat renumbered, a building added — so
+   this diffs rather than replacing wholesale. A removed flat takes its stays
+   with it, which is what the cascade in the schema is for; a renumbered one
+   keeps them, because bookings hang off the flat's id and not its number.    */
+function syncInventory(prev){
+  const bidFor = {};
+  prev.concat(flats).forEach(f=>{ if(f.bid && f.code && !bidFor[f.code]) bidFor[f.code] = f.bid; });
+  const seen = [];
+  flats.forEach(f=>{ if(seen.indexOf(f.code) < 0) seen.push(f.code); });
+
+  flats.forEach(f=>{
+    if(!bidFor[f.code]){                       // a building nobody has seen before
+      const bid = uuid();
+      bidFor[f.code] = bid;
+      enqueue({k:"bld+", id:bid, body:{code:f.code, name:f.bname,
+        short_name: f.bshort || f.bname, sort_order: seen.indexOf(f.code)}});
+    }
+    f.bid = bidFor[f.code];
+  });
+
+  const before = Object.fromEntries(prev.filter(f=>f.uid).map(f=>[f.uid, f]));
+  flats.forEach(f=>{
+    const body = {building_id:f.bid, code:f.id, floor:f.floor|0,
+                  unit_type:f.type, nightly_rate:f.rate || null};
+    if(!f.uid){ f.uid = uuid(); enqueue({k:"flat+", id:f.uid, body}); return; }
+    const o = before[f.uid];
+    if(o && (o.id !== f.id || o.floor !== f.floor || o.type !== f.type
+             || o.rate !== f.rate || o.bid !== f.bid)) enqueue({k:"flat~", id:f.uid, body});
+  });
+
+  const keep = new Set(flats.map(f=>f.uid));
+  prev.forEach(f=>{ if(f.uid && !keep.has(f.uid)) enqueue({k:"flat-", id:f.uid}); });
 }
 /* ── perspective ─────────────────────────────────────────────────────────────
    An unsold night is perishable stock: once the date passes it can never be
@@ -1297,6 +1435,7 @@ const STORE = "vacancy.bookings.v1";
 const isoDay = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 
 function save(){
+  if(MODE === "live") return;        // signed in, cacheSave() holds the book instead
   try{
     localStorage.setItem(STORE, JSON.stringify({
       savedOn: isoDay(today),
@@ -1330,10 +1469,379 @@ function load(){
   }catch(e){ return false; }
 }
 
-let usingDemo = !load();
-if(usingDemo) generateDemo();
-recompute();
-if(usingDemo) seedDemoBlocks();
+/* ══════════════════ the cloud ═══════════════════════════════════════════════
+   Two modes, and the pill in the top bar always says which one you are in.
+
+   sample — no account. Invented bookings kept in this browser. This is what
+            the public link opens, so it can be handed to anyone.
+   live   — signed in. The database is the book: the same rooms on every phone,
+            and Postgres, not this file, is what refuses a double booking.
+
+   Three rules shape everything below.
+
+   1. **Reads are cache-first.** This gets used mid-call in a lift with one bar
+      of signal. Yesterday's book beats a spinner, and a spinner beats nothing.
+   2. **Writes apply here first and travel afterwards.** Nobody holding a phone
+      to their ear waits for a round trip.
+   3. **Because of 2, the server can still say no** — another phone got there
+      first. Then the local entry is rolled back and you are told who took the
+      room, by name and dates. A write that quietly vanished would be far worse
+      than one that never happened.                                            */
+const SUPA_URL = "https://hwbquljbvanlgggemchg.supabase.co";
+/* Publishable by design, and safe in a file anyone can read: it grants nothing
+   on its own. Every row is gated by row-level security, so an anonymous caller
+   holding this key reads zero rows. */
+const SUPA_KEY = "sb_publishable_i4ZgWEz4uvP4FF0Fk5joUQ_jIohbSs5";
+const APP_VER  = "2026.08.10";
+
+const SESSION_KEY = "vacancy.session.v1";
+const QUEUE_KEY   = "vacancy.queue.v1";
+const CLOUD_KEY   = "vacancy.cloud.v1";
+
+const jget = k => { try{ return JSON.parse(localStorage.getItem(k) || "null"); }catch(e){ return null; } };
+const jset = (k,v) => { try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} };
+const jdel = k => { try{ localStorage.removeItem(k); }catch(e){} };
+const uuid = () => (crypto.randomUUID ? crypto.randomUUID()
+  : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c=>{
+      const r = Math.random()*16|0; return (c === "x" ? r : (r & 3 | 8)).toString(16); }));
+
+let session  = jget(SESSION_KEY);      // {access_token, refresh_token, expires_at, email, uid}
+let MODE     = session && session.refresh_token ? "live" : "sample";
+let hostId   = null, hostName = "";
+let queue    = jget(QUEUE_KEY) || [];  // writes that have not landed yet
+let inflight = null;                   // the one op currently on the wire
+let syncing  = false, needPull = false;
+let online   = navigator.onLine !== false;
+
+/* The local model counts days from today; the database stores real dates.
+   These two lines are the whole of the translation. */
+const dayISO = off => isoDay(dateAt(off));
+const dayOff = iso => { const d = new Date(iso + "T00:00:00"); d.setHours(0,0,0,0);
+                        return Math.round((d - today) / 86400000); };
+
+/* ── talking to it ─────────────────────────────────────────────────────────── */
+async function api(path, opt){
+  opt = opt || {};
+  const h = {apikey: SUPA_KEY, "Content-Type":"application/json", ...(opt.headers || {})};
+  if(opt.auth !== false && session && session.access_token)
+    h.Authorization = "Bearer " + session.access_token;
+  const res = await fetch(SUPA_URL + path, {
+    method: opt.method || "GET", headers: h,
+    body: opt.body === undefined ? undefined : JSON.stringify(opt.body)
+  });
+  const text = await res.text();
+  let data = null; try{ data = text ? JSON.parse(text) : null; }catch(e){ data = text; }
+  if(!res.ok){
+    const e = new Error((data && (data.message || data.error_description || data.msg))
+                        || ("HTTP " + res.status));
+    e.status = res.status; e.code = data && data.code; e.body = data;
+    throw e;
+  }
+  return data;
+}
+function keepSession(d){
+  session = { access_token: d.access_token, refresh_token: d.refresh_token,
+              expires_at: Date.now() + (d.expires_in || 3600) * 1000,
+              email: (d.user && d.user.email) || (session && session.email) || "",
+              uid:   (d.user && d.user.id)    || (session && session.uid)   || null };
+  jset(SESSION_KEY, session);
+}
+/* Access tokens last an hour. Renew a minute early so a booking never fails for
+   the sake of a clock. */
+async function freshToken(){
+  if(!session || !session.refresh_token){ const e = new Error("signed out"); e.status = 401; throw e; }
+  if(session.expires_at && Date.now() < session.expires_at - 60000) return;
+  try{
+    keepSession(await api("/auth/v1/token?grant_type=refresh_token",
+      {method:"POST", auth:false, body:{refresh_token: session.refresh_token}}));
+  }catch(e){
+    if(e.status >= 400 && e.status < 500){ signOut(true); }   // the refresh token is dead
+    throw e;
+  }
+}
+async function rest(method, path, body, headers){
+  await freshToken();
+  return api("/rest/v1" + path, {method, body, headers});
+}
+
+/* ── signing in and out ────────────────────────────────────────────────────── */
+async function signIn(email, password){
+  keepSession(await api("/auth/v1/token?grant_type=password",
+    {method:"POST", auth:false, body:{email: email.trim(), password}}));
+  MODE = "live";
+  await loadHost();
+  await cloudPull();
+  jdel(STORE);                       // the sample book is not this operator's book
+  startTelemetry();
+  paintAcct();
+}
+async function loadHost(){
+  const rows = await rest("GET", "/memberships?select=host_id,role,hosts(name,slug)");
+  if(!rows || !rows.length){
+    const e = new Error("This login is not attached to a property yet.");
+    e.status = 403; throw e;
+  }
+  hostId = rows[0].host_id;
+  hostName = (rows[0].hosts && rows[0].hosts.name) || "";
+}
+function signOut(silent){
+  const tok = session && session.access_token;
+  session = null; hostId = null; hostName = ""; MODE = "sample";
+  queue = []; jdel(QUEUE_KEY); jdel(SESSION_KEY); jdel(CLOUD_KEY);
+  if(tok) fetch(SUPA_URL + "/auth/v1/logout", {method:"POST",
+    headers:{apikey:SUPA_KEY, Authorization:"Bearer " + tok}}).catch(()=>{});
+  if(!silent){
+    flats = loadInventory() || defaultInventory();
+    flats.forEach(f=>{ f.pop = f.pop ?? 0.6; });
+    NF = flats.length;
+    flatIndex = Object.fromEntries(flats.map((f,i)=>[f.id,i]));
+    usingDemo = !load();
+    if(usingDemo){ generateDemo(); recompute(); seedDemoBlocks(); }
+    recompute(); paintAcct(); refreshScreen();
+  }
+}
+
+/* ── reading the book ──────────────────────────────────────────────────────── */
+async function cloudPull(){
+  if(!hostId) await loadHost();
+  const from = dayISO(-8), to = dayISO(DAYS);
+  const [bs, fl, st] = await Promise.all([
+    rest("GET", "/buildings?select=id,code,name,short_name,sort_order&order=sort_order.asc,code.asc"),
+    rest("GET", "/flats?select=id,building_id,code,floor,unit_type,nightly_rate&active=is.true&order=code.asc"),
+    rest("GET", "/stays?select=*&ends_on=gt." + from + "&starts_on=lt." + to),
+  ]);
+  const byB = Object.fromEntries((bs || []).map(b=>[b.id, b]));
+  flats = (fl || []).map(f=>{
+    const b = byB[f.building_id] || {code:"??", name:"Unfiled", short_name:"Unfiled", sort_order:999};
+    return { uid:f.id, bid:f.building_id, id:f.code, code:b.code, bname:b.name,
+             bshort: b.short_name || b.name, floor: f.floor, type: f.unit_type,
+             rate: Number(f.nightly_rate) || 0, ord: b.sort_order | 0, pop: 0.6 };
+  })
+  // buildings in the order the operator thinks of them, not alphabetically —
+  // the room grid is scanned by position, so this order is muscle memory
+  .sort((a,b)=> a.ord - b.ord || a.id.localeCompare(b.id));
+  NF = flats.length;
+  flatIndex = Object.fromEntries(flats.map((f,i)=>[f.id, i]));
+  const byUid = Object.fromEntries(flats.map((f,i)=>[f.uid, i]));
+  resv = (st || []).map(s=>{
+    const fi = byUid[s.flat_id];
+    if(fi === undefined) return null;              // a flat we cannot see or is retired
+    const start = dayOff(s.starts_on), end = dayOff(s.ends_on);
+    const block = s.kind === "block";
+    return { sid:s.id, fi, start, end, nights: end - start, manual:true,
+             guest: s.guest_name || (block ? (s.reason || "Out of service") : "Guest"),
+             src: s.source || (block ? "Block" : "Direct"),
+             kind: block ? "block" : undefined, reason: s.reason, note: s.note,
+             bookedOn: s.booked_on ? dayOff(s.booked_on) : undefined };
+  }).filter(Boolean)
+    // blocks linger a week past their end so the app can still ask whether the
+    // flat actually came back into service — same rule as the local store
+    .filter(r => r.start < DAYS && (r.kind === "block" ? r.end >= -7 : r.end >= 0));
+  usingDemo = false;
+  recompute(); cacheSave();
+}
+
+/* The cache exists for the lift with no signal. Same date-rebasing trick as the
+   local store, so a book cached yesterday still reads correctly today. */
+function cacheSave(){
+  if(MODE !== "live") return;
+  jset(CLOUD_KEY, { on: isoDay(today), host: hostId, hostName,
+    flats: flats.map(f=>({uid:f.uid, bid:f.bid, id:f.id, code:f.code, bname:f.bname,
+                          bshort:f.bshort, floor:f.floor, type:f.type, rate:f.rate, ord:f.ord})),
+    rows: resv.map(r=>({ sid:r.sid, id: flats[r.fi] && flats[r.fi].id,
+                         start:r.start, end:r.end, guest:r.guest, src:r.src,
+                         kind:r.kind, reason:r.reason, note:r.note,
+                         bookedOn: typeof r.bookedOn === "number" ? r.bookedOn : undefined }))});
+}
+function cacheLoad(){
+  const d = jget(CLOUD_KEY);
+  if(!d || !Array.isArray(d.flats) || !d.flats.length) return false;
+  const was = new Date(d.on + "T00:00:00"); was.setHours(0,0,0,0);
+  const shift = Math.round((was - today) / 86400000);
+  hostId = d.host || null; hostName = d.hostName || "";
+  flats = d.flats.map(f=>({...f, pop:0.6}));
+  NF = flats.length;
+  flatIndex = Object.fromEntries(flats.map((f,i)=>[f.id, i]));
+  resv = (d.rows || [])
+    .filter(r => flatIndex[r.id] !== undefined)
+    .map(r => ({ sid:r.sid, fi:flatIndex[r.id], start:r.start + shift, end:r.end + shift,
+                 nights:r.end - r.start, guest:r.guest, src:r.src, manual:true,
+                 kind:r.kind, reason:r.reason, note:r.note,
+                 bookedOn: typeof r.bookedOn === "number" ? r.bookedOn + shift : undefined }))
+    .filter(r => r.start < DAYS && (r.kind === "block" ? r.end >= -7 : r.end >= 0));
+  usingDemo = false;
+  recompute();
+  return true;
+}
+
+/* ── writing it back ───────────────────────────────────────────────────────────
+   Every write carries a client-generated id, and for inserts that id *is* the
+   row's primary key. So a retry after a flaky connection cannot create the
+   booking twice: the second attempt collides with itself and is treated as the
+   success it actually was.                                                    */
+function enqueue(op){
+  if(MODE !== "live") return;
+  queue.push(op); jset(QUEUE_KEY, queue);
+  paintAcct(); flush();
+}
+async function flush(){
+  if(syncing || MODE !== "live" || !queue.length) return;
+  syncing = true; paintAcct();
+  try{
+    if(!hostId) await loadHost();
+    while(queue.length){
+      const op = queue[0];
+      let settled = true;
+      inflight = op;
+      try{ await runOp(op); }
+      catch(e){
+        if(e.status === undefined){ settled = false; }        // no network — keep it
+        else await rejected(op, e);                           // the server said no
+      }
+      inflight = null;
+      if(!settled) break;
+      // remove by identity, not position: a cancel landing mid-flight may have
+      // filtered the queue underneath us, and shift() would eat the wrong op
+      const at = queue.indexOf(op);
+      if(at >= 0) queue.splice(at, 1);
+      jset(QUEUE_KEY, queue);
+    }
+  }catch(e){ /* could not even resolve the host — try again on the next event */ }
+  syncing = false;
+  if(needPull && !queue.length){
+    needPull = false;
+    try{ await cloudPull(); refreshScreen(); }catch(e){}
+  }
+  paintAcct();
+}
+const MIN = {Prefer:"return=minimal"};
+function runOp(op){
+  switch(op.k){
+    case "stay+": return rest("POST",  "/stays", {...op.body, id:op.id, host_id:hostId}, MIN);
+    case "stay~": return rest("PATCH", "/stays?id=eq." + op.id, op.body, MIN);
+    case "stay-": return rest("DELETE","/stays?id=eq." + op.id, undefined, MIN);
+    case "bld+":  return rest("POST",  "/buildings", {...op.body, id:op.id, host_id:hostId}, MIN);
+    case "flat+": return rest("POST",  "/flats", {...op.body, id:op.id, host_id:hostId}, MIN);
+    case "flat~": return rest("PATCH", "/flats?id=eq." + op.id, op.body, MIN);
+    case "flat-": return rest("DELETE","/flats?id=eq." + op.id, undefined, MIN);
+    case "wipe":  return rest("DELETE","/stays?host_id=eq." + hostId, undefined, MIN);
+  }
+  return Promise.resolve();
+}
+async function rejected(op, e){
+  if(e.code === "23505") return;                    // a retry that had already landed
+  if(e.code === "23P01"){ await lostTheRoom(op); return; }
+  if(e.status === 401 || e.status === 403){
+    toast("bad", "<b>Signed out.</b> Sign in again to save this.", null);
+    signOut(true); paintAcct(); openGate(); return;
+  }
+  // Anything else is a bug rather than a race, and losing it silently would be
+  // the one unforgivable outcome — so it is both reported and recorded.
+  rollBack(op);
+  toast("bad", "<b>Not saved.</b> " + esc(e.message) + " Nothing was changed on the server.", null);
+  trackError("write failed: " + op.k + " — " + e.message, "", "sync", 0, 0);
+}
+function rollBack(op){
+  if(op.k === "stay+"){
+    const i = resv.findIndex(r => r.sid === op.id);
+    if(i >= 0) resv.splice(i, 1);
+  }
+  needPull = true;
+  recompute(); cacheSave();
+}
+
+/* ── the headline case: somebody else got there first ──────────────────────────
+   The exclusion constraint (23P01) fired, which means these nights were taken
+   between this phone accepting the entry and the write reaching the server.
+   Say who took it. "Conflict" tells an operator nothing; a name and dates let
+   them get back on the call and offer something else.                         */
+async function lostTheRoom(op){
+  const mine  = resv.find(r => r.sid === op.id);
+  const block = op.body && op.body.kind === "block";
+  const flatUid = (op.body && op.body.flat_id) || (mine && flats[mine.fi] && flats[mine.fi].uid);
+  const code = mine && flats[mine.fi] ? flats[mine.fi].id
+             : (flats.find(f => f.uid === flatUid) || {}).id || "That room";
+  const a = (op.body && op.body.starts_on) || (mine && dayISO(mine.start));
+  const b = (op.body && op.body.ends_on)   || (mine && dayISO(mine.end));
+  const label = mine ? (mine.guest || "").trim() : "";
+
+  rollBack(op);
+
+  let who = "";
+  try{
+    const rows = await rest("GET", "/stays?select=guest_name,kind,reason,starts_on,ends_on"
+      + "&flat_id=eq." + flatUid + "&starts_on=lt." + b + "&ends_on=gt." + a);
+    if(rows && rows.length){
+      const w = rows[0];
+      const name = w.kind === "block" ? (w.reason || "Out of service") : (w.guest_name || "A guest");
+      who = esc(name) + " holds " + esc(spanWords(w.starts_on, w.ends_on));
+    }
+  }catch(err){ /* offline again — the headline still stands without the name */ }
+
+  toast("warn",
+    "<b>" + esc(code) + " was taken.</b> "
+    + (who ? who + " — entered on another phone. " : "Those nights went while you were typing. ")
+    + (block ? "The block was not saved." : "Your booking" + (label ? " for " + esc(label) : "") + " was not saved."),
+    mine ? mine.fi : null);
+  track("conflict_lost", {kind: block ? "block" : "booking"});
+  haptic([12, 60, 12]);
+}
+/* "12–15 Aug", with the month said once, and the end date read as the morning
+   they leave. A single night is just that night. */
+function spanWords(a, b){
+  const s = dayOff(a), e = dayOff(b);
+  if(e - s === 1) return fmt(s);
+  const ds = dateAt(s), de = dateAt(e);
+  return ds.getMonth() === de.getMonth() ? ds.getDate() + "–" + fmt(e)   // 12–15 Aug
+                                         : fmt(s) + "–" + fmt(e);       // 30 Aug–2 Sep
+}
+
+/* ── telemetry ────────────────────────────────────────────────────────────────
+   Counts, names of screens, and nothing else. No guest names, no notes, no
+   rates — the moment a crash report carries a guest's name, a support
+   conversation becomes a data breach.                                         */
+const sessionId = uuid();          // this run of the app, however it ends up signed in
+let evq = [];
+async function startTelemetry(){
+  if(MODE !== "live" || !hostId || !session) return;
+  try{
+    await rest("POST", "/app_sessions", {id:sessionId, host_id:hostId, user_id:session.uid,
+      app_version:APP_VER, user_agent:(navigator.userAgent || "").slice(0,300)}, MIN);
+  }catch(e){}
+  track("app_open", {flats: NF, bookings: bookings().length});
+}
+function track(name, props){
+  if(MODE !== "live" || !hostId) return;
+  evq.push({session_id:sessionId, host_id:hostId, user_id:session && session.uid,
+            name, props: props || {}, app_version:APP_VER});
+  if(evq.length >= 12) flushEvents();
+}
+function flushEvents(){
+  if(!evq.length || MODE !== "live" || !hostId) return;
+  const batch = evq; evq = [];
+  rest("POST", "/app_events", batch, MIN).catch(()=>{ /* never costs the operator anything */ });
+}
+function trackError(msg, stack, src, line, col){
+  if(MODE !== "live" || !hostId) return;
+  rest("POST", "/app_errors", {session_id:sessionId, host_id:hostId,
+    user_id: session && session.uid, message:String(msg).slice(0,500),
+    stack:String(stack || "").slice(0,2000), source:String(src || "").slice(0,300),
+    line:line|0, col:col|0, app_version:APP_VER,
+    user_agent:(navigator.userAgent || "").slice(0,300)}, MIN).catch(()=>{});
+}
+
+/* ── boot ─────────────────────────────────────────────────────────────────────
+   In live mode the cache paints first and the network corrects it, so the app
+   is usable in the time it takes to unlock the phone.                         */
+let usingDemo = false;
+if(MODE === "live"){
+  if(!cacheLoad()) recompute();
+}else{
+  usingDemo = !load();
+  if(usingDemo) generateDemo();
+  recompute();
+  if(usingDemo) seedDemoBlocks();
+}
 
 /* Refuses to double-book. The UI already hides the form on an unavailable flat,
    but a silent overlap is exactly the failure that loses a guest, so the data
@@ -1343,10 +1851,20 @@ function addBooking(fi, start, nights, guest, src){
   nights = Math.max(1, Math.min(nights|0, DAYS));
   if(start < 0 || start >= DAYS) return false;
   if(!freeRange(fi, start, start + nights)) return false;
-  resv.push({ fi, start, end:start+nights, nights, manual:true, bookedOn:0,
-              guest: (guest || "").trim() || "Guest", src: src || "Direct" });
+  const row = { fi, start, end:start+nights, nights, manual:true, bookedOn:0,
+                guest: (guest || "").trim() || "Guest", src: src || "Direct" };
+  if(MODE === "live"){
+    row.sid = uuid();
+    enqueue({k:"stay+", id:row.sid, body:{
+      flat_id: flats[fi].uid, kind:"booking",
+      starts_on: dayISO(start), ends_on: dayISO(start + nights),
+      guest_name: row.guest, source: row.src, booked_on: dayISO(0),
+      rate: flats[fi].rate || null, created_by: session && session.uid }});
+  }
+  resv.push(row);
   usingDemo = false;
-  recompute(); save();
+  recompute(); save(); cacheSave();
+  track("booking_created", {nights});
   return true;
 }
 const BLOCK_REASONS = ["Maintenance","Deep clean","Owner use","Renovation","Not ready"];
@@ -1358,11 +1876,21 @@ function addBlock(fi, start, nights, reason, note){
   nights = Math.max(1, Math.min(nights|0, DAYS));
   if(start < 0 || start >= DAYS) return false;
   if(!freeRange(fi, start, start + nights)) return false;
-  resv.push({ fi, start, end:start+nights, nights, kind:"block", manual:true,
-              reason: reason || "Maintenance", note: (note||"").trim(),
-              guest: reason || "Out of service", src:"Block", bookedOn:0 });
+  const row = { fi, start, end:start+nights, nights, kind:"block", manual:true,
+                reason: reason || "Maintenance", note: (note||"").trim(),
+                guest: reason || "Out of service", src:"Block", bookedOn:0 };
+  if(MODE === "live"){
+    row.sid = uuid();
+    enqueue({k:"stay+", id:row.sid, body:{
+      flat_id: flats[fi].uid, kind:"block",
+      starts_on: dayISO(start), ends_on: dayISO(start + nights),
+      reason: row.reason, note: row.note || null, source:"Block",
+      booked_on: dayISO(0), created_by: session && session.uid }});
+  }
+  resv.push(row);
   usingDemo = false;
-  recompute(); save();
+  recompute(); save(); cacheSave();
+  track("block_created", {nights, reason: row.reason});
   return true;
 }
 /* Push an existing block further out — "the technician did not come". Extends
@@ -1377,7 +1905,10 @@ function extendBlock(r, extraNights){
   if(!can) return 0;
   r.end = from + can;
   r.nights = r.end - r.start;
-  recompute(); save();
+  if(MODE === "live" && r.sid)
+    enqueue({k:"stay~", id:r.sid, body:{ends_on: dayISO(r.end)}});
+  recompute(); save(); cacheSave();
+  track("block_extended", {nights: can});
   return can;
 }
 /* How many more nights this block could take before it would run into a guest.
@@ -1394,16 +1925,40 @@ function releaseBlock(r){
   if(!isBlock(r)) return false;
   if(r.start >= 0){ cancelBooking(r); return true; }   // never started — just drop it
   r.end = 0; r.nights = r.end - r.start;
-  recompute(); save();
+  if(MODE === "live" && r.sid)
+    enqueue({k:"stay~", id:r.sid, body:{ends_on: dayISO(0)}});
+  recompute(); save(); cacheSave();
+  track("block_released", {});
   return true;
 }
 
 function cancelBooking(r){
   const i = resv.indexOf(r);
   if(i >= 0) resv.splice(i,1);
-  recompute(); save();
+  if(MODE === "live" && r.sid){
+    // An insert still waiting in the queue can be torn up along with its own
+    // cancellation — neither ever needs to travel. One already in flight
+    // cannot: it is going to land whatever we do here, so a delete has to
+    // follow it. Getting this wrong strands a phantom booking on the server
+    // that nothing on this phone remembers.
+    const flying = inflight && inflight.id === r.sid;
+    const queued = queue.some(op => op.id === r.sid && op !== inflight);
+    queue = queue.filter(op => op.id !== r.sid || op === inflight);
+    jset(QUEUE_KEY, queue);
+    if(queued && !flying) paintAcct();
+    else enqueue({k:"stay-", id:r.sid});
+  }
+  recompute(); save(); cacheSave();
+  track(isBlock(r) ? "block_released" : "booking_cancelled", {nights: r.nights});
 }
-function clearAll(){ resv = []; usingDemo = false; recompute(); save(); }
+function clearAll(){
+  resv = []; usingDemo = false;
+  if(MODE === "live"){
+    queue = queue.filter(op => op.k.indexOf("stay") !== 0);   // every stay op is moot now
+    enqueue({k:"wipe"});
+  }
+  recompute(); save(); cacheSave();
+}
 function resetDemo(){ generateDemo(); usingDemo = true; recompute(); seedDemoBlocks(); save(); }
 
 const freeRange = (fi,a,b)=>{ for(let d=a;d<b;d++){ if(d<0||d>=DAYS||occ[fi][d]) return false; } return true; };
@@ -1417,6 +1972,107 @@ const blockedOn = d => { let n=0; for(let i=0;i<NF;i++) if(blk[i][d]) n++; retur
 const haptic = ms => { try{ navigator.vibrate && navigator.vibrate(ms); }catch(e){} };
 const el = (t,c,x)=>{const n=document.createElement(t); if(c)n.className=c; if(x!=null)n.textContent=x; return n;};
 const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
+function esc(s){ return String(s == null ? "" : s)
+  .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+
+/* ── saying where the data is, and when it has not landed ─────────────────────
+   The pill is the only place the app makes a promise about durability, so it is
+   never allowed to flatter. "Live" means the server has it. Anything else says
+   so, with a count.                                                           */
+function paintAcct(){
+  const btn = document.getElementById("acctBtn"), txt = document.getElementById("acctTxt");
+  if(!btn) return;
+  btn.classList.remove("live","wait","off");
+  if(MODE !== "live"){
+    txt.textContent = "Sample";
+    btn.setAttribute("aria-label", "Sample data — tap to sign in");
+  }else if(!online){
+    btn.classList.add("off");
+    txt.textContent = queue.length ? queue.length + " to send" : "Offline";
+    btn.setAttribute("aria-label", queue.length
+      ? queue.length + " changes waiting for a connection" : "Offline — showing the last book that reached this phone");
+  }else if(queue.length){
+    btn.classList.add("wait");
+    txt.textContent = queue.length + " to send";
+    btn.setAttribute("aria-label", queue.length + " changes still saving");
+  }else{
+    btn.classList.add("live");
+    txt.textContent = "Live";
+    btn.setAttribute("aria-label", "Signed in" + (hostName ? " to " + hostName : "") + " — everything saved");
+  }
+}
+
+/* A conflict is news, not an error. Tapping it opens the room it is about, so
+   the next thing you say on the call is one tap away. */
+function toast(kind, html, fi){
+  const host = document.getElementById("toasts");
+  if(!host) return;
+  const t = el("div", "toast" + (kind ? " " + kind : ""));
+  t.innerHTML = html;
+  if(fi != null && flats[fi]){
+    const a = el("span", "tclose", "See " + flats[fi].id + " →");
+    t.append(a);
+    t.onclick = ()=>{ t.remove(); openSheet(fi); };
+  }else{
+    t.onclick = ()=> t.remove();
+  }
+  host.append(t);
+  // long enough to read a sentence and act on it, and conflicts get longer
+  setTimeout(()=>{ t.style.transition = "opacity .3s"; t.style.opacity = "0";
+                   setTimeout(()=>t.remove(), 320); }, kind === "warn" ? 11000 : 7000);
+  while(host.children.length > 3) host.firstChild.remove();
+}
+
+/* ── the account sheet ─────────────────────────────────────────────────────── */
+function openAccount(){
+  if(MODE !== "live"){ openGate(); return; }
+  sheetH.textContent = ""; sheetB.textContent = "";
+  const t = el("div");
+  t.innerHTML = `<div class="n">${esc(hostName || "Signed in")}</div>`
+              + `<div class="m">${esc((session && session.email) || "")}</div>`;
+  const x = el("button", null, "✕"); x.setAttribute("aria-label","Close");
+  x.onclick = ()=> closeSheet();
+  sheetH.append(t, x);
+
+  const state = el("div", "blocked");
+  state.innerHTML = !online
+    ? `<b>Offline.</b> You are looking at the last book that reached this phone`
+      + (queue.length ? `, and ${queue.length} change${queue.length>1?"s":""} are waiting to send.` : ".")
+    : queue.length
+      ? `<b>${queue.length} change${queue.length>1?"s":""} still saving.</b> They will land on their own; you can keep working.`
+      : `<b>Everything is saved.</b> The same book is on every phone signed in to ${esc(hostName || "this property")}.`;
+  sheetB.append(state);
+
+  const row = el("div", "dataTools");
+  row.style.cssText = "padding:14px 20px 0";
+  const sync = el("button", "copybtn", "Refresh now");
+  sync.onclick = async ()=>{
+    haptic(9); sync.textContent = "Refreshing…";
+    try{ await flush(); await cloudPull(); refreshScreen(); closeSheet();
+         toast("", "<b>Up to date.</b> " + NF + " flats, " + bookings().length + " bookings.", null); }
+    catch(e){ sync.textContent = "Refresh now";
+              toast("bad", "<b>Could not refresh.</b> " + esc(e.message), null); }
+  };
+  const out = el("button", "copybtn", "Sign out");
+  out.onclick = ()=>{
+    if(queue.length && !confirm(queue.length + " change" + (queue.length>1?"s have":" has")
+        + " not reached the server yet. Signing out will lose " + (queue.length>1?"them":"it") + ". Sign out anyway?")) return;
+    haptic(18); closeSheet(); signOut(false);
+    toast("", "<b>Signed out.</b> You are back on the sample book.", null);
+  };
+  row.append(sync, out);
+  sheetB.append(row);
+  sheet.classList.add("on"); scrim.classList.add("on");
+}
+
+/* ── the sign-in gate ──────────────────────────────────────────────────────── */
+function openGate(){
+  const g = document.getElementById("gate");
+  document.getElementById("gateErr").textContent = "";
+  g.classList.add("on");
+  setTimeout(()=>{ const f = document.getElementById("gateEmail"); if(f && !f.value) f.focus(); }, 260);
+}
+function closeGate(){ document.getElementById("gate").classList.remove("on"); }
 
 async function copyText(t){
   try{ await navigator.clipboard.writeText(t); return true; }
@@ -3175,6 +3831,7 @@ function switchTo(i, focusInput){
   s.scrollTop = 0;
   closeSheet();
   history.replaceState(null, "", "#" + SCREENS[i].id);
+  track("screen_view", {screen: SCREENS[i].id});
 }
 
 /* the large title condenses as you scroll away from it */
@@ -3221,4 +3878,79 @@ themeBtn.onclick = ()=>{
 
 const deep = SCREENS.findIndex(s=>s.id === location.hash.replace("#",""));
 switchTo(deep >= 0 ? deep : 0);
+
+/* ══════════════════ wiring the cloud to the screen ════════════════════════ */
+document.getElementById("acctBtn").onclick = ()=>{ haptic(9); openAccount(); };
+
+(function(){
+  const form = document.getElementById("gateForm");
+  const go   = document.getElementById("gateGo");
+  const errB = document.getElementById("gateErr");
+  const fail = m => { errB.innerHTML = '<p class="err">' + esc(m) + '</p>'; };
+
+  form.onsubmit = async ev=>{
+    ev.preventDefault();
+    const email = document.getElementById("gateEmail").value;
+    const pass  = document.getElementById("gatePass").value;
+    if(!email.trim() || !pass){ fail("Email and password, please."); return; }
+    errB.textContent = ""; go.disabled = true; go.textContent = "Signing in…";
+    try{
+      await signIn(email, pass);
+      document.getElementById("gatePass").value = "";
+      closeGate(); refreshScreen(); haptic(14);
+      toast("", "<b>Signed in.</b> " + NF + " flats, " + bookings().length
+               + " bookings — the same book on every phone.", null);
+    }catch(e){
+      // the two failures worth telling apart: wrong details, and no signal
+      fail(e.status === undefined
+        ? "No connection. Check your signal and try again."
+        : e.status === 400 || e.status === 401
+          ? "That email and password did not match."
+          : e.message);
+      haptic([10,50,10]);
+    }
+    go.disabled = false; go.textContent = "Sign in";
+  };
+  document.getElementById("gateSkip").onclick = ()=>{ haptic(9); closeGate(); };
+})();
+
+/* Connectivity. navigator.onLine lies often enough that the queue is the real
+   test — but it is a free hint that it is worth trying again now. */
+addEventListener("online",  ()=>{ online = true;  paintAcct(); flush(); });
+addEventListener("offline", ()=>{ online = false; paintAcct(); });
+
+/* Coming back to the app is the moment the book is most likely to be stale —
+   somebody else may have taken a room while the phone was in a pocket. */
+addEventListener("visibilitychange", ()=>{
+  if(document.visibilityState === "visible"){
+    if(MODE === "live"){ flush(); cloudPull().then(refreshScreen).catch(()=>{}); }
+  }else{ flushEvents(); }
+});
+addEventListener("pagehide", ()=>{ flushEvents(); });
+
+/* Crashes reach the operator's own project, never a third party, and carry no
+   guest data — a message, a stack and a version. */
+addEventListener("error", e=>{
+  trackError(e.message || "error", e.error && e.error.stack, e.filename, e.lineno, e.colno);
+});
+addEventListener("unhandledrejection", e=>{
+  const r = e.reason || {};
+  trackError("unhandled: " + (r.message || r), r.stack, "", 0, 0);
+});
+
+paintAcct();
+if(MODE === "live"){
+  // the cache already painted; correct it from the server, and if the session
+  // has expired for good, fall back to the sample book rather than a dead app
+  (async ()=>{
+    try{
+      await loadHost(); await cloudPull(); refreshScreen();
+      startTelemetry(); flush();
+    }catch(e){
+      if(e.status === 401 || e.status === 403){ signOut(false); openGate(); }
+    }
+    paintAcct();
+  })();
+}
+setInterval(flushEvents, 15000);
 </script>
