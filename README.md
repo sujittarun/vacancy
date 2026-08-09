@@ -163,18 +163,24 @@ comes first. Nothing moves automatically; it only tells you what is possible.
 ### Pulse
 
 Opens with **Worth doing now** — one card, and only things that are true **today or
-tomorrow** and stop being true if you ignore them:
+tomorrow** and stop being true if you ignore them. Each kind gets **one row**, with the
+flats a tap away:
 
-- a flat **due back from maintenance** — confirm it, or push it a week, in one tap
-- a **turnaround** — a flat with a check-out and a check-in the same day, needing a clean
-- **unsold tonight / tomorrow** — tap for the flats and a ready-to-send broadcast
-- an **orphan night** landing now — booked either side, so it will not sell at a full rate
-- a guest **leaving today or tomorrow** with an empty night behind them — offer a
-  discounted extension
+| Row | Tap it for |
+|---|---|
+| *TT-104 · Maintenance* | Due back today — confirm, or push a week. One row per flat, because each is its own decision. |
+| *2 turnarounds tomorrow* | The flats needing a clean between two guests |
+| *20 unsold tonight* | Those flats, at −25%, with a broadcast ready to send |
+| *5 one-night gaps* | Orphan nights — booked either side, so they will not sell at a full rate |
+| *18 guests leaving soon* | Offer them a discounted extra night |
 
-There is deliberately no second card for discounts. Maintenance and the flats worth
-discounting belong in the same list, because they are the same kind of thing: something
-to do before the day is out.
+Five near-identical rows saying "one night only" is a scroll, not a list — so anything with
+more than one instance collapses to a single row showing the first few flat numbers.
+Maintenance is the exception: each one carries its own two answers.
+
+There is no separate card for discounts. Maintenance and the flats worth discounting
+belong in the same list, because they are the same kind of thing: something to do before
+the day is out.
 
 **What is deliberately excluded is the point.** "16 orphan nights somewhere in the next
 fortnight" is still 16 tomorrow — it is a standing condition, not a task, and a to-do list

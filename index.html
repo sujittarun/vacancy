@@ -907,53 +907,83 @@ const NOW = 1;                       // today and tomorrow
 function todayActions(){
   const acts = [];
   const norm = weekdayFreeNorm();
+  const ids = rows => rows.slice(0,3).map(r=>flats[r.fi].id).join(", ")
+              + (rows.length > 3 ? ` +${rows.length-3}` : "");
 
-  // a flat due back from maintenance — a decision, one tap either way
+  // Maintenance stays one row per flat: each is a separate decision with its
+  // own two answers, so grouping them would hide the thing you must act on.
   blockNudges().filter(n=>n.due <= NOW + 1).forEach(n=>{
     acts.push({rank:0, fi:n.r.fi, block:n.r, tone:"warn",
       title:`${flats[n.r.fi].id} · ${n.r.reason}`,
-      body:`${n.when}${n.r.note ? " · " + n.r.note : ""}`,
-      tag:"confirm"});
+      body:`${n.when}${n.r.note ? " · " + n.r.note : ""}`, tag:"confirm"});
   });
 
-  // same-day turnarounds — the cleans that have to happen between two guests
+  /* Everything else groups. One row per kind, with the flats a tap away —
+     five near-identical rows saying "one night only" is a scroll, not a list. */
   for(let d=0; d<=NOW; d++){
-    dayOps(d).turnovers.forEach(t=>{
-      acts.push({rank:1, fi:t.fi, tone:"warn", day:d,
-        title:`${flats[t.fi].id} · turnaround`,
-        body:`${t.out.guest} out, ${t.in.guest} in`,
-        tag:d===0?"clean today":"clean tomorrow"});
-    });
+    const turns = dayOps(d).turnovers.map(t=>({fi:t.fi, d,
+      meta:`<b>${t.out.guest}</b> out, <b>${t.in.guest}</b> in<em>${fmtL(d)} · needs a clean between</em>`,
+      pill:"clean"}));
+    if(!turns.length) continue;
+    acts.push({rank:1, tone:"warn", day:d,
+      title: turns.length === 1 ? `${flats[turns[0].fi].id} · turnaround`
+                                : `${turns.length} turnarounds ${d===0?"today":"tomorrow"}`,
+      body: turns.length === 1 ? `${dayOps(d).turnovers[0].out.guest} out, ${dayOps(d).turnovers[0].in.guest} in`
+                               : ids(turns),
+      tag: d===0 ? "today" : "tomorrow",
+      open: ()=> openFlatList(`${turns.length} turnaround${turns.length>1?"s":""}`,
+              `${fmtL(d)} · check-out and check-in the same day`, turns)});
   }
 
-  // nights that perish — unsold rooms tonight and tomorrow
   for(let d=0; d<=NOW; d++){
-    const free = freeCount(d);
-    if(!free) continue;
-    const soft = free - norm[dateAt(d).getDay()];
+    const free = flats.map((f,i)=>i).filter(i=>!occ[i][d]);
+    if(!free.length) continue;
+    const soft = free.length - norm[dateAt(d).getDay()];
+    const depth = d===0 ? 25 : 20;
+    const rows = free.map(i=>({fi:i, d,
+      meta:`<b>${flats[i].type}</b> · ${flats[i].bshort}<em>free ${runFrom(i,d)} night${runFrom(i,d)>1?"s":""} from ${fmt(d)}</em>`,
+      pill:`−${depth}%`}));
     acts.push({rank: d===0 ? 2 : 4, day:d, tone: d===0 ? "good" : "",
-      title:`${free} unsold ${d===0?"tonight":"tomorrow"}`,
-      body: soft >= 2
-        ? `about ${Math.round(norm[dateAt(d).getDay()])} is normal for a ${DOWF[dateAt(d).getDay()]} — running soft`
-        : `${d===0?"Gone at midnight":"One day left to sell"} · tap for the flats`,
-      tag: d===0 ? "−25%" : "−20%", freeOn:d});
+      title:`${free.length} unsold ${d===0?"tonight":"tomorrow"}`,
+      body: soft >= 2 ? `about ${Math.round(norm[dateAt(d).getDay()])} is normal for a ${DOWF[dateAt(d).getDay()]}`
+                      : (d===0 ? "gone at midnight" : "one day left to sell"),
+      tag:`−${depth}%`,
+      open: ()=> openFlatList(`${free.length} unsold ${d===0?"tonight":fmt(d)}`,
+              d===0 ? "gone at midnight" : "one day left to sell", rows,
+              {head:`Rooms free ${fmtL(d)} — ${depth}% off`,
+               lead:"These nights stop existing the morning after. Anything you take for them beats nothing."})});
   }
 
-  // orphan nights landing now — unsellable at a normal rate, and about to expire
-  orphanNights().filter(o=>o.d <= NOW).forEach(o=>{
-    acts.push({rank:3, fi:o.fi, day:o.d, tone:"good",
-      title:`${flats[o.fi].id} · one night only`,
-      body:`${fmtL(o.d)} · booked either side`,
-      tag:"−25%"});
-  });
+  const orph = orphanNights().filter(o=>o.d <= NOW).map(o=>({fi:o.fi, d:o.d,
+    meta:`<b>${flats[o.fi].type}</b> · ${flats[o.fi].bshort}<em>${fmtL(o.d)} · booked either side</em>`,
+    pill:"−25%"}));
+  if(orph.length){
+    acts.push({rank:3, tone:"good", day:orph[0].d,
+      title: orph.length === 1 ? `${flats[orph[0].fi].id} · one night only`
+                               : `${orph.length} one-night gaps`,
+      body: orph.length === 1 ? `${fmtL(orph[0].d)} · booked either side` : ids(orph),
+      tag:"−25%",
+      open: ()=> openFlatList(`${orph.length} one-night gap${orph.length>1?"s":""}`,
+              "booked either side · today and tomorrow", orph,
+              {head:"One-night stays going cheap:",
+               lead:"A single night between two bookings will not sell at a normal rate — most guests want two or more. The alternative is leaving it empty."})});
+  }
 
-  // a guest leaving today or tomorrow with an empty night behind them
-  extensionOffers().filter(x=>x.from <= NOW + 1).forEach(x=>{
-    acts.push({rank:5, fi:x.fi, day:x.from, tone:"",
-      title:`${flats[x.fi].id} · ${x.r.guest}`,
-      body:`leaves ${fmt(x.from)}, ${x.nights} night${x.nights>1?"s":""} empty after — offer a discounted extension`,
-      tag:"extend"});
-  });
+  const ext = extensionOffers().filter(x=>x.from <= NOW + 1).map(x=>({fi:x.fi, d:x.from,
+    meta:`Offer <b>${x.r.guest}</b> a discounted extra night<em>leaves ${fmt(x.from)} · ${x.nights} night${x.nights>1?"s":""} empty after</em>`,
+    pill: x.orphan ? "closes a gap" : `+${x.nights}n`}));
+  if(ext.length){
+    acts.push({rank:5, day:ext[0].d,
+      title: ext.length === 1 ? `${flats[ext[0].fi].id} · ${extensionOffers()[0].r.guest}`
+                              : `${ext.length} guests leaving soon`,
+      body: ext.length === 1 ? "empty night behind them — offer a discounted extension"
+                             : ids(ext),
+      tag:"extend",
+      open: ()=> openFlatList(`${ext.length} extension offer${ext.length>1?"s":""}`,
+              "guests leaving today or tomorrow", ext,
+              {head:"Extend your stay at a reduced rate:",
+               lead:"A discounted extra night beats an empty one, and costs no commission and no clean in between."})});
+  }
 
   return acts.sort((a,b)=> a.rank - b.rank || (a.day||0) - (b.day||0));
 }
@@ -1800,7 +1830,7 @@ function renderTrends(){
         t.appendChild(ans);
       }
       row.onclick = ()=>{ haptic(10);
-        if(a.freeOn !== undefined) openFreeOn(a.freeOn);
+        if(a.open) a.open();
         else if(a.fi !== undefined) openSheet(a.fi, a.day || 0); };
       b.appendChild(row);
     });
@@ -2722,40 +2752,42 @@ function buildingForm(){
 }
 
 /* ── opportunities, one tap deep ─────────────────────────────────────────── */
-/* The flats free on one night, with a suggested depth and a message ready to
-   send. This is what "20 unsold tonight" opens into. */
-function openFreeOn(d){
+/* One sheet for every "show me the flats" tap. Rows carry a flat, a line of
+   detail and a pill; an optional broadcast button copies a ready message. */
+function openFlatList(title, sub, rows, broadcast){
   sheetH.textContent = ""; sheetB.textContent = "";
-  const free = flats.map((f,i)=>i).filter(i=>!occ[i][d]);
-  const depth = d === 0 ? 25 : 20;
   const t = el("div");
-  t.innerHTML = `<div class="n">${free.length} unsold ${d===0?"tonight":fmtL(d)}</div>`
-    + `<div class="m">${d===0?"these nights are gone at midnight":"one day left to sell"}</div>`;
+  t.innerHTML = `<div class="n">${title}</div><div class="m">${sub}</div>`;
   const x = el("button",null,"✕"); x.setAttribute("aria-label","Close"); x.onclick = closeSheet;
   sheetH.append(t, x);
 
-  const card2 = el("div","card"); card2.style.margin = "16px 20px 0";
-  if(!free.length) card2.appendChild(el("div","empty","Every flat is sold that night."));
-  free.forEach(i=>{
-    const fl = flats[i], run = runFrom(i, d);
+  if(broadcast && broadcast.lead){
+    const p = el("p");
+    p.style.cssText = "margin:16px 20px 0;font-size:12.5px;line-height:1.55;color:var(--txt-2)";
+    p.textContent = broadcast.lead;
+    sheetB.appendChild(p);
+  }
+
+  const card2 = el("div","card"); card2.style.margin = "14px 20px 0";
+  if(!rows.length) card2.appendChild(el("div","empty","Nothing here."));
+  rows.forEach(r=>{
     const row = el("button","row");
-    row.append(el("div","id", fl.id));
-    const m = el("div","meta");
-    m.innerHTML = `<b>${fl.type}</b> · ${fl.bshort}<em>free ${run} night${run>1?"s":""} from ${fmt(d)}</em>`;
-    row.append(m, el("span","pill now", `−${depth}%`));
-    row.onclick = ()=>{ haptic(9); openSheet(i, d); };
+    row.append(el("div","id", flats[r.fi].id));
+    const m = el("div","meta"); m.innerHTML = r.meta;
+    row.append(m, el("span","pill now", r.pill));
+    row.onclick = ()=>{ haptic(9); openSheet(r.fi, r.d || 0); };
     card2.appendChild(row);
   });
   sheetB.appendChild(card2);
 
-  if(free.length){
+  if(broadcast && rows.length){
     const bar = el("div","dataTools"); bar.style.cssText = "padding:14px 20px 0";
     const cp = el("button","copybtn");
     cp.innerHTML = "<span>Copy a broadcast</span>";
     cp.onclick = async ()=>{
-      const text = `Rooms free ${fmtL(d)} — ${depth}% off\n`
-        + free.slice(0,10).map(i=>`${flats[i].id} · ${flats[i].type} · ${flats[i].bshort}`).join("\n")
-        + (free.length > 10 ? `\n+${free.length - 10} more` : "");
+      const text = broadcast.head + "\n"
+        + rows.slice(0,10).map(r=>`${flats[r.fi].id} · ${flats[r.fi].type} · ${flats[r.fi].bshort}`).join("\n")
+        + (rows.length > 10 ? `\n+${rows.length - 10} more` : "");
       const ok = await copyText(text);
       haptic(12);
       cp.querySelector("span").textContent = ok ? "Copied" : "Press and hold to copy";
@@ -2769,94 +2801,6 @@ function openFreeOn(d){
   sheet.classList.add("on"); scrim.classList.add("on");
   sheetB.scrollTop = 0; x.focus();
 }
-
-function openOpportunity(kind){
-  sheetH.textContent = ""; sheetB.textContent = "";
-  const norm = weekdayFreeNorm();
-  const TITLE = {orphan:"Orphan nights", soft:"Soft dates", extend:"Extension offers"};
-  const SUB = {
-    orphan:"single empty nights between two bookings · next 14 days",
-    soft:"emptier than that weekday usually runs · next 14 days",
-    extend:"guests already in the flat · next 14 days",
-  };
-  const t = el("div");
-  t.innerHTML = `<div class="n">${TITLE[kind]}</div><div class="m">${SUB[kind]}</div>`;
-  const x = el("button",null,"✕"); x.setAttribute("aria-label","Close"); x.onclick = closeSheet;
-  sheetH.append(t, x);
-
-  const lead = el("p");
-  lead.style.cssText = "margin:16px 20px 0;font-size:12.5px;line-height:1.55;color:var(--txt-2)";
-  lead.innerHTML = kind === "orphan"
-    ? "A single night between two bookings will not sell at your normal rate — most guests want two or more. These are the ones worth advertising cheap, because the alternative is nothing."
-    : kind === "soft"
-    ? "These dates are running emptier than that weekday normally does, and they are close enough that a lower price still has time to work."
-    : "A guest is already in the flat and the night after they leave is empty. A discounted extra night beats an empty one, and costs you no commission and no clean in between.";
-  sheetB.appendChild(lead);
-
-  const card = el("div","card"); card.style.margin = "14px 20px 0";
-  let rows = [];
-
-  if(kind === "orphan"){
-    rows = orphanNights().map(o=>({
-      id: flats[o.fi].id, fi:o.fi, d:o.d,
-      meta: `${fl2(o.fi)}<em>${fmtL(o.d)} · one night only</em>`, pill:"−25%",
-    }));
-  } else if(kind === "soft"){
-    rows = softDates(norm).filter(sd=>sd.d < OPP_HORIZON).map(sd=>({
-      id: fmt(sd.d), d:sd.d,
-      meta: `<b>${sd.free} flats free</b> · about ${Math.round(sd.norm)} is normal<em>${DOWF[dateAt(sd.d).getDay()]} · ${sd.d===0?"tonight":sd.d+" days out"}</em>`,
-      pill: `−${sd.d<=3?20:15}%`,
-    }));
-  } else {
-    rows = extensionOffers().map(o=>({
-      id: flats[o.fi].id, fi:o.fi, d:o.from,
-      meta: `Offer <b>${o.r.guest}</b> a discounted extra night<em>${o.inHouse?"here now · ":""}leaves ${fmt(o.from)} · ${o.nights} night${o.nights>1?"s":""} empty after</em>`,
-      pill: o.orphan ? "closes a gap" : `+${o.nights}n`,
-    }));
-  }
-
-  if(!rows.length){
-    card.appendChild(el("div","empty", kind === "orphan"
-      ? "No orphan nights in the next fortnight — your empty time is in sellable stretches."
-      : kind === "soft" ? "No date in the next fortnight is running unusually empty."
-      : "No guest is leaving a flat empty behind them in the next fortnight."));
-  }
-  rows.slice(0,20).forEach(r=>{
-    const row = el("button","row");
-    row.append(el("div","id", r.id));
-    const m = el("div","meta"); m.innerHTML = r.meta;
-    row.append(m, el("span","pill now", r.pill));
-    if(r.fi !== undefined) row.onclick = ()=>{ haptic(9); openSheet(r.fi, r.d); };
-    card.appendChild(row);
-  });
-  sheetB.appendChild(card);
-
-  if(rows.length){
-    const bar = el("div","dataTools"); bar.style.cssText = "padding:14px 20px 0";
-    const cp = el("button","copybtn");
-    cp.innerHTML = "<span>Copy a broadcast</span>";
-    cp.onclick = async ()=>{
-      const lines = kind === "soft"
-        ? rows.slice(0,10).map(r=>`${fmtL(r.d)} — ${r.pill} off`)
-        : rows.slice(0,10).map(r=>`${r.id} · ${fmtL(r.d)}`);
-      const head = kind === "orphan" ? "One-night stays going cheap:"
-                 : kind === "soft"   ? "Dates with rooms free:"
-                 : "Extend your stay at a reduced rate:";
-      const ok = await copyText(head + "\n" + lines.join("\n"));
-      haptic(12);
-      cp.querySelector("span").textContent = ok ? "Copied" : "Press and hold to copy";
-      cp.classList.toggle("done", ok);
-      setTimeout(()=>{ cp.querySelector("span").textContent = "Copy a broadcast";
-                       cp.classList.remove("done"); }, 1800);
-    };
-    bar.appendChild(cp);
-    sheetB.appendChild(bar);
-  }
-
-  sheet.classList.add("on"); scrim.classList.add("on");
-  sheetB.scrollTop = 0; x.focus();
-}
-const fl2 = fi => `<b>${flats[fi].type}</b> · ${flats[fi].bshort}`;
 
 function closeSheet(){ sheet.classList.remove("on"); scrim.classList.remove("on"); }
 scrim.onclick = closeSheet;
