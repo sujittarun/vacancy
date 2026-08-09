@@ -83,7 +83,11 @@ user's "Bajarahills".
 - **Storage as of the trial:** bookings are held in the browser's `localStorage` on the
   device, keyed by flat ID and rebased on load so relative dates stay correct. This is
   enough for a few hours of real use by one person on one phone. It is **not** multi-user,
-  not backed up, and is erased if browser data is cleared. A real backend remains undecided.
+  not backed up, and is erased if browser data is cleared.
+- **The backend is decided and built, and the app is not yet wired to it.** One Supabase
+  project, each host a tenant inside it, isolated by Row Level Security. Crescent Stays is
+  the first tenant. See [ARCHITECTURE.md](ARCHITECTURE.md) — including why this was built
+  instead of the one-project-per-host shape that was asked for.
 - The **flats are real**; the bookings, guest names and rates shipped with the app are
   invented demonstration data and are labelled as such in the interface. The user can
   clear them ("Start empty") and enter real bookings.

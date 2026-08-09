@@ -280,5 +280,7 @@ Good enough to run a real day on. Honest limits before you rely on it:
   hand.
 - **Rates are invented** and shown as "specimen". Nothing calculates revenue.
 
-If the trial goes well, the next step is a real backend so it works across phones and
-survives a lost device.
+**The backend exists but the app does not use it yet.** A multi-tenant Supabase database is
+built, deployed and tested — tenant isolation proven, double-booking made structurally
+impossible at the database level. Connecting the app to it is the next piece of work, and
+it is what removes the first three limits above. See [ARCHITECTURE.md](ARCHITECTURE.md).
