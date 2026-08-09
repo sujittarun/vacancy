@@ -50,7 +50,7 @@ of record.
 
 ## What it does
 
-Three screens, reachable from the bar at the bottom.
+Four screens, reachable from the bar at the bottom.
 
 ### Rooms
 
@@ -92,11 +92,6 @@ Two ways to pick a stay, because a gesture should never be the only route in:
   the one thing the raw count cannot tell you: a Friday showing 20 free gets flagged while
   a Saturday showing 15 does not, because Fridays usually sit at 16 and Saturdays at 15.
   A low number can still be a bad night, and a high one can be perfectly ordinary.
-- **Which nights sell** shows the week's shape and names the weak night — the single most
-  actionable thing in the whole app if one weekday is dragging the month down.
-- **How each building is doing** ranks the five blocks and calls out any that is lagging
-  the leader by more than ten points. Same city, same month, so a gap there is pricing or
-  listing rather than demand.
 
 ### Ask
 
