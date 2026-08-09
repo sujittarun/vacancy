@@ -167,44 +167,26 @@ Opens with **Worth doing now** — one card, and only things that are true **tod
 tomorrow** and stop being true if you ignore them. Each kind gets **one row**, with the
 flats a tap away:
 
-| Row | What it means |
+It is a **board, not a list** — grouped by the response each thing needs, so a decision
+never looks like a discount idea and extra items thicken a figure rather than adding a row:
+
+**Needs a decision** — a flat due back from maintenance. **Back in service** ends the block
+today. **Still out** opens a slider: drag to say how many more days, and it shows the date
+it comes back. The slider is **capped at the nights actually free**, so a block can never be
+dragged over a guest.
+
+**To do** — work that must happen, counted rather than enumerated. *Clean 2 flats tomorrow.*
+
+**Perishing · sell or lose** — nights with a clock on them, shown as figures side by side
+rather than two rows saying the same thing:
+
+| Tonight | Tomorrow |
 |---|---|
-| *Is BH-101 back in service?* | Due back from maintenance — confirm, or push a week. One row per flat, because each is its own decision. |
-| *Clean 2 flats tomorrow* | Check-out and check-in the same day |
-| *19 flats unsold tonight* | These nights are gone at midnight |
-| *5 single spare nights* | Booked either side, so they will not sell at a normal rate |
-| *Offer 17 guests an extra night* | Checking out soon, with the flat empty behind them |
+| **19** unsold · −25% | **20** unsold · −20% |
 
-Every row **names the action and explains itself**. An earlier version said things like
-"18 guests leaving soon", which states a fact and leaves you to work out what to do with
-it — fine once you know the app, useless the first time you open it. Tap any row for the
-flats.
+Under them, single spare nights and extension offers. Tap anything for the flats.
 
-Five near-identical rows saying "one night only" is a scroll, not a list — so anything with
-more than one instance collapses to a single row showing the first few flat numbers.
-Maintenance is the exception: each one carries its own two answers.
-
-### Words for an advert, not a list of codes
-
-Tapping a discountable row gives you two things.
-
-**For your advert** — what you actually have to sell, in language a guest understands:
-
-> **25% off · tonight, Sun 9 Aug**
-> 10 × 3 BHK — TreeTops, Telecom Nagar, Madhapur, Lotus Pond
-> 8 × 2 BHK — TreeTops, Banjara Hills
-> 2 × Studio — Madhapur, Banjara Hills
-
-**Copy these words** puts that on the clipboard, ready to paste into an image generator or
-hand to whoever makes the creative. Grouped by size with the localities named, because that
-is what goes on a poster.
-
-**Which flats** — the same thing in your own shorthand (TT-102, BH-201) so you know which
-units to hold. That part is for you; `TT-102` means nothing to a guest and never appears in
-the advert text.
-
-Extension offers deliberately get no advert block — an extension is a conversation with one
-named guest before they check out, not something you broadcast.
+The whole card fits one phone screen.
 
 There is no separate card for discounts. Maintenance and the flats worth discounting
 belong in the same list, because they are the same kind of thing: something to do before

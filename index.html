@@ -304,7 +304,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
    phone, vertical scroll is the native, discoverable motion; nothing hides. */
 .deck{display:flex;flex-direction:column;gap:14px}
 .tcard{background:var(--surface);border:1px solid var(--line);border-radius:18px;
-  box-shadow:var(--shadow-sm);padding:17px 16px 15px;display:flex;flex-direction:column;
+  box-shadow:var(--shadow-sm);padding:15px 14px 14px;display:flex;flex-direction:column;
   transition:opacity .5s var(--out), transform .55s var(--out)}
 .tcard.pending{opacity:0;transform:translateY(12px)}
 @media (prefers-reduced-motion:reduce){
@@ -312,7 +312,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
   .tcard{transition:none}
 }
 .tcard h3{margin:0;font-size:15px;font-weight:650;letter-spacing:-.018em}
-.tcard .cap{margin:3px 0 15px;font-size:11.5px;color:var(--txt-3);letter-spacing:.01em}
+.tcard .cap{margin:3px 0 12px;font-size:11.5px;color:var(--txt-3);letter-spacing:.01em}
 .tcard .body{flex:1;display:flex;flex-direction:column;justify-content:center}
 .tcard .body > .act:first-child{border-top:0}
 .tcard .said{margin:14px 0 0;font-size:12.5px;line-height:1.55;color:var(--txt-2)}
@@ -353,6 +353,48 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .allclear div{font-size:12.5px;line-height:1.5;color:var(--txt-2)}
 .allclear b{color:var(--txt);font-weight:600}
 
+/* ── the board ───────────────────────────────────────────────────────────────
+   Grouped by the response each thing needs, so a decision never looks like a
+   discount idea, and extra items thicken a figure instead of adding a row. */
+.board{display:flex;flex-direction:column;gap:13px}
+.bsec{display:flex;flex-direction:column;gap:6px}
+.bsec > .lbl{margin:0 2px}
+
+/* DECIDE — a question with its answers attached */
+.decide{padding:12px 13px;border-radius:13px;
+  background:color-mix(in srgb,var(--hot) 7%,var(--surface-2));
+  border:1px solid color-mix(in srgb,var(--hot) 26%,transparent)}
+.decide > b{display:block;font-size:14px;font-weight:650;letter-spacing:-.015em;line-height:1.3}
+.decide > s{display:block;text-decoration:none;font-size:11.5px;color:var(--txt-2);
+  margin-top:3px;line-height:1.4}
+
+/* PERISHING — figures side by side, not two list rows saying the same thing */
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.dcell{padding:11px 11px 10px;border-radius:12px;background:var(--surface-2);
+  border:1px solid var(--line);text-align:left;display:flex;flex-direction:column;gap:2px;
+  transition:transform .38s var(--spring)}
+.dcell:active{transform:scale(.96)}
+.dcell .k{font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--txt-3)}
+.dcell .n{font-size:26px;font-weight:700;letter-spacing:-.045em;line-height:1.05}
+.dcell .s{font-size:11px;color:var(--txt-2);line-height:1.35}
+.dcell .d{margin-top:6px;align-self:flex-start;font-size:11px;font-weight:650;color:var(--now);
+  background:color-mix(in srgb,var(--now) 15%,transparent);padding:3px 8px;border-radius:7px}
+.dcell.urgent{border-color:color-mix(in srgb,var(--now) 38%,transparent);
+  background:color-mix(in srgb,var(--now) 7%,var(--surface-2))}
+.dcell.urgent .n{color:var(--now)}
+
+/* one-line rows for everything that is simply a count with a destination */
+.line{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:11px;
+  background:var(--surface-2);border:1px solid var(--line);width:100%;text-align:left;
+  transition:transform .38s var(--spring)}
+.line:active{transform:scale(.98)}
+.line .t{flex:1;min-width:0}
+.line .t b{display:block;font-size:13px;font-weight:620;letter-spacing:-.012em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.line .t s{display:block;text-decoration:none;font-size:11px;color:var(--txt-3);margin-top:2px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.line .chev{flex:0 0 auto;color:var(--txt-3);font-size:16px;line-height:1}
+
 /* the advert summary — what you have to sell, in words a guest understands */
 .advert{margin:16px 20px 0;padding:15px 16px 16px;border-radius:15px;
   background:color-mix(in srgb,var(--now) 9%,var(--surface));
@@ -377,7 +419,32 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .act .txt s{text-decoration:none;font-size:11.5px;color:var(--txt-3);
   line-height:1.4;margin-top:3px;display:-webkit-box;-webkit-line-clamp:2;
   -webkit-box-orient:vertical;overflow:hidden}
-.nudge{display:flex;gap:7px;margin-top:8px}
+.nudge{display:flex;gap:7px;margin-top:9px;flex-wrap:wrap}
+
+/* days slider — drag to choose how much longer the flat stays out */
+.exts{margin-top:10px;padding:10px 12px 9px;border-radius:12px;
+  background:var(--surface-2);border:1px solid var(--line)}
+.exts-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.exts-head b{font-size:11.5px;font-weight:600;color:var(--txt-2);letter-spacing:.01em}
+.exts-head u{text-decoration:none;font-size:17px;font-weight:700;letter-spacing:-.03em;color:var(--now)}
+.slider{position:relative;height:34px;touch-action:none;-webkit-user-select:none;user-select:none}
+.slider .track{position:absolute;left:13px;right:13px;top:50%;height:6px;margin-top:-3px;
+  border-radius:3px;background:var(--surface-3);overflow:hidden}
+.slider .track i{position:absolute;inset:0;border-radius:3px;transform-origin:left center;
+  background:linear-gradient(90deg, color-mix(in srgb,var(--now) 45%,transparent), var(--now))}
+.slider .thumb{position:absolute;top:50%;width:26px;height:26px;margin-top:-13px;
+  border-radius:50%;background:var(--free);display:grid;place-items:center;
+  box-shadow:0 2px 10px rgba(0,0,0,.45), 0 0 0 1px rgba(0,0,0,.18);
+  transition:transform .2s var(--out)}
+.slider .thumb::after{content:"";width:8px;height:8px;border-radius:50%;background:var(--now)}
+.slider.drag .thumb{transform:scale(1.18)}
+.slider .ticks{position:absolute;left:13px;right:13px;top:50%;margin-top:9px;
+  display:flex;justify-content:space-between;pointer-events:none}
+.slider .ticks span{font-size:9.5px;color:var(--txt-3);font-weight:600}
+.exts-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:2px}
+.exts-when{font-size:11.5px;color:var(--txt-3);line-height:1.3}
+.exts-when b{color:var(--txt-2);font-weight:600}
+@media (prefers-reduced-motion:reduce){.slider .thumb{transition:none}}
 .nudgeBtn{padding:7px 11px;border-radius:9px;background:var(--surface-2);
   border:1px solid var(--line);font-size:12px;font-weight:600;color:var(--txt-2);
   transition:transform .3s var(--out)}
@@ -915,89 +982,149 @@ function orphanNights(){
    stop reading. Everything longer-range lives in the sections below.        */
 const NOW = 1;                       // today and tomorrow
 
-function todayActions(){
-  const acts = [];
+/* Three different kinds of thing were being rendered as one flat list, which
+   made a maintenance decision look identical to a discount idea and grew a row
+   for every extra item. They are grouped by the response they need instead:
+
+     DECIDE   — a question only you can answer, with its answer attached
+     TO DO    — work that must happen, counted not enumerated
+     PERISHING— inventory with a clock on it, shown as figures side by side
+
+   Nothing here is more than two days out. */
+/* Drag to say how much longer a flat stays out, capped at the nights actually
+   available so a block can never be dragged over a guest. */
+function attachDaysSlider(host, block){
+  const room = maxExtend(block);
+  if(room <= 0){
+    const none = el("div","exts-when");
+    none.style.marginTop = "8px";
+    none.textContent = "A guest has the nights after this — it cannot stay out longer.";
+    host.appendChild(none);
+    return;
+  }
+  let days = Math.min(3, room);
+  const box = el("div","exts");
+  const head = el("div","exts-head");
+  const val = el("u");
+  head.append(el("b",null,"Still out for"), val);
+
+  const sl = el("div","slider");
+  sl.setAttribute("role","slider");
+  sl.setAttribute("aria-label","How many more days out of service");
+  sl.setAttribute("aria-valuemin","1");
+  sl.setAttribute("aria-valuemax",String(room));
+  sl.tabIndex = 0;
+  const track = el("div","track"); const fill = el("i");
+  track.appendChild(fill);
+  const thumb = el("div","thumb");
+  const ticks = el("div","ticks");
+  ticks.append(el("span",null,"1 day"), el("span",null,`${room} day${room>1?"s":""}`));
+  sl.append(track, thumb, ticks);
+
+  const foot = el("div","exts-foot");
+  const when = el("div","exts-when");
+  const go = el("button","nudgeBtn","Keep it out");
+  foot.append(when, go);
+
+  const paint = ()=>{
+    const p = room === 1 ? 1 : (days - 1) / (room - 1);
+    fill.style.transform = `scaleX(${p})`;
+    thumb.style.left = `calc(13px + ${p} * (100% - 26px))`;
+    val.textContent = `${days} day${days>1?"s":""}`;
+    const back = Math.min(Math.max(block.end,0) + days, DAYS-1);
+    when.innerHTML = `back on <b>${fmtL(back)}</b>`;
+    sl.setAttribute("aria-valuenow", String(days));
+    sl.setAttribute("aria-valuetext", `${days} day${days>1?"s":""}, back on ${fmtL(back)}`);
+  };
+  const setFromX = x=>{
+    const r = track.getBoundingClientRect();
+    const p = Math.max(0, Math.min(1, (x - r.left) / Math.max(1, r.width)));
+    const next = Math.max(1, Math.min(room, Math.round(1 + p * (room - 1))));
+    if(next !== days){ days = next; haptic(6); paint(); }
+  };
+  const down = e=>{ e.stopPropagation(); e.preventDefault(); sl.classList.add("drag");
+                    setFromX(e.touches ? e.touches[0].clientX : e.clientX); };
+  const move = e=>{ if(!sl.classList.contains("drag")) return; e.preventDefault();
+                    setFromX(e.touches ? e.touches[0].clientX : e.clientX); };
+  const up = ()=> sl.classList.remove("drag");
+  sl.addEventListener("touchstart", down, {passive:false});
+  sl.addEventListener("touchmove", move, {passive:false});
+  sl.addEventListener("touchend", up, {passive:true});
+  sl.addEventListener("mousedown", e=>{ down(e);
+    const mm = ev=>move(ev), mu = ()=>{ up();
+      removeEventListener("mousemove",mm); removeEventListener("mouseup",mu); };
+    addEventListener("mousemove", mm); addEventListener("mouseup", mu); });
+  sl.addEventListener("keydown", e=>{
+    if(e.key === "ArrowRight" && days < room){ days++; paint(); e.preventDefault(); }
+    if(e.key === "ArrowLeft"  && days > 1){    days--; paint(); e.preventDefault(); }
+  });
+  sl.addEventListener("click", e=>e.stopPropagation());
+  go.onclick = ev=>{ ev.stopPropagation(); extendBlock(block, days); haptic(18); refreshScreen(); };
+
+  box.append(head, sl, foot);
+  host.appendChild(box);
+  paint();
+}
+
+function todayBoard(){
   const norm = weekdayFreeNorm();
 
-  // Maintenance stays one row per flat: each is a separate decision with its
-  // own two answers, so grouping them would hide the thing you must act on.
-  blockNudges().filter(n=>n.due <= NOW + 1).forEach(n=>{
-    acts.push({rank:0, fi:n.r.fi, block:n.r, tone:"warn",
-      title:`Is ${flats[n.r.fi].id} back in service?`,
-      body:`${n.when}${n.r.note ? " · " + n.r.note : ""}`,
-      tag:"confirm"});
-  });
+  const decide = blockNudges().filter(n=>n.due <= NOW + 1).map(n=>({
+    block:n.r, fi:n.r.fi,
+    title:`Is ${flats[n.r.fi].id} back in service?`,
+    why:`${n.r.reason.toLowerCase()} · ${n.when}${n.r.note ? " · " + n.r.note : ""}`,
+  }));
 
-  /* Everything else groups. One row per kind, with the flats a tap away —
-     five near-identical rows saying "one night only" is a scroll, not a list. */
+  const todo = [];
   for(let d=0; d<=NOW; d++){
     const turns = dayOps(d).turnovers.map(t=>({fi:t.fi, d,
-      meta:`<b>${t.out.guest}</b> out, <b>${t.in.guest}</b> in<em>${fmtL(d)} · needs a clean between</em>`,
-      pill:"clean"}));
-    if(!turns.length) continue;
-    acts.push({rank:1, tone:"warn", day:d,
-      title: turns.length === 1
-        ? `Clean ${flats[turns[0].fi].id} ${d===0?"today":"tomorrow"}`
-        : `Clean ${turns.length} flats ${d===0?"today":"tomorrow"}`,
-      body: "check-out and check-in on the same day",
-      tag: d===0 ? "today" : "tomorrow",
-      open: ()=> openFlatList(`${turns.length} turnaround${turns.length>1?"s":""}`,
-              `${fmtL(d)} · check-out and check-in the same day`, turns)});
+      meta:`<b>${t.out.guest}</b> out, <b>${t.in.guest}</b> in<em>${fmtL(d)}</em>`, pill:"clean"}));
+    if(turns.length) todo.push({
+      label:`Clean ${turns.length} flat${turns.length>1?"s":""} ${d===0?"today":"tomorrow"}`,
+      note:"check-out and check-in the same day",
+      open:()=>openFlatList(`${turns.length} to clean`, `${fmtL(d)} · check-out and check-in the same day`, turns)});
   }
 
+  const days = [];
   for(let d=0; d<=NOW; d++){
     const free = flats.map((f,i)=>i).filter(i=>!occ[i][d]);
     if(!free.length) continue;
-    const soft = free.length - norm[dateAt(d).getDay()];
     const depth = d===0 ? 25 : 20;
     const rows = free.map(i=>({fi:i, d,
       meta:`<b>${flats[i].type}</b> · ${flats[i].bshort}<em>free ${runFrom(i,d)} night${runFrom(i,d)>1?"s":""} from ${fmt(d)}</em>`,
       pill:`−${depth}%`}));
-    acts.push({rank: d===0 ? 2 : 4, day:d, tone: d===0 ? "good" : "",
-      title:`${free.length} flats unsold ${d===0?"tonight":"tomorrow"}`,
-      body: soft >= 2
-        ? `emptier than a normal ${DOWF[dateAt(d).getDay()]} — about ${Math.round(norm[dateAt(d).getDay()])} is usual`
-        : (d===0 ? "these nights are gone at midnight" : "one day left to sell them"),
-      tag:`−${depth}%`,
-      open: ()=> openFlatList(`${free.length} unsold ${d===0?"tonight":fmt(d)}`,
-              d===0 ? "gone at midnight" : "one day left to sell", rows,
-              {depth, when: d===0 ? `tonight, ${fmtL(0)}` : fmtL(d),
-               lead:"These nights stop existing the morning after. Anything you take for them beats nothing."})});
+    days.push({d, n:free.length, depth,
+      soft: free.length - norm[dateAt(d).getDay()] >= 2,
+      open:()=>openFlatList(`${free.length} unsold ${d===0?"tonight":fmt(d)}`,
+        d===0 ? "gone at midnight" : "one day left to sell", rows,
+        {depth, when: d===0 ? `tonight, ${fmtL(0)}` : fmtL(d),
+         lead:"These nights stop existing the morning after. Anything you take for them beats nothing."})});
   }
 
   const orph = orphanNights().filter(o=>o.d <= NOW).map(o=>({fi:o.fi, d:o.d,
     meta:`<b>${flats[o.fi].type}</b> · ${flats[o.fi].bshort}<em>${fmtL(o.d)} · booked either side</em>`,
     pill:"−25%"}));
-  if(orph.length){
-    acts.push({rank:3, tone:"good", day:orph[0].d,
-      title: orph.length === 1 ? `One spare night in ${flats[orph[0].fi].id}`
-                               : `${orph.length} single spare nights`,
-      body: "booked either side, so they will not sell at a normal rate",
-      tag:"−25%",
-      open: ()=> openFlatList(`${orph.length} one-night gap${orph.length>1?"s":""}`,
-              "booked either side · today and tomorrow", orph,
-              {depth:25, when: orph.length === 1 ? fmtL(orph[0].d) : "single nights, today and tomorrow",
-               lead:"A single night between two bookings will not sell at a normal rate — most guests want two or more. The alternative is leaving it empty."})});
-  }
-
   const ext = extensionOffers().filter(x=>x.from <= NOW + 1).map(x=>({fi:x.fi, d:x.from,
     meta:`Offer <b>${x.r.guest}</b> a discounted extra night<em>leaves ${fmt(x.from)} · ${x.nights} night${x.nights>1?"s":""} empty after</em>`,
     pill: x.orphan ? "closes a gap" : `+${x.nights}n`}));
-  if(ext.length){
-    acts.push({rank:5, day:ext[0].d,
-      title: ext.length === 1
-        ? `Offer ${extensionOffers()[0].r.guest} an extra night`
-        : `Offer ${ext.length} guests an extra night`,
-      body: "checking out soon, and the flat is empty behind them",
-      tag:"−20%",
-      open: ()=> openFlatList(`${ext.length} extension offer${ext.length>1?"s":""}`,
-              "guests leaving today or tomorrow", ext,
-              // no advert block: an extension is a conversation with one named
-              // guest, not something you broadcast
-              {lead:"A discounted extra night beats an empty one, and costs no commission and no clean in between. Speak to each guest before they check out."})});
-  }
 
-  return acts.sort((a,b)=> a.rank - b.rank || (a.day||0) - (b.day||0));
+  const extras = [];
+  if(orph.length) extras.push({
+    label:`${orph.length} single spare night${orph.length>1?"s":""}`,
+    note:"booked either side, so they will not sell at a normal rate", pill:"−25%",
+    open:()=>openFlatList(`${orph.length} single spare night${orph.length>1?"s":""}`,
+      "booked either side · today and tomorrow", orph,
+      {depth:25, when: orph.length===1 ? fmtL(orph[0].d) : "single nights, today and tomorrow",
+       lead:"A single night between two bookings will not sell at a normal rate — most guests want two or more. The alternative is leaving it empty."})});
+  if(ext.length) extras.push({
+    label:`Offer ${ext.length} guest${ext.length>1?"s":""} an extra night`,
+    note:"checking out soon, with the flat empty behind them", pill:"−20%",
+    open:()=>openFlatList(`${ext.length} extension offer${ext.length>1?"s":""}`,
+      "guests leaving today or tomorrow", ext,
+      {lead:"A discounted extra night beats an empty one, and costs no commission and no clean in between. Speak to each guest before they check out."})});
+
+  return {decide, todo, days, extras,
+          count: decide.length + todo.length + days.length + extras.length};
 }
 
 /* One ranked list of things worth doing, newest problem first. The app should
@@ -1147,7 +1274,11 @@ function seedDemoBlocks(){
   ];
   wants.forEach(w=>{
     const from = Math.max(w.start, 0), to = w.start + w.nights;
-    const fits = i => { for(let d = from; d < to; d++) if(d < DAYS && occ[i][d]) return false; return true; };
+    // occ only covers today onward, so nights before today must be checked
+    // against the reservations themselves or a block can overlap a past stay
+    const fits = i =>
+      !resv.some(r => r.fi === i && r.start < to && r.end > w.start)
+      && (()=>{ for(let d = from; d < to; d++) if(d < DAYS && occ[i][d]) return false; return true; })();
     // spread them across buildings so the demo does not put every block in one block
     let fi = flats.findIndex((f,i)=> f.code === w.at && fits(i));
     if(fi < 0) fi = flats.findIndex((f,i)=> fits(i));
@@ -1249,6 +1380,15 @@ function extendBlock(r, extraNights){
   recompute(); save();
   return can;
 }
+/* How many more nights this block could take before it would run into a guest.
+   The slider is capped at this, so you can never drag a block over a booking. */
+function maxExtend(r){
+  const from = Math.max(r.end, 0);
+  let n = 0;
+  while(n < 30 && from + n < DAYS && !(occ[r.fi][from+n] && !blk[r.fi][from+n])) n++;
+  return n;
+}
+
 /* Bring a flat back into service now: end the block today. */
 function releaseBlock(r){
   if(!isBlock(r)) return false;
@@ -1834,43 +1974,84 @@ function renderTrends(){
     return w;
   };
 
-  /* 0 — one card, today and tomorrow only. Maintenance and the flats worth
-         discounting live together here; there is no second card. */
-  const acts = todayActions();
-  if(acts.length){
-    const {c,b} = card("Worth doing now", `${acts.length} ${acts.length===1?"thing":"things"} · today and tomorrow`);
+  /* 0 — the board. Grouped by the response each thing needs. */
+  const board = todayBoard();
+  if(board.count){
+    const {c,b} = card("Worth doing now", "today and tomorrow · what expires if ignored");
     b.style.justifyContent = "flex-start";
-    acts.slice(0,6).forEach(a=>{
-      const row = el("button","act" + (a.tone ? " "+a.tone : ""));
-      row.appendChild(el("div","mark"));
-      const t = el("div","txt");
-      t.append(el("b",null,a.title), el("s",null,a.body));
-      row.appendChild(t);
-      row.appendChild(el("span","pill" + (a.tone==="warn"?" warn":a.tone==="good"?" now":""), a.tag));
-      if(a.block){
+    const wrap = el("div","board");
+
+    /* DECIDE — questions only the operator can answer */
+    if(board.decide.length){
+      const sec = el("div","bsec");
+      sec.appendChild(el("div","lbl", board.decide.length === 1 ? "Needs a decision" : `${board.decide.length} need a decision`));
+      board.decide.slice(0,3).forEach(dcd=>{
+        const box = el("div","decide");
+        box.append(el("b",null,dcd.title), el("s",null,dcd.why));
         const ans = el("div","nudge");
-        const yes = el("button","nudgeBtn yes","Back on sale");
-        yes.onclick = ev=>{ ev.stopPropagation(); haptic(18); releaseBlock(a.block); refreshScreen(); };
-        const no = el("button","nudgeBtn","Still out · +7 days");
-        no.onclick = ev=>{
-          ev.stopPropagation();
-          const got = extendBlock(a.block, 7);
-          haptic(got ? 14 : 30);
-          if(got === 7){ refreshScreen(); return; }
-          no.textContent = got ? `Held ${got} night${got>1?"s":""} — a guest has the rest`
-                               : "A guest already has those nights";
-          setTimeout(()=>refreshScreen(), 1800);
-        };
-        ans.append(yes, no);
-        t.appendChild(ans);
+        const yes = el("button","nudgeBtn yes","Back in service");
+        yes.onclick = ev=>{ ev.stopPropagation(); haptic(18); releaseBlock(dcd.block); refreshScreen(); };
+        const still = el("button","nudgeBtn","Still out ⌄");
+        still.onclick = ev=>{ ev.stopPropagation(); haptic(10);
+          ans.remove(); attachDaysSlider(box, dcd.block); };
+        ans.append(yes, still);
+        box.appendChild(ans);
+        sec.appendChild(box);
+      });
+      if(board.decide.length > 3){
+        const more = el("div","lbl");
+        more.style.margin = "0 2px";
+        more.textContent = `+${board.decide.length - 3} more waiting on you`;
+        sec.appendChild(more);
       }
-      row.onclick = ()=>{ haptic(10);
-        if(a.open) a.open();
-        else if(a.fi !== undefined) openSheet(a.fi, a.day || 0); };
-      b.appendChild(row);
-    });
-    said(c, (acts.length > 6 ? `<b>${acts.length - 6} more below the first six.</b> ` : "")
-      + `Only what is true today or tomorrow and stops being true if you ignore it. Anything longer-range is analysis, and sits further down.`);
+      wrap.appendChild(sec);
+    }
+
+    /* TO DO — work that must happen */
+    if(board.todo.length){
+      const sec = el("div","bsec");
+      sec.appendChild(el("div","lbl","To do"));
+      board.todo.forEach(t=>{
+        const row = el("button","line");
+        const tx = el("div","t");
+        tx.append(el("b",null,t.label), el("s",null,t.note));
+        row.append(tx, el("span","chev","›"));
+        row.onclick = ()=>{ haptic(10); t.open(); };
+        sec.appendChild(row);
+      });
+      wrap.appendChild(sec);
+    }
+
+    /* PERISHING — nights with a clock on them */
+    if(board.days.length || board.extras.length){
+      const sec = el("div","bsec");
+      sec.appendChild(el("div","lbl","Perishing · sell or lose"));
+      if(board.days.length){
+        const duo = el("div","duo");
+        board.days.forEach(dd=>{
+          const cell = el("button","dcell" + (dd.d === 0 ? " urgent" : ""));
+          cell.append(el("div","k", dd.d === 0 ? "Tonight" : "Tomorrow"),
+                      el("div","n", String(dd.n)),
+                      el("div","s", dd.soft ? "unsold · softer than usual" : "unsold"),
+                      el("div","d", `−${dd.depth}%`));
+          cell.setAttribute("aria-label", `${dd.n} flats unsold ${dd.d===0?"tonight":"tomorrow"} — open the list`);
+          cell.onclick = ()=>{ haptic(10); dd.open(); };
+          duo.appendChild(cell);
+        });
+        sec.appendChild(duo);
+      }
+      board.extras.forEach(x=>{
+        const row = el("button","line");
+        const tx = el("div","t");
+        tx.append(el("b",null,x.label), el("s",null,x.note));
+        row.append(tx, el("span","pill now", x.pill), el("span","chev","›"));
+        row.onclick = ()=>{ haptic(10); x.open(); };
+        sec.appendChild(row);
+      });
+      wrap.appendChild(sec);
+    }
+
+    b.appendChild(wrap);
   } else {
     const line = el("div","allclear");
     line.append(el("div","tick","✓"));
