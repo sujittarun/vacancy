@@ -364,18 +364,19 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .advert-row s{text-decoration:none;font-size:12.5px;color:var(--txt-2);text-align:right;min-width:0}
 
 /* the action feed — what to do, above everything you have to interpret */
-.act{display:flex;gap:10px;align-items:center;padding:11px 14px;
+.act{display:flex;gap:10px;align-items:flex-start;padding:11px 14px;
   border-bottom:1px solid var(--line);width:100%;text-align:left}
 .act:last-child{border-bottom:0}
 .act:active{background:var(--surface-2)}
-.act .mark{flex:0 0 auto;width:7px;height:7px;border-radius:50%;background:var(--txt-3)}
+.act .mark{flex:0 0 auto;width:7px;height:7px;border-radius:50%;background:var(--txt-3);margin-top:5px}
 .act.warn .mark{background:var(--hot)}
 .act.good .mark{background:var(--now)}
 .act .txt{flex:1;min-width:0}
-.act > .pill{flex:0 0 auto;margin-top:1px}
+.act > .pill{flex:0 0 auto;margin-top:2px}
 .act .txt b{display:block;font-size:13.5px;font-weight:620;letter-spacing:-.012em;line-height:1.35;\n  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.act .txt s{display:block;text-decoration:none;font-size:11.5px;color:var(--txt-3);
-  line-height:1.35;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.act .txt s{text-decoration:none;font-size:11.5px;color:var(--txt-3);
+  line-height:1.4;margin-top:3px;display:-webkit-box;-webkit-line-clamp:2;
+  -webkit-box-orient:vertical;overflow:hidden}
 .nudge{display:flex;gap:7px;margin-top:8px}
 .nudgeBtn{padding:7px 11px;border-radius:9px;background:var(--surface-2);
   border:1px solid var(--line);font-size:12px;font-weight:600;color:var(--txt-2);
@@ -917,15 +918,14 @@ const NOW = 1;                       // today and tomorrow
 function todayActions(){
   const acts = [];
   const norm = weekdayFreeNorm();
-  const ids = rows => rows.slice(0,3).map(r=>flats[r.fi].id).join(", ")
-              + (rows.length > 3 ? ` +${rows.length-3}` : "");
 
   // Maintenance stays one row per flat: each is a separate decision with its
   // own two answers, so grouping them would hide the thing you must act on.
   blockNudges().filter(n=>n.due <= NOW + 1).forEach(n=>{
     acts.push({rank:0, fi:n.r.fi, block:n.r, tone:"warn",
-      title:`${flats[n.r.fi].id} · ${n.r.reason}`,
-      body:`${n.when}${n.r.note ? " · " + n.r.note : ""}`, tag:"confirm"});
+      title:`Is ${flats[n.r.fi].id} back in service?`,
+      body:`${n.when}${n.r.note ? " · " + n.r.note : ""}`,
+      tag:"confirm"});
   });
 
   /* Everything else groups. One row per kind, with the flats a tap away —
@@ -936,10 +936,10 @@ function todayActions(){
       pill:"clean"}));
     if(!turns.length) continue;
     acts.push({rank:1, tone:"warn", day:d,
-      title: turns.length === 1 ? `${flats[turns[0].fi].id} · turnaround`
-                                : `${turns.length} turnarounds ${d===0?"today":"tomorrow"}`,
-      body: turns.length === 1 ? `${dayOps(d).turnovers[0].out.guest} out, ${dayOps(d).turnovers[0].in.guest} in`
-                               : ids(turns),
+      title: turns.length === 1
+        ? `Clean ${flats[turns[0].fi].id} ${d===0?"today":"tomorrow"}`
+        : `Clean ${turns.length} flats ${d===0?"today":"tomorrow"}`,
+      body: "check-out and check-in on the same day",
       tag: d===0 ? "today" : "tomorrow",
       open: ()=> openFlatList(`${turns.length} turnaround${turns.length>1?"s":""}`,
               `${fmtL(d)} · check-out and check-in the same day`, turns)});
@@ -954,9 +954,10 @@ function todayActions(){
       meta:`<b>${flats[i].type}</b> · ${flats[i].bshort}<em>free ${runFrom(i,d)} night${runFrom(i,d)>1?"s":""} from ${fmt(d)}</em>`,
       pill:`−${depth}%`}));
     acts.push({rank: d===0 ? 2 : 4, day:d, tone: d===0 ? "good" : "",
-      title:`${free.length} unsold ${d===0?"tonight":"tomorrow"}`,
-      body: soft >= 2 ? `about ${Math.round(norm[dateAt(d).getDay()])} is normal for a ${DOWF[dateAt(d).getDay()]}`
-                      : (d===0 ? "gone at midnight" : "one day left to sell"),
+      title:`${free.length} flats unsold ${d===0?"tonight":"tomorrow"}`,
+      body: soft >= 2
+        ? `emptier than a normal ${DOWF[dateAt(d).getDay()]} — about ${Math.round(norm[dateAt(d).getDay()])} is usual`
+        : (d===0 ? "these nights are gone at midnight" : "one day left to sell them"),
       tag:`−${depth}%`,
       open: ()=> openFlatList(`${free.length} unsold ${d===0?"tonight":fmt(d)}`,
               d===0 ? "gone at midnight" : "one day left to sell", rows,
@@ -969,9 +970,9 @@ function todayActions(){
     pill:"−25%"}));
   if(orph.length){
     acts.push({rank:3, tone:"good", day:orph[0].d,
-      title: orph.length === 1 ? `${flats[orph[0].fi].id} · one night only`
-                               : `${orph.length} one-night gaps`,
-      body: orph.length === 1 ? `${fmtL(orph[0].d)} · booked either side` : ids(orph),
+      title: orph.length === 1 ? `One spare night in ${flats[orph[0].fi].id}`
+                               : `${orph.length} single spare nights`,
+      body: "booked either side, so they will not sell at a normal rate",
       tag:"−25%",
       open: ()=> openFlatList(`${orph.length} one-night gap${orph.length>1?"s":""}`,
               "booked either side · today and tomorrow", orph,
@@ -984,11 +985,11 @@ function todayActions(){
     pill: x.orphan ? "closes a gap" : `+${x.nights}n`}));
   if(ext.length){
     acts.push({rank:5, day:ext[0].d,
-      title: ext.length === 1 ? `${flats[ext[0].fi].id} · ${extensionOffers()[0].r.guest}`
-                              : `${ext.length} guests leaving soon`,
-      body: ext.length === 1 ? "empty night behind them — offer a discounted extension"
-                             : ids(ext),
-      tag:"extend",
+      title: ext.length === 1
+        ? `Offer ${extensionOffers()[0].r.guest} an extra night`
+        : `Offer ${ext.length} guests an extra night`,
+      body: "checking out soon, and the flat is empty behind them",
+      tag:"−20%",
       open: ()=> openFlatList(`${ext.length} extension offer${ext.length>1?"s":""}`,
               "guests leaving today or tomorrow", ext,
               // no advert block: an extension is a conversation with one named
@@ -1135,6 +1136,28 @@ function generateDemo(){
   });
 }
 
+/* A demo with no flats out of service never shows the maintenance side of the
+   app, so seed a few — including one due back tomorrow, which is what makes
+   the "is it back in service?" question appear. */
+function seedDemoBlocks(){
+  const wants = [
+    {reason:"Maintenance", note:"AC — technician booked", start:-3, nights:4, at:"BH"},
+    {reason:"Deep clean",  note:"quarterly clean",        start: 4, nights:2, at:"LP"},
+    {reason:"Renovation",  note:"bathroom re-tiling",     start: 8, nights:6, at:"TT"},
+  ];
+  wants.forEach(w=>{
+    const from = Math.max(w.start, 0), to = w.start + w.nights;
+    const fits = i => { for(let d = from; d < to; d++) if(d < DAYS && occ[i][d]) return false; return true; };
+    // spread them across buildings so the demo does not put every block in one block
+    let fi = flats.findIndex((f,i)=> f.code === w.at && fits(i));
+    if(fi < 0) fi = flats.findIndex((f,i)=> fits(i));
+    if(fi < 0) return;
+    resv.push({fi, start:w.start, end:to, nights:w.nights, kind:"block",
+               reason:w.reason, note:w.note, guest:"Out of service", src:"Block"});
+    recompute();                       // so the next block sees this one
+  });
+}
+
 /* ── persistence ─────────────────────────────────────────────────────────────
    Stored against flat IDs, not array indexes, so the file can gain or lose flats
    without corrupting saved bookings. Dates are stored as offsets from the day
@@ -1179,6 +1202,7 @@ function load(){
 let usingDemo = !load();
 if(usingDemo) generateDemo();
 recompute();
+if(usingDemo) seedDemoBlocks();
 
 /* Refuses to double-book. The UI already hides the form on an unavailable flat,
    but a silent overlap is exactly the failure that loses a guest, so the data
@@ -1240,7 +1264,7 @@ function cancelBooking(r){
   recompute(); save();
 }
 function clearAll(){ resv = []; usingDemo = false; recompute(); save(); }
-function resetDemo(){ generateDemo(); usingDemo = true; recompute(); save(); }
+function resetDemo(){ generateDemo(); usingDemo = true; recompute(); seedDemoBlocks(); save(); }
 
 const freeRange = (fi,a,b)=>{ for(let d=a;d<b;d++){ if(d<0||d>=DAYS||occ[fi][d]) return false; } return true; };
 const freeCount = d => { let n=0; for(let i=0;i<NF;i++) if(!occ[i][d]) n++; return n; };

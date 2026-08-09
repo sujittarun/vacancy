@@ -25,7 +25,8 @@ see *Editing the inventory* below. This table is only the starting point.
 
 ## Using it for real
 
-It opens with **demo bookings** so you can see it working. To use it properly:
+It opens with **demo bookings** and three flats out of service — one due back tomorrow, so
+you can see the maintenance question in action. To use it properly:
 
 1. Scroll to the bottom of **Rooms** and tap **Inventory**. Check the flats are right —
    add, renumber, retype or remove any of them, and add a building if one is missing.
@@ -166,13 +167,18 @@ Opens with **Worth doing now** — one card, and only things that are true **tod
 tomorrow** and stop being true if you ignore them. Each kind gets **one row**, with the
 flats a tap away:
 
-| Row | Tap it for |
+| Row | What it means |
 |---|---|
-| *TT-104 · Maintenance* | Due back today — confirm, or push a week. One row per flat, because each is its own decision. |
-| *2 turnarounds tomorrow* | The flats needing a clean between two guests |
-| *20 unsold tonight* | Those flats, at −25%, plus the words for an advert |
-| *5 one-night gaps* | Orphan nights — booked either side, so they will not sell at a full rate |
-| *18 guests leaving soon* | Offer them a discounted extra night |
+| *Is BH-101 back in service?* | Due back from maintenance — confirm, or push a week. One row per flat, because each is its own decision. |
+| *Clean 2 flats tomorrow* | Check-out and check-in the same day |
+| *19 flats unsold tonight* | These nights are gone at midnight |
+| *5 single spare nights* | Booked either side, so they will not sell at a normal rate |
+| *Offer 17 guests an extra night* | Checking out soon, with the flat empty behind them |
+
+Every row **names the action and explains itself**. An earlier version said things like
+"18 guests leaving soon", which states a fact and leaves you to work out what to do with
+it — fine once you know the app, useless the first time you open it. Tap any row for the
+flats.
 
 Five near-identical rows saying "one night only" is a scroll, not a list — so anything with
 more than one instance collapses to a single row showing the first few flat numbers.
