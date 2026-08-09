@@ -354,20 +354,19 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .allclear b{color:var(--txt);font-weight:600}
 
 /* the action feed — what to do, above everything you have to interpret */
-.act{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;
+.act{display:flex;gap:10px;align-items:center;padding:11px 14px;
   border-bottom:1px solid var(--line);width:100%;text-align:left}
 .act:last-child{border-bottom:0}
 .act:active{background:var(--surface-2)}
-.act .mark{flex:0 0 auto;width:8px;height:8px;border-radius:50%;margin-top:5px;
-  background:var(--txt-3)}
+.act .mark{flex:0 0 auto;width:7px;height:7px;border-radius:50%;background:var(--txt-3)}
 .act.warn .mark{background:var(--hot)}
 .act.good .mark{background:var(--now)}
 .act .txt{flex:1;min-width:0}
 .act > .pill{flex:0 0 auto;margin-top:1px}
 .act .txt b{display:block;font-size:13.5px;font-weight:620;letter-spacing:-.012em;line-height:1.35;\n  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.act .txt s{display:block;text-decoration:none;font-size:12px;color:var(--txt-2);
-  line-height:1.45;margin-top:3px}
-.nudge{display:flex;gap:7px;margin-top:9px}
+.act .txt s{display:block;text-decoration:none;font-size:11.5px;color:var(--txt-3);
+  line-height:1.35;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nudge{display:flex;gap:7px;margin-top:8px}
 .nudgeBtn{padding:7px 11px;border-radius:9px;background:var(--surface-2);
   border:1px solid var(--line);font-size:12px;font-weight:600;color:var(--txt-2);
   transition:transform .3s var(--out)}
@@ -895,6 +894,68 @@ function orphanNights(){
     });
   }
   return out.sort((a,b)=> a.d - b.d);
+}
+
+/* ── what actually belongs in a to-do list ───────────────────────────────────
+   Only things that are true today or tomorrow, that stop being true if
+   ignored, and that have one clear action. A standing condition — "16 orphan
+   nights exist somewhere in the next fortnight" — is still 16 tomorrow, so it
+   is analysis, not a task, and putting it here is what makes a list people
+   stop reading. Everything longer-range lives in the sections below.        */
+const NOW = 1;                       // today and tomorrow
+
+function todayActions(){
+  const acts = [];
+  const norm = weekdayFreeNorm();
+
+  // a flat due back from maintenance — a decision, one tap either way
+  blockNudges().filter(n=>n.due <= NOW + 1).forEach(n=>{
+    acts.push({rank:0, fi:n.r.fi, block:n.r, tone:"warn",
+      title:`${flats[n.r.fi].id} · ${n.r.reason}`,
+      body:`${n.when}${n.r.note ? " · " + n.r.note : ""}`,
+      tag:"confirm"});
+  });
+
+  // same-day turnarounds — the cleans that have to happen between two guests
+  for(let d=0; d<=NOW; d++){
+    dayOps(d).turnovers.forEach(t=>{
+      acts.push({rank:1, fi:t.fi, tone:"warn", day:d,
+        title:`${flats[t.fi].id} · turnaround`,
+        body:`${t.out.guest} out, ${t.in.guest} in`,
+        tag:d===0?"clean today":"clean tomorrow"});
+    });
+  }
+
+  // nights that perish — unsold rooms tonight and tomorrow
+  for(let d=0; d<=NOW; d++){
+    const free = freeCount(d);
+    if(!free) continue;
+    const soft = free - norm[dateAt(d).getDay()];
+    acts.push({rank: d===0 ? 2 : 4, day:d, tone: d===0 ? "good" : "",
+      title:`${free} unsold ${d===0?"tonight":"tomorrow"}`,
+      body: soft >= 2
+        ? `about ${Math.round(norm[dateAt(d).getDay()])} is normal for a ${DOWF[dateAt(d).getDay()]} — running soft`
+        : `${d===0?"Gone at midnight":"One day left to sell"} · tap for the flats`,
+      tag: d===0 ? "−25%" : "−20%", freeOn:d});
+  }
+
+  // orphan nights landing now — unsellable at a normal rate, and about to expire
+  orphanNights().filter(o=>o.d <= NOW).forEach(o=>{
+    acts.push({rank:3, fi:o.fi, day:o.d, tone:"good",
+      title:`${flats[o.fi].id} · one night only`,
+      body:`${fmtL(o.d)} · booked either side`,
+      tag:"−25%"});
+  });
+
+  // a guest leaving today or tomorrow with an empty night behind them
+  extensionOffers().filter(x=>x.from <= NOW + 1).forEach(x=>{
+    acts.push({rank:5, fi:x.fi, day:x.from, tone:"",
+      title:`${flats[x.fi].id} · ${x.r.guest}`,
+      body:`leaves ${fmt(x.from)}, ${x.nights} night${x.nights>1?"s":""} empty after — offer a discounted extension`,
+      tag:"extend"});
+  });
+
+  return acts.sort((a,b)=> a.rank - b.rank || (a.day||0) - (b.day||0));
 }
 
 /* One ranked list of things worth doing, newest problem first. The app should
@@ -1708,17 +1769,11 @@ function renderTrends(){
     return w;
   };
 
-  /* 0 — what to do now.
-
-     An action card is exception-driven: when there is nothing to act on it is
-     noise, so it does not render at all. The analysis sections below always
-     render, because they always have something to say and disappearing would
-     make the tab feel broken. Where both action cards are empty, one all-clear
-     line takes their place — vanishing without a word leaves you wondering
-     whether the app checked or simply failed. */
-  const acts = actionFeed();
+  /* 0 — one card, today and tomorrow only. Maintenance and the flats worth
+         discounting live together here; there is no second card. */
+  const acts = todayActions();
   if(acts.length){
-    const {c,b} = card("Worth doing now", `${acts.length} ${acts.length===1?"thing":"things"}`);
+    const {c,b} = card("Worth doing now", `${acts.length} ${acts.length===1?"thing":"things"} · today and tomorrow`);
     b.style.justifyContent = "flex-start";
     acts.slice(0,6).forEach(a=>{
       const row = el("button","act" + (a.tone ? " "+a.tone : ""));
@@ -1726,67 +1781,36 @@ function renderTrends(){
       const t = el("div","txt");
       t.append(el("b",null,a.title), el("s",null,a.body));
       row.appendChild(t);
-      row.appendChild(el("span","pill" + (a.tone==="warn"?" warn":a.tone==="good"?" good":""), a.tag));
+      row.appendChild(el("span","pill" + (a.tone==="warn"?" warn":a.tone==="good"?" now":""), a.tag));
       if(a.block){
-        /* answer the question in place — the whole point is that it takes one tap */
         const ans = el("div","nudge");
         const yes = el("button","nudgeBtn yes","Back on sale");
-        yes.onclick = ev=>{ ev.stopPropagation(); haptic(18);
-          releaseBlock(a.block); refreshScreen(); };
+        yes.onclick = ev=>{ ev.stopPropagation(); haptic(18); releaseBlock(a.block); refreshScreen(); };
         const no = el("button","nudgeBtn","Still out · +7 days");
         no.onclick = ev=>{
           ev.stopPropagation();
           const got = extendBlock(a.block, 7);
           haptic(got ? 14 : 30);
           if(got === 7){ refreshScreen(); return; }
-          // a guest holds the nights we could not take — say so instead of nothing
-          no.textContent = got
-            ? `Held ${got} night${got>1?"s":""} — a guest has the rest`
-            : "A guest already has those nights";
+          no.textContent = got ? `Held ${got} night${got>1?"s":""} — a guest has the rest`
+                               : "A guest already has those nights";
           setTimeout(()=>refreshScreen(), 1800);
         };
         ans.append(yes, no);
-        row.querySelector(".txt").appendChild(ans);
+        t.appendChild(ans);
       }
-      if(a.fi !== undefined) row.onclick = ()=>{ haptic(10); openSheet(a.fi, a.day || 0); };
+      row.onclick = ()=>{ haptic(10);
+        if(a.freeOn !== undefined) openFreeOn(a.freeOn);
+        else if(a.fi !== undefined) openSheet(a.fi, a.day || 0); };
       b.appendChild(row);
     });
-    said(c, `Everything here is something you can act on today, ranked by how soon it bites. Tap one to open the flat.`);
-  }
-
-  /* 0b — three numbers, detail one tap away. A tile reading zero says nothing
-         worth the space, so it is dropped; if all three are zero the card goes
-         with them. */
-  const norm0 = weekdayFreeNorm();
-  const opps = [
-    {k:"orphan", n:orphanNights().length,                                  label:"orphan nights", hot:true},
-    {k:"soft",   n:softDates(norm0).filter(sd=>sd.d < OPP_HORIZON).length, label:"soft dates"},
-    {k:"extend", n:extensionOffers().length,                               label:"could extend"},
-  ].filter(o => o.n > 0);
-
-  if(opps.length){
-    const {c,b} = card("Worth a discount", "next 14 days · tap for the flats");
-    b.style.justifyContent = "flex-start";
-    // the track stays three wide even with fewer tiles, so a tile is always the
-    // same size and its number reads at a consistent scale
-    const grid = el("div","opps");
-    opps.forEach(o=>{
-      const t = el("button","opp" + (o.hot ? " hot" : ""));
-      t.append(el("b",null,String(o.n)), el("s",null,o.label));
-      t.setAttribute("aria-label", `${o.n} ${o.label} — open the list`);
-      t.onclick = ()=>{ haptic(10); openOpportunity(o.k); };
-      grid.appendChild(t);
-    });
-    b.appendChild(grid);
-    said(c, `A one-night gap between two bookings will not sell at your normal rate, so it is worth advertising cheap — the alternative is nothing. <span class="hi">Only the next fortnight appears here.</span> Further out there is still time to sell those nights properly, and discounting them now is selling cheap what would have gone at full price.`);
-  }
-
-  /* neither card rendered — say so once, rather than leaving a silent gap */
-  if(!acts.length && !opps.length){
+    said(c, (acts.length > 6 ? `<b>${acts.length - 6} more below the first six.</b> ` : "")
+      + `Only what is true today or tomorrow and stops being true if you ignore it. Anything longer-range is analysis, and sits further down.`);
+  } else {
     const line = el("div","allclear");
     line.append(el("div","tick","✓"));
     const t = el("div");
-    t.innerHTML = `<b>Nothing needs attention.</b> No same-day cleans, no flats due back from maintenance, no orphan nights and no date running unusually empty in the next fortnight.`;
+    t.innerHTML = `<b>Nothing needs attention today.</b> No cleans between guests, no flat due back from maintenance, and every room tonight is sold.`;
     line.appendChild(t);
     deck.appendChild(line);
   }
@@ -2698,6 +2722,54 @@ function buildingForm(){
 }
 
 /* ── opportunities, one tap deep ─────────────────────────────────────────── */
+/* The flats free on one night, with a suggested depth and a message ready to
+   send. This is what "20 unsold tonight" opens into. */
+function openFreeOn(d){
+  sheetH.textContent = ""; sheetB.textContent = "";
+  const free = flats.map((f,i)=>i).filter(i=>!occ[i][d]);
+  const depth = d === 0 ? 25 : 20;
+  const t = el("div");
+  t.innerHTML = `<div class="n">${free.length} unsold ${d===0?"tonight":fmtL(d)}</div>`
+    + `<div class="m">${d===0?"these nights are gone at midnight":"one day left to sell"}</div>`;
+  const x = el("button",null,"✕"); x.setAttribute("aria-label","Close"); x.onclick = closeSheet;
+  sheetH.append(t, x);
+
+  const card2 = el("div","card"); card2.style.margin = "16px 20px 0";
+  if(!free.length) card2.appendChild(el("div","empty","Every flat is sold that night."));
+  free.forEach(i=>{
+    const fl = flats[i], run = runFrom(i, d);
+    const row = el("button","row");
+    row.append(el("div","id", fl.id));
+    const m = el("div","meta");
+    m.innerHTML = `<b>${fl.type}</b> · ${fl.bshort}<em>free ${run} night${run>1?"s":""} from ${fmt(d)}</em>`;
+    row.append(m, el("span","pill now", `−${depth}%`));
+    row.onclick = ()=>{ haptic(9); openSheet(i, d); };
+    card2.appendChild(row);
+  });
+  sheetB.appendChild(card2);
+
+  if(free.length){
+    const bar = el("div","dataTools"); bar.style.cssText = "padding:14px 20px 0";
+    const cp = el("button","copybtn");
+    cp.innerHTML = "<span>Copy a broadcast</span>";
+    cp.onclick = async ()=>{
+      const text = `Rooms free ${fmtL(d)} — ${depth}% off\n`
+        + free.slice(0,10).map(i=>`${flats[i].id} · ${flats[i].type} · ${flats[i].bshort}`).join("\n")
+        + (free.length > 10 ? `\n+${free.length - 10} more` : "");
+      const ok = await copyText(text);
+      haptic(12);
+      cp.querySelector("span").textContent = ok ? "Copied" : "Press and hold to copy";
+      cp.classList.toggle("done", ok);
+      setTimeout(()=>{ cp.querySelector("span").textContent = "Copy a broadcast";
+                       cp.classList.remove("done"); }, 1800);
+    };
+    bar.appendChild(cp);
+    sheetB.appendChild(bar);
+  }
+  sheet.classList.add("on"); scrim.classList.add("on");
+  sheetB.scrollTop = 0; x.focus();
+}
+
 function openOpportunity(kind){
   sheetH.textContent = ""; sheetB.textContent = "";
   const norm = weekdayFreeNorm();

@@ -162,37 +162,29 @@ comes first. Nothing moves automatically; it only tells you what is possible.
 
 ### Pulse
 
-Opens with **Worth doing now** — operations only, and only what needs a decision today:
-same-day cleans, and flats due back from maintenance (see *Out of service* above).
+Opens with **Worth doing now** — one card, and only things that are true **today or
+tomorrow** and stop being true if you ignore them:
 
-Under it, **Worth a discount** is three numbers. Tap any for the flats:
+- a flat **due back from maintenance** — confirm it, or push it a week, in one tap
+- a **turnaround** — a flat with a check-out and a check-in the same day, needing a clean
+- **unsold tonight / tomorrow** — tap for the flats and a ready-to-send broadcast
+- an **orphan night** landing now — booked either side, so it will not sell at a full rate
+- a guest **leaving today or tomorrow** with an empty night behind them — offer a
+  discounted extension
 
-| Tile | What it is |
-|---|---|
-| **Orphan nights** | Single empty nights between two bookings. They will not sell at your normal rate — most guests want two or more — so they are the ones worth advertising cheap. The alternative is nothing. |
-| **Soft dates** | Dates running emptier than that weekday normally does, close enough that a lower price still has time to work. |
-| **Could extend** | A guest is already in the flat and the night after they leave is empty. **Offer them a discounted extra night** — it beats an empty one and costs no commission and no clean in between. |
+There is deliberately no second card for discounts. Maintenance and the flats worth
+discounting belong in the same list, because they are the same kind of thing: something
+to do before the day is out.
 
-Each opens a list with a **Copy a broadcast** button, ready to paste.
+**What is deliberately excluded is the point.** "16 orphan nights somewhere in the next
+fortnight" is still 16 tomorrow — it is a standing condition, not a task, and a to-do list
+that contains standing conditions never empties, so people stop reading it. Longer-range
+patterns live in the sections below instead.
 
-**Cards appear only when they have something to say.** An action card is exception-driven,
-so when there is nothing to act on it does not render — an empty card is noise. A tile
-reading zero is dropped, and if all three are zero the card goes with them. The analysis
-sections below always render, because they always have something to say and vanishing
-would make the tab feel broken.
+When there is nothing, the card does not render. One line takes its place:
 
-When both action cards are empty you get one line rather than a silent gap:
-
-> ✓ **Nothing needs attention.** No same-day cleans, no flats due back from maintenance,
-> no orphan nights and no date running unusually empty in the next fortnight.
-
-Silence alone is ambiguous — it does not tell you whether the app checked or simply
-failed. That line does.
-
-**Only the next fortnight appears here** (a week for extensions, since you cannot have that
-conversation about a checkout two weeks out). Further ahead there is still time to sell
-those nights properly, and discounting them now is selling cheap what would have gone at
-full price — the most expensive mistake in this business.
+> ✓ **Nothing needs attention today.** No cleans between guests, no flat due back from
+> maintenance, and every room tonight is sold.
 
 Below it, one metric per section, scrolled vertically. The uncommon ones are the point:
 
