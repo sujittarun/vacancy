@@ -8,16 +8,25 @@ able to see the whole portfolio at once.
 
 Works on any phone browser. Nothing to install.
 
-**It opens on the sign-in screen.** Sign in once on a phone and it never asks again —
-that phone goes straight to the real book from then on, and the pill in the corner reads
-**Live**.
+**There is no login.** It opens straight into the app, and the book lives in the browser
+on that phone. It survives closing the app; it is not shared with another phone and it is
+not backed up, so export anything you would mind losing.
 
-The sign-in exists for one reason: the real bookings sit on a server and this page has a
-public web address. Without it, anyone holding the link could read and change them.
+It arrives carrying **test data**: the 45 flats are real, the bookings, guests, money and
+faults are invented so there is something to look at. **Rooms → Inventory → Delete all test
+bookings** empties the invented part and keeps every flat — do that once before handing the
+app to whoever will run it.
 
-Anyone who only wants a look around taps **Browse an invented set of bookings** — fake
-guests, fake money, nothing real — which is what makes the link safe to hand to someone.
-In that mode the corner reads **Demo data**, and tapping it takes you back to signing in.
+<details><summary>Turning on sync across phones</summary>
+
+The server side is built and tested — a multi-tenant Postgres schema with row-level
+security, an offline write queue, conflict handling and telemetry. It is switched off by
+one line, `CLOUD_ENABLED` at the top of the script, because there is no third option:
+the bookings would sit behind a public web address, and the sign-in is the only thing
+between a stranger with the link and a guest's name and phone number. Off is honest while
+the app is being built; on brings the sign-in back with it. See
+[ARCHITECTURE.md](ARCHITECTURE.md).
+</details>
 
 ## The portfolio
 

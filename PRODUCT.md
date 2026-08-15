@@ -80,7 +80,10 @@ user's "Bajarahills".
   the denominator rather than joining the numerator — blocking a flat must never
   flatter the occupancy figure. A block is not a booking and is excluded from
   arrivals, departures, turnarounds, stay length, source mix and extensions.
-- **Storage.** The app runs in one of two modes and always says which. *Sample* — no
+- **Storage (current).** Authentication is switched off by `CLOUD_ENABLED` during the
+  build, so the book lives in `localStorage` on one phone: no account, no server, nothing
+  exposed on the public URL. The cloud path below stays wired and returns with one line.
+- **Storage (when sync is on).** The app runs in one of two modes and always says which. *Sample* — no
   account, invented bookings in `localStorage`, which is what the public link opens.
   *Live* — signed in, with a Supabase database as the book: shared across phones, kept if
   a phone is lost, and the double-booking rule enforced by a Postgres exclusion constraint

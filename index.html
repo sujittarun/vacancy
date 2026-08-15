@@ -1776,6 +1776,24 @@ function load(){
       first. Then the local entry is rolled back and you are told who took the
       room, by name and dates. A write that quietly vanished would be far worse
       than one that never happened.                                            */
+/* ══════════════════ the server is switched off ══════════════════════════════
+   Set this to true to put the app back on Supabase: sign-in returns, the book
+   is shared across phones, and it survives a lost device. Everything needed is
+   still here and still wired — the schema, the sync queue, the conflict
+   handling, the telemetry — it is only gated on this one line.
+
+   It is FALSE while the app is being built, because there is no third option.
+   The bookings would live on a server behind a public web address, and the only
+   thing standing between a stranger with the link and a guest's name and phone
+   number is the sign-in. Removing the sign-in and keeping the server would not
+   mean "no login", it would mean "the data is public" — fine today, when every
+   booking is invented, and a quiet leak the week real ones are typed in, with
+   nothing to mark the moment it turned.
+
+   So while this is false the book lives on the phone alone: no account, no
+   server, nothing to expose. Sync is a switch to flip, not a rewrite.        */
+const CLOUD_ENABLED = false;
+
 const SUPA_URL = "https://hwbquljbvanlgggemchg.supabase.co";
 /* Publishable by design, and safe in a file anyone can read: it grants nothing
    on its own. Every row is gated by row-level security, so an anonymous caller
@@ -1801,7 +1819,7 @@ const uuid = () => (crypto.randomUUID ? crypto.randomUUID()
       const r = Math.random()*16|0; return (c === "x" ? r : (r & 3 | 8)).toString(16); }));
 
 let session  = jget(SESSION_KEY);      // {access_token, refresh_token, expires_at, email, uid}
-let MODE     = session && session.refresh_token ? "live" : "sample";
+let MODE     = (CLOUD_ENABLED && session && session.refresh_token) ? "live" : "sample";
 let hostId   = null, hostName = "";
 let queue    = jget(QUEUE_KEY) || [];  // writes that have not landed yet
 let inflight = null;                   // the one op currently on the wire
@@ -2503,7 +2521,11 @@ function paintAcct(){
   const btn = document.getElementById("acctBtn"), txt = document.getElementById("acctTxt");
   if(!btn) return;
   btn.classList.remove("live","wait","off");
-  if(MODE !== "live"){
+  if(!CLOUD_ENABLED){
+    // no account, so nothing to say about one — this is the way to the data
+    txt.textContent = "Data";
+    btn.setAttribute("aria-label", "Your data — export it, or clear the test bookings");
+  }else if(MODE !== "live"){
     txt.textContent = "Demo data";
     btn.setAttribute("aria-label", "These bookings are made up — tap to sign in and see your own");
   }else if(!online){
@@ -2817,6 +2839,7 @@ async function exportBook(btn){
 
 /* ── the account sheet ─────────────────────────────────────────────────────── */
 function openAccount(){
+  if(!CLOUD_ENABLED) return openDataSheet();
   const live = MODE === "live";
   sheetH.textContent = ""; sheetB.textContent = "";
   const t = el("div");
@@ -2897,6 +2920,54 @@ function openAccount(){
     + "across as text so they keep their leading digits, and amounts stay numbers you can total.";
   sheetB.append(note);
 
+  sheet.classList.add("on"); scrim.classList.add("on");
+}
+
+/* With the server off there is no account to manage, so this is simply where the
+   data is: what is in the book, how to get it out, and the plain fact that it
+   lives on this phone and nowhere else. */
+function openDataSheet(){
+  sheetH.textContent = ""; sheetB.textContent = "";
+  const t = el("div");
+  t.innerHTML = `<div class="n">Your data</div><div class="m">on this phone</div>`;
+  const x = el("button", null, "✕"); x.setAttribute("aria-label","Close");
+  x.onclick = ()=> closeSheet();
+  sheetH.append(t, x);
+
+  const bk = bookings().length, blkN = resv.filter(isBlock).length, isN = openIssues().length;
+  const state = el("div","blocked");
+  state.innerHTML = `<b>${NF} flats · ${bk} booking${bk===1?"":"s"}`
+    + (blkN ? ` · ${blkN} out of service` : "") + (isN ? ` · ${isN} to fix` : "") + `.</b> `
+    + `Everything is kept in this browser, on this phone. It survives closing the app, `
+    + `but it is not shared with another phone and it is not backed up — so export `
+    + `anything you would mind losing.`;
+  sheetB.append(state);
+
+  const row = el("div","dataTools");
+  row.style.cssText = "padding:14px 20px 0";
+  const dl = el("button","copybtn","Export to Excel");
+  dl.onclick = async ()=>{
+    haptic(9); dl.textContent = "Preparing…";
+    try{
+      const how = await exportBook();
+      dl.textContent = how === "cancelled" ? "Export to Excel" : "Done";
+      if(how !== "cancelled") toast("",
+        "<b>Exported.</b> Four sheets — summary by month, every booking, every payment, "
+        + "and one row per guest with their number.", null);
+    }catch(e){ dl.textContent = "Export to Excel";
+               toast("bad", "<b>Could not export.</b> " + esc(e.message), null); }
+  };
+  const inv = el("button","copybtn","Inventory and test data");
+  inv.onclick = ()=>{ haptic(9); openInventory(); };
+  row.append(dl, inv);
+  sheetB.append(row);
+
+  const note = el("p");
+  note.style.cssText = "margin:14px 20px 4px;font-size:12px;line-height:1.55;color:var(--txt-3)";
+  note.textContent = "Sharing the book across phones needs an account, which is switched off "
+    + "while the app is being built. Nothing is lost by it — the same book comes back when it "
+    + "is switched on.";
+  sheetB.append(note);
   sheet.classList.add("on"); scrim.classList.add("on");
 }
 
@@ -5502,7 +5573,7 @@ paintAcct();
 /* Sign-in is the front door. A phone that has never signed in, and whose owner
    has never said "just looking", meets it first — so nobody works a whole
    afternoon in invented bookings without knowing there is a real book. */
-if(MODE !== "live" && !jget(BROWSE_KEY)) openGate();
+if(CLOUD_ENABLED && MODE !== "live" && !jget(BROWSE_KEY)) openGate();
 if(MODE === "live"){
   // the cache already painted; correct it from the server, and if the session
   // has expired for good, fall back to the sample book rather than a dead app
