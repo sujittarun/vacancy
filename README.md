@@ -436,7 +436,18 @@ existing guest** to a flat that is free for their whole stay.
 > then TT-204 is yours
 
 Options are ranked so the move the guest would never notice — same building, same size —
-comes first. Nothing moves automatically; it only tells you what is possible.
+comes first.
+
+**Tapping one shows you the move before it happens.** Two rooms side by side with the guest
+standing in the first, their bag beside their name. Confirm and they cross — lifting,
+arcing, settling into the other room — while the room they left goes light the moment they
+step out of it, which is this app's word for *sellable*. Then the button becomes **Book
+BH-103**, which was the point of the whole manoeuvre.
+
+It asks first because it is the only action in the app that changes something a guest has
+already been told. Nothing else moves: same nights, same money, same guest, and a line
+reminding you they need telling their new room number. If the destination is taken while
+you are deciding, it refuses and says so rather than double-booking.
 
 ### Pulse
 

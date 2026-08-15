@@ -777,6 +777,79 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
 @media (prefers-reduced-motion:reduce){ .deck.slide{animation:none} }
 .deck{will-change:transform}
 
+/* ── moving a guest between two rooms ─────────────────────────────────────────
+   Two rooms and a gap, with the guest standing in the left one. On confirm they
+   lift, cross, and settle — an arc rather than a slide, because a straight line
+   between two points reads as a value being assigned and a lift reads as
+   somebody carrying something. The room they leave goes light the moment they
+   step out of it, not when they arrive, which is the half-second that makes the
+   whole thing legible.                                                        */
+.movestage{
+  position:relative;display:flex;align-items:stretch;gap:0;
+  margin:18px 20px 0;
+}
+.mroom{
+  flex:1;min-width:0;border-radius:14px;padding:14px 14px 46px;
+  background:var(--held);border:1px solid var(--line);
+  display:flex;flex-direction:column;gap:2px;
+  transition:background .45s var(--out), border-color .45s var(--out);
+}
+.mroom b{font-size:16px;font-weight:670;letter-spacing:-.02em;color:var(--held-ink)}
+.mroom s{text-decoration:none;font-size:11.5px;color:var(--txt-3)}
+.mroom.b{background:var(--surface-2)}
+/* the room they left, lit — this app's whole language for "sellable" */
+.mroom.a.emptied{background:var(--free);border-color:transparent}
+.mroom.a.emptied b{color:var(--free-ink)}
+.mroom.a.emptied s{color:color-mix(in srgb, var(--free-ink) 55%, transparent)}
+.mgap{flex:0 0 34px;display:grid;place-items:center}
+.mgap i{
+  display:block;width:100%;height:1px;background:var(--line-2);
+  position:relative;
+}
+.mgap i::after{
+  content:"";position:absolute;right:0;top:-3px;width:7px;height:7px;
+  border-top:1px solid var(--line-2);border-right:1px solid var(--line-2);
+  transform:rotate(45deg);
+}
+
+/* the guest, parked in the left room until they are asked to move */
+.mguest{
+  position:absolute;left:14px;bottom:12px;z-index:2;
+  display:flex;align-items:center;gap:7px;
+  padding:7px 11px 7px 8px;border-radius:10px;
+  background:var(--surface);border:1px solid var(--line-2);
+  box-shadow:var(--shadow-sm);
+  font-size:12.5px;font-weight:620;color:var(--txt);white-space:nowrap;
+  max-width:calc(50% - 26px);
+}
+.mguest b{overflow:hidden;text-overflow:ellipsis;font-weight:620}
+.mguest .bag{flex:0 0 auto;width:15px;height:15px;color:var(--txt-2);display:block}
+.mguest .bag svg{width:15px;height:15px;display:block}
+
+@keyframes carry{
+  0%   {transform:translate(0,0) scale(1)}
+  14%  {transform:translate(0,-9px) scale(1.05)}
+  52%  {transform:translate(calc(var(--dx,120px) * .52), -15px) scale(1.05)}
+  86%  {transform:translate(calc(var(--dx,120px) * 1.01), -2px) scale(1.01)}
+  100% {transform:translate(var(--dx,120px), 0) scale(1)}
+}
+.movestage.carrying .mguest{
+  animation:carry .72s var(--out) forwards;
+  box-shadow:var(--shadow);
+}
+.movestage.landed .mguest{transform:translate(var(--dx,120px), 0)}
+
+.movewhy{margin:16px 20px 0;font-size:13px;line-height:1.55;color:var(--txt-2)}
+.movewhy b{color:var(--txt);font-weight:640}
+.movewhy b.ok{color:var(--now)}
+.movenote{margin:10px 20px 0;font-size:12px;line-height:1.55;color:var(--txt-3)}
+.movestage + .movewhy + .bkgo{margin:16px 20px 0;width:calc(100% - 40px)}
+
+@media (prefers-reduced-motion:reduce){
+  .movestage.carrying .mguest{animation:none;transform:translate(var(--dx,120px),0)}
+  .mroom{transition:none}
+}
+
 /* ── the room card ────────────────────────────────────────────────────────────
    Opening a room reads. One primary action sized to say "this is what you came
    for", two small routes to the things that write, and then the lists. Every
@@ -2576,6 +2649,22 @@ function releaseBlock(r){
     enqueue({k:"stay~", id:r.sid, body:{ends_on: dayISO(0)}});
   recompute(); save(); cacheSave();
   return true;
+}
+
+/* Move a guest to another flat, same nights. The one operation in the app that
+   changes something a guest has already been told — which is why it is the only
+   one that asks first, and why the screen shows them travelling rather than a
+   record quietly updating. */
+function moveBooking(r, toFi){
+  if(isBlock(r) || !(toFi >= 0 && toFi < NF) || toFi === r.fi) return false;
+  const from = Math.max(r.start, 0);
+  if(!freeRange(toFi, from, r.end)) return false;      // somebody took it meanwhile
+  const wasFi = r.fi;
+  r.fi = toFi;
+  if(MODE === "live" && r.sid)
+    enqueue({k:"stay~", id:r.sid, body:{flat_id: flats[toFi].uid}});
+  recompute(); save(); cacheSave();
+  return {from: wasFi, to: toFi};
 }
 
 function cancelBooking(r){
@@ -4740,7 +4829,8 @@ function renderAsk(focus){
             + `<em>${fmt(B.start)}–${fmt(B.end)} · ${to.type}${mv.sameBuilding ? ", same building" : ` at ${to.bshort}`}`
             + `${mv.sameType ? ", same size" : ""} · then ${from.id} is yours</em>`;
           r.append(m, el("span","pill now","frees it"));
-          r.onclick = ()=>{ haptic(10); openSheet(mv.frees, a); };
+          // it used to open the room that WOULD be freed, having moved nobody
+          r.onclick = ()=>{ haptic(10); openMove(mv, a, fi => openBooking(fi, a, p.n)); };
           mcard.appendChild(r);
         });
         listWrap.append(mh, mcard);
@@ -5399,6 +5489,105 @@ function openSheet(fi, day){
 
   sheet.classList.add("on"); scrim.classList.add("on");
   sheetB.scrollTop = 0;
+}
+
+/* ══════════════ moving a guest ══════════════════════════════════════════════
+   Ask can already spot that one shuffle would rescue a stay it otherwise has to
+   refuse. It used to stop at spotting it: tapping the option opened the room
+   that WOULD be freed, and nobody had moved, which made the whole feature a
+   suggestion the operator then had to carry out by hand somewhere else.
+
+   This finishes it. And because it is the one action that changes something a
+   guest has already been told — their room number — it is the one action that
+   asks first, and the one that shows what it is about to do rather than
+   describing it. The guest crosses the gap between two rooms with their bag.
+   A record silently changing its flat_id would be the same operation and a
+   completely different thing to agree to.                                    */
+const SVG_BAG = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"'
+  + ' stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+  + '<rect x="3.2" y="6.6" width="13.6" height="10.2" rx="2.2"/>'
+  + '<path d="M7.6 6.6V4.4a1.4 1.4 0 0 1 1.4-1.4h2a1.4 1.4 0 0 1 1.4 1.4v2.2"/>'
+  + '<path d="M3.2 11.4h13.6"/></svg>';
+
+function openMove(mv, askDay, onFreed){
+  const B = mv.booking, from = flats[mv.frees], to = flats[mv.to];
+  sheetH.textContent = ""; sheetB.textContent = "";
+  const t = el("div");
+  t.innerHTML = `<div class="n">Move ${esc(B.guest)}</div>`
+              + `<div class="m">${esc(from.id)} → ${esc(to.id)} · ${esc(fmt(B.start))}–${esc(fmt(B.end))}</div>`;
+  const x = el("button", null, "✕"); x.setAttribute("aria-label","Close");
+  x.onclick = ()=> closeSheet();
+  sheetH.append(t, x);
+
+  /* the two rooms, and the guest standing in one of them */
+  const stage = el("div","movestage");
+  const mkRoom = (fl, cls)=>{
+    const r = el("div","mroom " + cls);
+    r.append(el("b", null, fl.id), el("s", null, fl.type + " · " + fl.bshort));
+    return r;
+  };
+  const a = mkRoom(from, "a"), bRoom = mkRoom(to, "b");
+  const gap = el("div","mgap");
+  gap.innerHTML = '<i></i>';
+  const guest = el("div","mguest");
+  guest.innerHTML = '<span class="bag">' + SVG_BAG + '</span><b>' + esc(B.guest) + '</b>';
+  stage.append(a, gap, bRoom, guest);
+
+  const why = el("p","movewhy");
+  why.innerHTML = `Same nights, ${esc(fmt(B.start))}–${esc(fmt(B.end))}. `
+    + (mv.sameBuilding && mv.sameType
+        ? `<b>Same building, same size</b> — the kind of move a guest never notices.`
+        : mv.sameBuilding
+        ? `Same building, ${mv.biggerOrEqual ? "and no smaller" : `a ${esc(to.type)} instead of a ${esc(from.type)}`}.`
+        : `A different building — ${esc(to.bname)} rather than ${esc(from.bname)}, so this one is worth a call.`);
+
+  const go = el("button","bkgo", `Move ${B.guest} to ${to.id}`);
+  const note = el("p","movenote");
+  note.textContent = "Nothing else changes — same dates, same money, same guest. "
+    + "They will need telling their room number.";
+
+  sheetB.append(stage, why, go, note);
+  sheet.classList.add("on"); scrim.classList.add("on");
+  sheetB.scrollTop = 0;
+
+  go.onclick = ()=>{
+    if(go.disabled) return;
+    go.disabled = true;
+    const dx = bRoom.getBoundingClientRect().left - a.getBoundingClientRect().left;
+    stage.style.setProperty("--dx", dx.toFixed(1) + "px");
+    haptic(12);
+    stage.classList.add("carrying");
+
+    // the room empties as they step out of it, not when they arrive
+    setTimeout(()=>{ a.classList.add("emptied"); haptic(6); }, calm ? 0 : 260);
+
+    setTimeout(()=>{
+      const done = moveBooking(B, mv.to);
+      if(!done){
+        stage.classList.remove("carrying");
+        a.classList.remove("emptied");
+        go.disabled = false;
+        toast("warn", `<b>${esc(to.id)} went while you were deciding.</b> `
+          + `${esc(B.guest)} has not been moved.`, mv.to);
+        return;
+      }
+      haptic(16);
+      stage.classList.add("landed");
+      refreshScreen();
+
+      // the point of the whole manoeuvre: the room it freed, offered
+      why.innerHTML = `<b class="ok">${esc(from.id)} is free.</b> ${esc(B.guest)} is in `
+        + `${esc(to.id)} for the same nights.`;
+      go.textContent = `Book ${from.id}`;
+      go.disabled = false;
+      go.onclick = ()=>{
+        haptic(14);
+        if(onFreed) onFreed(mv.frees);
+        else openBooking(mv.frees, askDay, 1);
+      };
+      note.textContent = "Tell them the new room number when you next speak to them.";
+    }, calm ? 10 : 720);
+  };
 }
 
 /* ── booking, on its own screen ───────────────────────────────────────────────
