@@ -261,6 +261,35 @@ Two ways to pick a stay, because a gesture should never be the only route in:
 
 ### Ask
 
+**It opens with an answer, not a keyboard.** The tab used to focus the box on arrival —
+so the keyboard covered the screen before anything had been asked — and the box arrived
+holding the last question, which had to be deleted a character at a time. Now it opens
+showing tonight, the box is empty, and the keyboard comes only when you mean to type.
+
+**The answer keeps up with the typing.** There is no Ask button any more; it only ever
+confirmed what was already on screen.
+
+**Paste the guest's message.** A great many enquiries are not phone calls at all — they
+arrive on WhatsApp: *"Hi, do you have a 2bhk from 15th to 18th for 4 people?"* Copy it, tap
+the clipboard icon, and it is read as it stands:
+
+> **Yes — 2 rooms free for all 3 nights, Thu 20 Aug → Sun 23 Aug.**
+> `the 20th to the 23rd` · `3 nights` · `2 BHK`
+
+Then **Copy for WhatsApp** sends the reply back. The round trip is the point: the question
+is already written down, so retyping it into a search box is wasted work.
+
+That same button becomes a **✕** once there is anything in the box — the two are never
+wanted at the same time, and clearing no longer means holding backspace through a sentence.
+
+The chips underneath are questions now, not parser syntax — *tonight, tomorrow, this
+weekend, 3 nights, next week* — one tap each. Anything you actually ask is remembered under
+**asked before**, because the same questions come round again.
+
+**A word on the microphone.** It is still there, but it will not be much use on a call: the
+phone's mic belongs to the call while it is running, so dictation is for when you are *not*
+on one — walking the building, hands full. Typing and pasting are the fast paths.
+
 Type or speak the question the way the caller said it:
 
 | You type | It reads |

@@ -582,9 +582,13 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .field input{flex:1;min-width:0;border:0;background:none;outline:none;padding:13px 0;font-size:16px;
   font-weight:450;letter-spacing:-.011em}
 .field input::placeholder{color:var(--txt-3)}
-.field button.go{background:var(--free);color:var(--free-ink);padding:11px 15px;border-radius:11px;
-  font-size:13px;font-weight:640;letter-spacing:-.01em;transition:transform .38s var(--spring)}
 .field button:active{transform:scale(.93)}
+/* one slot: paste into an empty box, clear a full one */
+.field button.slot{width:38px;height:38px;border-radius:11px;background:var(--surface-2);
+  border:1px solid var(--line);display:grid;place-items:center;color:var(--txt-2);flex:0 0 auto;
+  transition:transform .38s var(--spring), background .2s, color .2s}
+.field button.slot:active{transform:scale(.9);transition-duration:.085s;color:var(--txt)}
+.field button.slot[hidden]{display:none}
 .field button.mic{width:38px;height:38px;border-radius:11px;background:var(--surface-2);
   border:1px solid var(--line);display:grid;place-items:center;color:var(--txt-2);flex:0 0 auto;
   transition:transform .38s var(--spring), background .2s, color .2s}
@@ -605,6 +609,11 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .chips button{padding:8px 12px;border-radius:10px;background:var(--surface-2);border:1px solid var(--line);
   font-size:12.5px;font-weight:500;color:var(--txt-2);transition:transform .38s var(--spring), color .18s}
 .chips button:active{transform:scale(.94);color:var(--txt)}
+/* what was asked here before — quieter than the standing suggestions */
+.chips.recent{margin-top:9px;align-items:center}
+.chips.recent .reclbl{font-size:10.5px;font-weight:600;color:var(--txt-3);
+  text-transform:uppercase;letter-spacing:.08em;margin-right:1px}
+.chips.recent button{background:none;border-color:var(--line);color:var(--txt-3);font-weight:520}
 
 .answer{font-size:22px;font-weight:600;letter-spacing:-.028em;line-height:1.32;margin:0}
 .answer b{font-weight:700}
@@ -3507,9 +3516,13 @@ function renderTrends(){
 }
 
 /* ═══════════════ SCREEN 3 — ASK ═══════════════ */
-const SUGGEST = ["anything free tonight?","3 nights from friday","this weekend",
-                 "16 sep","15-18","3 bhk next week","2 bhk banjara","in 3 days"];
-let lastQuery = "anything free tonight?";
+/* Questions, not syntax. The old chips were a cheat-sheet for the parser —
+   "15-18", "3 bhk banjara" — which teaches the language but answers nothing.
+   These are the things actually asked down a phone, and each is one tap. */
+const SUGGEST = ["tonight","tomorrow","this weekend","3 nights","next week"];
+let lastQuery = "tonight";
+/* the last few real questions, so a repeat is a tap rather than retyping */
+let recentAsks = [];
 
 /* ══════════════════════════════════════════════════════════════════════════
    Query understanding
@@ -3720,11 +3733,15 @@ function renderAsk(focus){
   const top = el("div","stack");
   const field = el("div","field");
   const input = el("input");
-  input.type="text"; input.value = lastQuery; input.autocomplete="off";
-  input.placeholder = "anything free this weekend?";
+  /* The box starts EMPTY. It used to arrive holding the last question, which
+     had to be cleared a character at a time before a new one could be typed —
+     and the tab focused it on open, so the keyboard covered the answer before
+     anyone had asked anything. What was asked is shown above the answer
+     instead, where it belongs. */
+  input.type="text"; input.value = ""; input.autocomplete="off";
+  input.placeholder = "Ask, or paste a message";
   input.setAttribute("enterkeyhint","search");
   input.setAttribute("aria-label","Ask about availability in plain words");
-  const go = el("button","go","Ask");
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   let mic = null, rec = null;
   if(SR){
@@ -3753,26 +3770,102 @@ function renderAsk(focus){
       }catch(err){ field.classList.remove("hear"); rec = null; }
     };
   }
-  field.append(input);
+  /* ── paste the guest's own words ────────────────────────────────────────────
+     A great many enquiries do not arrive as a phone call at all, they arrive as
+     a WhatsApp message — "Hi, do you have a 2bhk from 15th to 18th for 4
+     people?". Retyping that into a search box is absurd when the parser already
+     reads exactly that shape. Copy the message, tap Paste, get the answer, then
+     Copy for WhatsApp sends the reply straight back. The round trip is the
+     feature; the clipboard is just where the question already is.            */
+  const SVG_PASTE = '<svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor"'
+    + ' stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'
+    + '<rect x="4.6" y="3.4" width="10.8" height="13.2" rx="2.2"/>'
+    + '<path d="M7.8 3.4V2.6a1.4 1.4 0 0 1 1.4-1.4h1.6a1.4 1.4 0 0 1 1.4 1.4v.8z"/></svg>';
+  const SVG_CLEAR = '<svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor"'
+    + ' stroke-width="1.9" stroke-linecap="round"><path d="M5.6 5.6l8.8 8.8M14.4 5.6l-8.8 8.8"/></svg>';
+
+  /* One slot, two jobs, and they are never wanted at the same time: an empty box
+     wants the guest's message pasted in, a full one wants emptying. Clearing
+     used to mean holding backspace through a whole sentence. */
+  const slot = el("button","slot");
+  const canPaste = !!(navigator.clipboard && navigator.clipboard.readText);
+  const doPaste = async ()=>{
+    haptic(10);
+    try{
+      const txt = (await navigator.clipboard.readText() || "").trim();
+      if(!txt){ input.placeholder = "Nothing copied yet — copy their message first"; return; }
+      input.value = txt.replace(/\s+/g," ").slice(0, 200);
+      paintSlot(); run();
+    }catch(e){
+      // Safari and Firefox refuse a clipboard read without an explicit grant
+      input.placeholder = "Can't read the clipboard here — paste into the box";
+      input.focus();
+    }
+  };
+  const doClear = ()=>{ haptic(8); input.value = ""; paintSlot(); run(true); input.focus(); };
+  function paintSlot(){
+    const full = input.value.trim().length > 0;
+    slot.hidden = !full && !canPaste;
+    slot.innerHTML = full ? SVG_CLEAR : SVG_PASTE;
+    slot.setAttribute("aria-label", full ? "Clear the question" : "Paste a guest's message and answer it");
+    slot.onclick = full ? doClear : doPaste;
+  }
+  paintSlot();
+
+  /* No "Ask" button. The answer now keeps up with the typing, so a submit
+     control only ever confirmed what was already on screen — and on a 375px
+     field, three buttons left the placeholder truncated mid-word. Enter still
+     submits for anyone who reaches for it. */
+  field.append(input, slot);
   if(mic) field.append(mic);
-  field.append(go);
+
   const chips = el("div","chips");
-  SUGGEST.forEach(q=>{ const b=el("button",null,q);
-    b.onclick=()=>{ input.value=q; run(); }; chips.appendChild(b); });
+  const addChip = (q, label, cls)=>{
+    const b = el("button", cls || null, label || q);
+    b.onclick = ()=>{ input.value = q; paintSlot(); run(); };
+    chips.appendChild(b);
+  };
+  SUGGEST.forEach(q => addChip(q));
   top.append(field, chips);
+  // questions actually asked here, once there are any — a repeat is one tap
+  if(recentAsks.length){
+    const rec = el("div","chips recent");
+    rec.append(el("span","reclbl","asked before"));
+    recentAsks.forEach(q=>{ const b = el("button",null,q);
+      b.onclick = ()=>{ input.value = q; paintSlot(); run(); }; rec.appendChild(b); });
+    top.append(rec);
+  }
 
   const ansWrap = el("div","stack gap-m");
   const listWrap = el("div","stack gap-s");
   s.append(top, ansWrap, listWrap);
 
-  go.onclick = run;
   input.addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); input.blur(); run(); }});
+  /* Answers while the thumb is still moving. There is no reason to make someone
+     finish a sentence and reach for a button to find out there is nothing free
+     — the answer can keep up. */
+  let typing = null;
+  input.addEventListener("input", ()=>{
+    paintSlot();
+    clearTimeout(typing);
+    typing = setTimeout(()=> run(true), 140);
+  });
   if(focus) setTimeout(()=>input.focus(),120);
-  run();
+  run(true);
 
-  function run(){
-    haptic(10);
-    lastQuery = input.value.trim() || "anything free tonight?";
+  function remember(q){
+    if(!q || SUGGEST.indexOf(q) >= 0) return;          // the standing chips are not history
+    recentAsks = [q, ...recentAsks.filter(x => x !== q)].slice(0, 4);
+  }
+
+  function run(quiet){
+    if(!quiet) haptic(10);
+    // every route in — chip, paste, speech, Enter — lands here, so the slot is
+    // kept honest here rather than at each caller
+    paintSlot();
+    lastQuery = input.value.trim() || "tonight";
+    // only a deliberate ask becomes history — not every keystroke on the way
+    if(!quiet) remember(lastQuery);
     const p = parseQuery(lastQuery);
     const a = p.start, b = p.start + p.n;
     let pool = flats.map((f,i)=>({f,i}));
@@ -4718,7 +4811,9 @@ SCREENS.forEach((sc,i)=>{
   b.setAttribute("role","tab");
   b.innerHTML = ICON[sc.id];
   b.appendChild(el("span",null,sc.label));
-  b.onclick = ()=>{ haptic(10); switchTo(i, i===2); };
+  // Ask no longer grabs focus: the tab opens with tonight's answer already on
+  // screen, and the keyboard arrives only when someone means to type
+  b.onclick = ()=>{ haptic(10); switchTo(i); };
   tabbar.appendChild(b);
 });
 
