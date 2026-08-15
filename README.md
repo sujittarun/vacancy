@@ -332,7 +332,13 @@ month.
 
 ### Month
 
-A calendar where each date carries **rooms still free that night** — not rooms booked.
+The calendar, and what you selected. It used to be seven stacked sections — a progress bar,
+a caption, two explanatory paragraphs — with the calendar as one of them. Pulse owns
+occupancy analysis now, so the month's fullness is a caption in the title row and the
+teaching text is gone: what survives under the grid is the one line that is *news*, a date
+running emptier than that weekday usually does.
+
+Each date carries **rooms still free that night** — not rooms booked.
 The bar under each date is that same figure as a share of all 45, so it shrinks as the
 night sells out. Tap a date for the rooms that are open.
 

@@ -520,7 +520,10 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .insight .hi{color:var(--now);font-weight:600}
 
 /* ══════════════════════ MONTH ══════════════════════ */
-.mnav{display:flex;align-items:center;gap:8px;margin-bottom:14px}
+.mnav{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+/* the month's fullness, riding in the title row instead of owning a section */
+.mnav .msum{flex:1 0 100%;order:3;font-size:12px;color:var(--txt-3);
+  margin-top:-4px;letter-spacing:-.005em}
 .mnav .t{flex:1;font-size:17px;font-weight:640;letter-spacing:-.02em}
 .mnav button{width:36px;height:36px;border-radius:10px;background:var(--surface-2);
   border:1px solid var(--line);display:grid;place-items:center;
@@ -3602,17 +3605,13 @@ function renderMonth(){
   const partial = mo.days[0] === 0 && dateAt(0).getDate() !== 1;
   const scope = partial ? `Rest of ${MONF[mo.m]}` : MONF[mo.m];
 
-  /* One thin bar under the month title carries the whole month's fullness.
-     Counted in room-nights, never money — the rates are not fixed. */
-  const shape = el("div","monthbar");
-  const bar = el("div","mbar");
-  const iSold = el("i","sold"); iSold.style.width = (st.pct*100).toFixed(1)+"%";
-  const iSoon = el("i","soon"); iSoon.style.width = (st.soon/st.total*100).toFixed(1)+"%";
-  bar.append(iSold, iSoon);
-  const cap = el("div","mcap");
-  cap.innerHTML = `<b>${Math.round(st.pct*100)}%</b> occupied · ${st.open.toLocaleString("en-IN")} room-nights still open`
-    + (st.soon ? `, <em>${st.soon} of them inside a week</em>` : "");
-  shape.append(bar, cap);
+  /* The month's fullness rides in the title row rather than taking a section of
+     its own. It was a progress bar plus a caption plus an explanatory paragraph
+     — three blocks to say one number, on the tab whose entire job is the
+     calendar underneath them. Pulse owns occupancy analysis now; this is a
+     caption, not a chart. */
+  nav.appendChild(el("div","msum",
+    `${Math.round(st.pct*100)}% booked · ${st.open.toLocaleString("en-IN")} room-nights open`));
 
   /* live readout while sweeping a range across the calendar */
   const hud = el("div","hud");
@@ -3669,20 +3668,25 @@ function renderMonth(){
   cal.append(dow, grid);
   attachSweep(grid, hud);
 
+  /* Two paragraphs used to sit under the calendar explaining what the numbers
+     mean and how to drag. Both were teaching, and teaching that is read once
+     costs a section forever. What survives is the one line that is NEWS — a
+     date running emptier than its weekday usually does — and only while a
+     selection is in progress, the line that says what the next tap does. */
+  const worst = soft[0];
   const key = el("p","insight");
   key.style.padding = "0 2px";
-  const worst = soft[0];
-  key.innerHTML = `The figure is rooms <b>still free</b> that night — not rooms booked.`
-    + (worst
-       ? ` <span class="hi">An amber dot marks a date running emptier than that weekday normally does</span> — ${fmtL(worst.d)} has ${worst.free} free against about ${Math.round(worst.norm)} on a typical ${DOWF[dateAt(worst.d).getDay()]}. That is the part a count alone cannot tell you: a low number can still be a bad night, and a high one can be perfectly ordinary.`
-       : ` Nothing in the next few weeks is running unusually empty for its weekday.`);
+  if(pendingStart !== null){
+    key.innerHTML = `Arriving <b>${fmtL(pendingStart)}</b> — now tap the departure date.`;
+  }else if(worst){
+    key.innerHTML = `<span class="hi">${fmtL(worst.d)} is running empty for a ${DOWF[dateAt(worst.d).getDay()]}</span>`
+      + ` — ${worst.free} free against about ${Math.round(worst.norm)} on a normal one. The amber dots mark the rest.`;
+  }else{
+    key.remove();
+  }
 
-  const hint = el("p","sweephint");
-  hint.innerHTML = pendingStart !== null
-    ? `Arriving <b>${fmtL(pendingStart)}</b> — now tap the departure date. Tap an earlier one to start again.`
-    : "<b>Tap arrival, then tap departure</b> to check a whole stay. One tap shows that night alone. You can also press and hold, then drag.";
-
-  s.append(nav, shape, hud, cal, key, hint);
+  s.append(nav, hud, cal);
+  if(key.parentNode !== null || key.innerHTML) s.append(key);
 
   /* one panel for whatever is selected — a single night is just n = 1 */
   {
