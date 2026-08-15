@@ -224,6 +224,11 @@ button{background:none;border:0;padding:0;cursor:pointer}
   padding:13px 14px;border-bottom:1px solid var(--line);width:100%;text-align:left;
   transition:background .16s}
 .row:last-child{border-bottom:0}
+/* A booking row carries money, which is wide, so it drops the separate date
+   column — the dates are already spelled out on the second line, and the guest's
+   name is what the eye is actually hunting for. */
+.row.bk{grid-template-columns:1fr auto}
+.row.bk .meta b{font-size:13.5px;font-weight:620;color:var(--txt);letter-spacing:-.015em}
 .row:active{background:var(--surface-2)}
 .row .id{font-size:13.5px;font-weight:640;letter-spacing:-.02em;white-space:nowrap}
 .row .meta{font-size:12.5px;color:var(--txt-2);line-height:1.35;min-width:0;
@@ -648,6 +653,54 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .card .row.lit{background:var(--surface-2)}
 .sheet-s{padding:14px 20px 8px;display:flex;justify-content:space-between;align-items:baseline;gap:10px}
 
+/* ── taking a booking ─────────────────────────────────────────────────────────
+   Phone first, because it is identity: type it and a returning guest names
+   himself. Everything below it arrives pre-filled, so the common booking is
+   still two touches — the number, and Book.                                  */
+.bkform{margin:14px 20px 0;display:flex;flex-direction:column;gap:8px}
+.bkform input{width:100%;padding:12px 13px;border-radius:11px;background:var(--surface-2);
+  border:1px solid var(--line);color:var(--txt);font-family:var(--ui);
+  font-size:16px;   /* 16px or iOS zooms the whole page on focus */
+  transition:border-color .18s, background .18s}
+.bkform input:focus{outline:none;border-color:var(--line-2);background:var(--surface-3)}
+.bkform input::placeholder{color:var(--txt-3)}
+.bkrow{display:flex;gap:8px}
+.bkamt{position:relative;flex:1;min-width:0}
+.bkamt s{position:absolute;left:13px;top:50%;transform:translateY(-50%);text-decoration:none;
+  font-size:15px;color:var(--txt-3);pointer-events:none}
+.bkamt input{padding-left:27px}
+/* a stepper, because nobody should open a keyboard to say "two people" */
+.step{display:flex;align-items:center;gap:0;padding:0 4px;background:var(--surface-2);
+  border:1px solid var(--line);border-radius:11px;flex:0 0 120px}
+.step button{width:36px;height:44px;font-size:20px;font-weight:400;color:var(--txt-2);
+  background:none;border:none;transition:transform .3s var(--spring)}
+.step button:active{transform:scale(.86)}
+.step button[disabled]{opacity:.3}
+.step b{flex:1;text-align:center;font-size:15px;font-weight:620}
+.srcRow{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.srcRow::-webkit-scrollbar{display:none}
+.srcRow button{flex:0 0 auto;padding:8px 12px;border-radius:9px;background:var(--surface-2);
+  border:1px solid var(--line);font-size:12.5px;font-weight:560;color:var(--txt-2);
+  white-space:nowrap;transition:transform .3s var(--spring), background .18s, color .18s}
+.srcRow button:active{transform:scale(.95)}
+.srcRow button[aria-pressed="true"]{background:var(--free);color:var(--free-ink);border-color:transparent}
+.bkgo{width:100%;padding:14px;border-radius:11px;border:none;background:var(--free);
+  color:var(--free-ink);font-family:var(--ui);font-size:15px;font-weight:650;
+  transition:transform .35s var(--spring)}
+.bkgo:active{transform:scale(.98)}
+/* the payoff of storing the number: he names himself on the second visit */
+.bkback{font-size:12px;font-weight:560;color:var(--now);padding:0 2px}
+
+/* Money on a booking row — three states, never two. Only the one that needs a
+   hand is loud; a settled booking should cost the eye nothing on the way past. */
+.paid{font-size:11px;font-weight:620;padding:5px 9px;border-radius:8px;white-space:nowrap;
+  border:1px solid transparent;transition:transform .3s var(--spring)}
+.paid.due{background:color-mix(in srgb,var(--now) 16%,transparent);color:var(--now);
+  border-color:color-mix(in srgb,var(--now) 34%,transparent)}
+.paid.due:active{transform:scale(.94)}
+.paid.plat{background:var(--surface-2);color:var(--txt-3);font-weight:560}
+.paid.clear{background:transparent;color:var(--txt-3);font-weight:560}
+
 /* booking entry */
 .book{margin:16px 20px 0;display:flex;gap:8px;align-items:stretch}
 .book input{flex:1;min-width:0;background:var(--surface-2);border:1px solid var(--line);
@@ -882,6 +935,10 @@ const NAMES = ["R. Menon","S. Kulkarni","A. Fernandes","D. Iyer","K. Bhatt","M. 
   "T. Nayar","J. Dcosta","V. Shetty","N. Pillai","H. Chandra","L. Mathew","G. Saldanha","B. Kaur",
   "F. Noronha","Y. Deshpande","C. Varghese","E. Pinto","U. Reddy"];
 const SRC = ["Airbnb","Direct call","Walk-in","Booking.com","Repeat guest"];
+/* Declared here rather than beside the money helpers because the demo generator
+   runs during boot, well before that block is evaluated. */
+const PAY_METHODS = ["Cash","UPI","Bank","Card","Platform"];
+const PLATFORMS = ["Airbnb","Booking.com"];
 
 /* ── inventory ───────────────────────────────────────────────────────────────
    The flats are editable and persist on the device. Bookings are held against
@@ -1257,6 +1314,26 @@ function todayBoard(){
       open:()=>openFlatList(`${turns.length} to clean`, `${fmtL(d)} · check-out and check-in the same day`, turns)});
   }
 
+  /* Money the operator can only collect while the guest is standing there.
+     Arrivals are derived from dates and so are always right — which is exactly
+     why this belongs here instead of behind a check-in button somebody has to
+     remember to press. Platform bookings are deliberately absent: the guest owes
+     nothing, and putting them on a chase list is how the column loses its
+     meaning. */
+  for(let d=0; d<=NOW; d++){
+    const owing = bookings().filter(r => r.start === d && dueFrom(r) > 0);
+    if(!owing.length) continue;
+    const total = owing.reduce((s,r)=> s + dueFrom(r), 0);
+    todo.push({
+      label:`Collect ${money(total)} from ${owing.length} arrival${owing.length>1?"s":""} ${d===0?"today":"tomorrow"}`,
+      note:"balance still due when they arrive",
+      open:()=>openFlatList(`${money(total)} to collect`, `${fmtL(d)} · arriving with a balance`,
+        owing.map(r=>({fi:r.fi, d,
+          meta:`<b>${esc(r.guest)}</b>${r.phone ? " · " + esc(r.phone) : ""}`
+             + `<em>${money(dueFrom(r))} of ${money(r.amount)} · ${esc(r.src)}</em>`,
+          pill: money(dueFrom(r))})))});
+  }
+
   const days = [];
   for(let d=0; d<=NOW; d++){
     const free = flats.map((f,i)=>i).filter(i=>!occ[i][d]);
@@ -1408,8 +1485,9 @@ function recompute(){
 const DOW_DEMAND = [0.86, 0.58, 0.55, 0.60, 0.80, 1.25, 1.20];   // Sun … Sat
 const BLD_DEMAND = {TT:1.05, TN:0.72, MP:1.35, BH:0.66, LP:1.10};
 
+const DEMO_PHONE = {}, DEMO_NUMBERS = [];
 function generateDemo(){
-  resv = [];
+  resv = []; DEMO_NUMBERS.length = 0;
   flats.forEach((fl,fi)=>{
     const bF = BLD_DEMAND[fl.code] ?? 1;
     let d = -2 - Math.floor(rng()*8);        // stays already in progress, some checking out today
@@ -1426,8 +1504,34 @@ function generateDemo(){
       if(rng() < .12)   n += 3 + Math.floor(rng()*5);    // the occasional long stay
       const start=d, end=d+n;
       // end >= 0 keeps stays that check out this morning — they are today's departures
-      if(end>=0 && start<DAYS) resv.push({fi, start, end, nights:n,
-        guest:NAMES[Math.floor(rng()*NAMES.length)], src:SRC[Math.floor(rng()*SRC.length)]});
+      if(end>=0 && start<DAYS){
+        const guest = NAMES[Math.floor(rng()*NAMES.length)];
+        const src = SRC[Math.floor(rng()*SRC.length)];
+        // Most guests come once. Roughly one booking in six reuses an earlier
+        // number, which is about the repeat rate a well-run short-let sees — and
+        // it means the phone lookup has something true to find without claiming
+        // somebody has stayed two dozen times.
+        let ph;
+        if(DEMO_NUMBERS.length && rng() < .17){
+          ph = DEMO_NUMBERS[Math.floor(rng()*DEMO_NUMBERS.length)];
+          DEMO_PHONE[ph] = DEMO_PHONE[ph] || guest;
+        }else{
+          ph = "9" + String(100000000 + Math.floor(rng()*899999999));
+          DEMO_NUMBERS.push(ph); DEMO_PHONE[ph] = guest;
+        }
+        const amount = Math.round((fl.rate * n) / 100) * 100;
+        // a returning number keeps the name it was first booked under
+        const row = {fi, start, end, nights:n, guest: DEMO_PHONE[ph] || guest, src,
+                     phone: ph, pax: 1 + Math.floor(rng()*4),
+                     amount, pays: []};
+        // platform bookings are settled by the guest before arrival; direct ones
+        // usually carry an advance and a balance still to collect
+        if(PLATFORMS.indexOf(src) >= 0) row.pays.push({id:"d"+resv.length, amount, method:"Platform", on:Math.max(start-3,-9)});
+        else if(rng() < .62) row.pays.push({id:"d"+resv.length,
+          amount: Math.round(amount * (rng() < .5 ? .5 : .3) / 100) * 100,
+          method: rng() < .7 ? "UPI" : "Cash", on: Math.max(start - 2, -9)});
+        resv.push(row);
+      }
       // a well-run short-let re-lets back-to-back roughly a third of the time,
       // which is exactly what creates a same-day turnaround
       d = end + (rng() < .3 ? 0 : 1 + Math.floor(rng()*4));
@@ -1476,6 +1580,7 @@ function save(){
       rows: resv.map(r=>({ id:flats[r.fi].id, start:r.start, end:r.end,
                            guest:r.guest, src:r.src, manual:!!r.manual,
                            kind:r.kind, reason:r.reason, note:r.note,
+                           phone:r.phone, pax:r.pax, amount:r.amount, pays:r.pays,
                            bookedOn: typeof r.bookedOn === "number" ? r.bookedOn : undefined }))
     }));
   }catch(e){ /* private browsing or storage full — the session still works */ }
@@ -1495,6 +1600,8 @@ function load(){
       .map(r => ({ fi:flatIndex[r.id], start:r.start+shift, end:r.end+shift,
                    nights:r.end-r.start, guest:r.guest, src:r.src, manual:r.manual,
                    kind:r.kind, reason:r.reason, note:r.note,
+                   phone:r.phone, pax:r.pax, amount:r.amount,
+                   pays: (r.pays || []).map(p => ({...p, on: (p.on || 0) + shift})),
                    bookedOn: typeof r.bookedOn === "number" ? r.bookedOn + shift : undefined }))
       // blocks are kept a little past their end date so the app can still ask
       // whether the flat actually came back into service
@@ -1639,11 +1746,15 @@ function signOut(silent){
 async function cloudPull(){
   if(!hostId) await loadHost();
   const from = dayISO(-8), to = dayISO(DAYS);
-  const [bs, fl, st] = await Promise.all([
+  const [bs, fl, st, pm] = await Promise.all([
     rest("GET", "/buildings?select=id,code,name,short_name,sort_order&order=sort_order.asc,code.asc"),
     rest("GET", "/flats?select=id,building_id,code,floor,unit_type,nightly_rate&active=is.true&order=code.asc"),
     rest("GET", "/stays?select=*&ends_on=gt." + from + "&starts_on=lt." + to),
+    rest("GET", "/payments?select=id,stay_id,amount,method,received_on,note&order=received_on.asc"),
   ]);
+  const paysBy = {};
+  (pm || []).forEach(p => (paysBy[p.stay_id] = paysBy[p.stay_id] || []).push(
+    {id:p.id, amount:Number(p.amount), method:p.method, on:dayOff(p.received_on), note:p.note}));
   const byB = Object.fromEntries((bs || []).map(b=>[b.id, b]));
   flats = (fl || []).map(f=>{
     const b = byB[f.building_id] || {code:"??", name:"Unfiled", short_name:"Unfiled", sort_order:999};
@@ -1666,6 +1777,9 @@ async function cloudPull(){
              guest: s.guest_name || (block ? (s.reason || "Out of service") : "Guest"),
              src: s.source || (block ? "Block" : "Direct"),
              kind: block ? "block" : undefined, reason: s.reason, note: s.note,
+             phone: s.guest_phone || undefined, pax: s.pax || undefined,
+             amount: s.amount != null ? Number(s.amount) : undefined,
+             pays: paysBy[s.id] || [],
              bookedOn: s.booked_on ? dayOff(s.booked_on) : undefined };
   }).filter(Boolean)
     // blocks linger a week past their end so the app can still ask whether the
@@ -1685,6 +1799,7 @@ function cacheSave(){
     rows: resv.map(r=>({ sid:r.sid, id: flats[r.fi] && flats[r.fi].id,
                          start:r.start, end:r.end, guest:r.guest, src:r.src,
                          kind:r.kind, reason:r.reason, note:r.note,
+                         phone:r.phone, pax:r.pax, amount:r.amount, pays:r.pays,
                          bookedOn: typeof r.bookedOn === "number" ? r.bookedOn : undefined }))});
 }
 function cacheLoad(){
@@ -1701,6 +1816,8 @@ function cacheLoad(){
     .map(r => ({ sid:r.sid, fi:flatIndex[r.id], start:r.start + shift, end:r.end + shift,
                  nights:r.end - r.start, guest:r.guest, src:r.src, manual:true,
                  kind:r.kind, reason:r.reason, note:r.note,
+                 phone:r.phone, pax:r.pax, amount:r.amount,
+                 pays: (r.pays || []).map(p => ({...p, on: (p.on || 0) + shift})),
                  bookedOn: typeof r.bookedOn === "number" ? r.bookedOn + shift : undefined }))
     .filter(r => r.start < DAYS && (r.kind === "block" ? r.end >= -7 : r.end >= 0));
   usingDemo = false;
@@ -1754,6 +1871,8 @@ function runOp(op){
     case "stay+": return rest("POST",  "/stays", {...op.body, id:op.id, host_id:hostId}, MIN);
     case "stay~": return rest("PATCH", "/stays?id=eq." + op.id, op.body, MIN);
     case "stay-": return rest("DELETE","/stays?id=eq." + op.id, undefined, MIN);
+    case "pay+":  return rest("POST",  "/payments", {...op.body, id:op.id, host_id:hostId}, MIN);
+    case "pay-":  return rest("DELETE","/payments?id=eq." + op.id, undefined, MIN);
     case "bld+":  return rest("POST",  "/buildings", {...op.body, id:op.id, host_id:hostId}, MIN);
     case "flat+": return rest("POST",  "/flats", {...op.body, id:op.id, host_id:hostId}, MIN);
     case "flat~": return rest("PATCH", "/flats?id=eq." + op.id, op.body, MIN);
@@ -1880,25 +1999,75 @@ if(MODE === "live"){
 /* Refuses to double-book. The UI already hides the form on an unavailable flat,
    but a silent overlap is exactly the failure that loses a guest, so the data
    layer enforces it too rather than trusting the screen. */
-function addBooking(fi, start, nights, guest, src){
+/* ── money ────────────────────────────────────────────────────────────────────
+   Three states, not two. Almost every booking tool stores "paid" and "unpaid",
+   which marks a platform booking unpaid forever — the guest HAS paid, just not
+   to the operator. Show a man a false "unpaid" twice and he stops reading the
+   field. So a payment carries how it arrived, and 'Platform' means settled by
+   the guest and owed to the operator by Airbnb or Booking.com.               */
+const sum = (r, f) => (r.pays || []).reduce((s,p)=> f(p) ? s + p.amount : s, 0);
+const paidOn     = r => sum(r, ()=>true);                       // settled by the guest
+const inHand     = r => sum(r, p => p.method !== "Platform");    // actually received
+const withPlatform = r => sum(r, p => p.method === "Platform");  // payout still to come
+const dueFrom    = r => Math.max(0, (r.amount || 0) - paidOn(r));
+const money = n => "₹" + Math.round(n).toLocaleString("en-IN");
+
+function addPayment(r, amount, method, note){
+  amount = Math.round(+amount);
+  if(!amount || !isFinite(amount)) return false;
+  if(PAY_METHODS.indexOf(method) < 0) method = "Cash";
+  const p = { id: uuid(), amount, method, on: 0, note: (note||"").trim() };
+  (r.pays = r.pays || []).push(p);
+  if(MODE === "live" && r.sid)
+    enqueue({k:"pay+", id:p.id, body:{stay_id:r.sid, amount, method,
+      received_on: dayISO(0), note: p.note || null, created_by: session && session.uid}});
+  save(); cacheSave();
+  track("payment_recorded", {method});
+  return true;
+}
+function dropPayment(r, p){
+  const i = (r.pays || []).indexOf(p);
+  if(i < 0) return;
+  r.pays.splice(i, 1);
+  if(MODE === "live" && p.id){
+    const flying = inflight && inflight.id === p.id;
+    const queued = queue.some(op => op.id === p.id && op !== inflight);
+    queue = queue.filter(op => op.id !== p.id || op === inflight);
+    jset(QUEUE_KEY, queue);
+    if(queued && !flying) paintAcct(); else enqueue({k:"pay-", id:p.id});
+  }
+  save(); cacheSave();
+}
+
+function addBooking(fi, start, nights, guest, src, extra){
   if(!(fi >= 0 && fi < NF)) return false;
   nights = Math.max(1, Math.min(nights|0, DAYS));
   if(start < 0 || start >= DAYS) return false;
   if(!freeRange(fi, start, start + nights)) return false;
+  extra = extra || {};
+  const amount = Math.round(+extra.amount) || 0;
   const row = { fi, start, end:start+nights, nights, manual:true, bookedOn:0,
-                guest: (guest || "").trim() || "Guest", src: src || "Direct" };
+                guest: (guest || "").trim() || "Guest", src: src || "Direct",
+                phone: (extra.phone || "").trim() || undefined,
+                pax: extra.pax > 0 ? extra.pax|0 : undefined,
+                amount: amount || undefined, pays: [] };
   if(MODE === "live"){
     row.sid = uuid();
     enqueue({k:"stay+", id:row.sid, body:{
       flat_id: flats[fi].uid, kind:"booking",
       starts_on: dayISO(start), ends_on: dayISO(start + nights),
       guest_name: row.guest, source: row.src, booked_on: dayISO(0),
+      guest_phone: row.phone || null, pax: row.pax || null, amount: amount || null,
       rate: flats[fi].rate || null, created_by: session && session.uid }});
   }
   resv.push(row);
+  // A platform booking is already settled by the guest. Recording that here is
+  // not an assumption, it is what happened — and it is the difference between a
+  // payment column the operator trusts and one he learns to ignore.
+  if(amount && PLATFORMS.indexOf(row.src) >= 0) addPayment(row, amount, "Platform");
   usingDemo = false;
   recompute(); save(); cacheSave();
-  track("booking_created", {nights});
+  track("booking_created", {nights, hasPhone: !!row.phone, hasAmount: !!amount});
   return true;
 }
 const BLOCK_REASONS = ["Maintenance","Deep clean","Owner use","Renovation","Not ready"];
@@ -3327,6 +3496,17 @@ const scrim = document.getElementById("scrim");
 const sheetH = document.getElementById("sheetH");
 const sheetB = document.getElementById("sheetB");
 
+/* Numbers get typed with spaces, +91, brackets and none of it consistently, so
+   match on the last ten digits and nothing else. */
+const digits10 = s => String(s || "").replace(/\D/g,"").slice(-10);
+function guestByPhone(ph){
+  const key = digits10(ph);
+  if(key.length < 10) return null;
+  const past = bookings().filter(r => r.phone && digits10(r.phone) === key)
+                         .sort((a,b) => b.start - a.start);
+  return past.length ? {name: past[0].guest, stays: past.length, last: past[0].start} : null;
+}
+
 /* What is happening in one flat on one night, phrased the way it would be said
    out loud. This is the whole reason the strip is worth touching: "booked" is
    not an answer, "R. Menon · night 2 of 3" is. */
@@ -3404,6 +3584,99 @@ function attachStripScrub(wrap, strip, head, foot, readD, readW, fi){
   ["pointerup","pointercancel"].forEach(ev => wrap.addEventListener(ev, stop));
 }
 
+/* Money rides in the booking's own row rather than on a line beneath it. A
+   separate line sits between two bookings and belongs visibly to neither, and
+   reading money against the wrong guest is the same class of mistake as reading
+   the wrong flat — the one failure this app exists to prevent.
+
+   Three states, and "unpaid" is never said about a platform booking: the guest
+   paid, Airbnb owes you, and those two need opposite actions. */
+function moneyPill(r, fi){
+  const due = dueFrom(r);
+  if(due > 0){
+    const b = el("button","paid due", money(due) + " due");
+    b.setAttribute("aria-label",
+      `${money(due)} still due from ${r.guest} of ${money(r.amount)} — record a payment`);
+    b.onclick = ev=>{ ev.stopPropagation(); haptic(9); openPayment(r, fi); };
+    return b;
+  }
+  if(withPlatform(r) > 0){
+    const s = el("span","paid plat","payout due");
+    s.setAttribute("aria-label", `${money(r.amount)} paid by the guest to ${r.src}; payout still to come`);
+    return s;
+  }
+  return el("span","paid clear","settled");
+}
+
+/* Recording money is two touches: the amount is already the balance, and the
+   method defaults to how this booking's source is actually settled. */
+function openPayment(r, fi){
+  sheetH.textContent = ""; sheetB.textContent = "";
+  const t = el("div");
+  t.innerHTML = `<div class="n">${money(dueFrom(r))} due</div>`
+              + `<div class="m">${esc(r.guest)} · ${flats[r.fi].id} · ${fmt(Math.max(r.start,0))} → ${fmt(r.end)}</div>`;
+  const x = el("button", null, "✕"); x.setAttribute("aria-label","Back");
+  x.onclick = ()=> openSheet(fi);
+  sheetH.append(t, x);
+
+  const form = el("div","bkform");
+  const amtWrap = el("div","bkamt");
+  amtWrap.appendChild(el("s", null, "₹"));
+  const amt = el("input");
+  amt.type = "text"; amt.inputMode = "numeric";
+  amt.value = String(Math.round(dueFrom(r)));
+  amt.setAttribute("aria-label","Amount received");
+  amtWrap.appendChild(amt);
+  form.append(amtWrap);
+
+  let method = PLATFORMS.indexOf(r.src) >= 0 ? "Platform" : "UPI";
+  const chips = el("div","srcRow");
+  PAY_METHODS.forEach(mth=>{
+    const c = el("button", null, mth);
+    c.setAttribute("aria-pressed", mth === method);
+    c.onclick = ()=>{ method = mth; haptic(8);
+      [...chips.children].forEach(o => o.setAttribute("aria-pressed", o.textContent === method)); };
+    chips.appendChild(c);
+  });
+  form.append(chips);
+
+  const go = el("button","bkgo","Record it");
+  go.onclick = ()=>{
+    if(addPayment(r, (amt.value||"").replace(/[^\d-]/g,""), method)){ haptic(18); openSheet(fi); }
+  };
+  form.append(go);
+  sheetB.append(form);
+
+  if((r.pays || []).length){
+    const s = el("div","sheet-s");
+    s.append(el("span","lbl","Already received"), el("span","lbl", money(paidOn(r))));
+    sheetB.append(s);
+    const card = el("div","card"); card.style.margin = "0 20px";
+    r.pays.forEach(p=>{
+      const row = el("div","row");
+      row.append(el("div","id", money(p.amount)));
+      const m = el("div","meta");
+      m.innerHTML = `<b>${esc(p.method)}</b><em>${fmt(p.on || 0)}</em>`;
+      const end = el("div","rowend");
+      const del = el("button","rowx","✕");
+      del.setAttribute("aria-label", `Remove this ${money(p.amount)} payment`);
+      let armed = false, tm = null;
+      del.onclick = ()=>{
+        if(!armed){ armed = true; del.classList.add("arm"); del.textContent = "Remove?"; haptic(10);
+          tm = setTimeout(()=>{ armed = false; del.classList.remove("arm"); del.textContent = "✕"; }, 3000);
+          return; }
+        clearTimeout(tm); haptic(20); dropPayment(r, p); openPayment(r, fi);
+      };
+      end.append(del);
+      row.append(m, end);
+      card.appendChild(row);
+    });
+    sheetB.append(card);
+  }
+  sheet.classList.add("on"); scrim.classList.add("on");
+  sheetB.scrollTop = 0;
+}
+
 function openSheet(fi, day){
   const fl = flats[fi];
   sheetH.textContent = ""; sheetB.textContent = "";
@@ -3444,23 +3717,84 @@ function openSheet(fi, day){
   const bDay = Math.min(pickedNight, DAYS-1), bN = stayNights;
   const span = bN === 1 ? fmtL(bDay) : `${fmt(bDay)} → ${fmt(bDay+bN)}`;
   if(freeRange(fi, bDay, bDay+bN)){
-    const form = el("div","book");
+    const form = el("div","bkform");
+
+    const phone = el("input");
+    phone.type = "tel"; phone.inputMode = "numeric"; phone.autocomplete = "tel";
+    phone.placeholder = "Phone number";
+    phone.setAttribute("aria-label", `Guest phone number for ${fl.id}, ${span}`);
+
     const who = el("input");
     who.type = "text"; who.placeholder = "Guest name"; who.autocomplete = "off";
     who.setAttribute("aria-label", `Guest name for ${fl.id}, ${span}`);
-    const btn = el("button","bookbtn", `Book ${bN}n`);
+
+    const back = el("div","bkback");
+    back.style.display = "none";
+
+    const row = el("div","bkrow");
+    const amtWrap = el("div","bkamt");
+    amtWrap.appendChild(el("s", null, "₹"));
+    const amt = el("input");
+    amt.type = "text"; amt.inputMode = "numeric";
+    amt.setAttribute("aria-label", "Total agreed for the stay");
+    amt.value = ((fl.rate || 0) * bN) ? String((fl.rate || 0) * bN) : "";
+    amt.placeholder = "Total";
+    amtWrap.appendChild(amt);
+
+    let pax = 2;
+    const step = el("div","step");
+    const less = el("button", null, "−"), more = el("button", null, "+");
+    const paxN = el("b", null, "2");
+    less.setAttribute("aria-label","Fewer guests"); more.setAttribute("aria-label","More guests");
+    const setPax = n => { pax = Math.max(1, Math.min(12, n)); paxN.textContent = pax;
+      less.disabled = pax <= 1; more.disabled = pax >= 12;
+      step.setAttribute("aria-label", pax + (pax === 1 ? " guest" : " guests")); haptic(6); };
+    less.onclick = ()=> setPax(pax - 1); more.onclick = ()=> setPax(pax + 1);
+    step.append(less, paxN, more); setPax(2);
+    row.append(amtWrap, step);
+
+    let src = "Direct";
+    const srcRow = el("div","srcRow");
+    ["Direct","Airbnb","Walk-in","Booking.com","Repeat guest"].forEach(s=>{
+      const c = el("button", null, s);
+      c.setAttribute("aria-pressed", s === src);
+      c.onclick = ()=>{ src = s; haptic(8);
+        [...srcRow.children].forEach(o => o.setAttribute("aria-pressed", o.textContent === src)); };
+      srcRow.appendChild(c);
+    });
+
+    const btn = el("button","bkgo", `Book ${bN} night${bN>1?"s":""}`);
     const take = ()=>{
-      if(addBooking(fi, bDay, bN, who.value.trim(), "Direct")){
-        haptic(18); closeSheet(); refreshScreen();
-      } else {                                   // someone took it in another tab
+      const ok = addBooking(fi, bDay, bN, who.value.trim(), src,
+        {phone: phone.value, pax, amount: (amt.value || "").replace(/[^\d]/g,"")});
+      if(ok){ haptic(18); closeSheet(); refreshScreen(); }
+      else {                                     // someone took it in another tab
         haptic(30);
         btn.textContent = "Just taken";
         setTimeout(()=>{ closeSheet(); refreshScreen(); }, 900);
       }
     };
     btn.onclick = take;
+
+    /* The whole reason the number is the first field: on the second visit the
+       guest names himself, and the operator learns something worth saying out
+       loud on the call. */
+    phone.addEventListener("input", ()=>{
+      const seen = guestByPhone(phone.value);
+      if(!seen){ back.style.display = "none"; return; }
+      if(!who.value.trim()) who.value = seen.name;
+      if(PLATFORMS.indexOf(src) < 0 && seen.stays >= 1){
+        src = "Repeat guest";
+        [...srcRow.children].forEach(o => o.setAttribute("aria-pressed", o.textContent === src));
+      }
+      back.style.display = "";
+      back.textContent = seen.stays === 1
+        ? `${seen.name} has stayed once before · last ${fmt(seen.last)}`
+        : `${seen.name} has stayed ${seen.stays} times · last ${fmt(seen.last)}`;
+    });
     who.addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); who.blur(); take(); }});
-    form.append(who, btn);
+
+    form.append(phone, who, back, row, srcRow, btn);
     sheetB.appendChild(form);
     const hint = el("div","lbl");
     hint.style.cssText = "margin:8px 20px 0";
@@ -3523,13 +3857,14 @@ function openSheet(fi, day){
   const mine = resv.filter(r=>r.fi===fi && r.end>0 && r.start<DAYS).sort((a,b)=>a.start-b.start);
   if(!mine.length) bl.appendChild(el("div","empty","No bookings in the next nine weeks — completely open."));
   mine.slice(0,14).forEach(r=>{
-    const row = el("div","row");
+    const row = el("div","row bk");
     row._resv = r;                     // so scrubbing the strip can light this row
-    row.append(el("div","id", Math.max(r.start,0)===0 ? "Now" : fmt(Math.max(r.start,0))));
+    const when = Math.max(r.start,0) === 0 ? "Now" : fmt(Math.max(r.start,0));
     const m = el("div","meta");
-    m.innerHTML = `<b>${r.guest}</b> · ${r.src}<em>${fmt(Math.max(r.start,0))} → ${fmt(Math.min(r.end,DAYS-1))}</em>`;
+    m.innerHTML = `<b>${esc(r.guest)}</b>`
+                + `<em>${when} → ${fmt(Math.min(r.end,DAYS-1))} · ${r.nights}n · ${esc(r.src)}</em>`;
     const end = el("div","rowend");
-    end.appendChild(el("span","pill", `${r.nights}n`));
+    end.appendChild(!isBlock(r) && r.amount ? moneyPill(r, fi) : el("span","pill", `${r.nights}n`));
     const x = el("button","rowx","✕");
     x.setAttribute("aria-label", `Cancel ${r.guest}'s booking in ${fl.id}`);
     let armed = false, t = null;

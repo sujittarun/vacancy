@@ -106,6 +106,36 @@ block 20–22 Sep (free)          201  accepted
 ends before it starts           400  rejected
 ```
 
+### `payments` — where the money actually is
+
+A list, not a running total, because *"what came in this month and through which pipe"* is
+a far more useful question than *"how much has this guest paid"*. Most stays hold one or
+two rows. A negative amount is a refund.
+
+The column that earns its place is `method`. `'Platform'` means the guest has settled with
+Airbnb or Booking.com and the payout is owed to the operator — which is neither "paid" nor
+"unpaid", and is exactly the case that breaks two-state payment models:
+
+```
+in hand         sum(amount) where method <> 'Platform'
+with platform   sum(amount) where method  = 'Platform'
+due from guest  stays.amount - sum(amount)
+```
+
+No extra flags, no second table, and the operator types none of it: the booking's source
+sets the default. A platform booking records its own settlement at the moment it is taken,
+so it never appears on a chase list. An operator shown a false "unpaid" twice stops reading
+the column, and then the whole feature is worth nothing.
+
+`stays` also gained `guest_phone`, `pax` and `amount` (the total agreed for the stay, not a
+nightly rate — long stays are discounted as a whole). `guest_phone` carries a partial index
+so the repeat-guest lookup is instant while the number is still being typed, and matching
+is on the last ten digits because numbers get entered with `+91`, spaces and brackets
+inconsistently.
+
+Deleting a stay cascades to its payments, so a cancelled booking cannot leave orphaned
+money behind.
+
 ---
 
 ## Telemetry — how each host's app is behaving

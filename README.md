@@ -36,9 +36,59 @@ you can see the maintenance question in action. To use it properly:
 1. Scroll to the bottom of **Rooms** and tap **Inventory**. Check the flats are right —
    add, renumber, retype or remove any of them, and add a building if one is missing.
    At the bottom of that sheet, **Clear all bookings** wipes the demo ones.
-2. Tap any flat, type the guest's name, tap **Book**. It books the dates currently
-   selected on the Rooms tab, so set the night and stay length there first.
+2. Tap any flat and take the booking. It uses the dates currently selected on the Rooms
+   tab, so set the night and stay length there first. See *Taking a booking* below.
 3. Cancel a booking with the ✕ next to it in the flat's sheet (also two taps).
+
+### Taking a booking
+
+The form is phone-first, and everything under it arrives pre-filled, so the ordinary
+booking is still two touches — the number, and **Book**.
+
+**The phone number is the important field**, and not because you ring it. It is the only
+key a walk-in, a repeat guest and a platform booking all share; names get spelled three
+ways and half your guests have no email. Type a number that has stayed before and the app
+fills the name in and tells you:
+
+> *R. Menon has stayed 3 times · last 11 Sep*
+
+which is worth knowing while you are still on the call. It also flips the source to
+*Repeat guest* on its own.
+
+**The amount** is the total agreed for the whole stay, not per night, because that is how
+it is actually negotiated — a week is quoted as a week. It arrives filled in at the flat's
+rate × nights, so accepting it is no taps at all.
+
+**Guests** is a stepper. Nobody should open a keyboard to say "two people".
+
+### Money, and the mistake most booking apps make
+
+Payment has **three** states here, not two:
+
+| Shown | Means | What you do |
+|---|---|---|
+| **₹4,400 due** | Genuinely unpaid | Chase it |
+| **payout due** | The guest paid Airbnb; the payout is coming to you | Nothing — do not chase the guest |
+| **settled** | All in | Nothing |
+
+Almost every booking tool stores only *paid* and *unpaid*, which marks every Airbnb
+booking unpaid forever — the guest **has** paid, just not to you. Show someone a false
+"unpaid" twice and they stop reading the column at all. So a platform booking records
+itself as settled by the guest the moment you take it, and only genuine balances appear
+anywhere that asks you to act.
+
+Tap the amber amount to record money: the figure is already the balance and the method is
+already the one that source is usually settled by, so it is two touches. Cash, UPI, bank,
+card or platform. A negative amount is a refund.
+
+**Arrivals with a balance surface in Pulse** — *"Collect ₹72,200 from 11 arrivals today"* —
+because that is money you can only take while the guest is standing in front of you.
+Platform bookings are deliberately absent from that list.
+
+There is no "checked in" button, on purpose. Anything a person has to remember to tap goes
+stale, and stale data is worse than none. Arrivals are worked out from the dates and are
+always right; the only thing you are ever asked to confirm is the money, which is the part
+that actually carries information.
 
 ### Out of service
 
@@ -133,6 +183,22 @@ Opens on today's operations, because that is the first thing an operator actuall
   many nights it stays free from that date. An **amber dot** marks a single orphan night
   wedged between two bookings — the hardest kind to fill and the easiest to miss in a
   spreadsheet.
+
+### The nine weeks under a room
+
+Tap any room and the strip at the top is its next nine weeks, one bar a night. **Put a
+finger on it and drag.** A playhead follows and tells you what that night actually is:
+
+> **Tue 18 Aug**  M. Sequeira · night 2 of 3
+> **Tue 8 Sep**  Free · 5 nights open, from 4 Sep
+
+The booking that owns the night lights up in the list below, which is what ties the picture
+to the words. Nothing resizes while you read — the legend and the readout share one box, so
+the form underneath never jumps. Dragging up or down hands control straight back to
+scrolling.
+
+Out of service is drawn in its own tone, between the lit and the recessed. A flat with a
+technician in it is not income and must not look like it.
 
 ### Month
 

@@ -94,6 +94,19 @@ user's "Bajarahills".
   conflict the operator can answer on the call, not an error code.
 - **Telemetry carries counts and screen names only.** No guest names, notes or rates ever
   reach the telemetry tables, so a crash report can never become a data breach.
+- **A booking carries guest phone, headcount and the total agreed for the stay.** Phone is
+  the identity key — the only one a walk-in, a repeat guest and a platform booking share —
+  and it drives repeat-guest recognition at the moment the number is typed.
+- **Payment has three states, not two:** received, settled-by-the-guest-with-a-platform
+  (payout still owed to the operator), and genuinely due. Modelling only paid/unpaid marks
+  every Airbnb booking unpaid forever, which teaches the operator to ignore the field.
+  Only genuine balances appear in anything that asks for action.
+- **No check-in/check-out state.** Any status a human must remember to maintain decays, and
+  decayed data is worse than none. Presence is derived from dates and is always correct;
+  the single manual action is recording money, which carries information dates cannot.
+- **Guest ID and compliance documents are deliberately out of scope** for now. Storing
+  identity documents is a materially different obligation under the DPDP Act and was
+  deferred by the user rather than skipped by omission.
 - The **flats are real**; the bookings, guest names and rates shipped with the app are
   invented demonstration data and are labelled as such in the interface. The user can
   clear them ("Start empty") and enter real bookings.
