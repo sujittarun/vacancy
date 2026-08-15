@@ -841,6 +841,31 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 @keyframes toastIn{from{opacity:0;transform:translateY(14px) scale(.97)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){ .toast{animation:none} }
 
+/* ── what broke, and who fixed it ─────────────────────────────────────────────
+   The flag appears the moment a fault is chosen, inside the block form, so the
+   history arrives while the decision is being made rather than in a report. */
+.faultRow{margin-top:2px}
+.tyRow.soft button{background:none;border-color:var(--line);color:var(--txt-3);font-weight:520}
+.faultFlag{
+  border-radius:11px;padding:11px 13px;font-size:12.5px;line-height:1.5;
+  background:var(--surface-3);border:1px solid var(--line-2);color:var(--txt-2);
+  animation:flagIn .3s var(--out) both;
+}
+.faultFlag.hot{background:color-mix(in srgb,var(--now) 13%,transparent);
+  border-color:color-mix(in srgb,var(--now) 40%,transparent)}
+.faultFlag b{color:var(--txt);font-weight:650}
+.faultFlag em{font-style:normal;color:var(--now);font-weight:600}
+.faultFlag .ff-a{display:flex;gap:7px;margin-top:9px;flex-wrap:wrap}
+.faultFlag .ff-call, .faultFlag .ff-same{
+  padding:7px 11px;border-radius:9px;font-size:12px;font-weight:620;
+  text-decoration:none;white-space:nowrap;transition:transform .3s var(--spring);
+}
+.faultFlag .ff-call{background:var(--now);color:#12100c}
+.faultFlag .ff-same{background:var(--surface);border:1px solid var(--line-2);color:var(--txt-2)}
+.faultFlag .ff-call:active, .faultFlag .ff-same:active{transform:scale(.95);transition-duration:.085s}
+@keyframes flagIn{from{opacity:0;transform:translateY(-4px)}}
+@media (prefers-reduced-motion:reduce){.faultFlag{animation:none}}
+
 /* ── the peek ─────────────────────────────────────────────────────────────────
    Sits above everything, takes no pointer events, and never moves the grid
    underneath it — the whole value is that your place is exactly where you left
@@ -994,6 +1019,14 @@ const SRC = ["Airbnb","Direct call","Walk-in","Booking.com","Repeat guest"];
    runs during boot, well before that block is evaluated. */
 const PAY_METHODS = ["Cash","UPI","Bank","Card","Platform"];
 const PLATFORMS = ["Airbnb","Booking.com"];
+const FAULTS = ["AC","Geyser","Plumbing","Electrical","Wi-Fi","Fridge",
+                "Washing machine","Furniture","Pest control","Other"];
+const REPEAT_WINDOW = 120;   // days a same-fault return still counts as "again"
+const HELD_WINDOW   = 30;    // a fix that fails this fast is the fixer's to answer for
+const URGENCY = ["whenever","soon","urgent"];
+/* Declared up here with the other boot-time constants: the demo seeder runs
+   during start-up, long before the maintenance block further down is reached. */
+let issues = [];
 
 /* ── inventory ───────────────────────────────────────────────────────────────
    The flats are editable and persist on the device. Bookings are held against
@@ -1598,10 +1631,19 @@ function generateDemo(){
    app, so seed a few — including one due back tomorrow, which is what makes
    the "is it back in service?" question appear. */
 function seedDemoBlocks(){
+  /* Two of these are the same AC in the same flat, six weeks apart and the
+     second one inside the month after Ramesh's visit — which is the whole
+     point of the feature and is invisible without a history to find. */
   const wants = [
-    {reason:"Maintenance", note:"AC — technician booked", start:-3, nights:4, at:"BH"},
-    {reason:"Deep clean",  note:"quarterly clean",        start: 4, nights:2, at:"LP"},
-    {reason:"Renovation",  note:"bathroom re-tiling",     start: 8, nights:6, at:"TT"},
+    {reason:"Maintenance", note:"compressor topped up", start:-26, nights:2, at:"BH",
+     fault:"AC", fixer:"Ramesh", phone:"9848012345", cost:1400},
+    {reason:"Maintenance", note:"not cooling again",    start:-3,  nights:4, at:"BH",
+     fault:"AC", fixer:"Ramesh", phone:"9848012345", cost:1200},
+    {reason:"Maintenance", note:"geyser leaking",       start:-20, nights:2, at:"TT",
+     fault:"Geyser", fixer:"Iqbal", phone:"9700045566", cost:900},
+    {reason:"Deep clean",  note:"quarterly clean",      start: 4,  nights:2, at:"LP"},
+    {reason:"Renovation",  note:"bathroom re-tiling",   start: 8,  nights:6, at:"TT",
+     fault:"Plumbing", fixer:"Iqbal", phone:"9700045566"},
   ];
   wants.forEach(w=>{
     const from = Math.max(w.start, 0), to = w.start + w.nights;
@@ -1611,12 +1653,43 @@ function seedDemoBlocks(){
       !resv.some(r => r.fi === i && r.start < to && r.end > w.start)
       && (()=>{ for(let d = from; d < to; d++) if(d < DAYS && occ[i][d]) return false; return true; })();
     // spread them across buildings so the demo does not put every block in one block
-    let fi = flats.findIndex((f,i)=> f.code === w.at && fits(i));
+    // — except a repeat fault, which is only a repeat if it is the same flat
+    let fi = (w.fault && DEMO_FAULT_FLAT[w.at + w.fault] !== undefined
+              && fits(DEMO_FAULT_FLAT[w.at + w.fault]))
+      ? DEMO_FAULT_FLAT[w.at + w.fault]
+      : flats.findIndex((f,i)=> f.code === w.at && fits(i));
     if(fi < 0) fi = flats.findIndex((f,i)=> fits(i));
     if(fi < 0) return;
+    if(w.fault) DEMO_FAULT_FLAT[w.at + w.fault] = fi;
     resv.push({fi, start:w.start, end:to, nights:w.nights, kind:"block",
-               reason:w.reason, note:w.note, guest:"Out of service", src:"Block"});
+               reason:w.reason, note:w.note, guest:"Out of service", src:"Block",
+               fault:w.fault, fixer:w.fixer, fixer_phone:w.phone, cost:w.cost});
     recompute();                       // so the next block sees this one
+  });
+}
+const DEMO_FAULT_FLAT = {};
+
+/* A few things wrong with flats that are still perfectly sellable — which is
+   the ordinary case, and invisible unless the demo has some. */
+function seedDemoIssues(){
+  issues = [];
+  const want = [
+    {code:"TT", fault:"Geyser", note:"slow to heat, guest mentioned it", urgency:"soon", on:-9},
+    {code:"TT", fault:"Wi-Fi",  note:"drops in the back bedroom",        urgency:"whenever", on:-4},
+    {code:"MP", fault:"AC",     note:"due its six-month service",        urgency:"soon", on:-15},
+    {code:"BH", fault:"Furniture", note:"wardrobe door off its runner",  urgency:"whenever", on:-2},
+    {code:"LP", fault:"Plumbing",  note:"kitchen tap dripping",          urgency:"urgent", on:-1},
+  ];
+  const used = {};
+  want.forEach(w=>{
+    // two on the same flat, so the "one visit" case has something to batch
+    let fi = used[w.code] !== undefined && w.fault !== "AC"
+      ? used[w.code]
+      : flats.findIndex(f => f.code === w.code);
+    if(fi < 0) fi = 0;
+    used[w.code] = fi;
+    issues.push({id:"demo-" + issues.length, fi, fault:w.fault, note:w.note,
+                 urgency:w.urgency, on:w.on, fixed:null});
   });
 }
 
@@ -1632,9 +1705,11 @@ function save(){
   try{
     localStorage.setItem(STORE, JSON.stringify({
       savedOn: isoDay(today),
+      issues: issues.map(x=>({...x, id2:flats[x.fi] && flats[x.fi].id})),
       rows: resv.map(r=>({ id:flats[r.fi].id, start:r.start, end:r.end,
                            guest:r.guest, src:r.src, manual:!!r.manual,
                            kind:r.kind, reason:r.reason, note:r.note,
+                           fault:r.fault, fixer:r.fixer, fixer_phone:r.fixer_phone, cost:r.cost,
                            phone:r.phone, pax:r.pax, amount:r.amount, pays:r.pays,
                            bookedOn: typeof r.bookedOn === "number" ? r.bookedOn : undefined }))
     }));
@@ -1655,12 +1730,20 @@ function load(){
       .map(r => ({ fi:flatIndex[r.id], start:r.start+shift, end:r.end+shift,
                    nights:r.end-r.start, guest:r.guest, src:r.src, manual:r.manual,
                    kind:r.kind, reason:r.reason, note:r.note,
+                   fault:r.fault, fixer:r.fixer, fixer_phone:r.fixer_phone, cost:r.cost,
                    phone:r.phone, pax:r.pax, amount:r.amount,
                    pays: (r.pays || []).map(p => ({...p, on: (p.on || 0) + shift})),
                    bookedOn: typeof r.bookedOn === "number" ? r.bookedOn + shift : undefined }))
-      // blocks are kept a little past their end date so the app can still ask
-      // whether the flat actually came back into service
-      .filter(r => r.start < DAYS && (r.kind === "block" ? r.end >= -7 : r.end >= 0));
+      // Blocks linger a week past their end so the app can still ask whether the
+      // flat came back into service — and a block that recorded a FAULT is kept
+      // far longer, because it is the only evidence that this is the third time
+      // the same AC has failed. Throwing it away after a week would delete the
+      // feature that reads it.
+      .filter(r => r.start < DAYS && (r.kind === "block"
+        ? (r.end >= -7 || (r.fault && r.end >= -REPEAT_WINDOW)) : r.end >= 0));
+  issues = (d.issues || []).filter(x => flatIndex[x.id2] !== undefined)
+    .map(x => ({...x, fi: flatIndex[x.id2], on: (x.on || 0) + shift,
+                fixed: x.fixed == null ? null : x.fixed + shift}));
     return true;
   }catch(e){ return false; }
 }
@@ -1792,7 +1875,8 @@ function signOut(silent){
     NF = flats.length;
     flatIndex = Object.fromEntries(flats.map((f,i)=>[f.id,i]));
     usingDemo = !load();
-    if(usingDemo){ generateDemo(); recompute(); seedDemoBlocks(); }
+    if(usingDemo){ generateDemo(); recompute(); seedDemoBlocks(); seedDemoIssues(); }
+    else issues = [];
     recompute(); paintAcct(); refreshScreen();
   }
 }
@@ -1801,11 +1885,12 @@ function signOut(silent){
 async function cloudPull(){
   if(!hostId) await loadHost();
   const from = dayISO(-8), to = dayISO(DAYS);
-  const [bs, fl, st, pm] = await Promise.all([
+  const [bs, fl, st, pm, iss] = await Promise.all([
     rest("GET", "/buildings?select=id,code,name,short_name,sort_order&order=sort_order.asc,code.asc"),
     rest("GET", "/flats?select=id,building_id,code,floor,unit_type,nightly_rate&active=is.true&order=code.asc"),
     rest("GET", "/stays?select=*&ends_on=gt." + from + "&starts_on=lt." + to),
     rest("GET", "/payments?select=id,stay_id,amount,method,received_on,note&order=received_on.asc"),
+    rest("GET", "/issues?select=*&order=reported_on.asc"),
   ]);
   const paysBy = {};
   (pm || []).forEach(p => (paysBy[p.stay_id] = paysBy[p.stay_id] || []).push(
@@ -1832,14 +1917,27 @@ async function cloudPull(){
              guest: s.guest_name || (block ? (s.reason || "Out of service") : "Guest"),
              src: s.source || (block ? "Block" : "Direct"),
              kind: block ? "block" : undefined, reason: s.reason, note: s.note,
+             fault: s.fault || undefined, fixer: s.fixer || undefined,
+             fixer_phone: s.fixer_phone || undefined,
+             cost: s.cost != null ? Number(s.cost) : undefined,
              phone: s.guest_phone || undefined, pax: s.pax || undefined,
              amount: s.amount != null ? Number(s.amount) : undefined,
              pays: paysBy[s.id] || [],
              bookedOn: s.booked_on ? dayOff(s.booked_on) : undefined };
   }).filter(Boolean)
-    // blocks linger a week past their end so the app can still ask whether the
-    // flat actually came back into service — same rule as the local store
-    .filter(r => r.start < DAYS && (r.kind === "block" ? r.end >= -7 : r.end >= 0));
+    // same retention rule as the local store: a week for ordinary blocks, the
+    // whole repeat window for anything that recorded a fault
+    .filter(r => r.start < DAYS && (r.kind === "block"
+      ? (r.end >= -7 || (r.fault && r.end >= -REPEAT_WINDOW)) : r.end >= 0));
+  issues = (iss || []).map(x=>{
+    const fi = byUid[x.flat_id];
+    if(fi === undefined) return null;
+    return {id:x.id, fi, fault:x.fault || undefined, note:x.note || "",
+            urgency:x.urgency || "soon", on:dayOff(x.reported_on),
+            fixed: x.fixed_on ? dayOff(x.fixed_on) : null,
+            fixer:x.fixer || undefined, fixer_phone:x.fixer_phone || undefined,
+            cost: x.cost != null ? Number(x.cost) : undefined};
+  }).filter(Boolean);
   usingDemo = false;
   recompute(); cacheSave();
 }
@@ -1851,9 +1949,11 @@ function cacheSave(){
   jset(CLOUD_KEY, { on: isoDay(today), host: hostId, hostName,
     flats: flats.map(f=>({uid:f.uid, bid:f.bid, id:f.id, code:f.code, bname:f.bname,
                           bshort:f.bshort, floor:f.floor, type:f.type, rate:f.rate, ord:f.ord})),
+    issues: issues.map(x=>({...x, id2:flats[x.fi] && flats[x.fi].id})),
     rows: resv.map(r=>({ sid:r.sid, id: flats[r.fi] && flats[r.fi].id,
                          start:r.start, end:r.end, guest:r.guest, src:r.src,
                          kind:r.kind, reason:r.reason, note:r.note,
+                         fault:r.fault, fixer:r.fixer, fixer_phone:r.fixer_phone, cost:r.cost,
                          phone:r.phone, pax:r.pax, amount:r.amount, pays:r.pays,
                          bookedOn: typeof r.bookedOn === "number" ? r.bookedOn : undefined }))});
 }
@@ -1871,10 +1971,15 @@ function cacheLoad(){
     .map(r => ({ sid:r.sid, fi:flatIndex[r.id], start:r.start + shift, end:r.end + shift,
                  nights:r.end - r.start, guest:r.guest, src:r.src, manual:true,
                  kind:r.kind, reason:r.reason, note:r.note,
+                 fault:r.fault, fixer:r.fixer, fixer_phone:r.fixer_phone, cost:r.cost,
                  phone:r.phone, pax:r.pax, amount:r.amount,
                  pays: (r.pays || []).map(p => ({...p, on: (p.on || 0) + shift})),
                  bookedOn: typeof r.bookedOn === "number" ? r.bookedOn + shift : undefined }))
-    .filter(r => r.start < DAYS && (r.kind === "block" ? r.end >= -7 : r.end >= 0));
+    .filter(r => r.start < DAYS && (r.kind === "block"
+      ? (r.end >= -7 || (r.fault && r.end >= -REPEAT_WINDOW)) : r.end >= 0));
+  issues = (d.issues || []).filter(x => flatIndex[x.id2] !== undefined)
+    .map(x => ({...x, fi: flatIndex[x.id2], on: (x.on || 0) + shift,
+                fixed: x.fixed == null ? null : x.fixed + shift}));
   usingDemo = false;
   recompute();
   return true;
@@ -1926,6 +2031,9 @@ function runOp(op){
     case "stay+": return rest("POST",  "/stays", {...op.body, id:op.id, host_id:hostId}, MIN);
     case "stay~": return rest("PATCH", "/stays?id=eq." + op.id, op.body, MIN);
     case "stay-": return rest("DELETE","/stays?id=eq." + op.id, undefined, MIN);
+    case "iss+":  return rest("POST",  "/issues", {...op.body, id:op.id, host_id:hostId}, MIN);
+    case "iss~":  return rest("PATCH", "/issues?id=eq." + op.id, op.body, MIN);
+    case "iss-":  return rest("DELETE","/issues?id=eq." + op.id, undefined, MIN);
     case "pay+":  return rest("POST",  "/payments", {...op.body, id:op.id, host_id:hostId}, MIN);
     case "pay-":  return rest("DELETE","/payments?id=eq." + op.id, undefined, MIN);
     case "bld+":  return rest("POST",  "/buildings", {...op.body, id:op.id, host_id:hostId}, MIN);
@@ -2048,7 +2156,7 @@ if(MODE === "live"){
   usingDemo = !load();
   if(usingDemo) generateDemo();
   recompute();
-  if(usingDemo) seedDemoBlocks();
+  if(usingDemo){ seedDemoBlocks(); seedDemoIssues(); }
 }
 
 /* Refuses to double-book. The UI already hides the form on an unavailable flat,
@@ -2136,15 +2244,139 @@ function addBooking(fi, start, nights, guest, src, extra){
 }
 const BLOCK_REASONS = ["Maintenance","Deep clean","Owner use","Renovation","Not ready"];
 
+/* ══════════════ what broke, and who fixed it ════════════════════════════════
+   No new tab, no work-order register, no asset list to populate. A block
+   already IS the work order — the flat is out, there is a reason, a note and a
+   span of nights. It gains two taps: what broke, and who is fixing it.
+
+   Everything the operator actually wants is then derived, not stored, and it
+   surfaces at the moment the flat goes out again rather than in a dashboard
+   nobody opens.                                                              */
+/* People, remembered from use. Independent electricians and plumbers, not
+   firms — so the only identity is a name and a number worth keeping, because
+   the point of the number is to ring it. */
+function fixers(){
+  const seen = new Map();
+  resv.filter(r => isBlock(r) && r.fixer).forEach(r=>{
+    const k = r.fixer.trim().toLowerCase();
+    const g = seen.get(k) || {name:r.fixer.trim(), phone:r.fixer_phone || "", jobs:0,
+                              back:0, spend:0, lastAt:-9999};
+    g.jobs++;
+    g.spend += r.cost || 0;
+    if(r.fixer_phone) g.phone = r.fixer_phone;
+    if(r.start > g.lastAt){ g.lastAt = r.start; g.name = r.fixer.trim(); }
+    seen.set(k, g);
+  });
+  // a job "came back" when the same flat had the same fault again soon after
+  resv.filter(r => isBlock(r) && r.fault).forEach(r=>{
+    const prev = priorFault(r.fi, r.fault, r.start);
+    if(prev && prev.fixer && r.start - prev.end <= HELD_WINDOW){
+      const g = seen.get(prev.fixer.trim().toLowerCase());
+      if(g) g.back++;
+    }
+  });
+  return [...seen.values()].sort((a,b)=> (b.back/b.jobs) - (a.back/a.jobs) || b.jobs - a.jobs);
+}
+
+/* ── things wrong with a flat that is still sellable ──────────────────────────
+   Most maintenance never justifies losing a night. Keeping these separate from
+   blocks is what stops the app from quietly teaching the operator to take a
+   good flat off the market just to leave himself a note.                     */
+/* `fixed` is a day offset, and today is 0 — which is falsy. Testing it with !x
+   would leave anything fixed TODAY sitting on the open list, on the one day the
+   operator is most likely to look at it. */
+const openIssues = fi => issues.filter(x => x.fixed == null && (fi == null || x.fi === fi))
+                               .sort((a,b)=> URGENCY.indexOf(b.urgency) - URGENCY.indexOf(a.urgency)
+                                          || a.on - b.on);
+
+function addIssue(fi, fault, note, urgency){
+  if(!(fi >= 0 && fi < NF)) return false;
+  const row = {id: uuid(), fi, fault: fault || undefined, note: (note||"").trim(),
+               urgency: URGENCY.indexOf(urgency) >= 0 ? urgency : "soon", on: 0, fixed: null};
+  issues.push(row);
+  if(MODE === "live") enqueue({k:"iss+", id:row.id, body:{
+    flat_id: flats[fi].uid, fault: row.fault || null, note: row.note || null,
+    urgency: row.urgency, reported_on: dayISO(0), created_by: session && session.uid}});
+  save(); cacheSave();
+  track("issue_reported", {fault: row.fault || "none", urgency: row.urgency});
+  return true;
+}
+function closeIssue(x, fixer, phone, cost){
+  x.fixed = 0; x.fixer = (fixer||"").trim() || undefined;
+  x.fixer_phone = (phone||"").trim() || undefined;
+  x.cost = toAmount(cost) || undefined;
+  if(MODE === "live") enqueue({k:"iss~", id:x.id, body:{
+    fixed_on: dayISO(0), fixer: x.fixer || null,
+    fixer_phone: x.fixer_phone || null, cost: x.cost || null}});
+  save(); cacheSave();
+  track("issue_closed", {fault: x.fault || "none"});
+}
+function dropIssue(x){
+  const i = issues.indexOf(x);
+  if(i >= 0) issues.splice(i, 1);
+  if(MODE === "live") enqueue({k:"iss-", id:x.id});
+  save(); cacheSave();
+}
+
+/* The reason this belongs in a booking app rather than a maintenance one: the
+   flat's empty nights are already known, so several small jobs can be pointed
+   at one visit in a gap the flat was going to sit idle through anyway. One trip
+   for the electrician instead of three, and no night lost to any of them. */
+function batchWindow(fi, minNights){
+  const want = Math.max(1, minNights || 1);
+  for(let d = 0; d < DAYS; d++){
+    if(occ[fi][d]) continue;
+    let n = 0; while(d + n < DAYS && !occ[fi][d + n]) n++;
+    if(n >= want) return {from: d, nights: n};
+    d += n;
+  }
+  return null;
+}
+
+/* The most recent earlier block on this flat for this same fault. */
+function priorFault(fi, fault, before){
+  if(!fault) return null;
+  return resv.filter(r => isBlock(r) && r.fi === fi && r.fault === fault && r.start < before)
+             .sort((a,b)=> b.start - a.start)[0] || null;
+}
+
+/* The line shown the instant a fault is chosen. This is the feature: not a
+   report, a sentence at the moment the flat goes out of service again. */
+function faultHistory(fi, fault, before){
+  const past = resv.filter(r => isBlock(r) && r.fi === fi && r.fault === fault
+                                && r.start < (before == null ? DAYS : before))
+                   .sort((a,b)=> b.start - a.start);
+  if(!past.length) return null;
+  const last = past[0];
+  const gap = Math.max(0, (before == null ? 0 : before) - last.end);
+  return {times: past.length + 1, last, gap,
+          insideHold: !!last.fixer && gap <= HELD_WINDOW,
+          recent: past.filter(r => (before == null ? 0 : before) - r.end <= REPEAT_WINDOW).length + 1};
+}
+
+/* What a spell out of service really cost: the bill plus the nights it took
+   off the market. Operators consistently see only the first half, and it is
+   the half that is usually smaller. */
+function outageCost(r){
+  const nights = Math.max(0, Math.min(r.end, DAYS) - Math.max(r.start, 0));
+  const lost = nights * ((flats[r.fi] && flats[r.fi].rate) || 0);
+  return {nights, lost, bill: r.cost || 0, total: (r.cost || 0) + lost};
+}
+
 /* A block may overlap nothing else, same as a booking — you cannot take a flat
    out of service for nights a guest already holds. */
-function addBlock(fi, start, nights, reason, note){
+function addBlock(fi, start, nights, reason, note, extra){
   if(!(fi >= 0 && fi < NF)) return false;
   nights = Math.max(1, Math.min(nights|0, DAYS));
   if(start < 0 || start >= DAYS) return false;
   if(!freeRange(fi, start, start + nights)) return false;
+  extra = extra || {};
   const row = { fi, start, end:start+nights, nights, kind:"block", manual:true,
                 reason: reason || "Maintenance", note: (note||"").trim(),
+                fault: extra.fault || undefined,
+                fixer: (extra.fixer || "").trim() || undefined,
+                fixer_phone: (extra.phone || "").trim() || undefined,
+                cost: toAmount(extra.cost) || undefined,
                 guest: reason || "Out of service", src:"Block", bookedOn:0 };
   if(MODE === "live"){
     row.sid = uuid();
@@ -2152,6 +2384,8 @@ function addBlock(fi, start, nights, reason, note){
       flat_id: flats[fi].uid, kind:"block",
       starts_on: dayISO(start), ends_on: dayISO(start + nights),
       reason: row.reason, note: row.note || null, source:"Block",
+      fault: row.fault || null, fixer: row.fixer || null,
+      fixer_phone: row.fixer_phone || null, cost: row.cost || null,
       booked_on: dayISO(0), created_by: session && session.uid }});
   }
   resv.push(row);
@@ -2226,7 +2460,7 @@ function clearAll(){
   }
   recompute(); save(); cacheSave();
 }
-function resetDemo(){ generateDemo(); usingDemo = true; recompute(); seedDemoBlocks(); save(); }
+function resetDemo(){ generateDemo(); usingDemo = true; recompute(); seedDemoBlocks(); seedDemoIssues(); save(); }
 
 const freeRange = (fi,a,b)=>{ for(let d=a;d<b;d++){ if(d<0||d>=DAYS||occ[fi][d]) return false; } return true; };
 const freeCount = d => { let n=0; for(let i=0;i<NF;i++) if(!occ[i][d]) n++; return n; };
@@ -2239,6 +2473,8 @@ const blockedOn = d => { let n=0; for(let i=0;i<NF;i++) if(blk[i][d]) n++; retur
 const haptic = ms => { try{ navigator.vibrate && navigator.vibrate(ms); }catch(e){} };
 const el = (t,c,x)=>{const n=document.createElement(t); if(c)n.className=c; if(x!=null)n.textContent=x; return n;};
 const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const ordinalSuffix = n => (n % 100 >= 11 && n % 100 <= 13) ? "th"
+  : ["th","st","nd","rd"][n % 10] || "th";
 function esc(s){ return String(s == null ? "" : s)
   .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
 
@@ -4213,6 +4449,77 @@ function openPayment(r, fi){
   sheetB.scrollTop = 0;
 }
 
+/* Report a fault without taking the flat off the market. Two taps and a word:
+   what it is, and how much it can wait. */
+function openIssueForm(fi, day){
+  const fl = flats[fi];
+  sheetH.textContent = ""; sheetB.textContent = "";
+  const t = el("div");
+  t.innerHTML = `<div class="n">${esc(fl.id)}</div>`
+              + `<div class="m">something needs fixing · stays on sale</div>`;
+  const x = el("button", null, "✕"); x.setAttribute("aria-label","Back");
+  x.onclick = ()=> openSheet(fi, day);
+  sheetH.append(t, x);
+
+  const form = el("div","invForm"); form.style.margin = "14px 20px 0";
+  let fault = "", urgency = "soon";
+  const fRow = el("div","tyRow faultRow");
+  const flag = el("div","faultFlag"); flag.hidden = true;
+  FAULTS.forEach(fx=>{
+    const b = el("button",null,fx);
+    b.setAttribute("aria-pressed","false");
+    b.onclick = ()=>{
+      fault = fault === fx ? "" : fx; haptic(8);
+      [...fRow.children].forEach(c=>c.setAttribute("aria-pressed", c.textContent===fault));
+      const h = fault ? faultHistory(fi, fault, DAYS) : null;
+      flag.hidden = !h;
+      if(h) flag.innerHTML = `<div class="ff-l"><b>${h.times}${ordinalSuffix(h.times)} `
+        + `${esc(fault.toLowerCase())} fault in ${esc(fl.id)}.</b> `
+        + (h.last.fixer ? `${esc(h.last.fixer)} saw it last.` : "Nobody recorded who fixed it last.")
+        + `</div>`;
+    };
+    fRow.appendChild(b);
+  });
+
+  const uRow = el("div","tyRow");
+  [["whenever","Can wait"],["soon","Soon"],["urgent","Urgent"]].forEach(([k,label])=>{
+    const b = el("button",null,label);
+    b.setAttribute("aria-pressed", k === urgency);
+    b.onclick = ()=>{ urgency = k; haptic(8);
+      [...uRow.children].forEach((c,i)=>c.setAttribute("aria-pressed", i === URGENCY.indexOf(urgency))); };
+    uRow.appendChild(b);
+  });
+
+  const noteRow = el("div","r");
+  const note = el("input");
+  note.type = "text"; note.placeholder = "What's wrong — e.g. geyser slow to heat";
+  noteRow.appendChild(note);
+
+  const acts = el("div","invActs");
+  const go = el("button","invSave","Log it");
+  go.onclick = ()=>{
+    if(!fault && !note.value.trim()){ note.placeholder = "Say what it is first"; note.focus(); return; }
+    addIssue(fi, fault, note.value, urgency);
+    haptic(18); openSheet(fi, day); refreshScreen();
+  };
+  const cancel = el("button","invDel","Cancel");
+  cancel.onclick = ()=>{ haptic(8); openSheet(fi, day); };
+  acts.append(go, cancel);
+  form.append(fRow, flag, uRow, noteRow, acts);
+  sheetB.append(form);
+
+  const hint = el("p");
+  hint.style.cssText = "margin:11px 20px 0;font-size:12px;line-height:1.55;color:var(--txt-3)";
+  const win = batchWindow(fi, 1);
+  hint.textContent = win
+    ? `${fl.id} stays on sale. It is empty ${fmt(win.from)} for ${win.nights} night${win.nights>1?"s":""} — `
+      + `get this and anything else outstanding done then, and it costs nothing.`
+    : `${fl.id} stays on sale — this is a note, not a block.`;
+  sheetB.append(hint);
+  sheet.classList.add("on"); scrim.classList.add("on");
+  setTimeout(()=> note.focus(), 80);
+}
+
 function openSheet(fi, day){
   const fl = flats[fi];
   sheetH.textContent = ""; sheetB.textContent = "";
@@ -4337,6 +4644,13 @@ function openSheet(fi, day){
     hint.textContent = `Books ${span} · change the dates on the Rooms tab`;
     sheetB.appendChild(hint);
 
+    /* Something wrong, but the flat still sells. This has to sit beside the
+       block button, not inside it — the whole point is that recording a fault
+       must never cost a night. */
+    const issueBtn = el("button","blockbtn", "Something needs fixing (keep it on sale)");
+    issueBtn.onclick = ()=>{ haptic(10); openIssueForm(fi, day); };
+    sheetB.appendChild(issueBtn);
+
     /* take the flat out of service for the same dates */
     const blockBtn = el("button","blockbtn", `Block these nights instead`);
     blockBtn.onclick = ()=>{
@@ -4352,27 +4666,101 @@ function openSheet(fi, day){
           [...chips.children].forEach(c=>c.setAttribute("aria-pressed", c.textContent===reason)); };
         chips.appendChild(b2);
       });
+      /* What broke. One tap, and it is the tap that makes every later question
+         answerable — a fault is what turns two unrelated outages into a
+         pattern with a name. */
+      let fault = "";
+      const fRow = el("div","tyRow faultRow");
+      const flag = el("div","faultFlag"); flag.hidden = true;
+      FAULTS.forEach(fx=>{
+        const b3 = el("button",null,fx);
+        b3.setAttribute("aria-pressed","false");
+        b3.onclick = ()=>{
+          fault = fault === fx ? "" : fx; haptic(8);
+          [...fRow.children].forEach(c=>c.setAttribute("aria-pressed", c.textContent===fault));
+          paintFlag();
+        };
+        fRow.appendChild(b3);
+      });
+
+      /* The whole feature, delivered at the only moment it is useful: the flat
+         is going out of service again and the person who touched it last is one
+         tap away. A report nobody opens would never have said this. */
+      function paintFlag(){
+        const h = fault ? faultHistory(fi, fault, bDay) : null;
+        flag.textContent = "";
+        if(!h){ flag.hidden = true; return; }
+        flag.hidden = false;
+        flag.classList.toggle("hot", h.insideHold);
+        const line = el("div","ff-l");
+        line.innerHTML = `<b>${h.recent > 2 ? h.recent + ordinalSuffix(h.recent) : h.times === 2 ? "Second" : h.times + ordinalSuffix(h.times)}`
+          + ` ${esc(fault.toLowerCase())} fault in ${esc(fl.id)}.</b> `
+          + (h.last.fixer
+              ? `${esc(h.last.fixer)} fixed it ${h.gap === 0 ? "and it is still out" : h.gap + " day" + (h.gap>1?"s":"") + " ago"}.`
+              : `Last one ended ${h.gap} day${h.gap===1?"":"s"} ago, nobody recorded.`)
+          + (h.insideHold ? " <em>Inside the month — worth asking for a free look.</em>" : "");
+        flag.append(line);
+        if(h.last.fixer){
+          const act = el("div","ff-a");
+          if(h.last.fixer_phone){
+            const call = el("a","ff-call", "Call " + h.last.fixer);
+            call.href = "tel:" + h.last.fixer_phone.replace(/[^\d+]/g,"");
+            act.append(call);
+          }
+          const same = el("button","ff-same", "Same person again");
+          same.onclick = ()=>{ who.value = h.last.fixer; ph.value = h.last.fixer_phone || "";
+                               haptic(8); };
+          act.append(same);
+          flag.append(act);
+        }
+      }
+
+      /* Who is fixing it. Independent people, so a name and a number — and the
+         number exists to be rung, which is why it is a tel: link everywhere
+         else it appears. Names already used become chips. */
+      const whoRow = el("div","r");
+      const who = el("input");
+      who.type = "text"; who.placeholder = "Who is fixing it";
+      who.setAttribute("aria-label","Name of the person fixing it");
+      const ph = el("input");
+      ph.type = "tel"; ph.inputMode = "numeric"; ph.placeholder = "Their number";
+      ph.setAttribute("aria-label","Their phone number");
+      whoRow.append(who, ph);
+      const known = fixers();
+      const knownRow = el("div","tyRow soft");
+      known.slice(0,6).forEach(g=>{
+        const b4 = el("button",null,g.name);
+        b4.onclick = ()=>{ who.value = g.name; ph.value = g.phone || ""; haptic(8); };
+        knownRow.appendChild(b4);
+      });
+
       const noteRow = el("div","r");
       const note = el("input");
-      note.type = "text"; note.placeholder = "Note — e.g. technician booked";
+      note.type = "text"; note.placeholder = "Note — e.g. compressor replaced";
       noteRow.appendChild(note);
+
       const acts = el("div","invActs");
       const go2 = el("button","invSave", `Block ${bN} night${bN>1?"s":""}`);
       go2.onclick = ()=>{
-        if(addBlock(fi, bDay, bN, reason, note.value)){
+        if(addBlock(fi, bDay, bN, reason, note.value,
+                    {fault, fixer:who.value, phone:ph.value})){
           haptic(18); closeSheet(); refreshScreen();
         }
       };
       const cancel = el("button","invDel","Cancel");
       cancel.onclick = ()=>{ haptic(8); openSheet(fi, day); };
       acts.append(go2, cancel);
-      form.append(chips, noteRow, acts);
+      form.append(chips, fRow, flag, whoRow);
+      if(known.length) form.append(knownRow);
+      form.append(noteRow, acts);
+
       const hintEl = el("div","lbl");
       hintEl.style.cssText = "margin:8px 20px 0";
-      hintEl.textContent = `Out of service ${span} — it comes back on sale the morning after.`;
+      const lost = bN * (fl.rate || 0);
+      hintEl.textContent = `Out of service ${span} — back on sale the morning after`
+        + (lost ? ` · ${bN} night${bN>1?"s":""} off the market, about ${money(lost)}` : "");
       sheetB.insertBefore(form, hint.nextSibling);
       sheetB.insertBefore(hintEl, form.nextSibling);
-      setTimeout(()=>note.focus(), 60);
     };
     sheetB.appendChild(blockBtn);
   } else {
@@ -4418,6 +4806,48 @@ function openSheet(fi, day){
     bl.appendChild(row);
   });
   sheetB.appendChild(bl);
+
+  /* What is wrong with this flat right now, while it carries on selling. */
+  const mine2 = openIssues(fi);
+  if(mine2.length){
+    const s3 = el("div","sheet-s");
+    const win = batchWindow(fi, 1);
+    s3.append(el("span","lbl", `Needs fixing · ${mine2.length}`),
+              el("span","lbl", win ? `empty ${fmt(win.from)} for ${win.nights}n` : "no gap yet"));
+    sheetB.appendChild(s3);
+    const il = el("div","card"); il.style.margin = "0 20px";
+    mine2.forEach(x=>{
+      const row = el("div","row bk");
+      const m = el("div","meta");
+      m.innerHTML = `<b>${esc(x.fault || "Issue")}</b>`
+                  + `<em>${esc(x.note || "no note")} · logged ${x.on === 0 ? "today" : fmt(x.on)}</em>`;
+      const end = el("div","rowend");
+      end.appendChild(el("span", "paid " + (x.urgency === "urgent" ? "due" : "clear"),
+                          x.urgency === "whenever" ? "can wait" : x.urgency));
+      const done = el("button","rowx","✓");
+      done.setAttribute("aria-label", `Mark ${x.fault || "this issue"} fixed`);
+      let armed = false, tm = null;
+      done.onclick = ()=>{
+        if(!armed){ armed = true; done.classList.add("arm"); done.textContent = "Fixed?"; haptic(10);
+          tm = setTimeout(()=>{ armed=false; done.classList.remove("arm"); done.textContent="✓"; }, 3000);
+          return; }
+        clearTimeout(tm); haptic(20); closeIssue(x); openSheet(fi, day); refreshScreen();
+      };
+      end.appendChild(done);
+      row.append(m, end);
+      il.appendChild(row);
+    });
+    sheetB.appendChild(il);
+    if(mine2.length > 1 && batchWindow(fi, 1)){
+      // a sentence, not a label — .lbl is uppercased and unreadable at this length
+      const b = el("p");
+      b.style.cssText = "margin:9px 20px 0;font-size:12px;line-height:1.55;color:var(--txt-3)";
+      const w = batchWindow(fi, 1);
+      b.textContent = `All ${mine2.length} could go in one visit while it sits empty from ${fmt(w.from)} — `
+        + `one trip instead of ${mine2.length}, and no night lost.`;
+      sheetB.appendChild(b);
+    }
+  }
 
   const s2 = el("div","sheet-s");
   s2.append(el("span","lbl","Open stretches"), el("span","lbl","sellable"));

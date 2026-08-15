@@ -134,6 +134,49 @@ Two details that matter and are easy to get wrong:
 - **A block is not a booking.** It is excluded from arrivals, departures, turnarounds,
   average stay length, source mix and extension offers.
 
+### What broke, and who fixed it
+
+Two different things, and collapsing them is the mistake most tools make.
+
+**A flat that is still sellable, with something wrong.** A slow geyser, a dripping tap,
+patchy Wi-Fi, a loose cupboard door, an AC due its six-month service. Open the flat and tap
+**Something needs fixing (keep it on sale)**. It costs no nights, blocks nothing, and sits
+on the flat until someone marks it done. If the only way to record a fault were to block
+the flat, you would either stop recording the small things or take a good flat off the
+market to leave yourself a note — and the second is worse, because it destroys revenue to
+satisfy the software.
+
+**A flat that genuinely cannot be sold.** That is still a block, and a block now also
+records **what broke** and **who is fixing it** — two chips on a form you already fill in.
+
+#### The line that pays for the whole thing
+
+The moment you pick a fault, it tells you what it already knows:
+
+> ⚠︎ **Third AC fault in BH-101.** Ramesh fixed it 21 days ago. *Inside the month — worth
+> asking for a free look.*   **[ Call Ramesh ]  [ Same person again ]**
+
+That is the answer to *"which electrician serviced this, and why is it broken again?"* — at
+the only moment it is useful, with one tap to the person who should be asked. A report
+would never have been opened.
+
+The industry name for what this measures is **first-time fix rate**. Normal is 85–92%; a
+tradesman below about 72% costs you roughly **2.4× in labour** because he keeps coming
+back, and each return trip costs 1.5–2× the original visit. You do not need the acronym —
+you need the flag, and the number.
+
+#### One trip instead of three
+
+This is the part a dedicated maintenance app cannot do, because it does not know your
+calendar. When a flat has several small things wrong, the app already knows when it is
+empty:
+
+> **All 3 could go in one visit while it sits empty from 17 Aug** — one trip instead of 3,
+> and no night lost.
+
+And when you do block a flat, it prices the outage honestly: the bill plus the nights taken
+off the market. A ₹1,200 AC service that blocks a 3 BHK for two nights did not cost ₹1,200.
+
 #### The part that actually saves money
 
 Taking a flat out of service is easy. *Putting it back* is what gets forgotten — a flat
