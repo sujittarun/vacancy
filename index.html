@@ -457,7 +457,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .exts-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
 .exts-head b{font-size:11.5px;font-weight:600;color:var(--txt-2);letter-spacing:.01em}
 .exts-head u{text-decoration:none;font-size:17px;font-weight:700;letter-spacing:-.03em;color:var(--now)}
-.exts-foot{display:flex;justify-content:flex-end;margin-top:10px}
+.exts-foot{display:flex;justify-content:flex-end;gap:8px;margin-top:10px}
 .exts-when{font-size:11.5px;color:var(--txt-3);line-height:1.4}
 .exts-when b{color:var(--txt-2);font-weight:600}
 .nudgeBtn{padding:7px 11px;border-radius:9px;background:var(--surface-2);
@@ -1552,9 +1552,13 @@ const NOW = 1;                       // today and tomorrow
    is holding the nights after, saying so instead of silently refusing to slide
    any further — which is why it sometimes stopped at two days with no
    explanation.                                                               */
-function attachDaysSlider(host, block){
+function attachDaysSlider(host, block, onCancel){
   const room = maxExtend(block);
   const box = el("div","exts");
+  const backOut = ()=>{
+    if(onCancel){ onCancel(); return; }
+    box.remove();
+  };
   if(room <= 0){
     const none = el("div","exts-when");
     none.style.marginTop = "8px";
@@ -1564,6 +1568,11 @@ function attachDaysSlider(host, block){
       ? `Cannot stay out any longer — <b>${esc(nextUp.guest)}</b> arrives ${esc(fmt(nextUp.start))}.`
       : `Cannot stay out any longer — the nights after are taken.`;
     box.appendChild(none);
+    const foot0 = el("div","exts-foot");
+    const back0 = el("button","nudgeBtn","Back");
+    back0.onclick = ev=>{ ev.stopPropagation(); backOut(); };
+    foot0.append(back0);
+    box.appendChild(foot0);
     host.appendChild(box);
     return;
   }
@@ -1578,8 +1587,10 @@ function attachDaysSlider(host, block){
 
   const when = el("div","bkstate");
   const go = el("button","nudgeBtn","Keep it out");
+  const back = el("button","nudgeBtn","Cancel");
+  back.onclick = ev=>{ ev.stopPropagation(); backOut(); };
   const foot = el("div","exts-foot");
-  foot.append(go);
+  foot.append(back, go);
 
   const paint = ()=>{
     days = Math.max(1, Math.min(room, days));
@@ -4012,7 +4023,16 @@ function renderTrends(){
         yes.onclick = ev=>{ ev.stopPropagation(); haptic(18); releaseBlock(dcd.block); refreshScreen(); };
         const still = el("button","nudgeBtn","Still out ⌄");
         still.onclick = ev=>{ ev.stopPropagation(); haptic(10);
-          ans.remove(); attachDaysSlider(box, dcd.block); };
+          // the two answers are replaced by the stepper, so the stepper has to
+          // carry the way back — otherwise the only exit from a question the
+          // operator opened by accident is to leave the tab
+          ans.remove();
+          attachDaysSlider(box, dcd.block, ()=>{
+            box.querySelectorAll(".exts").forEach(e=>e.remove());
+            box.appendChild(ans);
+            haptic(8);
+          });
+        };
         ans.append(yes, still);
         box.appendChild(ans);
         sec.appendChild(box);
