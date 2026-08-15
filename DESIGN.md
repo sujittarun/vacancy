@@ -49,6 +49,7 @@ Strategy: **Restrained** — a monochrome data field plus one accent. Semantic c
 | `--txt-3` | `#5C6579` | `#8A93A6` | Tertiary / labels |
 | `--free` | `#EAEFF9` | `#0B0D13` | **Vacant** — the lit state |
 | `--held` | `#1B1F2A` | `#DDE1EA` | **Booked** — recessed |
+| `--oos` | `#4E586E` | `#9AA4B6` | **Out of service** — a third state, never a shade of booked |
 | `--now` | `#FFA23A` | `#C96A00` | Today / live. The single accent. |
 | `--hot` | `#FF5F52` | `#D93A2B` | Orphan nights, fully-booked alerts |
 

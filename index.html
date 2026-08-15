@@ -31,6 +31,7 @@
   --line:rgba(255,255,255,.08); --line-2:rgba(255,255,255,.14);
   --txt:#FFFFFF; --txt-2:#98A1B5; --txt-3:#5C6579;
   --free:#EAEFF9; --free-ink:#0A0C11; --held:#1B1F2A; --held-ink:#69738A;
+  --oos:#4E586E;
   --now:#FFA23A; --hot:#FF5F52;
   --bar:rgba(12,14,20,.72);
   --shadow:0 1px 2px rgba(0,0,0,.5), 0 12px 32px -10px rgba(0,0,0,.75);
@@ -46,6 +47,7 @@
     --line:rgba(9,11,16,.10); --line-2:rgba(9,11,16,.16);
     --txt:#0B0D13; --txt-2:#5A6377; --txt-3:#8A93A6;
     --free:#0B0D13; --free-ink:#FFFFFF; --held:#DDE1EA; --held-ink:#98A1B5;
+    --oos:#9AA4B6;
     --now:#C96A00; --hot:#D93A2B;
     --bar:rgba(250,251,253,.78);
     --shadow:0 1px 2px rgba(9,11,16,.07), 0 12px 32px -12px rgba(9,11,16,.18);
@@ -57,6 +59,7 @@
   --line:rgba(9,11,16,.10); --line-2:rgba(9,11,16,.16);
   --txt:#0B0D13; --txt-2:#5A6377; --txt-3:#8A93A6;
   --free:#0B0D13; --free-ink:#FFFFFF; --held:#DDE1EA; --held-ink:#98A1B5;
+    --oos:#9AA4B6;
   --now:#C96A00; --hot:#D93A2B;
   --bar:rgba(250,251,253,.78);
   --shadow:0 1px 2px rgba(9,11,16,.07), 0 12px 32px -12px rgba(9,11,16,.18);
@@ -67,6 +70,7 @@
   --line:rgba(255,255,255,.08); --line-2:rgba(255,255,255,.14);
   --txt:#FFFFFF; --txt-2:#98A1B5; --txt-3:#5C6579;
   --free:#EAEFF9; --free-ink:#0A0C11; --held:#1B1F2A; --held-ink:#69738A;
+  --oos:#4E586E;
   --now:#FFA23A; --hot:#FF5F52;
   --bar:rgba(12,14,20,.72);
   --shadow:0 1px 2px rgba(0,0,0,.5), 0 12px 32px -10px rgba(0,0,0,.75);
@@ -649,22 +653,43 @@ button{background:none;border:0;padding:0;cursor:pointer}
    grouped so the eye has a landmark, and you can put a finger on it and read
    any single night without the strip changing size or the sheet moving.     */
 .stripwrap{position:relative;touch-action:pan-y}
-.strip{display:flex;gap:1px;height:22px;padding:16px 20px 0}
+/* height is the BORDER box here, so the 16px of padding was eating most of it —
+   the bars have quietly been six pixels tall. Given that this is a thing you put
+   a finger on and drag, they get room to be read. */
+.strip{display:flex;gap:1px;height:46px;padding:14px 20px 0}
 .strip i{flex:1;border-radius:1px;background:var(--held);transform-origin:bottom;
   transition:transform .2s var(--out)}
 .strip i.f{background:var(--free)}
-/* Out of service is a third state, not a shade of sold, and at five pixels a
-   night a hatch is invisible — so it takes the one tone that sits between the
-   lit and the recessed. Colour is not carrying it alone: the readout names the
-   reason and the list below spells it out. */
-.strip i.b{background:var(--surface-3)}
+/* ── the third state ──────────────────────────────────────────────────────────
+   Out of service was drawn in --surface-3, four points of luminance away from
+   --held: at four pixels wide that is not a distinction, it is the same bar. It
+   now takes a tone of its own AND half the height, anchored to the floor, so it
+   reads as a notch in the run rather than a shade of it — because colour alone
+   must never be the only thing carrying a state, and at this size it could not
+   carry one anyway. */
+.strip i.b{background:var(--oos);align-self:flex-end;height:52%}
 .strip i.td{box-shadow:inset 0 0 0 1px var(--now)}
-.strip i.on{transform:scaleY(1.45)}
+/* where one stay ends and the next begins — two back-to-back bookings used to
+   draw as one unbroken run, hiding every turnover in the month */
+.strip i.edge{box-shadow:inset 1px 0 0 var(--bg)}
+.strip i.b.edge{box-shadow:inset 1px 0 0 var(--bg)}
+
+/* the touched night lifts; the whole stay or gap it belongs to lifts with it,
+   a little less, so you are shown the span and not the pixel */
+.strip i.span{transform:scaleY(1.22)}
+.strip i.on{transform:scaleY(1.38)}
+.strip i.b.span{transform:scaleY(1.15)}
+.strip i.b.on{transform:scaleY(1.35)}
+
+/* the bars arrive from the floor, fast and once per opening */
+@keyframes barRise{from{transform:scaleY(.08);opacity:.4}}
+.stripwrap.fresh .strip i{animation:barRise .2s var(--out) backwards}
+@media (prefers-reduced-motion:reduce){ .stripwrap.fresh .strip i{animation:none} }
 @media (prefers-reduced-motion:reduce){ .strip i.on{transform:none} }
 
 /* a playhead, not a highlight: recolouring a booked bar is forbidden here, and
    a cursor says "you are reading this night" without touching the data */
-.playhead{position:absolute;top:12px;height:26px;width:1px;background:var(--now);
+.playhead{position:absolute;top:10px;height:40px;width:1px;background:var(--now);
   opacity:0;transition:opacity .15s;pointer-events:none;left:0}
 .stripwrap.reading .playhead{opacity:1}
 
@@ -1013,7 +1038,7 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 .peek-h b{font-size:19px;font-weight:680;letter-spacing:-.028em}
 .peek-h s{text-decoration:none;font-size:12px;color:var(--txt-2);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.peek .strip{padding:0;height:20px}
+.peek .strip{padding:0;height:26px}
 .peek-l{margin-top:11px;font-size:13.5px;font-weight:600;color:var(--txt)}
 .peek-s{margin-top:3px;font-size:12px;color:var(--txt-3)}
 @media (prefers-reduced-motion:reduce){ .peek{transition:opacity .12s} }
@@ -4892,9 +4917,21 @@ function attachStripScrub(wrap, strip, head, foot, readD, readW, fi){
     const t = (x - a.left) / (z.right - a.left);
     return Math.max(0, Math.min(DAYS-1, Math.floor(t * DAYS)));
   };
+  /* The run of nights the touched one belongs to: one stay, or one gap. Showing
+     it is the difference between reading a pixel and reading a span. */
+  const runAround = d => {
+    const r = resv.find(x => x.fi === fi && x.start <= d && x.end > d);
+    if(r) return {from: Math.max(r.start, 0), to: Math.min(r.end, DAYS) - 1};
+    let a2 = d; while(a2 > 0 && !occ[fi][a2-1]) a2--;
+    let b2 = d; while(b2 < DAYS-1 && !occ[fi][b2+1]) b2++;
+    return {from: a2, to: b2};
+  };
+  const clearSpan = ()=>{ for(const b2 of bars) b2.classList.remove("span","on"); };
   const show = d => {
     if(d === at) return;
-    if(at >= 0) bars[at].classList.remove("on");
+    clearSpan();
+    const run = runAround(d);
+    for(let k = run.from; k <= run.to; k++) bars[k].classList.add("span");
     at = d; bars[d].classList.add("on");
     const br = bars[d].getBoundingClientRect(), wr = wrap.getBoundingClientRect();
     head.style.transform = `translateX(${(br.left - wr.left + br.width / 2).toFixed(1)}px)`;
@@ -4910,7 +4947,7 @@ function attachStripScrub(wrap, strip, head, foot, readD, readW, fi){
   const stop = () => {
     if(!live) return;
     live = false;
-    if(at >= 0) bars[at].classList.remove("on");
+    clearSpan();
     at = -1;
     wrap.classList.remove("reading"); foot.classList.remove("reading");
     rowsIn().forEach(row => row.classList.remove("lit"));
@@ -5135,15 +5172,26 @@ function roomStrip(fi){
   strip.setAttribute("role","img");
   strip.setAttribute("aria-label",
     `${flats[fi].id} over the next nine weeks: ${occPct(fi)} per cent booked. Touch and drag to read a night.`);
+  // where a new stay begins against an occupied night before it — the seam two
+  // back-to-back bookings otherwise hide
+  const startsHere = new Set();
+  resv.filter(r => r.fi === fi).forEach(r=>{
+    if(r.start > 0 && r.start < DAYS && occ[fi][r.start - 1]) startsHere.add(r.start);
+  });
   for(let d=0; d<DAYS; d++){
     const i = el("i");
     if(!occ[fi][d]) i.classList.add("f");
     else if(blk[fi][d]) i.classList.add("b");
     if(d === 0) i.classList.add("td");
+    if(startsHere.has(d)) i.classList.add("edge");
+    i.style.animationDelay = (d * 3) + "ms";      // 63 bars, ~190ms end to end
     strip.appendChild(i);
   }
   const head = el("i","playhead");
   wrap.append(strip, head);
+  wrap.classList.add("fresh");
+  // let it play once, then get out of the way of the scrub's own transforms
+  setTimeout(()=> wrap.classList.remove("fresh"), 420);
   const foot = el("div","strip-foot");
   const k = el("div","strip-k");
   k.append(el("span","lbl","Today"), el("span","lbl", `${occPct(fi)}% booked`), el("span","lbl","+9 weeks"));

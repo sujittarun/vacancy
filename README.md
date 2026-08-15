@@ -319,8 +319,16 @@ to the words. Nothing resizes while you read — the legend and the readout shar
 the form underneath never jumps. Dragging up or down hands control straight back to
 scrolling.
 
-Out of service is drawn in its own tone, between the lit and the recessed. A flat with a
-technician in it is not income and must not look like it.
+**Out of service is a notch, not a shade.** It was drawn four points of luminance away from
+a booked night — at four pixels wide that is not a distinction, it is the same bar. It now
+has a tone of its own *and* half the height, anchored to the floor, so a flat with a
+technician in it can never read as income. Colour is never the only thing carrying a state
+here, and at this size it could not carry one anyway.
+
+**Touching a night shows you the span.** The whole stay — or the whole gap — lifts with it,
+so you read an extent rather than a pixel. Where two bookings run back to back there is now
+a seam between them; they used to draw as one unbroken run, hiding every turnover in the
+month.
 
 ### Month
 
