@@ -457,24 +457,9 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .exts-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
 .exts-head b{font-size:11.5px;font-weight:600;color:var(--txt-2);letter-spacing:.01em}
 .exts-head u{text-decoration:none;font-size:17px;font-weight:700;letter-spacing:-.03em;color:var(--now)}
-.slider{position:relative;height:34px;touch-action:none;-webkit-user-select:none;user-select:none}
-.slider .track{position:absolute;left:13px;right:13px;top:50%;height:6px;margin-top:-3px;
-  border-radius:3px;background:var(--surface-3);overflow:hidden}
-.slider .track i{position:absolute;inset:0;border-radius:3px;transform-origin:left center;
-  background:linear-gradient(90deg, color-mix(in srgb,var(--now) 45%,transparent), var(--now))}
-.slider .thumb{position:absolute;top:50%;width:26px;height:26px;margin-top:-13px;
-  border-radius:50%;background:var(--free);display:grid;place-items:center;
-  box-shadow:0 2px 10px rgba(0,0,0,.45), 0 0 0 1px rgba(0,0,0,.18);
-  transition:transform .2s var(--out)}
-.slider .thumb::after{content:"";width:8px;height:8px;border-radius:50%;background:var(--now)}
-.slider.drag .thumb{transform:scale(1.18)}
-.slider .ticks{position:absolute;left:13px;right:13px;top:50%;margin-top:9px;
-  display:flex;justify-content:space-between;pointer-events:none}
-.slider .ticks span{font-size:9.5px;color:var(--txt-3);font-weight:600}
-.exts-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:2px}
-.exts-when{font-size:11.5px;color:var(--txt-3);line-height:1.3}
+.exts-foot{display:flex;justify-content:flex-end;margin-top:10px}
+.exts-when{font-size:11.5px;color:var(--txt-3);line-height:1.4}
 .exts-when b{color:var(--txt-2);font-weight:600}
-@media (prefers-reduced-motion:reduce){.slider .thumb{transition:none}}
 .nudgeBtn{padding:7px 11px;border-radius:9px;background:var(--surface-2);
   border:1px solid var(--line);font-size:12px;font-weight:600;color:var(--txt-2);
   transition:transform .3s var(--out)}
@@ -826,18 +811,26 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
 .mguest .bag{flex:0 0 auto;width:15px;height:15px;color:var(--txt-2);display:block}
 .mguest .bag svg{width:15px;height:15px;display:block}
 
-@keyframes carry{
-  0%   {transform:translate(0,0) scale(1)}
-  14%  {transform:translate(0,-9px) scale(1.05)}
-  52%  {transform:translate(calc(var(--dx,120px) * .52), -15px) scale(1.05)}
-  86%  {transform:translate(calc(var(--dx,120px) * 1.01), -2px) scale(1.01)}
-  100% {transform:translate(var(--dx,120px), 0) scale(1)}
+/* An arc is TWO motions, and they do not share a curve: across is one long
+   ease-out, up-and-down is a symmetric rise and fall. Putting both in a single
+   multi-stop keyframe applies the easing between EVERY pair of stops — five
+   stops meant four separate ease-outs, and the result stutters, which is
+   exactly what it looked like. Nested elements let each axis keep its own
+   timing, which is how an arc is actually built. */
+@keyframes carryX{ from{transform:translateX(0)} to{transform:translateX(var(--dx,120px))} }
+@keyframes carryY{
+  0%,100%{transform:translateY(0) scale(1) rotate(0deg)}
+  50%    {transform:translateY(-22px) scale(1.06) rotate(-1.5deg)}
 }
+@keyframes carryLift{ 0%,100%{box-shadow:var(--shadow-sm)} 50%{box-shadow:var(--shadow)} }
 .movestage.carrying .mguest{
-  animation:carry .72s var(--out) forwards;
-  box-shadow:var(--shadow);
+  animation:carryX .46s cubic-bezier(.45,0,.15,1) forwards;
 }
-.movestage.landed .mguest{transform:translate(var(--dx,120px), 0)}
+.movestage.carrying .mguest-in{
+  animation:carryY .46s cubic-bezier(.37,0,.63,1), carryLift .46s linear;
+}
+.movestage.landed .mguest{transform:translateX(var(--dx,120px))}
+.mguest-in{display:flex;align-items:center;gap:7px}
 
 .movewhy{margin:16px 20px 0;font-size:13px;line-height:1.55;color:var(--txt-2)}
 .movewhy b{color:var(--txt);font-weight:640}
@@ -846,7 +839,8 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
 .movestage + .movewhy + .bkgo{margin:16px 20px 0;width:calc(100% - 40px)}
 
 @media (prefers-reduced-motion:reduce){
-  .movestage.carrying .mguest{animation:none;transform:translate(var(--dx,120px),0)}
+  .movestage.carrying .mguest{animation:none;transform:translateX(var(--dx,120px))}
+  .movestage.carrying .mguest-in{animation:none}
   .mroom{transition:none}
 }
 
@@ -1547,75 +1541,66 @@ const NOW = 1;                       // today and tomorrow
    Nothing here is more than two days out. */
 /* Drag to say how much longer a flat stays out, capped at the nights actually
    available so a block can never be dragged over a guest. */
+/* ── how much longer is it out ────────────────────────────────────────────────
+   This was a drag slider with absolutely-positioned end labels, and those
+   labels sat below the 34px track and collided with the line underneath — the
+   overlap you could see. It was also the only slider left in an app that speaks
+   steppers everywhere else, and it predates them.
+
+   A stepper cannot overlap anything, needs no ticks, and reads its own value.
+   The cap is the more useful half anyway: "back on Thursday" and, when a guest
+   is holding the nights after, saying so instead of silently refusing to slide
+   any further — which is why it sometimes stopped at two days with no
+   explanation.                                                               */
 function attachDaysSlider(host, block){
   const room = maxExtend(block);
+  const box = el("div","exts");
   if(room <= 0){
     const none = el("div","exts-when");
     none.style.marginTop = "8px";
-    none.textContent = "A guest has the nights after this — it cannot stay out longer.";
-    host.appendChild(none);
+    const nextUp = resv.filter(r => r.fi === block.fi && !isBlock(r) && r.start >= Math.max(block.end,0))
+                       .sort((a,b)=> a.start - b.start)[0];
+    none.innerHTML = nextUp
+      ? `Cannot stay out any longer — <b>${esc(nextUp.guest)}</b> arrives ${esc(fmt(nextUp.start))}.`
+      : `Cannot stay out any longer — the nights after are taken.`;
+    box.appendChild(none);
+    host.appendChild(box);
     return;
   }
   let days = Math.min(3, room);
-  const box = el("div","exts");
-  const head = el("div","exts-head");
-  const val = el("u");
-  head.append(el("b",null,"Still out for"), val);
 
-  const sl = el("div","slider");
-  sl.setAttribute("role","slider");
-  sl.setAttribute("aria-label","How many more days out of service");
-  sl.setAttribute("aria-valuemin","1");
-  sl.setAttribute("aria-valuemax",String(room));
-  sl.tabIndex = 0;
-  const track = el("div","track"); const fill = el("i");
-  track.appendChild(fill);
-  const thumb = el("div","thumb");
-  const ticks = el("div","ticks");
-  ticks.append(el("span",null,"1 day"), el("span",null,`${room} day${room>1?"s":""}`));
-  sl.append(track, thumb, ticks);
+  const cap = el("div","bkcap");
+  cap.append(el("span", null, "Keep it out for"));
+  const row = el("div","step nightStep");
+  const less = el("button", null, "−"), more = el("button", null, "+"), lab = el("b");
+  less.setAttribute("aria-label","One day fewer"); more.setAttribute("aria-label","One day more");
+  row.append(less, lab, more);
 
-  const foot = el("div","exts-foot");
-  const when = el("div","exts-when");
+  const when = el("div","bkstate");
   const go = el("button","nudgeBtn","Keep it out");
-  foot.append(when, go);
+  const foot = el("div","exts-foot");
+  foot.append(go);
 
   const paint = ()=>{
-    const p = room === 1 ? 1 : (days - 1) / (room - 1);
-    fill.style.transform = `scaleX(${p})`;
-    thumb.style.left = `calc(13px + ${p} * (100% - 26px))`;
-    val.textContent = `${days} day${days>1?"s":""}`;
-    const back = Math.min(Math.max(block.end,0) + days, DAYS-1);
-    when.innerHTML = `back on <b>${fmtL(back)}</b>`;
-    sl.setAttribute("aria-valuenow", String(days));
-    sl.setAttribute("aria-valuetext", `${days} day${days>1?"s":""}, back on ${fmtL(back)}`);
+    days = Math.max(1, Math.min(room, days));
+    lab.textContent = days + (days === 1 ? " day" : " days");
+    less.disabled = days <= 1; more.disabled = days >= room;
+    const back = Math.min(Math.max(block.end, 0) + days, DAYS - 1);
+    const capped = days >= room;
+    const nextUp = capped
+      ? resv.filter(r => r.fi === block.fi && !isBlock(r) && r.start >= Math.max(block.end,0))
+            .sort((a,b)=> a.start - b.start)[0]
+      : null;
+    when.innerHTML = `Back on sale <b>${esc(fmtL(back))}</b>`
+      + (nextUp ? ` · that is as far as it goes, ${esc(nextUp.guest)} arrives ${esc(fmt(nextUp.start))}`
+                : capped ? ` · as far as the free nights allow` : "");
+    go.textContent = `Keep it out ${days} more day${days>1?"s":""}`;
   };
-  const setFromX = x=>{
-    const r = track.getBoundingClientRect();
-    const p = Math.max(0, Math.min(1, (x - r.left) / Math.max(1, r.width)));
-    const next = Math.max(1, Math.min(room, Math.round(1 + p * (room - 1))));
-    if(next !== days){ days = next; haptic(6); paint(); }
-  };
-  const down = e=>{ e.stopPropagation(); e.preventDefault(); sl.classList.add("drag");
-                    setFromX(e.touches ? e.touches[0].clientX : e.clientX); };
-  const move = e=>{ if(!sl.classList.contains("drag")) return; e.preventDefault();
-                    setFromX(e.touches ? e.touches[0].clientX : e.clientX); };
-  const up = ()=> sl.classList.remove("drag");
-  sl.addEventListener("touchstart", down, {passive:false});
-  sl.addEventListener("touchmove", move, {passive:false});
-  sl.addEventListener("touchend", up, {passive:true});
-  sl.addEventListener("mousedown", e=>{ down(e);
-    const mm = ev=>move(ev), mu = ()=>{ up();
-      removeEventListener("mousemove",mm); removeEventListener("mouseup",mu); };
-    addEventListener("mousemove", mm); addEventListener("mouseup", mu); });
-  sl.addEventListener("keydown", e=>{
-    if(e.key === "ArrowRight" && days < room){ days++; paint(); e.preventDefault(); }
-    if(e.key === "ArrowLeft"  && days > 1){    days--; paint(); e.preventDefault(); }
-  });
-  sl.addEventListener("click", e=>e.stopPropagation());
+  less.onclick = ev=>{ ev.stopPropagation(); days--; haptic(5); paint(); };
+  more.onclick = ev=>{ ev.stopPropagation(); days++; haptic(5); paint(); };
   go.onclick = ev=>{ ev.stopPropagation(); extendBlock(block, days); haptic(18); refreshScreen(); };
 
-  box.append(head, sl, foot);
+  box.append(cap, row, when, foot);
   host.appendChild(box);
   paint();
 }
@@ -1637,6 +1622,33 @@ function todayBoard(){
       label:`Clean ${turns.length} flat${turns.length>1?"s":""} ${d===0?"today":"tomorrow"}`,
       note:"check-out and check-in the same day",
       open:()=>openFlatList(`${turns.length} to clean`, `${fmtL(d)} · check-out and check-in the same day`, turns)});
+  }
+
+  /* Logged faults never reached this board, which made logging one feel like
+     writing into a drawer. Only two kinds belong here, because this card is
+     things that stop being true if ignored: anything marked urgent, and
+     anything at all on a flat with a guest arriving in the next two days —
+     after that it is somebody else's problem to walk into. */
+  {
+    const urgent = openIssues().filter(x => x.urgency === "urgent");
+    const arrivingSoon = openIssues().filter(x => x.urgency !== "urgent"
+      && bookings().some(r => r.fi === x.fi && r.start >= 0 && r.start <= NOW + 1));
+    const pressing = urgent.concat(arrivingSoon);
+    if(pressing.length){
+      const rows = pressing.map(x=>({fi:x.fi, d:0,
+        meta:`<b>${esc(x.fault || "Issue")}</b> · ${esc(flats[x.fi].id)}`
+           + `<em>${esc(x.note || "no note")}`
+           + (x.urgency === "urgent" ? " · marked urgent" : " · a guest arrives within two days") + `</em>`,
+        pill: x.urgency === "urgent" ? "urgent" : "before they arrive"}));
+      todo.push({
+        label: urgent.length && arrivingSoon.length
+          ? `Fix ${pressing.length}: ${urgent.length} urgent, ${arrivingSoon.length} before a guest arrives`
+          : urgent.length ? `Fix ${urgent.length} urgent thing${urgent.length>1?"s":""}`
+          : `Fix ${arrivingSoon.length} thing${arrivingSoon.length>1?"s":""} before a guest arrives`,
+        note: "logged faults on flats that are still on sale",
+        open: ()=> openFlatList(`${pressing.length} to fix`,
+          "still on sale, and wanted before the next guest", rows)});
+    }
   }
 
   /* Money the operator can only collect while the guest is standing there.
@@ -5515,8 +5527,9 @@ function openMove(mv, askDay, onFreed){
   const t = el("div");
   t.innerHTML = `<div class="n">Move ${esc(B.guest)}</div>`
               + `<div class="m">${esc(from.id)} → ${esc(to.id)} · ${esc(fmt(B.start))}–${esc(fmt(B.end))}</div>`;
+  let booked = false, abandoned = null;
   const x = el("button", null, "✕"); x.setAttribute("aria-label","Close");
-  x.onclick = ()=> closeSheet();
+  x.onclick = ()=>{ closeSheet(); if(abandoned) abandoned(); };
   sheetH.append(t, x);
 
   /* the two rooms, and the guest standing in one of them */
@@ -5529,8 +5542,11 @@ function openMove(mv, askDay, onFreed){
   const a = mkRoom(from, "a"), bRoom = mkRoom(to, "b");
   const gap = el("div","mgap");
   gap.innerHTML = '<i></i>';
+  // two nested elements so the two axes can carry their own timing — see the
+  // note above @keyframes carryX
   const guest = el("div","mguest");
-  guest.innerHTML = '<span class="bag">' + SVG_BAG + '</span><b>' + esc(B.guest) + '</b>';
+  guest.innerHTML = '<div class="mguest-in"><span class="bag">' + SVG_BAG
+                  + '</span><b>' + esc(B.guest) + '</b></div>';
   stage.append(a, gap, bRoom, guest);
 
   const why = el("p","movewhy");
@@ -5581,12 +5597,30 @@ function openMove(mv, askDay, onFreed){
       go.textContent = `Book ${from.id}`;
       go.disabled = false;
       go.onclick = ()=>{
-        haptic(14);
+        haptic(14); booked = true;                 // the move earned its keep
         if(onFreed) onFreed(mv.frees);
         else openBooking(mv.frees, askDay, 1);
       };
       note.textContent = "Tell them the new room number when you next speak to them.";
-    }, calm ? 10 : 720);
+
+      /* The move is real the moment it happens — but if the booking it was
+         meant to enable never gets taken, the guest was shuffled for nothing.
+         Closing without booking says so, and offers it back. */
+      booked = false;
+      abandoned = ()=>{
+        if(booked) return;
+        toast("warn", `<b>${esc(B.guest)} was moved to ${esc(to.id)}</b> but `
+          + `${esc(from.id)} was never booked — so nobody was moved for a reason.`,
+          null, {label:`Put ${B.guest} back in ${from.id}`, run:()=>{
+            if(!moveBooking(B, mv.frees)){
+              toast("bad", `<b>${esc(from.id)} has gone.</b> ${esc(B.guest)} stays in ${esc(to.id)}.`, null);
+              return;
+            }
+            haptic(14); refreshScreen();
+            toast("", `<b>${esc(B.guest)} is back in ${esc(from.id)}.</b>`, null);
+          }});
+      };
+    }, calm ? 10 : 460);
   };
 }
 

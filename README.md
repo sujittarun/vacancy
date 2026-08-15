@@ -449,6 +449,13 @@ already been told. Nothing else moves: same nights, same money, same guest, and 
 reminding you they need telling their new room number. If the destination is taken while
 you are deciding, it refuses and says so rather than double-booking.
 
+**Walk away without booking and it offers the move back.** A guest shuffled for a booking
+that never happened was shuffled for nothing, so closing the sheet says so and puts them
+back in one tap.
+
+It only handles **one** guest. A room blocked by two separate bookings inside your dates
+cannot be freed by a single move, and the app does not pretend otherwise — see *Status*.
+
 ### Pulse
 
 Opens with **Worth doing now** — one card, and only things that are true **today or
@@ -584,6 +591,9 @@ Good enough to run a real day on, signed in. Honest limits before you rely on it
   connection is not confirmed until the pill says *Live* — which is exactly what it says.
 - **One login for the property.** Adding a second person is a row in the database, not yet
   a screen in the app.
+- **A room move shifts one guest, not two.** If a room is held by two separate bookings
+  across the nights you want, freeing it needs both moved and the app will not offer it.
+  That is the common case for a long stay, so *One move away* is mostly a short-stay tool.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for how the multi-tenant database is put together
 and why it was built as one project rather than one per host.
