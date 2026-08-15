@@ -465,7 +465,26 @@ When there is nothing, the card does not render. One line takes its place:
 > ✓ **Nothing needs attention today.** No cleans between guests, no flat due back from
 > maintenance, and every room tonight is sold.
 
-Below it, one metric per section, scrolled vertically. The uncommon ones are the point:
+Above it, a bar of five questions — **Now · Money · Rooms · Guests · Upkeep** — because
+they run on different clocks and used to sit in one nine-card scroll, where what to do today
+was pushed down by how the year is going. A dot on **Now** means something is waiting.
+
+**Money** — what a night is actually worth. RevPAR is the number operators run on, because a
+full house at a poor rate and a half-empty one at a good rate look identical on an occupancy
+chart and never on this. Beside it, the gap between what you list and what you achieve — the
+discount you are actually giving — and what you are owed, split into money you can collect
+at the door and money that has already walked out.
+
+**Guests** — how much of the book is people who came back, and whether they are worth more
+than first-timers. Only possible because a booking carries a phone number.
+
+**Upkeep** — what keeping the place standing costs, counted honestly: the invoice *and* the
+nights the repair took off the market. In the sample book that is ₹3,500 of invoices against
+₹42,600 of lost nights. The half nobody counts is usually the larger one, and it is the
+argument for paying more for someone who can come today. Then which flats keep costing you,
+and whose work comes back within a month.
+
+The rest live under **Rooms**. The uncommon ones are the point:
 
 | Card | Why it matters |
 |---|---|

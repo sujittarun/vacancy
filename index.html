@@ -682,6 +682,30 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .card .row.lit{background:var(--surface-2)}
 .sheet-s{padding:14px 20px 8px;display:flex;justify-content:space-between;align-items:baseline;gap:10px}
 
+/* ── the Pulse segment bar ────────────────────────────────────────────────────
+   Five questions on different clocks, not one queue. Sticky, because the answer
+   to "where am I" should not require scrolling back up.                       */
+.segbar{
+  display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;
+  position:sticky;top:0;z-index:6;margin:0 -20px;padding:2px 20px 12px;
+  background:linear-gradient(var(--bg) 72%, transparent);
+}
+.segbar::-webkit-scrollbar{display:none}
+.segbar button{
+  position:relative;flex:0 0 auto;padding:9px 14px;border-radius:10px;
+  background:var(--surface-2);border:1px solid var(--line);
+  font-size:13px;font-weight:600;color:var(--txt-3);white-space:nowrap;
+  transition:transform .38s var(--spring), background .18s, color .18s;
+}
+.segbar button:active{transform:scale(.95);transition-duration:.085s}
+.segbar button[aria-pressed="true"]{background:var(--free);color:var(--free-ink);border-color:transparent}
+/* something is waiting under Now — the only badge in the app, so it means it */
+.segbar button i.dot{
+  position:absolute;top:6px;right:7px;width:5px;height:5px;border-radius:50%;
+  background:var(--now);
+}
+.segbar button[aria-pressed="true"] i.dot{background:var(--free-ink);opacity:.55}
+
 /* ── the room card ────────────────────────────────────────────────────────────
    Opening a room reads. One primary action sized to say "this is what you came
    for", two small routes to the things that write, and then the lists. Every
@@ -3604,6 +3628,92 @@ function renderMonth(){
 }
 
 /* ═══════════════ SCREEN 4 — TRENDS ═══════════════ */
+
+/* ══════════════ what the money is doing ═════════════════════════════════════
+   Occupancy alone hides the thing that pays: a full house at a poor rate and a
+   half-empty one at a good rate look identical on an occupancy chart. RevPAR
+   folds price and occupancy into one number and is what operators actually run
+   on. Everything here is honest about coverage — a booking with no amount
+   recorded is excluded and SAID to be excluded, rather than quietly dragging
+   the average down.                                                          */
+function moneyStats(){
+  const bk = bookings().filter(r => r.end > 0 && r.start < DAYS);
+  let nightsSold = 0, revenue = 0, priced = 0, pricedNights = 0;
+  bk.forEach(r=>{
+    const n = Math.max(0, Math.min(r.end, DAYS) - Math.max(r.start, 0));
+    nightsSold += n;
+    if(r.amount && r.nights){
+      priced++; pricedNights += n;
+      revenue += r.amount * (n / r.nights);   // only the nights inside the horizon
+    }
+  });
+  let sellable = 0;
+  for(let d = 0; d < DAYS; d++) for(let i = 0; i < NF; i++) if(!blk[i][d]) sellable++;
+  const adr = pricedNights ? revenue / pricedNights : 0;
+  // scale the priced sample up to every sold night, so RevPAR is not understated
+  // simply because some bookings have no figure against them
+  const projected = pricedNights ? adr * nightsSold : 0;
+  return {nightsSold, sellable, revenue, adr, priced, total: bk.length,
+          coverage: bk.length ? priced / bk.length : 0,
+          revpar: sellable ? projected / sellable : 0,
+          listed: NF ? flats.reduce((s,f)=> s + (f.rate||0), 0) / NF : 0};
+}
+
+/* Money already agreed and not yet in hand, split by whether you can still do
+   anything about it. A guest who has left owing is a different job from one who
+   arrives on Tuesday. */
+function owedStats(){
+  const bk = bookings().filter(r => r.amount && dueFrom(r) > 0);
+  const soon = bk.filter(r => r.start >= 0 && r.start <= 7);
+  const gone = bk.filter(r => r.end <= 0);
+  const sum = a => a.reduce((s,r)=> s + dueFrom(r), 0);
+  return {total: sum(bk), count: bk.length,
+          soon: sum(soon), soonN: soon.length,
+          gone: sum(gone), goneN: gone.length,
+          platform: bookings().reduce((s,r)=> s + withPlatform(r), 0)};
+}
+
+/* Repeat business, which is the cheapest revenue there is — no commission, no
+   listing, no photographs. Only visible at all because a booking now carries a
+   phone number. */
+function guestStats(){
+  const bk = bookings().filter(r => r.phone && r.end > 0 && r.start < DAYS);
+  const by = {};
+  bk.forEach(r=> (by[digits10(r.phone)] = by[digits10(r.phone)] || []).push(r));
+  const people = Object.values(by);
+  const repeat = people.filter(p => p.length > 1);
+  const repeatRows = repeat.reduce((a,p)=> a.concat(p), []);
+  const onceRows = people.filter(p => p.length === 1).map(p => p[0]);
+  const avg = rows => { const v = rows.filter(r=>r.amount);
+    return v.length ? v.reduce((s,r)=> s + r.amount, 0) / v.length : 0; };
+  return {people: people.length, repeat: repeat.length,
+          bookings: bk.length, repeatBookings: repeatRows.length,
+          share: bk.length ? repeatRows.length / bk.length : 0,
+          avgRepeat: avg(repeatRows), avgOnce: avg(onceRows),
+          top: repeat.map(p=>({name: p[p.length-1].guest, phone: p[0].phone, stays: p.length,
+                               spend: p.reduce((s,r)=> s + (r.amount||0), 0)}))
+                     .sort((a,b)=> b.spend - a.spend)};
+}
+
+/* What keeping the place standing actually costs — the invoice plus the nights
+   the repair took off the market, which is the half that never appears on any
+   bill and is usually the larger one. */
+function upkeepStats(){
+  const jobs = resv.filter(isBlock);
+  let bill = 0, lost = 0, nights = 0;
+  const byFlat = {};
+  jobs.forEach(r=>{
+    const c = outageCost(r);
+    bill += c.bill; lost += c.lost; nights += c.nights;
+    const g = byFlat[r.fi] = byFlat[r.fi] || {fi:r.fi, bill:0, lost:0, jobs:0, nights:0};
+    g.bill += c.bill; g.lost += c.lost; g.jobs++; g.nights += c.nights;
+  });
+  return {bill, lost, nights, total: bill + lost, jobs: jobs.length,
+          open: openIssues().length,
+          flats: Object.values(byFlat).sort((a,b)=> (b.bill+b.lost) - (a.bill+a.lost))};
+}
+
+let pulseSeg = "now";
 function renderTrends(){
   const s = document.getElementById("scr-trends");
   s.textContent = "";
@@ -3624,6 +3734,24 @@ function renderTrends(){
     return;
   }
   const all = []; for(let d=0; d<DAYS; d++) all.push(d);
+
+  /* ── one question per segment ────────────────────────────────────────────────
+     Pulse was nine cards in a single scroll: what to do today sat above how the
+     year is going, and each new measure pushed the actionable ones further down.
+     They answer different questions on different clocks — act now, earn, fill,
+     return, spend — so they get a bar rather than a queue. */
+  const SEGS = [["now","Now"],["money","Money"],["rooms","Rooms"],
+                ["guests","Guests"],["upkeep","Upkeep"]];
+  const seg = SEGS.some(s=>s[0] === pulseSeg) ? pulseSeg : "now";
+  const bar = el("div","segbar");
+  SEGS.forEach(([k,label])=>{
+    const b2 = el("button", null, label);
+    b2.setAttribute("aria-pressed", k === seg);
+    if(k === "now" && todayBoard().count) b2.append(el("i","dot"));
+    b2.onclick = ()=>{ if(k === seg) return; pulseSeg = k; haptic(9); renderTrends(); };
+    bar.appendChild(b2);
+  });
+  s.appendChild(bar);
 
   const deck = el("div","deck");
   const card = (title, cap)=>{
@@ -3665,7 +3793,7 @@ function renderTrends(){
 
   /* 0 — the board. Grouped by the response each thing needs. */
   const board = todayBoard();
-  if(board.count){
+  if(seg === "now" && board.count){
     const {c,b} = card("Worth doing now", "today and tomorrow · what expires if ignored");
     b.style.justifyContent = "flex-start";
     const wrap = el("div","board");
@@ -3741,7 +3869,8 @@ function renderTrends(){
     }
 
     b.appendChild(wrap);
-  } else {
+  } else if(seg === "now"){
+    // the all-clear belongs to Now; it was leaking onto every other segment
     const line = el("div","allclear");
     line.append(el("div","tick","✓"));
     const t = el("div");
@@ -3751,7 +3880,173 @@ function renderTrends(){
   }
 
   /* 1 — the booking curve */
-  {
+
+  /* ── MONEY ─────────────────────────────────────────────────────────────── */
+  if(seg === "money"){
+    const M = moneyStats();
+    const {c,b} = card("What a night is worth", "revenue per available night");
+    const head = el("div","headline");
+    head.append(el("b", null, money(M.revpar)));
+    head.append(el("s", null, `per available night · ${money(M.adr)} average when sold`));
+    b.appendChild(head);
+    b.appendChild(vbars([
+      {v: M.revpar, label: Math.round(M.revpar/100)/10 + "k", k:"RevPAR"},
+      {v: M.adr,    label: Math.round(M.adr/100)/10 + "k",    k:"Achieved"},
+      {v: M.listed, label: Math.round(M.listed/100)/10 + "k", k:"Listed"},
+    ], 0));
+    said(c, M.priced === 0
+      ? `No amounts recorded yet, so there is nothing to average. Put a figure on a booking and this fills in.`
+      : `Occupancy alone cannot tell you this: a full house at a poor rate and a half-empty one at a good rate `
+        + `look the same on an occupancy chart. <b>${money(M.revpar)}</b> is what each of your ${M.sellable.toLocaleString("en-IN")} `
+        + `sellable nights earns on average. The gap between <b>achieved</b> and <b>listed</b> is what you are actually `
+        + `discounting — ${M.adr >= M.listed ? "you are holding your rate" : `about <span class="hi">${Math.round((1 - M.adr/M.listed)*100)}%</span> off`}.`
+        + (M.coverage < 0.95 ? ` Based on the <b>${M.priced} of ${M.total}</b> bookings that carry an amount.` : ""));
+  }
+
+  if(seg === "money"){
+    const O = owedStats();
+    const {c,b} = card("What you are owed", "agreed but not in hand");
+    const head = el("div","headline");
+    head.append(el("b", null, money(O.total)));
+    head.append(el("s", null, `across ${O.count} booking${O.count===1?"":"s"}`));
+    b.appendChild(head);
+    const rows = el("div","card");
+    [["Arriving within a week", O.soon, O.soonN, "collect at the door"],
+     ["Already left", O.gone, O.goneN, "has to be chased"],
+     ["Sitting with a platform", O.platform, null, "coming to you, do not chase"]]
+      .forEach(([k, v, n, why])=>{
+        if(!v) return;
+        const r = el("div","row bk");
+        const m = el("div","meta");
+        m.innerHTML = `<b>${esc(k)}</b><em>${esc(why)}${n != null ? ` · ${n} booking${n===1?"":"s"}` : ""}</em>`;
+        const e = el("div","rowend");
+        e.append(el("span", "paid " + (k === "Already left" ? "due" : "clear"), money(v)));
+        r.append(m, e);
+        rows.appendChild(r);
+      });
+    if(!O.total && !O.platform) rows.appendChild(el("div","empty","Nothing outstanding — every booking is settled."));
+    b.appendChild(rows);
+    said(c, O.gone > 0
+      ? `<b>${money(O.gone)}</b> is owed by guests who have already gone, which is the money that quietly never arrives. `
+        + `The rest is collectable while they are standing in front of you.`
+      : `Nothing has walked out unpaid. The balance is with guests still to arrive, which is the easy kind to collect.`);
+  }
+
+  /* ── GUESTS ────────────────────────────────────────────────────────────── */
+  if(seg === "guests"){
+    const G = guestStats();
+    const {c,b} = card("Guests who come back", "repeat business in the book");
+    const head = el("div","headline");
+    head.append(el("b", null, Math.round(G.share*100) + "%"));
+    head.append(el("s", null, `of bookings · ${G.repeat} of ${G.people} people have stayed before`));
+    b.appendChild(head);
+    if(G.avgRepeat && G.avgOnce) b.appendChild(vbars([
+      {v: G.avgOnce,  label: Math.round(G.avgOnce/100)/10 + "k",  k:"First time"},
+      {v: G.avgRepeat,label: Math.round(G.avgRepeat/100)/10 + "k",k:"Returning"},
+    ], G.avgRepeat >= G.avgOnce ? 1 : 0));
+    const top = el("div","card");
+    G.top.slice(0,5).forEach(g=>{
+      const r = el("div","row bk");
+      const m = el("div","meta");
+      m.innerHTML = `<b>${esc(g.name)}</b><em>${g.stays} stays · ${esc(g.phone)}</em>`;
+      const e = el("div","rowend");
+      e.append(el("span","paid clear", money(g.spend)));
+      const call = el("a","rowx");
+      call.href = "tel:" + String(g.phone).replace(/[^\d+]/g,"");
+      call.textContent = "☎";
+      call.setAttribute("aria-label", "Call " + g.name);
+      e.append(call);
+      r.append(m, e);
+      top.appendChild(r);
+    });
+    if(!G.top.length) top.appendChild(el("div","empty","Nobody has booked twice yet — this fills in as numbers repeat."));
+    b.appendChild(top);
+    said(c, G.repeat
+      ? `Repeat guests are the cheapest revenue there is: no commission, no listing, no photographs. `
+        + (G.avgRepeat > G.avgOnce
+            ? `Yours also spend <span class="hi">${Math.round((G.avgRepeat/G.avgOnce - 1)*100)}% more</span> than first-timers.`
+            : `They are worth about the same as a first-timer here, so the saving is the commission you did not pay.`)
+        + ` The numbers are in the export — that list is who to message when a week looks thin.`
+      : `This only counts once a phone number turns up twice, so it grows with use. It is worth entering numbers `
+        + `even on walk-ins for exactly this reason.`);
+  }
+
+  /* ── UPKEEP ────────────────────────────────────────────────────────────── */
+  if(seg === "upkeep"){
+    const U = upkeepStats();
+    const {c,b} = card("What upkeep costs", "the bill, and the nights it took");
+    const head = el("div","headline");
+    head.append(el("b", null, money(U.total)));
+    head.append(el("s", null, `${U.jobs} spell${U.jobs===1?"":"s"} out of service · ${U.nights} night${U.nights===1?"":"s"} lost`));
+    b.appendChild(head);
+    if(U.total) b.appendChild(vbars([
+      {v: U.bill, label: Math.round(U.bill/100)/10 + "k", k:"Invoices"},
+      {v: U.lost, label: Math.round(U.lost/100)/10 + "k", k:"Lost nights"},
+    ], U.lost > U.bill ? 1 : 0));
+    said(c, U.total
+      ? `The invoice is the half everybody counts. <b>${money(U.lost)}</b> is the half nobody does — the nights the flat `
+        + `could not be sold while the work happened`
+        + (U.lost > U.bill ? `, and here it is the <span class="hi">larger</span> of the two. That is the argument for paying more for someone who can come today.` : `.`)
+        + (U.open ? ` ${U.open} thing${U.open===1?" is":"s are"} still waiting to be fixed.` : "")
+      : `Nothing has gone out of service yet. When it does, this counts the bill and the nights together.`);
+  }
+
+  if(seg === "upkeep"){
+    const U = upkeepStats();
+    const {c,b} = card("Which flats cost you", "repairs and lost nights, by flat");
+    const rows = el("div","card");
+    U.flats.slice(0,6).forEach(g=>{
+      const r = el("button","row bk");
+      const m = el("div","meta");
+      m.innerHTML = `<b>${esc(flats[g.fi].id)}</b><em>${g.jobs} spell${g.jobs===1?"":"s"} · ${g.nights} night${g.nights===1?"":"s"} lost</em>`;
+      const e = el("div","rowend");
+      e.append(el("span","paid " + (g.bill + g.lost > 0 ? "due" : "clear"), money(g.bill + g.lost)));
+      r.append(m, e);
+      r.onclick = ()=>{ haptic(9); openSheet(g.fi); };
+      rows.appendChild(r);
+    });
+    if(!U.flats.length) rows.appendChild(el("div","empty","No flat has been out of service yet."));
+    b.appendChild(rows);
+    said(c, U.flats.length > 1
+      ? `A flat that keeps appearing here is telling you something an average never will — that the money is going `
+        + `into one address. Tap one to see what kept breaking.`
+      : `Once a few repairs are logged this ranks the flats, which is how a quietly expensive one gets noticed.`);
+  }
+
+  if(seg === "upkeep"){
+    const F = fixers();
+    const {c,b} = card("Whose work sticks", "and whose comes back");
+    const rows = el("div","card");
+    F.forEach(g=>{
+      const r = el("div","row bk");
+      const m = el("div","meta");
+      m.innerHTML = `<b>${esc(g.name)}</b><em>${g.jobs} job${g.jobs===1?"":"s"}`
+                  + (g.spend ? ` · ${money(g.spend)}` : "") + `</em>`;
+      const e = el("div","rowend");
+      e.append(el("span", "paid " + (g.back ? "due" : "clear"),
+                 g.back ? `${g.back} came back` : "none came back"));
+      if(g.phone){
+        const call = el("a","rowx");
+        call.href = "tel:" + String(g.phone).replace(/[^\d+]/g,"");
+        call.textContent = "☎";
+        call.setAttribute("aria-label", "Call " + g.name);
+        e.append(call);
+      }
+      r.append(m, e);
+      rows.appendChild(r);
+    });
+    if(!F.length) rows.appendChild(el("div","empty","Nobody recorded yet. Put a name against a repair and this builds itself."));
+    b.appendChild(rows);
+    const worst = F[0];
+    said(c, worst && worst.back
+      ? `<b>${esc(worst.name)}</b> has had <span class="hi">${worst.back} of ${worst.jobs}</span> jobs come back within a month. `
+        + `The trade calls this first-time fix rate; below about seven in ten, a cheaper tradesman costs more than a dearer one `
+        + `because you pay for the second visit and lose the nights twice.`
+      : `Nothing has come back within a month, which is what good work looks like. This is the number worth watching `
+        + `before deciding who to keep calling.`);
+  }
+
+  if(seg === "rooms"){
     const curve = bookingCurve();
     const {c,b} = card("How your book fills", "occupancy by week ahead");
     const near = curve[0], far = curve[curve.length-1];
@@ -3772,7 +4067,7 @@ function renderTrends(){
   }
 
   /* 2 — which nights sell */
-  {
+  if(seg === "rooms"){
     const wk = weekdayPattern(all);
     const {c,b} = card("Which nights sell", "occupancy by day of week");
     const order = [1,2,3,4,5,6,0];
@@ -3784,7 +4079,7 @@ function renderTrends(){
   }
 
   /* 3 — by building */
-  {
+  if(seg === "rooms"){
     const rows = groupOcc(all, f=>f.bname);
     const {c,b} = card("How each building is doing", "occupancy across the nine weeks");
     b.appendChild(hbars(rows.slice().reverse().map(r=>({k:r.k, pct:r.pct, right:Math.round(r.pct*100)+"%"})),
@@ -3796,7 +4091,7 @@ function renderTrends(){
   }
 
   /* 4 — by unit type */
-  {
+  if(seg === "rooms"){
     const rows = groupOcc(all, f=>f.type);
     const {c,b} = card("Which sizes sell", "occupancy by unit type");
     b.appendChild(hbars(rows.slice().reverse().map(r=>({k:`${r.k} · ${r.units} flat${r.units>1?"s":""}`,
@@ -3806,7 +4101,7 @@ function renderTrends(){
   }
 
   /* 5 — length of stay */
-  {
+  if(seg === "guests"){
     const m = stayMix();
     const {c,b} = card("How long people stay", `${m.total} bookings in the next nine weeks`);
     const head = el("div","headline");
@@ -3819,7 +4114,7 @@ function renderTrends(){
   }
 
   /* 6 — where bookings come from */
-  {
+  if(seg === "money"){
     const m = sourceMix();
     const {c,b} = card("Where bookings come from", `${m.total} bookings in the next nine weeks`);
     b.appendChild(hbars(m.rows.map(r=>({k:r.k, pct:r.n/Math.max(1,m.total),
@@ -3829,7 +4124,7 @@ function renderTrends(){
   }
 
   /* 7 — turnaround load */
-  {
+  if(seg === "rooms"){
     const load = turnLoad(14);
     const {c,b} = card("The cleaning week", "same-day turnarounds, next fortnight");
     const peak = load.reduce((a,x)=> x.n > a.n ? x : a, load[0]);
@@ -3845,7 +4140,7 @@ function renderTrends(){
   }
 
   /* 8 — fragmentation */
-  {
+  if(seg === "rooms"){
     const f = fragmentation();
     const {c,b} = card("How broken up the gaps are", "empty stretches between bookings");
     const head = el("div","headline");
