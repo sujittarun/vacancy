@@ -682,13 +682,58 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .card .row.lit{background:var(--surface-2)}
 .sheet-s{padding:14px 20px 8px;display:flex;justify-content:space-between;align-items:baseline;gap:10px}
 
+/* ── a chart that answers back ────────────────────────────────────────────────
+   The readout lives in a slot that is already there, so touching a bar never
+   pushes the cards below it down the page.                                    */
+.vwrap{display:flex;flex-direction:column}
+/* 0fr → 1fr rather than a height: the browser resolves it on the compositor,
+   so the cards below never thrash while it opens */
+.vsay{display:grid;grid-template-rows:0fr;opacity:0;
+  transition:grid-template-rows .26s var(--out), opacity .2s var(--out)}
+.vsay > .vsay-in{overflow:hidden;min-height:0}
+.vwrap.telling .vsay{grid-template-rows:1fr;opacity:1}
+.vwrap.telling .vsay > .vsay-in{padding-top:11px}
+.vsay-l{font-size:12.5px;line-height:1.5;color:var(--txt-2)}
+.vsay-l b{color:var(--txt);font-weight:640}
+.vsay-go{
+  margin-top:7px;padding:6px 10px;border-radius:8px;font-size:12px;font-weight:640;
+  color:var(--now);background:color-mix(in srgb,var(--now) 14%,transparent);
+  transition:transform .3s var(--spring);
+}
+.vsay-go:active{transform:scale(.94);transition-duration:.085s}
+/* the touched bar lifts out of the row rather than recolouring, because colour
+   on a data cell already means something here */
+.vbar{transition:transform .28s var(--spring), opacity .2s}
+button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
+.vwrap.telling .vbar{opacity:.45}
+.vbar.on{opacity:1;transform:translateY(-3px)}
+@media (prefers-reduced-motion:reduce){ .vbar,.vsay{transition:none} }
+
 /* ── the Pulse segment bar ────────────────────────────────────────────────────
    Five questions on different clocks, not one queue. Sticky, because the answer
    to "where am I" should not require scrolling back up.                       */
 .segbar{
   display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;
-  position:sticky;top:0;z-index:6;margin:0 -20px;padding:2px 20px 12px;
-  background:linear-gradient(var(--bg) 72%, transparent);
+  /* top is NEGATIVE by exactly the screen's padding, because sticky resolves
+     against the scroll container's padding box: -22px makes the floor the border
+     box instead, so the bar parks flush under the title bar rather than 22px
+     adrift with scrolling content showing through the gap. The matching
+     negative margin cancels it at rest, and the 22px top padding it carries is
+     the solid ground the chips sit on once content slides underneath. */
+  position:sticky;top:-22px;z-index:6;
+  /* The screen is a flex column with a 30px gap and 22px of top padding, which
+     left a ~42px empty band under the title. The gap below is clawed back with a
+     negative margin; the space ABOVE cannot be, because sticky `top:0` resolves
+     against the scroll container's PADDING box — the 22px is a floor, and a
+     negative top margin only moves the static position before sticky pulls it
+     back down. So the bar simply carries no top padding of its own, and the
+     screen's own 22px becomes its breathing room, exactly as on every other
+     tab. The 8px it does keep is the gradient it needs once content scrolls
+     underneath it. */
+  margin:-22px -20px -20px;padding:22px 20px 12px;
+  /* solid behind the chips, fading only through the bottom padding — a gradient
+     that starts at the chips lets the card titles read straight through them */
+  background:linear-gradient(var(--bg) calc(100% - 14px), transparent);
 }
 .segbar::-webkit-scrollbar{display:none}
 .segbar button{
@@ -3795,20 +3840,52 @@ function renderTrends(){
     return {c, b};
   };
   const said = (c, html)=>{ const p = el("p","said"); p.innerHTML = html; c.appendChild(p); };
-  const vbars = (rows, accIdx)=>{
+  /* A chart that only draws is a picture. Touch a bar and it says what it is in
+     words, and where there is something to do about it, offers the route. The
+     readout sits in a fixed slot under the chart so nothing reflows and the
+     cards below never jump.                                                   */
+  const vbars = (rows, accIdx, tell)=>{
+    const wrap = el("div","vwrap");
     const w = el("div","vbars");
     const max = Math.max(...rows.map(r=>r.v), 0.0001);
+    const out = el("div","vsay");
+    let picked = -1;
+    const bars = [];
     rows.forEach((r,i)=>{
-      const b = el("div","vbar" + (i===accIdx ? " acc" : ""));
+      const b = el(tell ? "button" : "div", "vbar" + (i===accIdx ? " acc" : ""));
       b.append(el("div","v", r.label));
       const col = el("div","col"); const fill = el("i");
       fill.style.height = "100%";
       fill.style.setProperty("--v", Math.max(.02, r.v/max).toFixed(3));
       col.appendChild(fill);
       b.append(col, el("div","k", r.k));
+      if(tell){
+        b.setAttribute("aria-label", r.k + ", " + r.label);
+        b.onclick = ()=>{
+          picked = picked === i ? -1 : i;
+          bars.forEach((z,j)=> z.classList.toggle("on", j === picked));
+          out.textContent = "";
+          if(picked < 0){ wrap.classList.remove("telling"); return; }
+          const said2 = tell(rows[i], i);
+          if(!said2){ wrap.classList.remove("telling"); return; }
+          wrap.classList.add("telling");
+          const inner = el("div","vsay-in");
+          const line = el("div","vsay-l"); line.innerHTML = said2.text;
+          inner.append(line);
+          if(said2.go){
+            const a2 = el("button","vsay-go", said2.go.label);
+            a2.onclick = ev=>{ ev.stopPropagation(); haptic(10); said2.go.run(); };
+            inner.append(a2);
+          }
+          out.append(inner);
+          haptic(7);
+        };
+      }
+      bars.push(b);
       w.appendChild(b);
     });
-    return w;
+    wrap.append(w, out);
+    return wrap;
   };
   const hbars = (rows, lowKey)=>{
     const w = el("div","pat"); w.style.padding = "0";
@@ -4087,7 +4164,16 @@ function renderTrends(){
     head.append(el("b",null, Math.round(near.pct*100)+"%"));
     head.append(el("s",null, `this week, falling to ${Math.round(far.pct*100)}% by week ${curve.length}`));
     b.appendChild(head);
-    b.appendChild(vbars(curve.map((x,i)=>({v:x.pct, label:Math.round(x.pct*100)+"", k:"W"+(i+1)})), 0));
+    b.appendChild(vbars(curve.map((x,i)=>({v:x.pct, label:Math.round(x.pct*100)+"", k:"W"+(i+1)})), 0,
+      (r, i)=>{
+        const from = i*7, to = Math.min(from+7, DAYS);
+        let free = 0;
+        for(let d = from; d < to; d++) for(let j = 0; j < NF; j++)
+          if(!blk[j][d] && !occ[j][d]) free++;
+        return {text: `<b>${fmt(from)} → ${fmt(to-1)}</b> · ${Math.round(r.v*100)}% booked · `
+                    + `<b>${free}</b> room-night${free===1?"":"s"} still to sell`,
+                go: free ? {label:"See that week →", run:()=>{ pickedNight = from; switchTo(1); }} : null};
+      }));
     const halfway = curve.findIndex(x=> x.pct < near.pct/2);
     const drop = near.pct - far.pct;
     said(c, `Bookings arrive close to the date, so the far weeks <b>should</b> look thin — that is the shape of a healthy book, not a problem. `
@@ -4107,7 +4193,17 @@ function renderTrends(){
     const worst = order.reduce((a,d)=> wk[d] < wk[a] ? d : a, order[0]);
     const best  = order.reduce((a,d)=> wk[d] > wk[a] ? d : a, order[0]);
     b.appendChild(vbars(order.map(d=>({v:wk[d], label:Math.round(wk[d]*100)+"", k:DOW[d][0]})),
-                        order.indexOf(worst)));
+      order.indexOf(worst),
+      (r, i)=>{
+        const dow = order[i];
+        const days = []; for(let d2=0; d2<DAYS; d2++) if(dateAt(d2).getDay() === dow) days.push(d2);
+        const emptiest = days.map(d2=>({d:d2, free:freeCount(d2)})).sort((x,y)=> y.free - x.free)[0];
+        const gap = Math.round((wk[best] - wk[dow]) * 100);
+        return {text: `<b>${DOWF[dow]}s</b> run at ${Math.round(wk[dow]*100)}%`
+                    + (gap > 0 ? ` — <span class="hi">${gap} points</span> under ${DOWF[best]}s` : ` — your strongest night`)
+                    + (emptiest ? `. Emptiest is ${fmt(emptiest.d)}, ${emptiest.free} free.` : "."),
+                go: emptiest ? {label:`See ${fmt(emptiest.d)} →`, run:()=>{ pickedNight = emptiest.d; switchTo(0); }} : null};
+      }));
     said(c, `<b>${DOWF[worst]}s</b> run at <span class="hi">${Math.round(wk[worst]*100)}%</span> against ${Math.round(wk[best]*100)}% on ${DOWF[best]}s — a ${Math.round((wk[best]-wk[worst])*100)} point gap. Midweek pricing, or a minimum stay that forces weekend guests to take a shoulder night, is what usually closes it.`);
   }
 

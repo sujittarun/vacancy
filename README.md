@@ -469,6 +469,15 @@ Above it, a bar of five questions — **Now · Money · Rooms · Guests · Upkee
 they run on different clocks and used to sit in one nine-card scroll, where what to do today
 was pushed down by how the year is going. A dot on **Now** means something is waiting.
 
+**Touch a bar and it answers.** A chart that only draws is a picture; these say what the
+bar means in words and, where there is something to do, offer the route:
+
+> **Mondays** run at 35% — *25 points* under Saturdays. Emptiest is 7 Sep, 32 free.
+> **[ See 7 Sep → ]**
+
+The other bars step back, the touched one lifts, and the answer opens into a slot that is
+already reserved, so nothing below it jumps.
+
 **Swipe the cards sideways to move between them.** The deck follows your thumb as you drag
 rather than waiting for you to let go, and at the first and last it resists — a third of the
 travel becomes a ninth — which is how a phone says *nothing that way* without words. Moving
