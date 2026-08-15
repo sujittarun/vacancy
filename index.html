@@ -2226,45 +2226,322 @@ function toast(kind, html, fi){
   while(host.children.length > 3) host.firstChild.remove();
 }
 
+/* ══════════════ writing a real .xlsx, with no library ═══════════════════════
+   A CSV would have been ten lines. It is not used because Excel reads a column
+   of ten-digit phone numbers as scientific notation and writes 9.81235E+09 —
+   silently destroying the single most valuable column in the export, which is
+   the one the whole marketing list is keyed on.
+
+   So: a genuine workbook, where numbers are numbers you can sum, dates are
+   dates you can sort, and phone numbers are text that survives. An xlsx is a
+   ZIP of XML, and a ZIP entry may be *stored* rather than deflated, so all this
+   needs is a CRC32 and careful byte assembly — no dependency, nothing fetched,
+   still one file that works offline.                                          */
+const CRC_T = (()=>{ const t = new Uint32Array(256);
+  for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c = (c & 1) ? (0xEDB88320 ^ (c>>>1)) : (c>>>1); t[n] = c>>>0; }
+  return t; })();
+function crc32(u8){
+  let c = 0xFFFFFFFF;
+  for(let i=0;i<u8.length;i++) c = CRC_T[(c ^ u8[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+function zipStore(files){
+  const enc = new TextEncoder(), parts = [], dir = [];
+  let at = 0;
+  files.forEach(f=>{
+    const name = enc.encode(f.name), crc = crc32(f.data), n = f.data.length;
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true);
+    lh.setUint16(8, 0, true);                        // stored, not deflated
+    lh.setUint16(10, 0, true); lh.setUint16(12, 0x2141, true);   // fixed timestamp
+    lh.setUint32(14, crc, true); lh.setUint32(18, n, true); lh.setUint32(22, n, true);
+    lh.setUint16(26, name.length, true);
+    parts.push(new Uint8Array(lh.buffer), name, f.data);
+    const ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true);
+    ch.setUint16(10, 0, true);
+    ch.setUint16(12, 0, true); ch.setUint16(14, 0x2141, true);
+    ch.setUint32(16, crc, true); ch.setUint32(20, n, true); ch.setUint32(24, n, true);
+    ch.setUint16(28, name.length, true); ch.setUint32(42, at, true);
+    dir.push(new Uint8Array(ch.buffer), name);
+    at += 30 + name.length + n;
+  });
+  const dirBytes = dir.reduce((s,b)=> s + b.length, 0);
+  const eo = new DataView(new ArrayBuffer(22));
+  eo.setUint32(0, 0x06054b50, true);
+  eo.setUint16(8, files.length, true); eo.setUint16(10, files.length, true);
+  eo.setUint32(12, dirBytes, true); eo.setUint32(16, at, true);
+  const all = parts.concat(dir, [new Uint8Array(eo.buffer)]);
+  const out = new Uint8Array(all.reduce((s,b)=> s + b.length, 0));
+  let o = 0; all.forEach(b=>{ out.set(b, o); o += b.length; });
+  return out;
+}
+const xmlEsc = s => String(s == null ? "" : s)
+  .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+  .replace(/"/g,"&quot;").replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g,"");
+const colName = i => { let s = ""; i++; while(i > 0){ const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = (i - 1 - m) / 26; } return s; };
+/* Excel counts days from 1899-12-30 */
+const xlDate = d => Math.round((d - new Date(Date.UTC(1899,11,30))) / 86400000);
+
+/* A cell is {v, t} where t is "s" text, "n" number, "d" date, "m" money.
+   Styles: 0 plain, 1 header, 2 date, 3 money, 4 text-forced (phone numbers). */
+function sheetXml(rows){
+  let x = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        + '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>';
+  rows.forEach((row, r)=>{
+    x += '<row r="' + (r+1) + '">';
+    row.forEach((c, i)=>{
+      if(c == null || c.v === "" || c.v == null) return;
+      const ref = colName(i) + (r+1);
+      if(c.t === "n" || c.t === "m")
+        x += '<c r="' + ref + '" s="' + (c.t === "m" ? 3 : 0) + '"><v>' + Number(c.v) + '</v></c>';
+      else if(c.t === "d")
+        x += '<c r="' + ref + '" s="2"><v>' + xlDate(c.v) + '</v></c>';
+      else
+        x += '<c r="' + ref + '" s="' + (c.t === "h" ? 1 : c.t === "p" ? 4 : 0)
+           + '" t="inlineStr"><is><t xml:space="preserve">' + xmlEsc(c.v) + '</t></is></c>';
+    });
+    x += '</row>';
+  });
+  return x + '</sheetData></worksheet>';
+}
+function buildXlsx(sheets){                       // [{name, rows}]
+  const enc = new TextEncoder(), B = s => enc.encode(s);
+  const files = [
+    {name:"[Content_Types].xml", data:B('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+      + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+      + '<Default Extension="xml" ContentType="application/xml"/>'
+      + '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+      + '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+      + sheets.map((s,i)=>'<Override PartName="/xl/worksheets/sheet'+(i+1)+'.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>').join("")
+      + '</Types>')},
+    {name:"_rels/.rels", data:B('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>')},
+    {name:"xl/workbook.xml", data:B('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+      + 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>'
+      + sheets.map((s,i)=>'<sheet name="'+xmlEsc(s.name)+'" sheetId="'+(i+1)+'" r:id="rId'+(i+1)+'"/>').join("")
+      + '</sheets></workbook>')},
+    {name:"xl/_rels/workbook.xml.rels", data:B('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      + sheets.map((s,i)=>'<Relationship Id="rId'+(i+1)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet'+(i+1)+'.xml"/>').join("")
+      + '<Relationship Id="rId'+(sheets.length+1)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+      + '</Relationships>')},
+    {name:"xl/styles.xml", data:B('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+      + '<numFmts count="2"><numFmt numFmtId="180" formatCode="dd\\ mmm\\ yyyy"/>'
+      + '<numFmt numFmtId="181" formatCode="#,##0"/></numFmts>'
+      + '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font>'
+      + '<font><b/><sz val="11"/><name val="Calibri"/></font></fonts>'
+      + '<fills count="2"><fill><patternFill patternType="none"/></fill>'
+      + '<fill><patternFill patternType="gray125"/></fill></fills>'
+      + '<borders count="1"><border/></borders>'
+      + '<cellStyleXfs count="1"><xf/></cellStyleXfs>'
+      + '<cellXfs count="5">'
+      + '<xf xfId="0"/>'                                              // 0 plain
+      + '<xf xfId="0" fontId="1" applyFont="1"/>'                     // 1 header
+      + '<xf xfId="0" numFmtId="180" applyNumberFormat="1"/>'         // 2 date
+      + '<xf xfId="0" numFmtId="181" applyNumberFormat="1"/>'         // 3 money
+      + '<xf xfId="0" quotePrefix="1"/>'                              // 4 forced text
+      + '</cellXfs>'
+      // without a named default style some readers warn and substitute their own
+      + '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'
+      + '</styleSheet>')},
+  ];
+  sheets.forEach((s,i)=> files.push({name:"xl/worksheets/sheet"+(i+1)+".xml", data:B(sheetXml(s.rows))}));
+  return new Blob([zipStore(files)],
+    {type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+}
+
+/* ── what actually goes in the book ──────────────────────────────────────────
+   Four sheets, each answering a question somebody asks out loud. Nothing is
+   invented: a booking with no amount exports a blank cell rather than a zero,
+   because a zero would read as "free stay" and get summed. */
+function exportRows(){
+  const bk = bookings().slice().sort((a,b)=> a.start - b.start);
+  const fmtDay = d => dateAt(d);
+  const H = a => a.map(v => ({v, t:"h"}));
+
+  const bookingRows = [H(["Flat","Building","Type","Guest","Phone","Source","Check in","Check out",
+                          "Nights","Guests","Agreed","Received","With platform","Balance","Status"])];
+  bk.forEach(r=>{
+    const f = flats[r.fi], due = dueFrom(r), plat = withPlatform(r);
+    bookingRows.push([
+      {v:f.id}, {v:f.bname}, {v:f.type}, {v:r.guest}, {v:r.phone || "", t:"p"}, {v:r.src},
+      {v:fmtDay(r.start), t:"d"}, {v:fmtDay(r.end), t:"d"},
+      {v:r.nights, t:"n"}, r.pax ? {v:r.pax, t:"n"} : null,
+      r.amount ? {v:r.amount, t:"m"} : null,
+      inHand(r) ? {v:inHand(r), t:"m"} : null,
+      plat ? {v:plat, t:"m"} : null,
+      due ? {v:due, t:"m"} : null,
+      {v: !r.amount ? "no amount recorded" : due > 0 ? "balance due" : plat > 0 ? "payout due" : "settled"},
+    ]);
+  });
+
+  const payRows = [H(["Date","Amount","Method","Guest","Phone","Flat","Stay from","Stay to"])];
+  bk.forEach(r=> (r.pays || []).forEach(p=> payRows.push([
+    {v:fmtDay(p.on || 0), t:"d"}, {v:p.amount, t:"m"}, {v:p.method}, {v:r.guest},
+    {v:r.phone || "", t:"p"}, {v:flats[r.fi].id},
+    {v:fmtDay(r.start), t:"d"}, {v:fmtDay(r.end), t:"d"}])));
+
+  /* One row per number, which is the marketing list. Sorted by how much they
+     have been worth, because that is the order you would call them in. */
+  const byPhone = {};
+  bk.filter(r => r.phone).forEach(r=>{
+    const k = digits10(r.phone);
+    const g = byPhone[k] = byPhone[k] || {name:r.guest, phone:r.phone, stays:0, nights:0,
+                                          billed:0, paid:0, first:r.start, last:r.start};
+    g.stays++; g.nights += r.nights; g.billed += r.amount || 0; g.paid += paidOn(r);
+    g.first = Math.min(g.first, r.start); g.last = Math.max(g.last, r.start);
+    if(r.start >= g.last) g.name = r.guest;
+  });
+  const guestRows = [H(["Guest","Phone","Stays","Nights","Billed","Paid","First stay","Last stay"])];
+  Object.values(byPhone).sort((a,b)=> b.billed - a.billed).forEach(g=> guestRows.push([
+    {v:g.name}, {v:g.phone, t:"p"}, {v:g.stays, t:"n"}, {v:g.nights, t:"n"},
+    g.billed ? {v:g.billed, t:"m"} : null, g.paid ? {v:g.paid, t:"m"} : null,
+    {v:fmtDay(g.first), t:"d"}, {v:fmtDay(g.last), t:"d"}]));
+
+  /* Month by month. Occupancy excludes blocked nights from the denominator,
+     exactly as it does on screen — taking a flat out of service must never
+     flatter the figure. */
+  const months = {};
+  for(let d = 0; d < DAYS; d++){
+    const dt = dateAt(d), key = dt.getFullYear() + "-" + String(dt.getMonth()+1).padStart(2,"0");
+    const m = months[key] = months[key] || {key, label: MONF[dt.getMonth()] + " " + dt.getFullYear(),
+                                             sold:0, sellable:0, billed:0, paid:0, arrivals:0};
+    for(let i = 0; i < NF; i++){
+      if(blk[i][d]) continue;
+      m.sellable++; if(occ[i][d]) m.sold++;
+    }
+  }
+  bk.forEach(r=>{
+    const dt = dateAt(Math.max(r.start,0));
+    const key = dt.getFullYear() + "-" + String(dt.getMonth()+1).padStart(2,"0");
+    if(!months[key]) return;
+    months[key].arrivals++; months[key].billed += r.amount || 0;
+    (r.pays || []).forEach(p=>{
+      const pd = dateAt(p.on || 0);
+      const pk = pd.getFullYear() + "-" + String(pd.getMonth()+1).padStart(2,"0");
+      if(months[pk]) months[pk].paid += p.amount;
+    });
+  });
+  const sumRows = [H(["Month","Arrivals","Nights sold","Sellable nights","Occupancy","Billed","Collected","Outstanding"])];
+  Object.values(months).sort((a,b)=> a.key < b.key ? -1 : 1).forEach(m=> sumRows.push([
+    {v:m.label}, {v:m.arrivals, t:"n"}, {v:m.sold, t:"n"}, {v:m.sellable, t:"n"},
+    {v: m.sellable ? Math.round(m.sold / m.sellable * 100) + "%" : "—"},
+    m.billed ? {v:m.billed, t:"m"} : null, m.paid ? {v:m.paid, t:"m"} : null,
+    (m.billed - m.paid) > 0 ? {v:m.billed - m.paid, t:"m"} : null]));
+
+  return [{name:"Summary", rows:sumRows}, {name:"Bookings", rows:bookingRows},
+          {name:"Payments", rows:payRows}, {name:"Guests", rows:guestRows}];
+}
+
+/* On a phone the share sheet is the right destination — it puts the file
+   straight into WhatsApp or mail, which is how it reaches the accountant.
+   On a desktop it is an ordinary download. */
+async function exportBook(btn){
+  const sheets = exportRows();
+  const blob = buildXlsx(sheets);
+  const stamp = isoDay(today);
+  const name = (hostName || "Vacancy").replace(/[^\w]+/g,"-").toLowerCase() + "-" + stamp + ".xlsx";
+  const file = new File([blob], name, {type: blob.type});
+  track("export", {sheets: sheets.length, rows: sheets.reduce((s,x)=> s + x.rows.length - 1, 0)});
+  if(navigator.canShare && navigator.canShare({files:[file]})){
+    try{ await navigator.share({files:[file], title:"Bookings"}); return "shared"; }
+    catch(e){ if(e && e.name === "AbortError") return "cancelled"; }
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=> URL.revokeObjectURL(url), 4000);
+  return "downloaded";
+}
+
 /* ── the account sheet ─────────────────────────────────────────────────────── */
 function openAccount(){
-  if(MODE !== "live"){ openGate(); return; }
+  const live = MODE === "live";
   sheetH.textContent = ""; sheetB.textContent = "";
   const t = el("div");
-  t.innerHTML = `<div class="n">${esc(hostName || "Signed in")}</div>`
-              + `<div class="m">${esc((session && session.email) || "")}</div>`;
+  t.innerHTML = live
+    ? `<div class="n">${esc(hostName || "Signed in")}</div>`
+      + `<div class="m">${esc((session && session.email) || "")}</div>`
+    : `<div class="n">Demo data</div><div class="m">nothing here is real</div>`;
   const x = el("button", null, "✕"); x.setAttribute("aria-label","Close");
   x.onclick = ()=> closeSheet();
   sheetH.append(t, x);
 
+  /* Tapping the pill is the gesture for "what am I looking at", so it answers
+     that before it offers anything — rather than throwing up a login form and
+     leaving the question hanging. */
   const state = el("div", "blocked");
-  state.innerHTML = !online
-    ? `<b>Offline.</b> You are looking at the last book that reached this phone`
-      + (queue.length ? `, and ${queue.length} change${queue.length>1?"s":""} are waiting to send.` : ".")
-    : queue.length
-      ? `<b>${queue.length} change${queue.length>1?"s":""} still saving.</b> They will land on their own; you can keep working.`
-      : `<b>Everything is saved.</b> The same book is on every phone signed in to ${esc(hostName || "this property")}.`;
+  state.innerHTML = !live
+    ? `<b>Every booking on screen is made up.</b> The guests, the numbers and the money `
+      + `were generated so the app has something to show. Nothing you do here leaves this `
+      + `phone, and none of it is your property's book.`
+    : !online
+      ? `<b>Offline.</b> You are looking at the last book that reached this phone`
+        + (queue.length ? `, and ${queue.length} change${queue.length>1?"s":""} are waiting to send.` : ".")
+      : queue.length
+        ? `<b>${queue.length} change${queue.length>1?"s":""} still saving.</b> They will land on their own; you can keep working.`
+        : `<b>Everything is saved.</b> The same book is on every phone signed in to ${esc(hostName || "this property")}.`;
   sheetB.append(state);
 
   const row = el("div", "dataTools");
   row.style.cssText = "padding:14px 20px 0";
-  const sync = el("button", "copybtn", "Refresh now");
-  sync.onclick = async ()=>{
-    haptic(9); sync.textContent = "Refreshing…";
-    try{ await flush(); await cloudPull(); refreshScreen(); closeSheet();
-         toast("", "<b>Up to date.</b> " + NF + " flats, " + bookings().length + " bookings.", null); }
-    catch(e){ sync.textContent = "Refresh now";
-              toast("bad", "<b>Could not refresh.</b> " + esc(e.message), null); }
+
+  if(live){
+    const sync = el("button", "copybtn", "Refresh now");
+    sync.onclick = async ()=>{
+      haptic(9); sync.textContent = "Refreshing…";
+      try{ await flush(); await cloudPull(); refreshScreen(); closeSheet();
+           toast("", "<b>Up to date.</b> " + NF + " flats, " + bookings().length + " bookings.", null); }
+      catch(e){ sync.textContent = "Refresh now";
+                toast("bad", "<b>Could not refresh.</b> " + esc(e.message), null); }
+    };
+    row.append(sync);
+  }else{
+    const go = el("button", "copybtn", "Sign in to your own book");
+    go.onclick = ()=>{ haptic(9); closeSheet(); openGate(); };
+    row.append(go);
+  }
+
+  const dl = el("button", "copybtn", "Export to Excel");
+  dl.onclick = async ()=>{
+    haptic(9); dl.textContent = "Preparing…";
+    try{
+      const how = await exportBook();
+      dl.textContent = how === "cancelled" ? "Export to Excel" : "Done";
+      if(how !== "cancelled") toast("",
+        "<b>Exported.</b> Four sheets — summary by month, every booking, every payment, "
+        + "and one row per guest with their number.", null);
+    }catch(e){
+      dl.textContent = "Export to Excel";
+      toast("bad", "<b>Could not export.</b> " + esc(e.message), null);
+    }
   };
-  const out = el("button", "copybtn", "Sign out");
-  out.onclick = ()=>{
-    if(queue.length && !confirm(queue.length + " change" + (queue.length>1?"s have":" has")
-        + " not reached the server yet. Signing out will lose " + (queue.length>1?"them":"it") + ". Sign out anyway?")) return;
-    haptic(18); closeSheet(); signOut(false);
-    toast("", "<b>Signed out.</b> You are back on the sample book.", null);
-  };
-  row.append(sync, out);
+  row.append(dl);
+
+  if(live){
+    const out = el("button", "copybtn", "Sign out");
+    out.onclick = ()=>{
+      if(queue.length && !confirm(queue.length + " change" + (queue.length>1?"s have":" has")
+          + " not reached the server yet. Signing out will lose " + (queue.length>1?"them":"it") + ". Sign out anyway?")) return;
+      haptic(18); closeSheet(); signOut(false);
+      toast("", "<b>Signed out.</b> You are back on the demo book.", null);
+    };
+    row.append(out);
+  }
   sheetB.append(row);
+
+  const note = el("p");
+  note.style.cssText = "margin:14px 20px 4px;font-size:12px;line-height:1.55;color:var(--txt-3)";
+  note.textContent = "The export opens in Excel, Numbers or Google Sheets. Phone numbers come "
+    + "across as text so they keep their leading digits, and amounts stay numbers you can total.";
+  sheetB.append(note);
+
   sheet.classList.add("on"); scrim.classList.add("on");
 }
 

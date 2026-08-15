@@ -104,6 +104,12 @@ user's "Bajarahills".
 - **No check-in/check-out state.** Any status a human must remember to maintain decays, and
   decayed data is worse than none. Presence is derived from dates and is always correct;
   the single manual action is recording money, which carries information dates cannot.
+- **Export is a real `.xlsx`, written in-app with no library** (an xlsx is a ZIP of XML, and
+  a ZIP entry may be stored rather than deflated, so it needs only a CRC32). CSV was
+  rejected because Excel coerces a column of ten-digit phone numbers to `9.81235E+09`,
+  destroying the one column the guest list exists for. Four sheets: Summary by month,
+  Bookings, Payments, Guests. No PDF — the app is already the dashboard, and a PDF cannot
+  be filtered or totalled by an accountant.
 - **Guest ID and compliance documents are deliberately out of scope** for now. Storing
   identity documents is a materially different obligation under the DPDP Act and was
   deferred by the user rather than skipped by omission.

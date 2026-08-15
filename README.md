@@ -90,6 +90,32 @@ stale, and stale data is worse than none. Arrivals are worked out from the dates
 always right; the only thing you are ever asked to confirm is the money, which is the part
 that actually carries information.
 
+### Getting the data out
+
+Tap the pill in the top right, then **Export to Excel**. On a phone this opens the share
+sheet, so it goes straight to WhatsApp or mail — which is how it reaches an accountant. On
+a computer it downloads.
+
+One workbook, four sheets:
+
+| Sheet | Answers |
+|---|---|
+| **Summary** | month by month — arrivals, nights sold, occupancy, billed, collected, outstanding |
+| **Bookings** | one row per stay: flat, guest, phone, source, dates, nights, agreed, received, balance |
+| **Payments** | one row per payment — the sheet to reconcile against a bank statement, and the one that finds cash that never arrived |
+| **Guests** | one row per phone number: name, stays, nights, spend, first and last visit. This is the list to broadcast an offer to |
+
+**It is a real spreadsheet, not a CSV, for one specific reason.** Excel reads a column of
+ten-digit phone numbers as a number and writes `9.81235E+09` — silently destroying the one
+column the guest list exists for. Here phone numbers arrive as text and keep every digit,
+amounts arrive as numbers you can total, and dates as dates you can sort.
+
+A booking with no amount recorded exports an empty cell, never a zero. A zero would read as
+a free stay and would be summed as one.
+
+There is no PDF, deliberately. The app is already the dashboard; a PDF of it could not be
+filtered, totalled, or opened by an accountant's software.
+
 ### Out of service
 
 A flat can be **blocked** — maintenance, deep clean, owner use, renovation, not ready.
@@ -369,7 +395,6 @@ Good enough to run a real day on, signed in. Honest limits before you rely on it
 - **No sync** with Airbnb, Booking.com or any channel manager. Every booking is entered by
   hand.
 - **Rates are invented** and shown as "specimen". Nothing calculates revenue.
-- **No export yet.** The data is safe in the database, but there is no download button.
 - **Writes need signal.** They queue and send themselves, but a booking entered on a dead
   connection is not confirmed until the pill says *Live* — which is exactly what it says.
 - **One login for the property.** Adding a second person is a row in the database, not yet
