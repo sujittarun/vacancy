@@ -609,11 +609,43 @@ button{background:none;border:0;padding:0;cursor:pointer}
   display:grid;place-items:center;color:var(--txt-2);flex:0 0 auto}
 .sheet-b{overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
   padding-bottom:calc(20px + var(--safe-b))}
+/* ── the nine-week strip ──────────────────────────────────────────────────────
+   Nine weeks of one flat, one bar a night. Held back from being decoration by
+   three things: blocked nights read differently from sold ones, months are
+   grouped so the eye has a landmark, and you can put a finger on it and read
+   any single night without the strip changing size or the sheet moving.     */
+.stripwrap{position:relative;touch-action:pan-y}
 .strip{display:flex;gap:1px;height:22px;padding:16px 20px 0}
-.strip i{flex:1;border-radius:1px;background:var(--held)}
+.strip i{flex:1;border-radius:1px;background:var(--held);transform-origin:bottom;
+  transition:transform .2s var(--out)}
 .strip i.f{background:var(--free)}
+/* Out of service is a third state, not a shade of sold, and at five pixels a
+   night a hatch is invisible — so it takes the one tone that sits between the
+   lit and the recessed. Colour is not carrying it alone: the readout names the
+   reason and the list below spells it out. */
+.strip i.b{background:var(--surface-3)}
 .strip i.td{box-shadow:inset 0 0 0 1px var(--now)}
-.strip-k{display:flex;justify-content:space-between;padding:7px 20px 16px}
+.strip i.on{transform:scaleY(1.45)}
+@media (prefers-reduced-motion:reduce){ .strip i.on{transform:none} }
+
+/* a playhead, not a highlight: recolouring a booked bar is forbidden here, and
+   a cursor says "you are reading this night" without touching the data */
+.playhead{position:absolute;top:12px;height:26px;width:1px;background:var(--now);
+  opacity:0;transition:opacity .15s;pointer-events:none;left:0}
+.stripwrap.reading .playhead{opacity:1}
+
+/* the legend and the readout share one box, so reading a night moves nothing */
+.strip-foot{position:relative;padding:7px 20px 16px;min-height:33px}
+.strip-k{display:flex;justify-content:space-between;transition:opacity .16s}
+.strip-read{position:absolute;left:20px;right:20px;top:7px;display:flex;gap:7px;
+  align-items:baseline;opacity:0;pointer-events:none;transition:opacity .16s}
+.strip-read b{font-size:12px;font-weight:660;color:var(--txt);white-space:nowrap}
+.strip-read span{font-size:12px;color:var(--txt-2);overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.strip-foot.reading .strip-k{opacity:0}
+.strip-foot.reading .strip-read{opacity:1}
+/* the booking this night belongs to, lit in the list below */
+.card .row.lit{background:var(--surface-2)}
 .sheet-s{padding:14px 20px 8px;display:flex;justify-content:space-between;align-items:baseline;gap:10px}
 
 /* booking entry */
@@ -736,6 +768,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .gate.on{display:flex;opacity:1}
 .gate h2{margin:0 0 6px;font-size:27px;font-weight:680;letter-spacing:-.028em}
 .gate p.lede{margin:0 0 26px;font-size:14px;line-height:1.5;color:var(--txt-2)}
+.gate p.lede b{color:var(--txt);font-weight:640}
 .gate label{display:block;font-size:11px;font-weight:650;color:var(--txt-3);
   text-transform:uppercase;letter-spacing:.07em;margin:0 0 6px}
 .gate input{
@@ -776,7 +809,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
 <div class="app">
   <header class="topbar">
     <h1 id="scrTitle">Rooms<span class="sub" id="scrSub"></span></h1>
-    <button class="pill" id="acctBtn" aria-label="Account and sync"><i></i><span id="acctTxt">Sample</span></button>
+    <button class="pill" id="acctBtn" aria-label="Account and sync"><i></i><span id="acctTxt">Demo data</span></button>
     <button class="ghost" id="themeBtn" aria-label="Switch theme"><span id="themeIc">◐</span></button>
   </header>
 
@@ -801,8 +834,9 @@ button{background:none;border:0;padding:0;cursor:pointer}
 
 <section class="gate" id="gate" aria-label="Sign in">
   <h2>Crescent Stays</h2>
-  <p class="lede">Sign in once on this phone and the book follows you — the same
-    bookings on every device, and nothing lost if you drop it.</p>
+  <p class="lede"><b>Every booking you can see right now is made up.</b> They are there so
+    the app has something to show. Sign in and you get your own book instead — the same
+    bookings on every phone, and nothing lost if you drop one.</p>
   <div id="gateErr"></div>
   <form id="gateForm" novalidate>
     <label for="gateEmail">Email</label>
@@ -1984,8 +2018,8 @@ function paintAcct(){
   if(!btn) return;
   btn.classList.remove("live","wait","off");
   if(MODE !== "live"){
-    txt.textContent = "Sample";
-    btn.setAttribute("aria-label", "Sample data — tap to sign in");
+    txt.textContent = "Demo data";
+    btn.setAttribute("aria-label", "These bookings are made up — tap to sign in and see your own");
   }else if(!online){
     btn.classList.add("off");
     txt.textContent = queue.length ? queue.length + " to send" : "Offline";
@@ -3293,6 +3327,83 @@ const scrim = document.getElementById("scrim");
 const sheetH = document.getElementById("sheetH");
 const sheetB = document.getElementById("sheetB");
 
+/* What is happening in one flat on one night, phrased the way it would be said
+   out loud. This is the whole reason the strip is worth touching: "booked" is
+   not an answer, "R. Menon · night 2 of 3" is. */
+function nightStory(fi, d){
+  const r = resv.find(x => x.fi === fi && x.start <= d && x.end > d);
+  if(r) return isBlock(r)
+    ? (r.reason || "Out of service") + (r.note ? " · " + r.note : "")
+    : `${r.guest} · night ${d - r.start + 1} of ${r.end - r.start}`;
+  // a free night only means something alongside the length of the gap it sits in
+  let a = d; while(a > 0 && !occ[fi][a-1]) a--;
+  let b = d; while(b < DAYS-1 && !occ[fi][b+1]) b++;
+  const n = b - a + 1;
+  return n === 1 ? "Free · a single night between bookings"
+       : a === d ? `Free · ${n} nights open from here`
+                 : `Free · ${n} nights open, from ${fmt(a)}`;
+}
+
+/* Put a finger anywhere on the nine weeks and read that night. Nothing resizes
+   and nothing reflows: the legend and the readout share one box, and the only
+   things that move are a one-pixel playhead and the touched bar. The gesture
+   yields to a vertical scroll rather than fighting it — a strip you cannot
+   scroll past would be a worse trade than one you cannot scrub. */
+function attachStripScrub(wrap, strip, head, foot, readD, readW, fi){
+  const bars = strip.children;
+  let live = false, dead = false, at = -1, was = null, y0 = 0;
+  const rowsIn = () => sheetB.querySelectorAll(".card .row");
+
+  const dayAt = x => {
+    const a = bars[0].getBoundingClientRect(), z = bars[DAYS-1].getBoundingClientRect();
+    const t = (x - a.left) / (z.right - a.left);
+    return Math.max(0, Math.min(DAYS-1, Math.floor(t * DAYS)));
+  };
+  const show = d => {
+    if(d === at) return;
+    if(at >= 0) bars[at].classList.remove("on");
+    at = d; bars[d].classList.add("on");
+    const br = bars[d].getBoundingClientRect(), wr = wrap.getBoundingClientRect();
+    head.style.transform = `translateX(${(br.left - wr.left + br.width / 2).toFixed(1)}px)`;
+    readD.textContent = d === 0 ? "Tonight" : fmtL(d);
+    readW.textContent = nightStory(fi, d);
+    const r = resv.find(x => x.fi === fi && x.start <= d && x.end > d) || null;
+    rowsIn().forEach(row => row.classList.toggle("lit", !!r && row._resv === r));
+    // a tick only when the night belongs to something else — not 63 times a sweep
+    if(r !== was){ was = r; haptic(5); }
+  };
+  const start = x => { live = true; at = -1; was = null;
+    wrap.classList.add("reading"); foot.classList.add("reading"); show(dayAt(x)); };
+  const stop = () => {
+    if(!live) return;
+    live = false;
+    if(at >= 0) bars[at].classList.remove("on");
+    at = -1;
+    wrap.classList.remove("reading"); foot.classList.remove("reading");
+    rowsIn().forEach(row => row.classList.remove("lit"));
+  };
+
+  wrap.addEventListener("pointerdown", e=>{
+    if(e.pointerType === "mouse" && e.button !== 0) return;
+    dead = false; y0 = e.clientY;
+    // capture, so a finger that strays off the strip keeps reading instead of
+    // dropping the gesture. pointerleave would fire constantly here and is not
+    // an end to the gesture, only a departure from the box.
+    try{ wrap.setPointerCapture(e.pointerId); }catch(err){}
+    start(e.clientX);
+  });
+  wrap.addEventListener("pointermove", e=>{
+    if(!live || dead) return;
+    // they meant to scroll the sheet, not read a night — get out of the way
+    if(e.pointerType !== "mouse" && Math.abs(e.clientY - y0) > 16){ dead = true; stop(); return; }
+    if(e.cancelable) e.preventDefault();
+    show(dayAt(e.clientX));
+  }, {passive:false});
+  // capture routes both of these back here, so no window listeners accumulate
+  // as sheets open and close
+  ["pointerup","pointercancel"].forEach(ev => wrap.addEventListener(ev, stop));
+}
+
 function openSheet(fi, day){
   const fl = flats[fi];
   sheetH.textContent = ""; sheetB.textContent = "";
@@ -3303,11 +3414,31 @@ function openSheet(fi, day){
   x.onclick = closeSheet;
   sheetH.append(t, x);
 
+  const wrap = el("div","stripwrap");
   const strip = el("div","strip");
-  for(let d=0;d<DAYS;d++){ const i=el("i"); if(!occ[fi][d]) i.className="f"; if(d===0) i.classList.add("td"); strip.appendChild(i); }
+  strip.setAttribute("role","img");
+  strip.setAttribute("aria-label",
+    `${fl.id} over the next nine weeks: ${occPct(fi)} per cent booked. Touch and drag to read a night.`);
+  for(let d=0;d<DAYS;d++){
+    const i = el("i");
+    if(!occ[fi][d]) i.classList.add("f");
+    else if(blk[fi][d]) i.classList.add("b");        // out of service, not sold
+    if(d === 0) i.classList.add("td");
+    strip.appendChild(i);
+  }
+  const head = el("i","playhead");
+  wrap.append(strip, head);
+
+  const foot = el("div","strip-foot");
   const k = el("div","strip-k");
   k.append(el("span","lbl","Today"), el("span","lbl", `${occPct(fi)}% booked`), el("span","lbl","+9 weeks"));
-  sheetB.append(strip, k);
+  const read = el("div","strip-read");
+  read.setAttribute("aria-live","polite");
+  const readD = el("b"), readW = el("span");
+  read.append(readD, readW);
+  foot.append(k, read);
+  sheetB.append(wrap, foot);
+  attachStripScrub(wrap, strip, head, foot, readD, readW, fi);
 
   /* take a booking for the dates currently selected on the Rooms screen */
   const bDay = Math.min(pickedNight, DAYS-1), bN = stayNights;
@@ -3393,6 +3524,7 @@ function openSheet(fi, day){
   if(!mine.length) bl.appendChild(el("div","empty","No bookings in the next nine weeks — completely open."));
   mine.slice(0,14).forEach(r=>{
     const row = el("div","row");
+    row._resv = r;                     // so scrubbing the strip can light this row
     row.append(el("div","id", Math.max(r.start,0)===0 ? "Now" : fmt(Math.max(r.start,0))));
     const m = el("div","meta");
     m.innerHTML = `<b>${r.guest}</b> · ${r.src}<em>${fmt(Math.max(r.start,0))} → ${fmt(Math.min(r.end,DAYS-1))}</em>`;
