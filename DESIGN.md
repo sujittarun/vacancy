@@ -86,8 +86,24 @@ being compared down a column.
 ## Motion
 
 One spring, defined once as `--spring` (a `linear()` curve), used for every state
-change. Screen entry is an orchestrated stagger, not per-element flourishes.
-`prefers-reduced-motion` drops travel and stagger, keeps opacity.
+change. `prefers-reduced-motion` drops travel and stagger, keeps opacity.
+
+**Press is fast, release springs.** A spring is a ~380ms curve; running it on the
+way *down* makes a control appear to lag the thumb by a third of a second, which
+is the single largest reason an app that is fast still feels slow. Every pressable
+element therefore takes an 85ms ease on `:active` and springs back on release —
+the two directions of a physical button.
+
+**The entrance plays once per screen.** A staggered arrival is a first impression.
+On a tab this operator swipes to fifty times a day it stops being polish and
+becomes a toll: the last section used to settle ~720ms after the thumb landed.
+Screens are marked `.seen` after their first paint and never animate in again.
+
+Budget, measured not guessed: tab switch **~4ms** of render and no animation on
+return; sheet open **420ms**; scroll-reveal **300ms**; bar growth **420ms**.
+Anything that tracks a finger — the condensing title, the strip playhead — is
+either untransitioned or under 200ms, because a curve between the finger and the
+pixel reads as lag.
 
 ## Prohibitions
 

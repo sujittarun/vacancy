@@ -38,7 +38,10 @@ you can see the maintenance question in action. To use it properly:
    At the bottom of that sheet, **Clear all bookings** wipes the demo ones.
 2. Tap any flat and take the booking. It uses the dates currently selected on the Rooms
    tab, so set the night and stay length there first. See *Taking a booking* below.
-3. Cancel a booking with the ✕ next to it in the flat's sheet (also two taps).
+3. Cancel a booking with the ✕ next to it in the flat's sheet (also two taps). **It can be
+   undone** — the message that follows carries an *Undo* that puts the guest, the number,
+   the dates and every payment back exactly as they were. If somebody else took the nights
+   in the meantime it says so rather than double-booking them.
 
 ### Taking a booking
 
@@ -209,6 +212,18 @@ Opens on today's operations, because that is the first thing an operator actuall
   many nights it stays free from that date. An **amber dot** marks a single orphan night
   wedged between two bookings — the hardest kind to fill and the easiest to miss in a
   spreadsheet.
+
+  **Hold a tile to read the room without opening it.** Mid-call the question is rarely
+  "show me everything about 204", it is *"what about 204?"* — asked while the grid is still
+  what you want to be looking at. Holding shows its nine weeks, what is in it tonight, and
+  who is next in:
+
+  > **BH-203** · 2 BHK · Banjara Hills · floor 2
+  > N. Pillai · night 1 of 1
+  > Next in: S. Kulkarni, 25 Aug · 29% booked
+
+  Lift your thumb and it is gone. Nothing to dismiss, nothing to navigate back from, and
+  the grid never moved. Dragging instead of holding just scrolls, as usual.
 
 ### The nine weeks under a room
 
