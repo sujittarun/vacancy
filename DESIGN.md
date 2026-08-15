@@ -105,6 +105,18 @@ Anything that tracks a finger — the condensing title, the strip playhead — i
 either untransitioned or under 200ms, because a curve between the finger and the
 pixel reads as lag.
 
+## References considered and declined
+
+**BoardUI** (a React dashboard system, 50+ components, 400+ tokens) was raised as a
+reference. Its *thinking* is worth having — dense cards, clear metric hierarchy, an action
+beside every number — and the Pulse rebuild uses it. Its **look** is deliberately not
+adopted. This app has one committed world: vacancy is the lit thing, near-monochrome, a
+single accent that only ever means *now*. A general-purpose dashboard skin over that would
+cost the only property that makes it not look like every other tool.
+
+The rule when a reference arrives: take the reasoning, refuse the surface, unless the brief
+itself asks for a new world.
+
 ## Prohibitions
 
 - No paper, ruling, stamps, or any ledger device. That world is discarded.

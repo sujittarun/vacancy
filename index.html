@@ -705,6 +705,11 @@ button{background:none;border:0;padding:0;cursor:pointer}
   background:var(--now);
 }
 .segbar button[aria-pressed="true"] i.dot{background:var(--free-ink);opacity:.55}
+/* the deck arrives from the side you travelled */
+@keyframes segIn{from{opacity:0;transform:translateX(var(--from,20px))}}
+.deck.slide{animation:segIn .26s var(--out) both}
+@media (prefers-reduced-motion:reduce){ .deck.slide{animation:none} }
+.deck{will-change:transform}
 
 /* ── the room card ────────────────────────────────────────────────────────────
    Opening a room reads. One primary action sized to say "this is what you came
@@ -3713,7 +3718,20 @@ function upkeepStats(){
           flats: Object.values(byFlat).sort((a,b)=> (b.bill+b.lost) - (a.bill+a.lost))};
 }
 
-let pulseSeg = "now";
+let pulseSeg = "now", pulseDir = 0;
+const PULSE_SEGS = ["now","money","rooms","guests","upkeep"];
+
+/* Move between Pulse segments. Direction is remembered so the deck arrives from
+   the side you travelled, which is the whole difference between a screen that
+   changed and a place you moved to. */
+function pulseGo(dir){
+  const at = PULSE_SEGS.indexOf(pulseSeg);
+  const to = at + dir;
+  if(to < 0 || to >= PULSE_SEGS.length) return false;
+  pulseSeg = PULSE_SEGS[to]; pulseDir = dir;
+  haptic(9); renderTrends();
+  return true;
+}
 function renderTrends(){
   const s = document.getElementById("scr-trends");
   s.textContent = "";
@@ -3748,12 +3766,27 @@ function renderTrends(){
     const b2 = el("button", null, label);
     b2.setAttribute("aria-pressed", k === seg);
     if(k === "now" && todayBoard().count) b2.append(el("i","dot"));
-    b2.onclick = ()=>{ if(k === seg) return; pulseSeg = k; haptic(9); renderTrends(); };
+    b2.onclick = ()=>{
+      if(k === seg) return;
+      pulseDir = SEGS.findIndex(x=>x[0]===k) > SEGS.findIndex(x=>x[0]===seg) ? 1 : -1;
+      pulseSeg = k; haptic(9); renderTrends();
+    };
     bar.appendChild(b2);
   });
   s.appendChild(bar);
+  // keep the live chip in view — the bar scrolls, and a selected chip you cannot
+  // see is worse than no bar at all
+  requestAnimationFrame(()=>{
+    const on = bar.querySelector('[aria-pressed="true"]');
+    if(on && on.scrollIntoView) on.scrollIntoView({block:"nearest", inline:"center"});
+  });
 
   const deck = el("div","deck");
+  if(pulseDir && !calm){
+    deck.classList.add("slide");
+    deck.style.setProperty("--from", (pulseDir > 0 ? 26 : -26) + "px");
+  }
+  pulseDir = 0;
   const card = (title, cap)=>{
     const c = el("div","tcard");
     c.append(el("h3",null,title), el("div","cap",cap));
@@ -5928,6 +5961,57 @@ function switchTo(i, focusInput){
     }
     x0=null;
   },{passive:true});
+})();
+
+/* ── paging Pulse with a thumb ────────────────────────────────────────────────
+   The deck was already excluded from the tab swipe, so a horizontal drag on
+   these cards did nothing at all — dead gesture territory, claimed here with
+   no conflict to resolve.
+
+   It tracks the finger rather than waiting for the release, because a swipe
+   that only reveals its answer afterwards is a guess. The deck follows at a
+   third of the distance — enough to say "this moves" without pretending the
+   next segment is already rendered — and refuses at the ends with a much
+   shorter throw, which is how a phone says "nothing that way" without words. */
+(function(){
+  const deckIn = () => document.querySelector("#scr-trends .deck");
+  let x0 = null, y0 = null, live = false, deck = null;
+  const scr = document.getElementById("scr-trends");
+
+  scr.addEventListener("touchstart", e=>{
+    if(sheet.classList.contains("on")) return;
+    if(!e.target.closest || !e.target.closest(".deck")) return;
+    x0 = e.touches[0].clientX; y0 = e.touches[0].clientY;
+    live = false; deck = deckIn();
+  }, {passive:true});
+
+  scr.addEventListener("touchmove", e=>{
+    if(x0 === null || !deck) return;
+    const dx = e.touches[0].clientX - x0, dy = e.touches[0].clientY - y0;
+    if(!live){
+      if(Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)){ x0 = null; return; }  // scrolling
+      if(Math.abs(dx) < 12) return;
+      live = true; deck.style.transition = "none";
+    }
+    const at = PULSE_SEGS.indexOf(pulseSeg);
+    const wall = (dx > 0 && at === 0) || (dx < 0 && at === PULSE_SEGS.length - 1);
+    deck.style.transform = "translateX(" + (dx / (wall ? 9 : 3)).toFixed(1) + "px)";
+    if(e.cancelable) e.preventDefault();
+  }, {passive:false});
+
+  const release = e=>{
+    if(x0 === null){ return; }
+    const dx = (e.changedTouches ? e.changedTouches[0].clientX : x0) - x0;
+    const d = deck;
+    x0 = null;
+    if(!live || !d) return;
+    live = false;
+    d.style.transition = "transform .3s var(--out)";
+    d.style.transform = "";
+    if(Math.abs(dx) > 56) pulseGo(dx < 0 ? 1 : -1);
+  };
+  scr.addEventListener("touchend", release);
+  scr.addEventListener("touchcancel", release);
 })();
 
 /* theme toggle */

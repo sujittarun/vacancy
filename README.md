@@ -469,6 +469,12 @@ Above it, a bar of five questions — **Now · Money · Rooms · Guests · Upkee
 they run on different clocks and used to sit in one nine-card scroll, where what to do today
 was pushed down by how the year is going. A dot on **Now** means something is waiting.
 
+**Swipe the cards sideways to move between them.** The deck follows your thumb as you drag
+rather than waiting for you to let go, and at the first and last it resists — a third of the
+travel becomes a ninth — which is how a phone says *nothing that way* without words. Moving
+by tapping the bar slides the deck in from the side you travelled, so it reads as a place you
+moved to rather than a screen that changed.
+
 **Money** — what a night is actually worth. RevPAR is the number operators run on, because a
 full house at a poor rate and a half-empty one at a good rate look identical on an occupancy
 chart and never on this. Beside it, the gap between what you list and what you achieve — the
