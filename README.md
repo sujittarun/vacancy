@@ -8,10 +8,16 @@ able to see the whole portfolio at once.
 
 Works on any phone browser. Nothing to install.
 
-It opens on **sample data**, so the link can be handed to anyone — no account, no
-login, nothing real on screen. Tap **Sample** in the top right and sign in to switch to
-the real book, which is shared across every phone and kept in a database rather than in
-one browser. The pill then reads **Live**.
+**It opens on the sign-in screen.** Sign in once on a phone and it never asks again —
+that phone goes straight to the real book from then on, and the pill in the corner reads
+**Live**.
+
+The sign-in exists for one reason: the real bookings sit on a server and this page has a
+public web address. Without it, anyone holding the link could read and change them.
+
+Anyone who only wants a look around taps **Browse an invented set of bookings** — fake
+guests, fake money, nothing real — which is what makes the link safe to hand to someone.
+In that mode the corner reads **Demo data**, and tapping it takes you back to signing in.
 
 ## The portfolio
 

@@ -967,9 +967,9 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 
 <section class="gate" id="gate" aria-label="Sign in">
   <h2>Crescent Stays</h2>
-  <p class="lede"><b>Every booking you can see right now is made up.</b> They are there so
-    the app has something to show. Sign in and you get your own book instead — the same
-    bookings on every phone, and nothing lost if you drop one.</p>
+  <p class="lede">Sign in to see your real bookings. They live on a server, so the same book
+    is on every phone and nothing is lost if one goes missing — and the sign-in is what
+    keeps them off this address for everyone else.</p>
   <div id="gateErr"></div>
   <form id="gateForm" novalidate>
     <label for="gateEmail">Email</label>
@@ -979,7 +979,8 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
     <input id="gatePass" type="password" autocomplete="current-password">
     <button class="go" id="gateGo" type="submit">Sign in</button>
   </form>
-  <button class="alt" id="gateSkip">Just looking? <b>Explore with sample data</b></button>
+  <button class="alt" id="gateSkip">Only want a look around?
+    <b>Browse an invented set of bookings</b></button>
 </section>
 
 <script>
@@ -1774,6 +1775,12 @@ const SUPA_KEY = "sb_publishable_i4ZgWEz4uvP4FF0Fk5joUQ_jIohbSs5";
 const APP_VER  = "2026.08.10";
 
 const SESSION_KEY = "vacancy.session.v1";
+/* Set once someone has deliberately chosen to browse the invented book. Without
+   it the app used to *start* in demo and leave signing in as something you had
+   to notice — which meant an operator could work in fake data without ever
+   realising there was a real one. Sign-in is the front door now; this is the
+   record that you knowingly walked past it. */
+const BROWSE_KEY  = "vacancy.browsing.v1";
 const QUEUE_KEY   = "vacancy.queue.v1";
 const CLOUD_KEY   = "vacancy.cloud.v1";
 
@@ -1848,6 +1855,7 @@ async function signIn(email, password){
   keepSession(await api("/auth/v1/token?grant_type=password",
     {method:"POST", auth:false, body:{email: email.trim(), password}}));
   MODE = "live";
+  jdel(BROWSE_KEY);
   await loadHost();
   await cloudPull();
   jdel(STORE);                       // the sample book is not this operator's book
@@ -5375,7 +5383,11 @@ if(location.hostname === "localhost" || location.hostname === "127.0.0.1"){
     }
     go.disabled = false; go.textContent = "Sign in";
   };
-  document.getElementById("gateSkip").onclick = ()=>{ haptic(9); closeGate(); };
+  document.getElementById("gateSkip").onclick = ()=>{
+    haptic(9); jset(BROWSE_KEY, 1); closeGate();
+    toast("", "<b>These bookings are invented.</b> Nothing here is Crescent Stays' real book — "
+            + "tap <b>Demo data</b> at the top to sign in to that.", null);
+  };
 })();
 
 /* Connectivity. navigator.onLine lies often enough that the queue is the real
@@ -5403,6 +5415,10 @@ addEventListener("unhandledrejection", e=>{
 });
 
 paintAcct();
+/* Sign-in is the front door. A phone that has never signed in, and whose owner
+   has never said "just looking", meets it first — so nobody works a whole
+   afternoon in invented bookings without knowing there is a real book. */
+if(MODE !== "live" && !jget(BROWSE_KEY)) openGate();
 if(MODE === "live"){
   // the cache already painted; correct it from the server, and if the session
   // has expired for good, fall back to the sample book rather than a dead app
