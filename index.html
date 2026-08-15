@@ -682,6 +682,52 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .card .row.lit{background:var(--surface-2)}
 .sheet-s{padding:14px 20px 8px;display:flex;justify-content:space-between;align-items:baseline;gap:10px}
 
+/* ── the room card ────────────────────────────────────────────────────────────
+   Opening a room reads. One primary action sized to say "this is what you came
+   for", two small routes to the things that write, and then the lists. Every
+   form that used to live here now has a screen of its own.                    */
+.roomAct{padding:16px 20px 4px;display:flex;flex-direction:column;gap:9px}
+.bigAct{
+  width:100%;padding:15px 16px;border-radius:14px;border:none;
+  background:var(--free);color:var(--free-ink);font-family:var(--ui);
+  font-size:16px;font-weight:670;letter-spacing:-.02em;text-align:left;
+  display:flex;flex-direction:column;gap:2px;
+  transition:transform .38s var(--spring);
+}
+.bigAct:active{transform:scale(.985);transition-duration:.085s}
+.bigAct s{text-decoration:none;font-size:12px;font-weight:520;opacity:.62}
+.actWhy{
+  padding:13px 15px;border-radius:12px;background:var(--surface-2);
+  border:1px solid var(--line);font-size:13.5px;line-height:1.45;color:var(--txt-2);
+}
+.actWhy b{color:var(--txt);font-weight:640}
+/* the two things that write, given equal and deliberately modest weight */
+.roomRoutes{display:flex;gap:9px}
+.roomRoutes button{
+  flex:1;min-width:0;padding:11px 12px;border-radius:12px;
+  background:var(--surface-2);border:1px solid var(--line);
+  font-family:var(--ui);font-size:13px;font-weight:600;color:var(--txt);
+  display:flex;flex-direction:column;gap:1px;text-align:left;
+  transition:transform .38s var(--spring), background .18s;
+}
+.roomRoutes button:active{transform:scale(.96);transition-duration:.085s;background:var(--surface-3)}
+.roomRoutes button s{text-decoration:none;font-size:11px;font-weight:500;color:var(--txt-3)}
+.rowMore{padding:11px 14px;font-size:12px;color:var(--txt-3);border-top:1px solid var(--line)}
+
+/* a stepper that has to hold a date, so it gets the room a number does not need */
+.stepWide{display:flex;align-items:center;gap:0;padding:0 4px;flex:1;min-width:0;
+  background:var(--surface-2);border:1px solid var(--line);border-radius:11px}
+.stepWide button{width:38px;height:44px;font-size:20px;font-weight:400;color:var(--txt-2);
+  background:none;border:none;transition:transform .3s var(--spring)}
+.stepWide button:active{transform:scale(.86);transition-duration:.085s}
+.stepWide button[disabled]{opacity:.3}
+.stepWide b{flex:1;text-align:center;font-size:14px;font-weight:620;letter-spacing:-.015em;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* the running consequence of the two steppers above it */
+.bkstate{font-size:12.5px;line-height:1.45;color:var(--txt-3);padding:0 2px;margin-top:-2px}
+.bkstate.bad{color:var(--hot)}
+.bkgo[disabled]{opacity:.45}
+
 /* ── taking a booking ─────────────────────────────────────────────────────────
    Phone first, because it is identity: type it and a returning guest names
    himself. Everything below it arrives pre-filled, so the common booking is
@@ -4631,31 +4677,49 @@ function openIssueForm(fi, day){
   setTimeout(()=> note.focus(), 80);
 }
 
-function openSheet(fi, day){
+/* ══════════════ opening a room ══════════════════════════════════════════════
+   A room used to open onto every form at once: book a guest, log a fault, take
+   it out of service, all expanded inline under three read-only lists. Forty-
+   seven buttons and nearly four screens of scroll before anything was typed,
+   because each new feature was added where it was *about* rather than where it
+   belonged.
+
+   The rule now is one surface, one job. Opening a room READS: what it is, its
+   nine weeks, and the one thing you most likely came to do. Everything that
+   writes is its own screen with a single commit, and Back returns here.       */
+
+/* The room's own header, shared by every screen in the stack, so moving between
+   them never feels like leaving the room. */
+function roomHead(fi, backTo){
   const fl = flats[fi];
-  sheetH.textContent = ""; sheetB.textContent = "";
-
+  sheetH.textContent = "";
   const t = el("div");
-  t.innerHTML = `<div class="n">${fl.id}</div><div class="m">${fl.type} · ${fl.bname} · floor ${fl.floor}</div>`;
-  const x = el("button",null,"✕"); x.setAttribute("aria-label","Close");
-  x.onclick = closeSheet;
+  t.innerHTML = `<div class="n">${esc(fl.id)}</div>`
+              + `<div class="m">${esc(fl.type)} · ${esc(fl.bname)} · floor ${fl.floor}</div>`;
+  const x = el("button", null, backTo ? "‹" : "✕");
+  x.setAttribute("aria-label", backTo ? "Back to the room" : "Close");
+  x.onclick = backTo || closeSheet;
   sheetH.append(t, x);
+  return x;
+}
 
+/* The nine weeks, scrubbable. Built here rather than inline so the room card
+   stays readable as a list of sections. */
+function roomStrip(fi){
   const wrap = el("div","stripwrap");
   const strip = el("div","strip");
   strip.setAttribute("role","img");
   strip.setAttribute("aria-label",
-    `${fl.id} over the next nine weeks: ${occPct(fi)} per cent booked. Touch and drag to read a night.`);
-  for(let d=0;d<DAYS;d++){
+    `${flats[fi].id} over the next nine weeks: ${occPct(fi)} per cent booked. Touch and drag to read a night.`);
+  for(let d=0; d<DAYS; d++){
     const i = el("i");
     if(!occ[fi][d]) i.classList.add("f");
-    else if(blk[fi][d]) i.classList.add("b");        // out of service, not sold
+    else if(blk[fi][d]) i.classList.add("b");
     if(d === 0) i.classList.add("td");
     strip.appendChild(i);
   }
   const head = el("i","playhead");
   wrap.append(strip, head);
-
   const foot = el("div","strip-foot");
   const k = el("div","strip-k");
   k.append(el("span","lbl","Today"), el("span","lbl", `${occPct(fi)}% booked`), el("span","lbl","+9 weeks"));
@@ -4664,329 +4728,146 @@ function openSheet(fi, day){
   const readD = el("b"), readW = el("span");
   read.append(readD, readW);
   foot.append(k, read);
-  sheetB.append(wrap, foot);
-  attachStripScrub(wrap, strip, head, foot, readD, readW, fi);
+  return {wrap, strip, head, foot, readD, readW};
+}
 
-  /* take a booking for the dates currently selected on the Rooms screen */
+/* The next run of free nights at or after `from`, which is what turns "not
+   available" into something you can still act on. */
+function nextFree(fi, from){
+  for(let d = Math.max(0, from); d < DAYS; d++){
+    if(occ[fi][d]) continue;
+    let n = 0; while(d + n < DAYS && !occ[fi][d + n]) n++;
+    return {from: d, nights: n};
+  }
+  return null;
+}
+
+function openSheet(fi, day){
+  const fl = flats[fi];
+  roomHead(fi);
+  sheetB.textContent = "";
+
+  const S = roomStrip(fi);
+  sheetB.append(S.wrap, S.foot);
+  attachStripScrub(S.wrap, S.strip, S.head, S.foot, S.readD, S.readW, fi);
+
+  /* ── the one thing you probably came for ──────────────────────────────────
+     Decided by the room's state rather than always being the same button, so
+     the largest target on screen is never the wrong one. */
   const bDay = Math.min(pickedNight, DAYS-1), bN = stayNights;
-  const span = bN === 1 ? fmtL(bDay) : `${fmt(bDay)} → ${fmt(bDay+bN)}`;
-  if(freeRange(fi, bDay, bDay+bN)){
-    const form = el("div","bkform");
+  const canTake = freeRange(fi, bDay, bDay + bN);
+  const act = el("div","roomAct");
 
-    const phone = el("input");
-    phone.type = "tel"; phone.inputMode = "numeric"; phone.autocomplete = "tel";
-    phone.placeholder = "Phone number";
-    phone.setAttribute("aria-label", `Guest phone number for ${fl.id}, ${span}`);
-
-    const who = el("input");
-    who.type = "text"; who.placeholder = "Guest name"; who.autocomplete = "off";
-    who.setAttribute("aria-label", `Guest name for ${fl.id}, ${span}`);
-
-    const back = el("div","bkback");
-    back.style.display = "none";
-
-    /* Both of these were bare boxes side by side — a number with a rupee sign
-       and a number with plus and minus. Perfectly obvious to whoever built it
-       and to nobody else, which is the usual way a field ends up unlabelled. */
-    const capRow = el("div","bkcap");
-    capRow.append(el("span",null,"Total for the stay"), el("span",null,"Guests"));
-    const row = el("div","bkrow");
-    const amtWrap = el("div","bkamt");
-    amtWrap.appendChild(el("s", null, "₹"));
-    const amt = el("input");
-    amt.type = "text"; amt.inputMode = "numeric";
-    amt.setAttribute("aria-label", "Total agreed for the stay");
-    amt.value = ((fl.rate || 0) * bN) ? String((fl.rate || 0) * bN) : "";
-    amt.placeholder = "Total";
-    amtWrap.appendChild(amt);
-
-    let pax = 2;
-    const step = el("div","step");
-    const less = el("button", null, "−"), more = el("button", null, "+");
-    const paxN = el("b", null, "2");
-    less.setAttribute("aria-label","Fewer guests"); more.setAttribute("aria-label","More guests");
-    const setPax = n => { pax = Math.max(1, Math.min(12, n)); paxN.textContent = pax;
-      less.disabled = pax <= 1; more.disabled = pax >= 12;
-      step.setAttribute("aria-label", pax + (pax === 1 ? " guest" : " guests")); haptic(6); };
-    less.onclick = ()=> setPax(pax - 1); more.onclick = ()=> setPax(pax + 1);
-    step.append(less, paxN, more); setPax(2);
-    row.append(amtWrap, step);
-
-    let src = "Direct";
-    const srcRow = el("div","srcRow");
-    ["Direct","Airbnb","Walk-in","Booking.com","Repeat guest"].forEach(s=>{
-      const c = el("button", null, s);
-      c.setAttribute("aria-pressed", s === src);
-      c.onclick = ()=>{ src = s; haptic(8);
-        [...srcRow.children].forEach(o => o.setAttribute("aria-pressed", o.textContent === src)); };
-      srcRow.appendChild(c);
-    });
-
-    const btn = el("button","bkgo", `Book ${bN} night${bN>1?"s":""}`);
-    const take = ()=>{
-      const ok = addBooking(fi, bDay, bN, who.value.trim(), src,
-        {phone: phone.value, pax, amount: (amt.value || "").replace(/[^\d]/g,"")});
-      if(ok){ haptic(18); closeSheet(); refreshScreen(); }
-      else {                                     // someone took it in another tab
-        haptic(30);
-        btn.textContent = "Just taken";
-        setTimeout(()=>{ closeSheet(); refreshScreen(); }, 900);
-      }
-    };
-    btn.onclick = take;
-
-    /* The whole reason the number is the first field: on the second visit the
-       guest names himself, and the operator learns something worth saying out
-       loud on the call. */
-    phone.addEventListener("input", ()=>{
-      const seen = guestByPhone(phone.value);
-      if(!seen){ back.style.display = "none"; return; }
-      if(!who.value.trim()) who.value = seen.name;
-      if(PLATFORMS.indexOf(src) < 0 && seen.stays >= 1){
-        src = "Repeat guest";
-        [...srcRow.children].forEach(o => o.setAttribute("aria-pressed", o.textContent === src));
-      }
-      back.style.display = "";
-      back.textContent = seen.stays === 1
-        ? `${seen.name} has stayed once before · last ${fmt(seen.last)}`
-        : `${seen.name} has stayed ${seen.stays} times · last ${fmt(seen.last)}`;
-    });
-    who.addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); who.blur(); take(); }});
-
-    form.append(phone, who, back, capRow, row, srcRow, btn);
-    sheetB.appendChild(form);
-    const hint = el("div","lbl");
-    hint.style.cssText = "margin:8px 20px 0";
-    hint.textContent = `Books ${span} · change the dates on the Rooms tab`;
-    sheetB.appendChild(hint);
-
-    /* Something wrong, but the flat still sells. This has to sit beside the
-       block button, not inside it — the whole point is that recording a fault
-       must never cost a night. */
-    const issueBtn = el("button","blockbtn", "Something needs fixing (keep it on sale)");
-    issueBtn.onclick = ()=>{ haptic(10); openIssueForm(fi, day); };
-    sheetB.appendChild(issueBtn);
-
-    /* take the flat out of service for the same dates */
-    const blockBtn = el("button","blockbtn", `Block these nights instead`);
-    blockBtn.onclick = ()=>{
-      haptic(10);
-      blockBtn.remove();
-      const form = el("div","invForm"); form.style.margin = "10px 20px 0";
-      const chips = el("div","tyRow");
-      let reason = BLOCK_REASONS[0];
-      BLOCK_REASONS.forEach(rz=>{
-        const b2 = el("button",null,rz);
-        b2.setAttribute("aria-pressed", rz===reason);
-        b2.onclick = ()=>{ reason = rz; haptic(8);
-          [...chips.children].forEach(c=>c.setAttribute("aria-pressed", c.textContent===reason)); };
-        chips.appendChild(b2);
-      });
-      /* What broke. One tap, and it is the tap that makes every later question
-         answerable — a fault is what turns two unrelated outages into a
-         pattern with a name. */
-      let fault = "";
-      const fRow = el("div","tyRow faultRow");
-      const flag = el("div","faultFlag"); flag.hidden = true;
-      FAULTS.forEach(fx=>{
-        const b3 = el("button",null,fx);
-        b3.setAttribute("aria-pressed","false");
-        b3.onclick = ()=>{
-          fault = fault === fx ? "" : fx; haptic(8);
-          [...fRow.children].forEach(c=>c.setAttribute("aria-pressed", c.textContent===fault));
-          paintFlag();
-        };
-        fRow.appendChild(b3);
-      });
-
-      /* The whole feature, delivered at the only moment it is useful: the flat
-         is going out of service again and the person who touched it last is one
-         tap away. A report nobody opens would never have said this. */
-      function paintFlag(){
-        const h = fault ? faultHistory(fi, fault, bDay) : null;
-        flag.textContent = "";
-        if(!h){ flag.hidden = true; return; }
-        flag.hidden = false;
-        flag.classList.toggle("hot", h.insideHold);
-        const line = el("div","ff-l");
-        line.innerHTML = `<b>${h.recent > 2 ? h.recent + ordinalSuffix(h.recent) : h.times === 2 ? "Second" : h.times + ordinalSuffix(h.times)}`
-          + ` ${esc(fault.toLowerCase())} fault in ${esc(fl.id)}.</b> `
-          + (h.last.fixer
-              ? `${esc(h.last.fixer)} fixed it ${h.gap === 0 ? "and it is still out" : h.gap + " day" + (h.gap>1?"s":"") + " ago"}.`
-              : `Last one ended ${h.gap} day${h.gap===1?"":"s"} ago, nobody recorded.`)
-          + (h.insideHold ? " <em>Inside the month — worth asking for a free look.</em>" : "");
-        flag.append(line);
-        if(h.last.fixer){
-          const act = el("div","ff-a");
-          if(h.last.fixer_phone){
-            const call = el("a","ff-call", "Call " + h.last.fixer);
-            call.href = "tel:" + h.last.fixer_phone.replace(/[^\d+]/g,"");
-            act.append(call);
-          }
-          const same = el("button","ff-same", "Same person again");
-          same.onclick = ()=>{ who.value = h.last.fixer; ph.value = h.last.fixer_phone || "";
-                               haptic(8); };
-          act.append(same);
-          flag.append(act);
-        }
-      }
-
-      /* Who is fixing it. Independent people, so a name and a number — and the
-         number exists to be rung, which is why it is a tel: link everywhere
-         else it appears. Names already used become chips. */
-      const whoRow = el("div","r");
-      const who = el("input");
-      who.type = "text"; who.placeholder = "Who is fixing it";
-      who.setAttribute("aria-label","Name of the person fixing it");
-      const ph = el("input");
-      ph.type = "tel"; ph.inputMode = "numeric"; ph.placeholder = "Their number";
-      ph.setAttribute("aria-label","Their phone number");
-      whoRow.append(who, ph);
-      const known = fixers();
-      const knownRow = el("div","tyRow soft");
-      known.slice(0,6).forEach(g=>{
-        const b4 = el("button",null,g.name);
-        b4.onclick = ()=>{ who.value = g.name; ph.value = g.phone || ""; haptic(8); };
-        knownRow.appendChild(b4);
-      });
-
-      const noteRow = el("div","r");
-      const note = el("input");
-      note.type = "text"; note.placeholder = "Note — e.g. compressor replaced";
-      noteRow.appendChild(note);
-
-      /* How long it is out. This used to inherit 1/2/3/7 from the Rooms tab,
-         which is a guest's stay length — a repair is however long the repair
-         takes, and there was no way to say "five days". Capped at the nights
-         actually free, so a block can never be dragged over a booking. */
-      let outN = Math.max(1, bN);
-      const capN = (()=>{ let n = 0;
-        while(n < 60 && bDay + n < DAYS && !occ[fi][bDay + n]) n++; return Math.max(1, n); })();
-      outN = Math.min(outN, capN);
-      const nRow = el("div","step nightStep");
-      const less2 = el("button", null, "−"), more2 = el("button", null, "+");
-      const nLab = el("b");
-      less2.setAttribute("aria-label","Fewer nights out of service");
-      more2.setAttribute("aria-label","More nights out of service");
-      const outHint = el("p");
-      outHint.style.cssText = "margin:7px 2px 0;font-size:12px;line-height:1.5;color:var(--txt-3)";
-      const setOut = n=>{
-        outN = Math.max(1, Math.min(capN, n));
-        nLab.textContent = outN + (outN === 1 ? " night" : " nights");
-        less2.disabled = outN <= 1; more2.disabled = outN >= capN;
-        go2.textContent = `Block ${outN} night${outN>1?"s":""}`;
-        const lostN = outN * (fl.rate || 0);
-        outHint.textContent = `Out ${fmt(bDay)} → back on sale ${fmt(bDay + outN)}`
-          + (lostN ? ` · about ${money(lostN)} off the market` : "")
-          + (outN >= capN ? " · a guest holds the night after" : "");
-        haptic(5);
-      };
-      less2.onclick = ()=> setOut(outN - 1);
-      more2.onclick = ()=> setOut(outN + 1);
-      nRow.append(less2, nLab, more2);
-
-      const acts = el("div","invActs");
-      const go2 = el("button","invSave", "");
-      go2.onclick = ()=>{
-        if(addBlock(fi, bDay, outN, reason, note.value,
-                    {fault, fixer:who.value, phone:ph.value})){
-          haptic(18); closeSheet(); refreshScreen();
-        }
-      };
-      setOut(outN);
-      const cancel = el("button","invDel","Cancel");
-      cancel.onclick = ()=>{ haptic(8); openSheet(fi, day); };
-      acts.append(go2, cancel);
-      const nCap = el("div","bkcap"); nCap.append(el("span",null,"How long is it out"));
-      form.append(chips, fRow, flag, nCap, nRow, outHint, whoRow);
-      if(known.length) form.append(knownRow);
-      form.append(noteRow, acts);
-
-      sheetB.insertBefore(form, hint.nextSibling);
-    };
-    sheetB.appendChild(blockBtn);
-  } else {
-    const blocker = resv.find(r => r.fi===fi && r.start < bDay+bN && r.end > bDay);
-    const b = el("div","blocked");
-    b.innerHTML = blocker
-      ? `Can't take <b>${span}</b> — <b>${blocker.guest}</b> is in until ${fmt(Math.min(blocker.end,DAYS-1))}.`
-      : `Not available for <b>${span}</b>.`;
-    sheetB.appendChild(b);
+  if(canTake){
+    const b = el("button","bigAct", `Book ${bN === 1 ? fmtL(bDay) : fmt(bDay) + " → " + fmt(bDay + bN)}`);
+    b.append(el("s", null, bN === 1 ? "one night" : bN + " nights"));
+    b.onclick = ()=>{ haptic(12); openBooking(fi, bDay, bN); };
+    act.append(b);
+  }else{
+    const busy = resv.find(r => r.fi === fi && r.start < bDay + bN && r.end > bDay);
+    const nxt = nextFree(fi, bDay);
+    const why = el("div","actWhy");
+    why.innerHTML = busy
+      ? (isBlock(busy)
+          ? `<b>${esc(busy.reason || "Out of service")}</b> until ${esc(fmt(Math.min(busy.end, DAYS-1)))}`
+          : `<b>${esc(busy.guest)}</b> is in until ${esc(fmt(Math.min(busy.end, DAYS-1)))}`)
+      : `Not free for those nights`;
+    act.append(why);
+    if(nxt){
+      // a dead end is a wasted screen — offer the nearest thing that can be sold
+      const b = el("button","bigAct", `Book from ${fmt(nxt.from)}`);
+      b.append(el("s", null, `next free · ${nxt.nights} night${nxt.nights>1?"s":""}`));
+      b.onclick = ()=>{ haptic(12); openBooking(fi, nxt.from, Math.min(nxt.nights, 3)); };
+      act.append(b);
+    }
   }
 
+  const routes = el("div","roomRoutes");
+  const rFault = el("button", null, "Log a fault");
+  rFault.append(el("s", null, "stays on sale"));
+  rFault.onclick = ()=>{ haptic(9); openIssueForm(fi, day); };
+  const rOut = el("button", null, "Out of service");
+  rOut.append(el("s", null, "cannot be sold"));
+  rOut.onclick = ()=>{ haptic(9); openBlockForm(fi, day); };
+  routes.append(rFault, rOut);
+  act.append(routes);
+  sheetB.append(act);
+
+  /* ── what is true about this room, read only ─────────────────────────────── */
+  const mine = resv.filter(r=>r.fi===fi && r.end>0 && r.start<DAYS).sort((a,b)=>a.start-b.start);
   const s1 = el("div","sheet-s");
-  // the rate is whatever was set in Inventory — no longer a number this app invented
-  s1.append(el("span","lbl","Upcoming bookings"),
+  s1.append(el("span","lbl", `Coming up · ${mine.length}`),
             el("span","lbl", `₹${fl.rate.toLocaleString("en-IN")} / night`));
   sheetB.appendChild(s1);
   const bl = el("div","card"); bl.style.margin="0 20px";
-  const mine = resv.filter(r=>r.fi===fi && r.end>0 && r.start<DAYS).sort((a,b)=>a.start-b.start);
-  if(!mine.length) bl.appendChild(el("div","empty","No bookings in the next nine weeks — completely open."));
-  mine.slice(0,14).forEach(r=>{
+  if(!mine.length) bl.appendChild(el("div","empty","Nothing booked in the next nine weeks."));
+  // a glance, not an archive — the strip above already carries the whole shape,
+  // and anything past the next few is a scroll nobody performs
+  const SHOW = 5;
+  mine.slice(0, SHOW).forEach(r=>{
     const row = el("div","row bk");
-    row._resv = r;                     // so scrubbing the strip can light this row
+    row._resv = r;
     const when = Math.max(r.start,0) === 0 ? "Now" : fmt(Math.max(r.start,0));
     const m = el("div","meta");
     m.innerHTML = `<b>${esc(r.guest)}</b>`
                 + `<em>${when} → ${fmt(Math.min(r.end,DAYS-1))} · ${r.nights}n · ${esc(r.src)}</em>`;
     const end = el("div","rowend");
     end.appendChild(!isBlock(r) && r.amount ? moneyPill(r, fi) : el("span","pill", `${r.nights}n`));
-    const x = el("button","rowx","✕");
-    x.setAttribute("aria-label", `Cancel ${r.guest}'s booking in ${fl.id}`);
-    let armed = false, t = null;
-    x.onclick = ()=>{
-      if(!armed){
-        armed = true; x.classList.add("arm"); x.textContent = "Cancel?"; haptic(10);
-        t = setTimeout(()=>{ armed=false; x.classList.remove("arm"); x.textContent="✕"; }, 3000);
-        return;
-      }
-      clearTimeout(t); haptic(20);
+    const x2 = el("button","rowx","✕");
+    x2.setAttribute("aria-label", `Cancel ${r.guest}'s booking in ${fl.id}`);
+    let armed = false, t2 = null;
+    x2.onclick = ()=>{
+      if(!armed){ armed = true; x2.classList.add("arm"); x2.textContent = "Cancel?"; haptic(10);
+        t2 = setTimeout(()=>{ armed=false; x2.classList.remove("arm"); x2.textContent="✕"; }, 3000);
+        return; }
+      clearTimeout(t2); haptic(20);
       cancelWithUndo(r, fi); closeSheet(); refreshScreen();
     };
-    end.appendChild(x);
+    end.appendChild(x2);
     row.append(m, end);
     bl.appendChild(row);
   });
+  if(mine.length > SHOW){
+    const more = el("div","rowMore", `${mine.length - SHOW} more in the strip above`);
+    bl.appendChild(more);
+  }
   sheetB.appendChild(bl);
 
-  /* What is wrong with this flat right now, while it carries on selling. */
   const mine2 = openIssues(fi);
   if(mine2.length){
-    const s3 = el("div","sheet-s");
     const win = batchWindow(fi, 1);
+    const s3 = el("div","sheet-s");
     s3.append(el("span","lbl", `Needs fixing · ${mine2.length}`),
               el("span","lbl", win ? `empty ${fmt(win.from)} for ${win.nights}n` : "no gap yet"));
     sheetB.appendChild(s3);
     const il = el("div","card"); il.style.margin = "0 20px";
-    mine2.forEach(x=>{
+    mine2.forEach(x2=>{
       const row = el("div","row bk");
       const m = el("div","meta");
-      m.innerHTML = `<b>${esc(x.fault || "Issue")}</b>`
-                  + `<em>${esc(x.note || "no note")} · logged ${x.on === 0 ? "today" : fmt(x.on)}</em>`;
+      m.innerHTML = `<b>${esc(x2.fault || "Issue")}</b>`
+                  + `<em>${esc(x2.note || "no note")} · logged ${x2.on === 0 ? "today" : fmt(x2.on)}</em>`;
       const end = el("div","rowend");
-      end.appendChild(el("span", "paid " + (x.urgency === "urgent" ? "due" : "clear"),
-                          x.urgency === "whenever" ? "can wait" : x.urgency));
+      end.appendChild(el("span", "paid " + (x2.urgency === "urgent" ? "due" : "clear"),
+                         x2.urgency === "whenever" ? "can wait" : x2.urgency));
       const done = el("button","rowx","✓");
-      done.setAttribute("aria-label", `Mark ${x.fault || "this issue"} fixed`);
+      done.setAttribute("aria-label", `Mark ${x2.fault || "this issue"} fixed`);
       let armed = false, tm = null;
       done.onclick = ()=>{
         if(!armed){ armed = true; done.classList.add("arm"); done.textContent = "Fixed?"; haptic(10);
           tm = setTimeout(()=>{ armed=false; done.classList.remove("arm"); done.textContent="✓"; }, 3000);
           return; }
-        clearTimeout(tm); haptic(20); closeIssue(x); openSheet(fi, day); refreshScreen();
+        clearTimeout(tm); haptic(20); closeIssue(x2); openSheet(fi, day); refreshScreen();
       };
       end.appendChild(done);
       row.append(m, end);
       il.appendChild(row);
     });
     sheetB.appendChild(il);
-    if(mine2.length > 1 && batchWindow(fi, 1)){
-      // a sentence, not a label — .lbl is uppercased and unreadable at this length
+    if(mine2.length > 1 && win){
       const b = el("p");
       b.style.cssText = "margin:9px 20px 0;font-size:12px;line-height:1.55;color:var(--txt-3)";
-      const w = batchWindow(fi, 1);
-      b.textContent = `All ${mine2.length} could go in one visit while it sits empty from ${fmt(w.from)} — `
-        + `one trip instead of ${mine2.length}, and no night lost.`;
+      b.textContent = `All ${mine2.length} could go in one visit while it sits empty from `
+        + `${fmt(win.from)} — one trip instead of ${mine2.length}, and no night lost.`;
       sheetB.appendChild(b);
     }
   }
@@ -4995,15 +4876,19 @@ function openSheet(fi, day){
   s2.append(el("span","lbl","Open stretches"), el("span","lbl","sellable"));
   sheetB.appendChild(s2);
   const gl = el("div","card"); gl.style.margin="0 20px";
-  let d=0, any=false;
+  let d=0, any=false, shown=0;
   while(d<DAYS){
     if(occ[fi][d]){ d++; continue; }
     let n=0; while(d+n<DAYS && !occ[fi][d+n]) n++;
-    const row = el("div","row"); any=true;
+    if(shown >= SHOW){ d += n; any = true; continue; }
+    shown++;
+    const row = el("button","row"); any=true;
     row.append(el("div","id", `${n}n`));
     const m = el("div","meta");
     m.innerHTML = `${fmtL(d)}<em>through ${fmtL(Math.min(d+n,DAYS-1))}</em>`;
     row.append(m, el("span", n===1 ? "pill warn" : "pill good", n===1 ? "orphan night" : "open"));
+    const at = d, len = n;
+    row.onclick = ()=>{ haptic(9); openBooking(fi, at, Math.min(len, 3)); };
     gl.appendChild(row);
     d += n;
   }
@@ -5012,7 +4897,280 @@ function openSheet(fi, day){
 
   sheet.classList.add("on"); scrim.classList.add("on");
   sheetB.scrollTop = 0;
-  x.focus();
+}
+
+/* ── booking, on its own screen ───────────────────────────────────────────────
+   It sets its own dates. The old form inherited them from the Rooms tab and
+   apologised for it in help text — "change the dates on the Rooms tab" — which
+   is what a broken flow sounds like when nobody fixes it.                     */
+function openBooking(fi, from, nights){
+  const fl = flats[fi];
+  roomHead(fi, ()=> openSheet(fi, from));
+  sheetB.textContent = "";
+
+  let day = Math.max(0, Math.min(from|0, DAYS-1));
+  let n   = Math.max(1, nights|0 || 1);
+  const capFrom = d => { let k = 0; while(k < 60 && d + k < DAYS && !occ[fi][d + k]) k++; return k; };
+
+  const form = el("div","bkform");
+
+  /* when */
+  const whenCap = el("div","bkcap");
+  whenCap.append(el("span",null,"Arriving"), el("span",null,"Nights"));
+  const whenRow = el("div","bkrow");
+  const dayBox = el("div","stepWide");
+  const dLess = el("button",null,"−"), dMore = el("button",null,"+"), dLab = el("b");
+  dLess.setAttribute("aria-label","A day earlier"); dMore.setAttribute("aria-label","A day later");
+  dayBox.append(dLess, dLab, dMore);
+  const nBox = el("div","step");
+  const nLess = el("button",null,"−"), nMore = el("button",null,"+"), nLab = el("b");
+  nLess.setAttribute("aria-label","Fewer nights"); nMore.setAttribute("aria-label","More nights");
+  nBox.append(nLess, nLab, nMore);
+  whenRow.append(dayBox, nBox);
+
+  const state = el("div","bkstate");
+
+  const phone = el("input");
+  phone.type = "tel"; phone.inputMode = "numeric"; phone.autocomplete = "tel";
+  phone.placeholder = "Phone number";
+  phone.setAttribute("aria-label", `Guest phone number for ${fl.id}`);
+  const who = el("input");
+  who.type = "text"; who.placeholder = "Guest name"; who.autocomplete = "off";
+  who.setAttribute("aria-label", `Guest name for ${fl.id}`);
+  const back = el("div","bkback"); back.style.display = "none";
+
+  const capRow = el("div","bkcap");
+  capRow.append(el("span",null,"Total for the stay"), el("span",null,"Guests"));
+  const row = el("div","bkrow");
+  const amtWrap = el("div","bkamt");
+  amtWrap.appendChild(el("s", null, "₹"));
+  const amt = el("input");
+  amt.type = "text"; amt.inputMode = "numeric"; amt.placeholder = "Total";
+  amt.setAttribute("aria-label","Total agreed for the stay");
+  amtWrap.appendChild(amt);
+  let pax = 2, touchedAmt = false;
+  amt.addEventListener("input", ()=>{ touchedAmt = true; });
+  const step = el("div","step");
+  const pLess = el("button",null,"−"), pMore = el("button",null,"+"), paxN = el("b","","2");
+  pLess.setAttribute("aria-label","Fewer guests"); pMore.setAttribute("aria-label","More guests");
+  const setPax = v => { pax = Math.max(1, Math.min(12, v)); paxN.textContent = pax;
+    pLess.disabled = pax <= 1; pMore.disabled = pax >= 12; haptic(5); };
+  pLess.onclick = ()=> setPax(pax-1); pMore.onclick = ()=> setPax(pax+1);
+  step.append(pLess, paxN, pMore); setPax(2);
+  row.append(amtWrap, step);
+
+  let src = "Direct";
+  const srcRow = el("div","srcRow");
+  ["Direct","Airbnb","Walk-in","Booking.com","Repeat guest"].forEach(s=>{
+    const c = el("button", null, s);
+    c.setAttribute("aria-pressed", s === src);
+    c.onclick = ()=>{ src = s; haptic(8);
+      [...srcRow.children].forEach(o=>o.setAttribute("aria-pressed", o.textContent === src)); };
+    srcRow.appendChild(c);
+  });
+
+  const go = el("button","bkgo","");
+
+  function paint(){
+    const cap = capFrom(day);
+    n = Math.max(1, Math.min(n, Math.max(1, cap)));
+    dLab.textContent = day === 0 ? "Tonight" : fmtL(day);
+    nLab.textContent = n;                       // the caption above says NIGHTS
+    dLess.disabled = day <= 0; dMore.disabled = day >= DAYS-1;
+    nLess.disabled = n <= 1;   nMore.disabled = n >= cap;
+    const ok = cap > 0 && freeRange(fi, day, day + n);
+    state.classList.toggle("bad", !ok);
+    if(ok){
+      state.textContent = `Leaves ${fmt(day + n)}` + (cap > n ? ` · free for ${cap} night${cap>1?"s":""} from here` : " · the night after is taken");
+    }else{
+      const busy = resv.find(r => r.fi === fi && r.start <= day && r.end > day);
+      state.textContent = busy
+        ? `${isBlock(busy) ? (busy.reason || "Out of service") : busy.guest} holds ${fmtL(day)}`
+        : `${fl.id} is not free on ${fmtL(day)}`;
+    }
+    if(!touchedAmt) amt.value = (fl.rate || 0) * n ? String((fl.rate || 0) * n) : "";
+    go.textContent = ok ? `Book ${n} night${n>1?"s":""}` : "Not available";
+    go.disabled = !ok;
+  }
+  dLess.onclick = ()=>{ day = Math.max(0, day-1); haptic(5); paint(); };
+  dMore.onclick = ()=>{ day = Math.min(DAYS-1, day+1); haptic(5); paint(); };
+  nLess.onclick = ()=>{ n = Math.max(1, n-1); haptic(5); paint(); };
+  nMore.onclick = ()=>{ n = n+1; haptic(5); paint(); };
+
+  phone.addEventListener("input", ()=>{
+    const seen = guestByPhone(phone.value);
+    if(!seen){ back.style.display = "none"; return; }
+    if(!who.value.trim()) who.value = seen.name;
+    if(PLATFORMS.indexOf(src) < 0){
+      src = "Repeat guest";
+      [...srcRow.children].forEach(o=>o.setAttribute("aria-pressed", o.textContent === src));
+    }
+    back.style.display = "";
+    back.textContent = seen.stays === 1
+      ? `${seen.name} has stayed once before · last ${fmt(seen.last)}`
+      : `${seen.name} has stayed ${seen.stays} times · last ${fmt(seen.last)}`;
+  });
+
+  const take = ()=>{
+    if(go.disabled) return;
+    if(addBooking(fi, day, n, who.value.trim(), src,
+                  {phone: phone.value, pax, amount: (amt.value||"").replace(/[^\d]/g,"")})){
+      haptic(18); closeSheet(); refreshScreen();
+    }else{
+      haptic(30); go.textContent = "Just taken";
+      setTimeout(()=>{ openSheet(fi, day); refreshScreen(); }, 900);
+    }
+  };
+  go.onclick = take;
+  who.addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); who.blur(); take(); }});
+
+  form.append(whenCap, whenRow, state, phone, who, back, capRow, row, srcRow, go);
+  sheetB.append(form);
+  paint();
+  sheet.classList.add("on"); scrim.classList.add("on");
+  sheetB.scrollTop = 0;
+  setTimeout(()=> phone.focus(), 120);
+}
+
+/* ── out of service, on its own screen ────────────────────────────────────── */
+function openBlockForm(fi, day){
+  const fl = flats[fi];
+  roomHead(fi, ()=> openSheet(fi, day));
+  sheetB.textContent = "";
+
+  let from = Math.max(0, Math.min(pickedNight, DAYS-1));
+  while(from < DAYS && occ[fi][from]) from++;                 // start where it can actually go out
+  if(from >= DAYS) from = Math.max(0, Math.min(pickedNight, DAYS-1));
+  let outN = 1, reason = BLOCK_REASONS[0], fault = "";
+  const capFrom = d => { let k = 0; while(k < 60 && d + k < DAYS && !occ[fi][d + k]) k++; return Math.max(1, k); };
+
+  const form = el("div","bkform");
+
+  const whenCap = el("div","bkcap");
+  whenCap.append(el("span",null,"Out from"), el("span",null,"Nights out"));
+  const whenRow = el("div","bkrow");
+  const dayBox = el("div","stepWide");
+  const dLess = el("button",null,"−"), dMore = el("button",null,"+"), dLab = el("b");
+  dLess.setAttribute("aria-label","A day earlier"); dMore.setAttribute("aria-label","A day later");
+  dayBox.append(dLess, dLab, dMore);
+  const nBox = el("div","step");
+  const nLess = el("button",null,"−"), nMore = el("button",null,"+"), nLab = el("b");
+  nLess.setAttribute("aria-label","Fewer nights out"); nMore.setAttribute("aria-label","More nights out");
+  nBox.append(nLess, nLab, nMore);
+  whenRow.append(dayBox, nBox);
+  const state = el("div","bkstate");
+
+  const rChips = el("div","tyRow");
+  BLOCK_REASONS.forEach(rz=>{
+    const b = el("button",null,rz);
+    b.setAttribute("aria-pressed", rz === reason);
+    b.onclick = ()=>{ reason = rz; haptic(8);
+      [...rChips.children].forEach(c=>c.setAttribute("aria-pressed", c.textContent === reason)); };
+    rChips.appendChild(b);
+  });
+
+  const fCap = el("div","bkcap"); fCap.append(el("span",null,"What broke"));
+  const fRow = el("div","tyRow faultRow");
+  const flag = el("div","faultFlag"); flag.hidden = true;
+  FAULTS.forEach(fx=>{
+    const b = el("button",null,fx);
+    b.setAttribute("aria-pressed","false");
+    b.onclick = ()=>{
+      fault = fault === fx ? "" : fx; haptic(8);
+      [...fRow.children].forEach(c=>c.setAttribute("aria-pressed", c.textContent === fault));
+      paintFlag();
+    };
+    fRow.appendChild(b);
+  });
+
+  const whoRow = el("div","r");
+  const who = el("input");
+  who.type = "text"; who.placeholder = "Who is fixing it";
+  who.setAttribute("aria-label","Name of the person fixing it");
+  const ph = el("input");
+  ph.type = "tel"; ph.inputMode = "numeric"; ph.placeholder = "Their number";
+  ph.setAttribute("aria-label","Their phone number");
+  whoRow.append(who, ph);
+  const known = fixers();
+  const knownRow = el("div","tyRow soft");
+  known.slice(0,6).forEach(g=>{
+    const b = el("button",null,g.name);
+    b.onclick = ()=>{ who.value = g.name; ph.value = g.phone || ""; haptic(8); };
+    knownRow.appendChild(b);
+  });
+
+  function paintFlag(){
+    const h = fault ? faultHistory(fi, fault, from) : null;
+    flag.textContent = "";
+    if(!h){ flag.hidden = true; return; }
+    flag.hidden = false;
+    flag.classList.toggle("hot", h.insideHold);
+    const line = el("div","ff-l");
+    line.innerHTML = `<b>${h.recent > 2 ? h.recent + ordinalSuffix(h.recent)
+                        : h.times === 2 ? "Second" : h.times + ordinalSuffix(h.times)}`
+      + ` ${esc(fault.toLowerCase())} fault in ${esc(fl.id)}.</b> `
+      + (h.last.fixer
+          ? `${esc(h.last.fixer)} fixed it ${h.gap === 0 ? "and it is still out" : h.gap + " day" + (h.gap>1?"s":"") + " ago"}.`
+          : `Last one ended ${h.gap} day${h.gap===1?"":"s"} ago, nobody recorded.`)
+      + (h.insideHold ? " <em>Inside the month — worth asking for a free look.</em>" : "");
+    flag.append(line);
+    if(h.last.fixer){
+      const a = el("div","ff-a");
+      if(h.last.fixer_phone){
+        const call = el("a","ff-call", "Call " + h.last.fixer);
+        call.href = "tel:" + h.last.fixer_phone.replace(/[^\d+]/g,"");
+        a.append(call);
+      }
+      const same = el("button","ff-same","Same person again");
+      same.onclick = ()=>{ who.value = h.last.fixer; ph.value = h.last.fixer_phone || ""; haptic(8); };
+      a.append(same);
+      flag.append(a);
+    }
+  }
+
+  const noteRow = el("div","r");
+  const note = el("input");
+  note.type = "text"; note.placeholder = "Note — e.g. compressor replaced";
+  noteRow.appendChild(note);
+
+  const go = el("button","bkgo","");
+  function paint(){
+    const cap = capFrom(from);
+    outN = Math.max(1, Math.min(outN, cap));
+    dLab.textContent = from === 0 ? "Today" : fmtL(from);
+    nLab.textContent = outN;
+    dLess.disabled = from <= 0; dMore.disabled = from >= DAYS-1;
+    nLess.disabled = outN <= 1; nMore.disabled = outN >= cap;
+    const ok = freeRange(fi, from, from + outN);
+    state.classList.toggle("bad", !ok);
+    const lost = outN * (fl.rate || 0);
+    state.textContent = ok
+      ? `Back on sale ${fmt(from + outN)}` + (lost ? ` · about ${money(lost)} off the market` : "")
+        + (outN >= cap ? " · a guest holds the night after" : "")
+      : `${fl.id} is already taken on ${fmtL(from)}`;
+    go.textContent = ok ? `Block ${outN} night${outN>1?"s":""}` : "Not available";
+    go.disabled = !ok;
+    paintFlag();
+  }
+  dLess.onclick = ()=>{ from = Math.max(0, from-1); haptic(5); paint(); };
+  dMore.onclick = ()=>{ from = Math.min(DAYS-1, from+1); haptic(5); paint(); };
+  nLess.onclick = ()=>{ outN = Math.max(1, outN-1); haptic(5); paint(); };
+  nMore.onclick = ()=>{ outN = outN+1; haptic(5); paint(); };
+
+  go.onclick = ()=>{
+    if(go.disabled) return;
+    if(addBlock(fi, from, outN, reason, note.value, {fault, fixer:who.value, phone:ph.value})){
+      haptic(18); closeSheet(); refreshScreen();
+    }
+  };
+
+  form.append(whenCap, whenRow, state, rChips, fCap, fRow, flag, whoRow);
+  if(known.length) form.append(knownRow);
+  form.append(noteRow, go);
+  sheetB.append(form);
+  paint();
+  sheet.classList.add("on"); scrim.classList.add("on");
+  sheetB.scrollTop = 0;
 }
 /* arrivals / departures / turnarounds for one day */
 function openOps(kind, d){

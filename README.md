@@ -51,17 +51,38 @@ you can see the maintenance question in action. To use it properly:
 1. Scroll to the bottom of **Rooms** and tap **Inventory**. Check the flats are right —
    add, renumber, retype or remove any of them, and add a building if one is missing.
    At the bottom of that sheet, **Clear all bookings** wipes the demo ones.
-2. Tap any flat and take the booking. It uses the dates currently selected on the Rooms
-   tab, so set the night and stay length there first. See *Taking a booking* below.
+2. Tap any flat. It opens a **room card** — what it is, its nine weeks, and the one thing
+   you probably came for. Booking, logging a fault and taking it out of service are each
+   their own screen from there. See *Opening a room* below.
 3. Cancel a booking with the ✕ next to it in the flat's sheet (also two taps). **It can be
    undone** — the message that follows carries an *Undo* that puts the guest, the number,
    the dates and every payment back exactly as they were. If somebody else took the nights
    in the meantime it says so rather than double-booking them.
 
+### Opening a room
+
+A room used to open onto every form at once — book a guest, log a fault, take it out of
+service — all expanded under three lists. Forty-seven buttons and nearly four screens of
+scroll before anything was typed. It now **reads**:
+
+- what it is, and its nine weeks (hold and drag to read any night)
+- **one primary action, decided by the room's state** — *Book Sat 15 Aug* when it is free,
+  *Book from 21 Aug · next free* when it is not, so a busy room is never a dead end
+- two quiet routes: **Log a fault** (stays on sale) and **Out of service** (cannot be sold)
+- then what is true about it: what is coming up, what needs fixing, where the gaps are
+
+Everything that writes has a screen of its own with one job and one commit button, and Back
+returns to the room card.
+
 ### Taking a booking
 
-The form is phone-first, and everything under it arrives pre-filled, so the ordinary
-booking is still two touches — the number, and **Book**.
+**The booking screen sets its own dates.** The old form inherited them from the Rooms tab
+and said so in help text — *"change the dates on the Rooms tab"* — which is what a broken
+flow sounds like. Arriving and Nights are steppers at the top, capped at what is actually
+free, and the line under them keeps up: *Leaves 19 Aug · free for 5 nights from here*.
+
+Everything below arrives pre-filled, so the ordinary booking is still two touches — the
+number, and **Book**.
 
 **The phone number is the important field**, and not because you ring it. It is the only
 key a walk-in, a repeat guest and a platform booking all share; names get spelled three
