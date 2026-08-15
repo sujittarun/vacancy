@@ -20,7 +20,7 @@ app to whoever will run it.
 <details><summary>Turning on sync across phones</summary>
 
 The server side is built and tested — a multi-tenant Postgres schema with row-level
-security, an offline write queue, conflict handling and telemetry. It is switched off by
+security, an offline write queue and conflict handling. It is switched off by
 one line, `CLOUD_ENABLED` at the top of the script, because there is no third option:
 the bookings would sit behind a public web address, and the sign-in is the only thing
 between a stranger with the link and a guest's name and phone number. Off is honest while

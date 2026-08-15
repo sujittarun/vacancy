@@ -138,7 +138,15 @@ money behind.
 
 ---
 
-## Telemetry — how each host's app is behaving
+## Telemetry — built, then removed from the client
+
+> **Not in the app today.** This existed to answer "how is each host's copy behaving" when
+> the plan was many hosts on one backend. With `CLOUD_ENABLED` false there is one operator,
+> one device and no server: it collected nothing and carried a privacy obligation for it.
+> The client code is gone; the tables, indexes and policies below stay in the schema, so
+> restoring it is a commit rather than a rebuild.
+
+### How it was built
 
 `app_sessions`, `app_events`, `app_errors`. The app writes; **only platform admins read**.
 A host cannot read even its own telemetry, so nothing leaks through a shared table.

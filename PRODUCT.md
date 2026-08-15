@@ -95,8 +95,11 @@ user's "Bajarahills".
   restarts. When the server refuses a write because another phone got there first, the
   local entry is rolled back and the app names the guest and dates that beat it — a
   conflict the operator can answer on the call, not an error code.
-- **Telemetry carries counts and screen names only.** No guest names, notes or rates ever
-  reach the telemetry tables, so a crash report can never become a data breach.
+- **No telemetry.** It was built when the plan was many hosts sharing one backend and the
+  app's author needed to see crashes and usage per host. With sign-in switched off there is
+  one operator, one device and no server, so it collected nothing and only carried an
+  obligation. Removed from the client; the tables and their policies remain in the schema
+  for the day sync returns.
 - **A booking carries guest phone, headcount and the total agreed for the stay.** Phone is
   the identity key — the only one a walk-in, a repeat guest and a platform booking share —
   and it drives repeat-guest recognition at the moment the number is typed.

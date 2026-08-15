@@ -1254,7 +1254,6 @@ function applyInventory(next, renames){
              .map(r => { const {_id, ...rest} = r; return {...rest, fi:flatIndex[_id]}; });
   if(MODE === "live") syncInventory(prev);
   recompute(); saveInventory(); save(); cacheSave();
-  track("inventory_changed", {flats: NF});
 }
 
 /* Inventory edits are rare and small — a flat renumbered, a building added — so
@@ -2041,7 +2040,6 @@ async function signIn(email, password){
   await loadHost();
   await cloudPull();
   jdel(STORE);                       // the sample book is not this operator's book
-  startTelemetry();
   paintAcct();
 }
 async function loadHost(){
@@ -2245,7 +2243,6 @@ async function rejected(op, e){
   // the one unforgivable outcome — so it is both reported and recorded.
   rollBack(op);
   toast("bad", "<b>Not saved.</b> " + esc(e.message) + " Nothing was changed on the server.", null);
-  trackError("write failed: " + op.k + " — " + e.message, "", "sync", 0, 0);
 }
 function rollBack(op){
   if(op.k === "stay+"){
@@ -2289,7 +2286,6 @@ async function lostTheRoom(op){
     + (who ? who + " — entered on another phone. " : "Those nights went while you were typing. ")
     + (block ? "The block was not saved." : "Your booking" + (label ? " for " + esc(label) : "") + " was not saved."),
     mine ? mine.fi : null);
-  track("conflict_lost", {kind: block ? "block" : "booking"});
   haptic([12, 60, 12]);
 }
 /* "12–15 Aug", with the month said once, and the end date read as the morning
@@ -2300,40 +2296,6 @@ function spanWords(a, b){
   const ds = dateAt(s), de = dateAt(e);
   return ds.getMonth() === de.getMonth() ? ds.getDate() + "–" + fmt(e)   // 12–15 Aug
                                          : fmt(s) + "–" + fmt(e);       // 30 Aug–2 Sep
-}
-
-/* ── telemetry ────────────────────────────────────────────────────────────────
-   Counts, names of screens, and nothing else. No guest names, no notes, no
-   rates — the moment a crash report carries a guest's name, a support
-   conversation becomes a data breach.                                         */
-const sessionId = uuid();          // this run of the app, however it ends up signed in
-let evq = [];
-async function startTelemetry(){
-  if(MODE !== "live" || !hostId || !session) return;
-  try{
-    await rest("POST", "/app_sessions", {id:sessionId, host_id:hostId, user_id:session.uid,
-      app_version:APP_VER, user_agent:(navigator.userAgent || "").slice(0,300)}, MIN);
-  }catch(e){}
-  track("app_open", {flats: NF, bookings: bookings().length});
-}
-function track(name, props){
-  if(MODE !== "live" || !hostId) return;
-  evq.push({session_id:sessionId, host_id:hostId, user_id:session && session.uid,
-            name, props: props || {}, app_version:APP_VER});
-  if(evq.length >= 12) flushEvents();
-}
-function flushEvents(){
-  if(!evq.length || MODE !== "live" || !hostId) return;
-  const batch = evq; evq = [];
-  rest("POST", "/app_events", batch, MIN).catch(()=>{ /* never costs the operator anything */ });
-}
-function trackError(msg, stack, src, line, col){
-  if(MODE !== "live" || !hostId) return;
-  rest("POST", "/app_errors", {session_id:sessionId, host_id:hostId,
-    user_id: session && session.uid, message:String(msg).slice(0,500),
-    stack:String(stack || "").slice(0,2000), source:String(src || "").slice(0,300),
-    line:line|0, col:col|0, app_version:APP_VER,
-    user_agent:(navigator.userAgent || "").slice(0,300)}, MIN).catch(()=>{});
 }
 
 /* ── boot ─────────────────────────────────────────────────────────────────────
@@ -2384,7 +2346,6 @@ function addPayment(r, amount, method, note){
     enqueue({k:"pay+", id:p.id, body:{stay_id:r.sid, amount, method,
       received_on: dayISO(0), note: p.note || null, created_by: session && session.uid}});
   save(); cacheSave();
-  track("payment_recorded", {method});
   return true;
 }
 function dropPayment(r, p){
@@ -2429,7 +2390,6 @@ function addBooking(fi, start, nights, guest, src, extra){
   if(amount && PLATFORMS.indexOf(row.src) >= 0) addPayment(row, amount, "Platform");
   usingDemo = false;
   recompute(); save(); cacheSave();
-  track("booking_created", {nights, hasPhone: !!row.phone, hasAmount: !!amount});
   return true;
 }
 const BLOCK_REASONS = ["Maintenance","Deep clean","Owner use","Renovation","Not ready"];
@@ -2488,7 +2448,6 @@ function addIssue(fi, fault, note, urgency){
     flat_id: flats[fi].uid, fault: row.fault || null, note: row.note || null,
     urgency: row.urgency, reported_on: dayISO(0), created_by: session && session.uid}});
   save(); cacheSave();
-  track("issue_reported", {fault: row.fault || "none", urgency: row.urgency});
   return true;
 }
 function closeIssue(x, fixer, phone, cost){
@@ -2499,7 +2458,6 @@ function closeIssue(x, fixer, phone, cost){
     fixed_on: dayISO(0), fixer: x.fixer || null,
     fixer_phone: x.fixer_phone || null, cost: x.cost || null}});
   save(); cacheSave();
-  track("issue_closed", {fault: x.fault || "none"});
 }
 function dropIssue(x){
   const i = issues.indexOf(x);
@@ -2581,7 +2539,6 @@ function addBlock(fi, start, nights, reason, note, extra){
   resv.push(row);
   usingDemo = false;
   recompute(); save(); cacheSave();
-  track("block_created", {nights, reason: row.reason});
   return true;
 }
 /* Push an existing block further out — "the technician did not come". Extends
@@ -2599,7 +2556,6 @@ function extendBlock(r, extraNights){
   if(MODE === "live" && r.sid)
     enqueue({k:"stay~", id:r.sid, body:{ends_on: dayISO(r.end)}});
   recompute(); save(); cacheSave();
-  track("block_extended", {nights: can});
   return can;
 }
 /* How many more nights this block could take before it would run into a guest.
@@ -2619,7 +2575,6 @@ function releaseBlock(r){
   if(MODE === "live" && r.sid)
     enqueue({k:"stay~", id:r.sid, body:{ends_on: dayISO(0)}});
   recompute(); save(); cacheSave();
-  track("block_released", {});
   return true;
 }
 
@@ -2640,7 +2595,6 @@ function cancelBooking(r){
     else enqueue({k:"stay-", id:r.sid});
   }
   recompute(); save(); cacheSave();
-  track(isBlock(r) ? "block_released" : "booking_cancelled", {nights: r.nights});
 }
 function clearAll(){
   resv = []; usingDemo = false;
@@ -2979,7 +2933,6 @@ async function exportBook(btn){
   const stamp = isoDay(today);
   const name = (hostName || "Vacancy").replace(/[^\w]+/g,"-").toLowerCase() + "-" + stamp + ".xlsx";
   const file = new File([blob], name, {type: blob.type});
-  track("export", {sheets: sheets.length, rows: sheets.reduce((s,x)=> s + x.rows.length - 1, 0)});
   if(navigator.canShare && navigator.canShare({files:[file]})){
     try{ await navigator.share({files:[file], title:"Bookings"}); return "shared"; }
     catch(e){ if(e && e.name === "AbortError") return "cancelled"; }
@@ -6163,7 +6116,6 @@ function switchTo(i, focusInput){
   s.scrollTop = 0;
   closeSheet();
   history.replaceState(null, "", "#" + SCREENS[i].id);
-  track("screen_view", {screen: SCREENS[i].id});
 }
 
 /* the large title condenses as you scroll away from it */
@@ -6328,18 +6280,7 @@ addEventListener("offline", ()=>{ online = false; paintAcct(); });
 addEventListener("visibilitychange", ()=>{
   if(document.visibilityState === "visible"){
     if(MODE === "live"){ flush(); cloudPull().then(refreshScreen).catch(()=>{}); }
-  }else{ flushEvents(); }
-});
-addEventListener("pagehide", ()=>{ flushEvents(); });
-
-/* Crashes reach the operator's own project, never a third party, and carry no
-   guest data — a message, a stack and a version. */
-addEventListener("error", e=>{
-  trackError(e.message || "error", e.error && e.error.stack, e.filename, e.lineno, e.colno);
-});
-addEventListener("unhandledrejection", e=>{
-  const r = e.reason || {};
-  trackError("unhandled: " + (r.message || r), r.stack, "", 0, 0);
+  }
 });
 
 paintAcct();
@@ -6353,12 +6294,10 @@ if(MODE === "live"){
   (async ()=>{
     try{
       await loadHost(); await cloudPull(); refreshScreen();
-      startTelemetry(); flush();
     }catch(e){
       if(e.status === 401 || e.status === 403){ signOut(false); openGate(); }
     }
     paintAcct();
   })();
 }
-setInterval(flushEvents, 15000);
 </script>
