@@ -128,8 +128,10 @@ filtered, totalled, or opened by an accountant's software.
 ### Out of service
 
 A flat can be **blocked** — maintenance, deep clean, owner use, renovation, not ready.
-Open the flat, tap **Block these nights instead**, pick a reason and add a note
-("technician booked"). It then cannot be sold: not offered in Ask, not in the month
+Open the flat, tap **Block these nights instead**, pick a reason, say **how long it is
+out** — any number of nights, capped at what is actually free so it can never be pushed
+over a guest — and add a note. It prices the outage as you change it: *back on sale 19 Aug
+· about ₹16,400 off the market*. It then cannot be sold: not offered in Ask, not in the month
 drill-in, not proposed for a discount, not shown as free anywhere. The tile turns hatched
 and reads the reason.
 
@@ -350,6 +352,7 @@ Type or speak the question the way the caller said it:
 | `3 nights`, `1n`, `2nt`, `a week`, `fortnight` | how long the stay is |
 | `3 bhk`, `2bhk`, `studio` | unit type |
 | `treetops`, `banjara`, `lotus pond`, `telecom` | building |
+| `bh201`, `BH-201`, `bh 201` | **one particular flat** |
 
 These combine freely — *"do you have a 3 bhk free from 16 sep for 4 nights"* works, and so
 does *"any 2 bhk in banjara hills from 16 sep to 19 sep"*. A bare date means the **next**

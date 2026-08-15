@@ -693,6 +693,12 @@ button{background:none;border:0;padding:0;cursor:pointer}
   transition:border-color .18s, background .18s}
 .bkform input:focus{outline:none;border-color:var(--line-2);background:var(--surface-3)}
 .bkform input::placeholder{color:var(--txt-3)}
+/* captions sit above the pair and line up with them, so neither number has to
+   be guessed at */
+.bkcap{display:flex;gap:8px;margin:2px 0 -3px;font-size:10.5px;font-weight:640;
+  color:var(--txt-3);text-transform:uppercase;letter-spacing:.07em}
+.bkcap span:first-child{flex:1;min-width:0}
+.bkcap span:last-child{flex:0 0 120px;text-align:center}
 .bkrow{display:flex;gap:8px}
 .bkamt{position:relative;flex:1;min-width:0}
 .bkamt s{position:absolute;left:13px;top:50%;transform:translateY(-50%);text-decoration:none;
@@ -701,6 +707,9 @@ button{background:none;border:0;padding:0;cursor:pointer}
 /* a stepper, because nobody should open a keyboard to say "two people" */
 .step{display:flex;align-items:center;gap:0;padding:0 4px;background:var(--surface-2);
   border:1px solid var(--line);border-radius:11px;flex:0 0 120px}
+/* the same control, but it has a whole row to itself and a word in it */
+.step.nightStep{flex:1 1 auto;width:100%}
+.step.nightStep b{font-size:14px;letter-spacing:-.01em}
 .step button{width:36px;height:44px;font-size:20px;font-weight:400;color:var(--txt-2);
   background:none;border:none;transition:transform .3s var(--spring)}
 .step button:active{transform:scale(.86)}
@@ -3900,6 +3909,21 @@ function readDate(tk, i, minOff){
 function parseQuery(q){
   const tk = normalize(q).split(" ").filter(Boolean);
 
+  /* 0. a flat by name — "bh201", "BH-201", "bh 201". Taken out before anything
+     else, because "201" left lying around would otherwise be read as a date and
+     the answer would be about the 1st of next month. Matched against the real
+     inventory rather than a pattern, so renumbering a flat cannot break it. */
+  let flat = null;
+  const codes = flats.map((f,i)=>({key: f.id.toLowerCase().replace(/[^a-z0-9]/g,""), i}));
+  for(let i = 0; i < tk.length && !flat; i++){
+    const one = tk[i].replace(/[^a-z0-9]/g,"");
+    const two = one + (tk[i+1] || "").replace(/[^a-z0-9]/g,"");
+    let hit = codes.find(c => c.key === one);
+    if(hit){ flat = hit.i; tk.splice(i,1); break; }
+    hit = codes.find(c => c.key === two);
+    if(hit){ flat = hit.i; tk.splice(i,2); break; }
+  }
+
   /* 1. filters — removed first so "2 bhk" never looks like the 2nd */
   let type = null, bldg = null;
   for(let i = tk.length - 1; i >= 0; i--){
@@ -3967,7 +3991,7 @@ function parseQuery(q){
 
   start = Math.max(0, Math.min(DAYS - 1, start));
   n = Math.max(1, Math.min(n, DAYS - start));
-  return {start, n, how:label, type, bldg, beyond};
+  return {start, n, how:label, type, bldg, flat, beyond};
 }
 
 function renderAsk(focus){
@@ -4113,6 +4137,7 @@ function renderAsk(focus){
     const p = parseQuery(lastQuery);
     const a = p.start, b = p.start + p.n;
     let pool = flats.map((f,i)=>({f,i}));
+    if(p.flat != null) pool = pool.filter(x=>x.i === p.flat);
     if(p.type) pool = pool.filter(x=>x.f.type===p.type);
     if(p.bldg) pool = pool.filter(x=>x.f.code===p.bldg);
     const free = pool.filter(x=>freeRange(x.i,a,b));
@@ -4123,11 +4148,18 @@ function renderAsk(focus){
     const ans = el("p","answer");
     ans.innerHTML = p.beyond
       ? `That's past <b class="n">${fmtL(DAYS-1)}</b> — the furthest this book goes. Showing ${when} instead.`
+      : p.flat != null
+      ? (free.length
+          ? `<b class="y">${esc(flats[p.flat].id)}</b> is free for ${nightsTxt}, ${when}.`
+          : (()=>{ const b2 = resv.find(r => r.fi===p.flat && r.start < a+p.n && r.end > a);
+              return `<b class="n">${esc(flats[p.flat].id)}</b> is not free ${when}`
+                + (b2 ? ` — ${esc(isBlock(b2) ? (b2.reason || "out of service") : b2.guest)} until ${fmt(Math.min(b2.end,DAYS-1))}.` : "."); })())
       : free.length
       ? `Yes — <b class="y">${free.length} room${free.length>1?"s":""}</b> free for ${nightsTxt}, ${when}.`
       : `<b class="n">Nothing</b> covers ${nightsTxt}, ${when}.`;
     const heard = el("div","heard");
-    heard.append(el("span","pill now", p.how));
+    if(p.flat != null) heard.append(el("span","pill now", flats[p.flat].id));
+    heard.append(el("span","pill" + (p.flat != null ? "" : " now"), p.how));
     heard.append(el("span","pill", `${p.n} night${p.n>1?"s":""}`));
     if(p.type) heard.append(el("span","pill", p.type));
     if(p.bldg) heard.append(el("span","pill", BUILDINGS.find(z=>z.code===p.bldg).name));
@@ -4582,6 +4614,11 @@ function openSheet(fi, day){
     const back = el("div","bkback");
     back.style.display = "none";
 
+    /* Both of these were bare boxes side by side — a number with a rupee sign
+       and a number with plus and minus. Perfectly obvious to whoever built it
+       and to nobody else, which is the usual way a field ends up unlabelled. */
+    const capRow = el("div","bkcap");
+    capRow.append(el("span",null,"Total for the stay"), el("span",null,"Guests"));
     const row = el("div","bkrow");
     const amtWrap = el("div","bkamt");
     amtWrap.appendChild(el("s", null, "₹"));
@@ -4645,7 +4682,7 @@ function openSheet(fi, day){
     });
     who.addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); who.blur(); take(); }});
 
-    form.append(phone, who, back, row, srcRow, btn);
+    form.append(phone, who, back, capRow, row, srcRow, btn);
     sheetB.appendChild(form);
     const hint = el("div","lbl");
     hint.style.cssText = "margin:8px 20px 0";
@@ -4747,28 +4784,54 @@ function openSheet(fi, day){
       note.type = "text"; note.placeholder = "Note — e.g. compressor replaced";
       noteRow.appendChild(note);
 
+      /* How long it is out. This used to inherit 1/2/3/7 from the Rooms tab,
+         which is a guest's stay length — a repair is however long the repair
+         takes, and there was no way to say "five days". Capped at the nights
+         actually free, so a block can never be dragged over a booking. */
+      let outN = Math.max(1, bN);
+      const capN = (()=>{ let n = 0;
+        while(n < 60 && bDay + n < DAYS && !occ[fi][bDay + n]) n++; return Math.max(1, n); })();
+      outN = Math.min(outN, capN);
+      const nRow = el("div","step nightStep");
+      const less2 = el("button", null, "−"), more2 = el("button", null, "+");
+      const nLab = el("b");
+      less2.setAttribute("aria-label","Fewer nights out of service");
+      more2.setAttribute("aria-label","More nights out of service");
+      const outHint = el("p");
+      outHint.style.cssText = "margin:7px 2px 0;font-size:12px;line-height:1.5;color:var(--txt-3)";
+      const setOut = n=>{
+        outN = Math.max(1, Math.min(capN, n));
+        nLab.textContent = outN + (outN === 1 ? " night" : " nights");
+        less2.disabled = outN <= 1; more2.disabled = outN >= capN;
+        go2.textContent = `Block ${outN} night${outN>1?"s":""}`;
+        const lostN = outN * (fl.rate || 0);
+        outHint.textContent = `Out ${fmt(bDay)} → back on sale ${fmt(bDay + outN)}`
+          + (lostN ? ` · about ${money(lostN)} off the market` : "")
+          + (outN >= capN ? " · a guest holds the night after" : "");
+        haptic(5);
+      };
+      less2.onclick = ()=> setOut(outN - 1);
+      more2.onclick = ()=> setOut(outN + 1);
+      nRow.append(less2, nLab, more2);
+
       const acts = el("div","invActs");
-      const go2 = el("button","invSave", `Block ${bN} night${bN>1?"s":""}`);
+      const go2 = el("button","invSave", "");
       go2.onclick = ()=>{
-        if(addBlock(fi, bDay, bN, reason, note.value,
+        if(addBlock(fi, bDay, outN, reason, note.value,
                     {fault, fixer:who.value, phone:ph.value})){
           haptic(18); closeSheet(); refreshScreen();
         }
       };
+      setOut(outN);
       const cancel = el("button","invDel","Cancel");
       cancel.onclick = ()=>{ haptic(8); openSheet(fi, day); };
       acts.append(go2, cancel);
-      form.append(chips, fRow, flag, whoRow);
+      const nCap = el("div","bkcap"); nCap.append(el("span",null,"How long is it out"));
+      form.append(chips, fRow, flag, nCap, nRow, outHint, whoRow);
       if(known.length) form.append(knownRow);
       form.append(noteRow, acts);
 
-      const hintEl = el("div","lbl");
-      hintEl.style.cssText = "margin:8px 20px 0";
-      const lost = bN * (fl.rate || 0);
-      hintEl.textContent = `Out of service ${span} — back on sale the morning after`
-        + (lost ? ` · ${bN} night${bN>1?"s":""} off the market, about ${money(lost)}` : "");
       sheetB.insertBefore(form, hint.nextSibling);
-      sheetB.insertBefore(hintEl, form.nextSibling);
     };
     sheetB.appendChild(blockBtn);
   } else {
@@ -4985,24 +5048,45 @@ function openInventory(editing){
 
   const foot = el("p");
   foot.style.cssText = "margin:18px 20px 10px;font-size:12px;line-height:1.55;color:var(--txt-3)";
-  foot.textContent = "Flats and bookings are saved on this device. Removing a flat also removes its bookings.";
+  foot.textContent = "Removing a flat also removes its bookings, its payments and anything logged against it.";
   sheetB.appendChild(foot);
 
-  /* clearing the sample bookings has to live somewhere — this is the data screen */
+  /* ── handing the app over ───────────────────────────────────────────────────
+     The flats are real; the bookings, guests, money and faults shipped with the
+     app are invented so it has something to show. This is the one button that
+     separates the two — it empties everything that was made up and leaves the
+     inventory standing, which is exactly the state you want before giving the
+     app to whoever is going to run it. */
+  const counts = {b: bookings().length, k: resv.filter(isBlock).length,
+                  p: resv.reduce((s,r)=> s + (r.pays ? r.pays.length : 0), 0),
+                  i: issues.length};
   const wipe = el("div","dataTools");
   wipe.style.cssText = "padding:0 20px";
-  const bClear = el("button","copybtn", `Clear all ${resv.length} bookings`);
+  const label = `Delete all ${counts.b} test bookings`;
+  const bClear = el("button","copybtn", label);
   let armed = false;
   bClear.onclick = ()=>{
     if(!armed){ armed = true; bClear.classList.add("done");
-      bClear.textContent = "Erase every booking?"; haptic(10);
+      bClear.textContent = "Erase everything except the flats?"; haptic(10);
       setTimeout(()=>{ armed=false; bClear.classList.remove("done");
-        bClear.textContent = `Clear all ${resv.length} bookings`; }, 3500);
+        bClear.textContent = label; }, 3500);
       return; }
-    haptic(24); clearAll(); openInventory();
+    haptic(24);
+    clearAll();
+    issues.slice().forEach(dropIssue);
+    save(); cacheSave();
+    openInventory();
+    toast("", `<b>Cleared.</b> ${NF} flats kept · ${counts.b} bookings, ${counts.k} blocks, `
+            + `${counts.p} payments and ${counts.i} logged faults removed. `
+            + `The book is empty and ready for real ones.`, null);
   };
   wipe.appendChild(bClear);
   sheetB.appendChild(wipe);
+  const wipeNote = el("p");
+  wipeNote.style.cssText = "margin:9px 20px 0;font-size:12px;line-height:1.55;color:var(--txt-3)";
+  wipeNote.textContent = "Keeps every flat and building. Removes the invented bookings, guests, "
+    + "money and faults — do this once, before handing the app over.";
+  sheetB.appendChild(wipeNote);
 
   sheet.classList.add("on"); scrim.classList.add("on");
   if(!editing) sheetB.scrollTop = 0;
