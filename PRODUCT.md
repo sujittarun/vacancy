@@ -107,6 +107,18 @@ user's "Bajarahills".
   (payout still owed to the operator), and genuinely due. Modelling only paid/unpaid marks
   every Airbnb booking unpaid forever, which teaches the operator to ignore the field.
   Only genuine balances appear in anything that asks for action.
+- **A guest in the way is a question, not a verdict.** The shuffle that frees a flat for
+  a booking frees it for a plumber too, so when an out-of-service run stops dead against an
+  arriving guest the app names who could move, where, and how many extra days that buys —
+  and when nobody can move, it says that too, in one muted line rather than silence. There
+  is no cap on how many guests may be moved: the count and the cost are put in front of the
+  operator and the decision is theirs. Guests already in the flat are never asked to pack,
+  and nobody is ever moved into a smaller unit.
+- **Maintenance is captured in taps, not sentences.** Choosing what broke offers the four
+  things it usually turns out to be ("not cooling", "leaking water"), so the note ends up
+  in words that read back sensibly months later instead of blank. The person fixing it is
+  offered as a card carrying their record — jobs done, how many came back, and whoever
+  touched this exact fault in this exact flat first, because they hold the warranty.
 - **No check-in/check-out state.** Any status a human must remember to maintain decays, and
   decayed data is worse than none. Presence is derived from dates and is always correct;
   the single manual action is recording money, which carries information dates cannot.

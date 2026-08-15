@@ -124,6 +124,23 @@ wrong place.
 Moved into the header it inherits the blurred material, needs no z-index, no gradient and
 no offsets, and the failure mode cannot recur.
 
+## A dead end still answers
+
+Where the app can suggest a way forward it shows a card. Where it cannot, it says so in one
+muted line in the same slot — deliberately not a card, so a dead end never looks like
+something to tap. "Nowhere free to put A. Fernandes for all 9 of their nights" is a shorter
+sentence than the offer and a more useful one than nothing: without it the operator is left
+wondering whether the app looked.
+
+## The `:last-child` caption trap
+
+`.bkcap span:last-child { flex: 0 0 120px; text-align: center }` was written for a two-part
+caption over a `[wide][narrow]` control pair. A caption with **one** span matches
+`:last-child` as well, so every lone label in the app — "Why is it out", "How much can it
+wait" — was being squeezed into 120 centred pixels and wrapped mid-phrase. `:not(
+:first-child)` is the whole fix. The lesson is narrower than it looks: a positional selector
+written for a known sibling count silently claims the one-child case too.
+
 ## References considered and declined
 
 **BoardUI** (a React dashboard system, 50+ components, 400+ tokens) was raised as a

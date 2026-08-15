@@ -776,7 +776,7 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
 .mroom{
   position:relative;
   flex:1;min-width:0;border-radius:14px;
-  padding:14px 14px calc(var(--rows,1) * 44px + 12px);
+  padding:14px 14px calc(var(--rows,1) * 54px + 12px);
   background:var(--held);border:1px solid var(--line);
   display:flex;flex-direction:column;gap:2px;
   transition:background .45s var(--out), border-color .45s var(--out);
@@ -786,12 +786,12 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
 .mroom.b{background:var(--surface-2)}
 /* one destination row per guest — the same picture whether it is one move or
    four, so nothing new has to be learned when the shuffle gets bigger */
-.mdests{flex:1;min-width:0;display:flex;flex-direction:column;gap:10px;justify-content:center}
+.mdests{flex:1;min-width:0;display:flex;flex-direction:column;gap:14px;justify-content:center}
 .mdest{
   border-radius:11px;padding:8px 11px;background:var(--surface-2);
   border:1px solid var(--line);display:flex;align-items:baseline;gap:7px;min-height:34px;
 }
-.mdest{flex-wrap:wrap;min-height:34px;align-items:center}
+.mdest{flex-wrap:wrap;min-height:40px;align-items:center}
 .mdest b{font-size:13.5px;font-weight:660;letter-spacing:-.02em;color:var(--txt);white-space:nowrap}
 .mdest s{text-decoration:none;font-size:10.5px;color:var(--txt-3);white-space:nowrap}
 /* the room they left, lit — this app's whole language for "sellable" */
@@ -812,6 +812,9 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
 /* the guest, parked in the left room until they are asked to move */
 .mguest{
   position:absolute;left:12px;top:0;z-index:2;
+  /* scenery, not a control — a finger reaching for the button underneath must
+     never be caught by a guest standing in the way */
+  pointer-events:none;
   display:flex;align-items:center;gap:7px;
   padding:7px 11px 7px 8px;border-radius:10px;
   background:var(--surface);border:1px solid var(--line-2);
@@ -849,6 +852,28 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
 }
 .movestage.landed .mguest{transform:translateX(var(--dx,120px))}
 .movestage.landed .mguest-in{transform:translateY(var(--dy,0px))}
+/* undoing it is the same walk the other way, not a jump cut */
+@keyframes carryXBack{ from{transform:translateX(var(--dx,120px))} to{transform:translateX(0)} }
+@keyframes carryYBack{
+  0%  {transform:translateY(var(--dy,0px)) scale(1)}
+  50% {transform:translateY(calc(var(--dy,0px) * .5 - 20px)) scale(1.06) rotate(1.5deg)}
+  100%{transform:translateY(0) scale(1)}
+}
+.movestage.returning .mguest{
+  animation:carryXBack .46s cubic-bezier(.45,0,.15,1) var(--delay,0ms) forwards;
+}
+.movestage.returning .mguest-in{
+  animation:carryYBack .46s cubic-bezier(.37,0,.63,1) var(--delay,0ms) forwards,
+            carryLift .46s linear var(--delay,0ms);
+}
+/* a quiet way back, beside the thing you actually came to do */
+.moveundo{
+  display:inline-flex;align-items:center;gap:6px;margin:10px 20px 0;
+  padding:8px 12px;border-radius:10px;background:none;border:1px solid var(--line);
+  font-family:var(--ui);font-size:12.5px;font-weight:600;color:var(--txt-3);
+  transition:transform .3s var(--spring), color .18s;
+}
+.moveundo:active{transform:scale(.95);transition-duration:.085s;color:var(--txt-2)}
 .mguest-in{display:flex;align-items:center;gap:7px}
 
 .movewhy{margin:16px 20px 0;font-size:13px;line-height:1.55;color:var(--txt-2)}
@@ -860,6 +885,8 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
 @media (prefers-reduced-motion:reduce){
   .movestage.carrying .mguest{animation:none;transform:translateX(var(--dx,120px))}
   .movestage.carrying .mguest-in{animation:none}
+  .movestage.returning .mguest{animation:none;transform:translateX(0)}
+  .movestage.returning .mguest-in{animation:none;transform:none}
   .mroom{transition:none}
 }
 
@@ -925,7 +952,11 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
 .bkcap{display:flex;gap:8px;margin:2px 0 -3px;font-size:10.5px;font-weight:640;
   color:var(--txt-3);text-transform:uppercase;letter-spacing:.07em}
 .bkcap span:first-child{flex:1;min-width:0}
-.bkcap span:last-child{flex:0 0 120px;text-align:center}
+/* the narrow right-hand column belongs to a two-part caption over a
+   [wide][narrow] control pair. A lone caption matches :last-child too, and was
+   being squeezed into 120 centred pixels and wrapped mid-phrase — ":not(
+   :first-child)" is the whole fix and it applies everywhere at once. */
+.bkcap span:last-child:not(:first-child){flex:0 0 120px;text-align:center}
 .bkrow{display:flex;gap:8px}
 .bkamt{position:relative;flex:1;min-width:0}
 .bkamt s{position:absolute;left:13px;top:50%;transform:translateY(-50%);text-decoration:none;
@@ -1113,6 +1144,67 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 @keyframes flagIn{from{opacity:0;transform:translateY(-4px)}}
 @media (prefers-reduced-motion:reduce){.faultFlag{animation:none}}
 
+/* ── the way past the wall ────────────────────────────────────────────────────
+   Sits under the stepper only once the stepper has run out of room, so it reads
+   as the answer to the sentence above it rather than as a permanent option. */
+.wallmove{
+  display:grid;grid-template-columns:1fr auto;align-items:center;
+  gap:2px 10px;width:100%;text-align:left;margin-top:9px;
+  padding:10px 11px;border-radius:12px;
+  background:var(--surface-2);border:1px solid var(--line);
+  transition:transform .3s var(--spring), background .18s;
+  animation:wallIn .3s var(--out) both;
+}
+.wallmove:active{transform:scale(.975);transition-duration:.085s}
+/* headline and prize share the top row; the reasoning runs the full width
+   underneath, so a two-line name never has to squeeze past the pill */
+.wm-h{grid-area:1/1;display:flex;align-items:center;gap:7px;min-width:0}
+.wm-h svg{width:15px;height:15px;flex:0 0 15px;color:var(--now)}
+.wm-h b{font-size:13px;font-weight:640;color:var(--txt);line-height:1.3}
+.wm-g{
+  grid-area:1/2;align-self:start;
+  font-size:12px;font-weight:700;color:var(--free-ink);
+  background:var(--free);border-radius:8px;padding:5px 8px;white-space:nowrap;
+}
+.wm-s{grid-area:2/1/auto/-1;font-size:11.5px;color:var(--txt-2);line-height:1.45}
+.wm-s b{color:var(--txt);font-weight:640}
+@keyframes wallIn{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:none}}
+/* the same slot when the answer is no — deliberately not a card, so a dead end
+   never looks like something to tap */
+.wallno{
+  margin-top:8px;font-size:11.5px;line-height:1.45;color:var(--txt-3);
+  animation:wallIn .3s var(--out) both;
+}
+.wallno b{color:var(--txt-2);font-weight:640}
+@media (prefers-reduced-motion:reduce){
+  .wallmove,.wallno{animation:none}
+}
+
+/* ── the people who fix things ────────────────────────────────────────────────
+   Not names to pick from — people with a record. Whoever touched this exact
+   fault in this exact flat comes first, because they hold the warranty, and the
+   number under each is the one that decides who to ring next.                */
+.fixers{display:flex;gap:7px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px;margin-bottom:-2px}
+.fixers::-webkit-scrollbar{display:none}
+.fixers[hidden]{display:none}
+.fixer{
+  flex:0 0 auto;min-width:126px;text-align:left;
+  padding:9px 11px;border-radius:11px;
+  background:var(--surface-2);border:1px solid var(--line);
+  display:flex;flex-direction:column;gap:2px;
+  transition:transform .3s var(--spring), border-color .18s, background .18s;
+}
+.fixer:active{transform:scale(.96);transition-duration:.085s}
+.fixer.on{background:var(--free);border-color:transparent}
+.fixer.on .fx-n b{color:var(--free-ink)}
+.fixer.on .fx-r{color:color-mix(in srgb, var(--free-ink) 60%, transparent)}
+.fx-n{display:flex;align-items:baseline;gap:6px;min-width:0}
+.fx-n b{font-size:13px;font-weight:650;color:var(--txt);white-space:nowrap}
+.fx-n em{font-style:normal;font-size:10px;font-weight:650;color:var(--now);white-space:nowrap}
+.fixer.on .fx-n em{color:var(--free-ink);opacity:.7}
+.fx-r{font-size:10.5px;color:var(--txt-3);white-space:nowrap}
+.fx-r.bad{color:var(--now)}
+
 /* ── the peek ─────────────────────────────────────────────────────────────────
    Sits above everything, takes no pointer events, and never moves the grid
    underneath it — the whole value is that your place is exactly where you left
@@ -1272,6 +1364,21 @@ const PAY_METHODS = ["Cash","UPI","Bank","Card","Platform"];
 const PLATFORMS = ["Airbnb","Booking.com"];
 const FAULTS = ["AC","Geyser","Plumbing","Electrical","Wi-Fi","Fridge",
                 "Washing machine","Furniture","Pest control","Other"];
+/* What each of those actually turns out to be, in the words an operator would
+   use on the phone to the person fixing it. The free-text box was asking them
+   to type a sentence the app could have offered — and a note nobody types is a
+   note nobody reads back six weeks later when the same thing fails again. */
+const SYMPTOMS = {
+  "AC":              ["not cooling","leaking water","noisy","remote dead"],
+  "Geyser":          ["slow to heat","no hot water","leaking","tripping the switch"],
+  "Plumbing":        ["tap dripping","drain blocked","low pressure","leak under the sink"],
+  "Electrical":      ["socket dead","lights flickering","MCB tripping","fan not working"],
+  "Wi-Fi":           ["drops out","very slow","router dead","no signal in one room"],
+  "Fridge":          ["not cooling","freezing everything","noisy","door seal gone"],
+  "Washing machine": ["not draining","not spinning","leaking","door stuck"],
+  "Furniture":       ["door off its runner","broken leg","torn upholstery","handle come off"],
+  "Pest control":    ["cockroaches","ants","mosquitoes","rodents"],
+};
 const REPEAT_WINDOW = 120;   // days a same-fault return still counts as "again"
 const HELD_WINDOW   = 30;    // a fix that fails this fast is the fixer's to answer for
 const URGENCY = ["whenever","soon","urgent"];
@@ -1571,6 +1678,72 @@ const NOW = 1;                       // today and tomorrow
    is holding the nights after, saying so instead of silently refusing to slide
    any further — which is why it sometimes stopped at two days with no
    explanation.                                                               */
+/* Whoever holds the first night this block cannot have. It was being looked up
+   as "the next guest to arrive", which quietly skips a guest who is already in
+   the flat right now — a lapsed block would then name somebody a fortnight away
+   as the reason it could not extend by a single day.                          */
+function blockWall(block){
+  const from = Math.max(block.end, 0);
+  return resv.filter(r => r.fi === block.fi && !isBlock(r) && r.end > from)
+             .sort((a,b)=> a.start - b.start)[0] || null;
+}
+
+/* The offer itself. Null when nobody can move — silence is the honest answer,
+   and a card that says "no options" is a card the operator learns to skip. */
+function wallOffer(block, wall, onDone){
+  if(!wall) return null;
+  const quiet = t =>{ const q = el("div","wallno"); q.innerHTML = t; return q; };
+  const nights = wall.end - Math.max(wall.start, 0);
+
+  // a guest who has already let themselves in is not being asked to pack
+  if(wall.start < 0)
+    return quiet(`<b>${esc(wall.guest)}</b> is already in there until `
+      + `${esc(fmt(wall.end))} — nobody moves a guest mid-stay.`);
+
+  const mv = moveFor(wall);
+  if(!mv)
+    return quiet(`Nowhere free to put <b>${esc(wall.guest)}</b> for all `
+      + `${nights} of their nights, so this really is the wall.`);
+
+  const gained = extendAfter(block, mv);
+  const now = maxExtend(block);
+  if(gained <= now)
+    return quiet(`Even moving <b>${esc(wall.guest)}</b> buys nothing — `
+      + `the nights behind them are taken too.`);
+
+  const to = flats[mv.moves[0].to], n = mv.moves.length;
+  const till = Math.min(Math.max(block.end, 0) + gained, DAYS - 1);
+
+  const card = el("button","wallmove");
+  const gain = el("span","wm-g", "+" + (gained - now) + (gained - now === 1 ? " day" : " days"));
+  const head = el("div","wm-h");
+  head.innerHTML = SVG_SWAP + `<b>${n === 1
+      ? esc(wall.guest) + " could move to " + esc(to.id)
+      : n + " guests could move out of the way"}</b>`;
+  const sub = el("div","wm-s");
+  sub.innerHTML = (n === 1
+      ? (mv.sameBuilding && mv.sameType ? "Same building, same size" :
+         mv.sameBuilding ? "Same building" : "A different building — worth a call")
+      : `${mv.sameBuilding ? "All in the same building" : "Across buildings"}`)
+    + ` · then ${esc(flats[block.fi].id)} can stay out to <b>${esc(fmtL(till))}</b>`;
+  card.append(head, gain, sub);
+  card.onclick = ev=>{
+    ev.stopPropagation(); haptic(10);
+    openMove(mv, Math.max(block.end, 0), ()=>{
+      const bought = gained - now;
+      extendBlock(block, extendAfter(block, mv));
+      closeSheet(); haptic(18); refreshScreen();
+      // the same number the card promised, not a different true one
+      toast("", `<b>${esc(flats[block.fi].id)} stays out to `
+        + `${esc(fmtL(Math.min(Math.max(block.end, 0), DAYS-1)))}.</b> `
+        + `Moving ${esc(wall.guest)} bought ${bought} of those days.`, null);
+      if(onDone) onDone();
+    }, {title: `Keep ${flats[block.fi].id} out longer`,
+        cta:   `Keep it out to ${fmtL(till)}`});
+  };
+  return card;
+}
+
 function attachDaysSlider(host, block, onCancel){
   const room = maxExtend(block);
   const box = el("div","exts");
@@ -1581,12 +1754,15 @@ function attachDaysSlider(host, block, onCancel){
   if(room <= 0){
     const none = el("div","exts-when");
     none.style.marginTop = "8px";
-    const nextUp = resv.filter(r => r.fi === block.fi && !isBlock(r) && r.start >= Math.max(block.end,0))
-                       .sort((a,b)=> a.start - b.start)[0];
+    const nextUp = blockWall(block);
     none.innerHTML = nextUp
-      ? `Cannot stay out any longer — <b>${esc(nextUp.guest)}</b> arrives ${esc(fmt(nextUp.start))}.`
+      ? `Cannot stay out any longer — <b>${esc(nextUp.guest)}</b> `
+        + (nextUp.start < 0 ? `is in there until ${esc(fmt(nextUp.end))}.`
+                            : `arrives ${esc(fmt(nextUp.start))}.`)
       : `Cannot stay out any longer — the nights after are taken.`;
     box.appendChild(none);
+    const offer0 = wallOffer(block, nextUp);
+    if(offer0) box.appendChild(offer0);
     const foot0 = el("div","exts-foot");
     const back0 = el("button","nudgeBtn","Back");
     back0.onclick = ev=>{ ev.stopPropagation(); backOut(); };
@@ -1605,6 +1781,7 @@ function attachDaysSlider(host, block, onCancel){
   row.append(less, lab, more);
 
   const when = el("div","bkstate");
+  const offerSlot = el("div");
   const go = el("button","nudgeBtn","Keep it out");
   const back = el("button","nudgeBtn","Cancel");
   back.onclick = ev=>{ ev.stopPropagation(); backOut(); };
@@ -1617,20 +1794,21 @@ function attachDaysSlider(host, block, onCancel){
     less.disabled = days <= 1; more.disabled = days >= room;
     const back = Math.min(Math.max(block.end, 0) + days, DAYS - 1);
     const capped = days >= room;
-    const nextUp = capped
-      ? resv.filter(r => r.fi === block.fi && !isBlock(r) && r.start >= Math.max(block.end,0))
-            .sort((a,b)=> a.start - b.start)[0]
-      : null;
+    const nextUp = capped ? blockWall(block) : null;
     when.innerHTML = `Back on sale <b>${esc(fmtL(back))}</b>`
-      + (nextUp ? ` · that is as far as it goes, ${esc(nextUp.guest)} arrives ${esc(fmt(nextUp.start))}`
+      + (nextUp ? ` · that is as far as it goes, ${esc(nextUp.guest)} `
+                  + (nextUp.start < 0 ? `is in until ${esc(fmt(nextUp.end))}` : `arrives ${esc(fmt(nextUp.start))}`)
                 : capped ? ` · as far as the free nights allow` : "");
     go.textContent = `Keep it out ${days} more day${days>1?"s":""}`;
+    // the way past the wall only appears once you have actually hit it
+    offerSlot.textContent = "";
+    const o = wallOffer(block, nextUp); if(o) offerSlot.appendChild(o);
   };
   less.onclick = ev=>{ ev.stopPropagation(); days--; haptic(5); paint(); };
   more.onclick = ev=>{ ev.stopPropagation(); days++; haptic(5); paint(); };
   go.onclick = ev=>{ ev.stopPropagation(); extendBlock(block, days); haptic(18); refreshScreen(); };
 
-  box.append(cap, row, when, foot);
+  box.append(cap, row, when, offerSlot, foot);
   host.appendChild(box);
   paint();
 }
@@ -1820,6 +1998,18 @@ const buildingsOf = ()=>{
 let resv = [];
 let occ = [], chg = [], blk = [];
 
+/* These four sit here, immediately under the state they read, because the
+   demo seeders below run during boot and reach for them. A `const` declared
+   further down the file is not merely later — it is in its temporal dead zone,
+   and the seeder dies with "cannot access before initialization". That has
+   happened four times in this file now; keeping the primitives above their
+   first caller is the fix that stops it happening a fifth. */
+function freeRange(fi,a,b){ for(let d=a;d<b;d++){ if(d<0||d>=DAYS||occ[fi][d]) return false; } return true; }
+function runFrom(fi,d){ let n=0; while(d+n<DAYS && !occ[fi][d+n]) n++; return n; }
+const SIZE = {"Studio":0, "1 BHK":1, "2 BHK":2, "3 BHK":3};
+/* past four this is not a shuffle, it is a reorganisation */
+const MOVE_CEILING = 4;
+
 /* A block is an entry with kind:"block" — a flat out of service for maintenance,
    a deep clean or owner use. It occupies nights exactly like a booking so it can
    never be sold, but it is NOT a booking: it has no guest, it is excluded from
@@ -1925,28 +2115,105 @@ function seedDemoBlocks(){
      fault:"Plumbing", fixer:"Iqbal", phone:"9700045566"},
   ];
   wants.forEach(w=>{
-    const from = Math.max(w.start, 0), to = w.start + w.nights;
     // occ only covers today onward, so nights before today must be checked
     // against the reservations themselves or a block can overlap a past stay
-    const fits = i =>
-      !resv.some(r => r.fi === i && r.start < to && r.end > w.start)
-      && (()=>{ for(let d = from; d < to; d++) if(d < DAYS && occ[i][d]) return false; return true; })();
-    // spread them across buildings so the demo does not put every block in one block
-    // — except a repeat fault, which is only a repeat if it is the same flat
-    let fi = (w.fault && DEMO_FAULT_FLAT[w.at + w.fault] !== undefined
-              && fits(DEMO_FAULT_FLAT[w.at + w.fault]))
-      ? DEMO_FAULT_FLAT[w.at + w.fault]
-      : flats.findIndex((f,i)=> f.code === w.at && fits(i));
-    if(fi < 0) fi = flats.findIndex((f,i)=> fits(i));
+    const fits = (i, s) => {
+      const to = s + w.nights, from = Math.max(s, 0);
+      if(resv.some(r => r.fi === i && r.start < to && r.end > s)) return false;
+      for(let d = from; d < to; d++) if(d < DAYS && occ[i][d]) return false;
+      return true;
+    };
+    /* Spread them across buildings so the demo does not put every block in one
+       block — except a repeat fault, which is only a repeat if it is the SAME
+       flat. When the remembered flat is busy on the requested nights the answer
+       is to slide the dates, not to give up and use a different flat: a second
+       AC failure in a different apartment is not a fault coming back, and the
+       whole "who fixed this last time" feature then has nothing to show. */
+    let start = w.start, fi = -1;
+    const want = w.fault ? DEMO_FAULT_FLAT[w.at + w.fault] : undefined;
+    if(want !== undefined){
+      for(const shift of [0,1,-1,2,-2,3,4,5,6,7]){
+        if(fits(want, w.start + shift)){ fi = want; start = w.start + shift; break; }
+      }
+    }
+    if(fi < 0) fi = flats.findIndex((f,i)=> f.code === w.at && fits(i, start));
+    if(fi < 0) fi = flats.findIndex((f,i)=> fits(i, start));
     if(fi < 0) return;
     if(w.fault) DEMO_FAULT_FLAT[w.at + w.fault] = fi;
-    resv.push({fi, start:w.start, end:to, nights:w.nights, kind:"block",
+    resv.push({fi, start, end: start + w.nights, nights:w.nights, kind:"block",
                reason:w.reason, note:w.note, guest:"Out of service", src:"Block",
                fault:w.fault, fixer:w.fixer, fixer_phone:w.phone, cost:w.cost});
     recompute();                       // so the next block sees this one
   });
 }
 const DEMO_FAULT_FLAT = {};
+
+/* One flat out of service whose wall a shuffle could actually push back.
+
+   Every other block is placed blind, so whether the guest standing at the end
+   of it happens to be movable is luck — and the offer to move them is invisible
+   unless the demo contains a case where it fires. This finds a short stay a few
+   days out that has somewhere to go, and puts a block in front of it.        */
+function seedMoveableWall(){
+  const cands = resv.filter(r => !isBlock(r) && r.start >= 2 && r.start <= 12
+                                 && r.end - r.start <= 6);
+  let best = null;
+  for(const B of cands){
+    for(const gap of [2,3,1]){
+      const end = B.start - gap, start = end - 3;
+      if(end < 0 || end > 2) continue;         // it has to be a decision due now
+      // the block's own nights and the gap after it must both be clear
+      if(resv.some(r => r.fi === B.fi && r.start < B.start && r.end > start)) continue;
+      const row = {fi:B.fi, start, end, nights: end - start, kind:"block",
+                   reason:"Maintenance", note:"kitchen chimney rewire",
+                   guest:"Out of service", src:"Block", fault:"Electrical",
+                   fixer:"Ramesh", fixer_phone:"9848012345", cost:2200};
+      resv.push(row); recompute();
+      const mv = moveFor(B);
+      // a shuffle that buys one night is not worth a guest changing rooms, and
+      // a demo of it teaches the wrong lesson — hold out for a real one
+      const gain = mv ? extendAfter(row, mv) - maxExtend(row) : 0;
+      resv.pop(); recompute();
+      if(gain >= 3 && (!best || gain > best.gain)) best = {row, gain};
+    }
+  }
+  if(!best) return false;
+  resv.push(best.row); recompute();
+  return true;
+}
+
+/* A festival weekend, staggered.
+
+   Filling every flat for the SAME three nights would make the window
+   unbookable and the shuffle impossible at once — there would be nowhere to
+   move anyone to. A real book is not blocked like that: it is blocked by stays
+   that cross the window at different angles, and that is exactly what leaves
+   room to shuffle. So half the flats are busy over the front of the window and
+   half over the back. Nothing is free for all three nights, plenty is free for
+   part of it, and one flat is deliberately held by two back-to-back stays so
+   the multi-guest case appears beside the single-guest one. */
+const FULL_FROM = 18, FULL_NIGHTS = 3;
+function seedFullHouse(){
+  const A = FULL_FROM, B = A + FULL_NIGHTS;
+  resv = resv.filter(r => !(r.start < B && r.end > A));
+  const cash = (f, n) => Math.round(f.rate * n / 100) * 100;
+  const num = i => "9" + String(100000000 + i * 7919).slice(0, 9);
+  flats.forEach((f, i)=>{
+    if(i === 2){
+      resv.push({fi:i, start:A, end:A+1, nights:1, guest:NAMES[3], src:"Direct call",
+                 phone:num(i), pax:2, amount:cash(f,1), pays:[]});
+      resv.push({fi:i, start:A+1, end:B, nights:FULL_NIGHTS-1, guest:NAMES[9], src:"Airbnb",
+                 phone:num(i+40), pax:2, amount:cash(f,FULL_NIGHTS-1), pays:[]});
+      return;
+    }
+    const front = i % 2 === 0;
+    const s = front ? A : A + 1;
+    const e = front ? A + 1 : B;
+    resv.push({fi:i, start:s, end:e, nights:e - s,
+               guest: NAMES[(i * 7) % NAMES.length], src: SRC[(i * 3) % SRC.length],
+               phone:num(i), pax:2, amount:cash(f, e - s), pays:[]});
+  });
+}
 
 /* A few things wrong with flats that are still perfectly sellable — which is
    the ordinary case, and invisible unless the demo has some. */
@@ -2178,7 +2445,7 @@ function signOut(silent){
     NF = flats.length;
     flatIndex = Object.fromEntries(flats.map((f,i)=>[f.id,i]));
     usingDemo = !load();
-    if(usingDemo){ generateDemo(); recompute(); seedDemoBlocks(); seedDemoIssues(); }
+    if(usingDemo){ generateDemo(); seedFullHouse(); recompute(); seedDemoBlocks(); seedMoveableWall(); seedDemoIssues(); }
     else issues = [];
     recompute(); paintAcct(); refreshScreen();
   }
@@ -2423,7 +2690,7 @@ if(MODE === "live"){
   usingDemo = !load();
   if(usingDemo) generateDemo();
   recompute();
-  if(usingDemo){ seedDemoBlocks(); seedDemoIssues(); }
+  if(usingDemo){ seedFullHouse(); recompute(); seedDemoBlocks(); seedMoveableWall(); seedDemoIssues(); }
 }
 
 /* Refuses to double-book. The UI already hides the form on an unavailable flat,
@@ -2735,11 +3002,9 @@ function clearAll(){
   }
   recompute(); save(); cacheSave();
 }
-function resetDemo(){ generateDemo(); usingDemo = true; recompute(); seedDemoBlocks(); seedDemoIssues(); save(); }
+function resetDemo(){ generateDemo(); usingDemo = true; seedFullHouse(); recompute(); seedDemoBlocks(); seedMoveableWall(); seedDemoIssues(); save(); }
 
-const freeRange = (fi,a,b)=>{ for(let d=a;d<b;d++){ if(d<0||d>=DAYS||occ[fi][d]) return false; } return true; };
 const freeCount = d => { let n=0; for(let i=0;i<NF;i++) if(!occ[i][d]) n++; return n; };
-const runFrom   = (fi,d)=>{ let n=0; while(d+n<DAYS && !occ[fi][d+n]) n++; return n; };
 const occPct    = fi => { let sold=0, avail=0;
   for(let d=0;d<DAYS;d++){ if(blk[fi][d]) continue; avail++; if(occ[fi][d]) sold++; }
   return avail ? Math.round(sold/avail*100) : 0; };
@@ -3359,9 +3624,8 @@ const soonestFor = (n, from) => { for(let d=from; d<=DAYS-n; d++) if(countFreeFo
    not the software's — three moves for one long booking might be obviously
    worth it in December and obviously not in June — so the count is put in front
    of them and the options are ranked fewest-first. The only ceiling is a
-   practical one: past four this is not a shuffle, it is a reorganisation.    */
-const MOVE_CEILING = 4;
-
+   practical one: past four this is not a shuffle, it is a reorganisation
+   (MOVE_CEILING, declared with the other primitives above).                  */
 function roomMoves(a, b, pool){
   const out = [];
   pool.forEach(({f: fl, i: fi})=>{
@@ -3409,7 +3673,35 @@ function roomMoves(a, b, pool){
   // fewest guests disturbed first, then the least noticeable move
   return out.sort((x,y)=> x.moves.length - y.moves.length || y.score - x.score);
 }
-const SIZE = {"Studio":0, "1 BHK":1, "2 BHK":2, "3 BHK":3};
+
+
+/* ── the wall, and whether it can be moved ────────────────────────────────────
+   An out-of-service run stops dead the day a guest arrives, and the app used to
+   say so and stop there — which is a fact, not an answer. The same shuffle that
+   frees a room for a booking frees it for a plumber, so the question "can this
+   stay out longer" gets the same treatment: name the guest in the way, name
+   where they could go, and say how much longer that buys.                     */
+function moveFor(B){
+  if(!B || isBlock(B) || B.start < 0) return null;      // in-house guests do not pack
+  const opts = roomMoves(B.start, B.end, [{f: flats[B.fi], i: B.fi}]);
+  return opts.length ? opts[0] : null;
+}
+
+/* How far the block could then run, treating the guests who are moving as gone
+   and everything else — another block, a stay nobody offered to move — as the
+   real wall it is. */
+function extendAfter(block, mv){
+  const moved = new Set(mv.moves.map(m => m.booking));
+  const from = Math.max(block.end, 0);
+  let n = 0;
+  while(n < 30 && from + n < DAYS){
+    const d = from + n;
+    if(resv.some(r => r.fi === block.fi && r !== block && !moved.has(r)
+                      && r.start <= d && r.end > d)) break;
+    n++;
+  }
+  return n;
+}
 
 /* The operator's real morning question isn't "how many are free" — it's
    who is arriving, who is leaving, and which rooms have to be turned around
@@ -4908,11 +5200,24 @@ function renderAsk(focus){
       const moves = roomMoves(a, b, pool);
       if(moves.length){
         const mh = el("div","sect");
-        const fewest = moves[0].moves.length;
-        mh.append(el("span","lbl", fewest === 1 ? "One move away" : `${fewest} moves away`),
+        /* Fewest-first is the right order — but with forty single-guest options
+           the one room that needs two guests moved falls off the end, and the
+           operator never learns the app can do it at all. So the shortlist is
+           the best four, plus the best multi-guest option if none made the cut.
+           It is a different shape of answer, not a worse one. */
+        const shown = moves.slice(0,4);
+        if(!shown.some(m => m.moves.length > 1)){
+          const multi = moves.find(m => m.moves.length > 1);
+          if(multi) shown.push(multi);
+        }
+        const fewest = shown[0].moves.length;
+        const most = Math.max(...shown.map(m => m.moves.length));
+        mh.append(el("span","lbl", fewest === most
+                    ? (fewest === 1 ? "One move away" : `${fewest} moves away`)
+                    : `From ${fewest === 1 ? "one move" : fewest + " moves"}`),
                   el("span","lbl", `${moves.length} option${moves.length>1?"s":""}`));
         const mcard = el("div","card");
-        moves.slice(0,4).forEach(mv=>{
+        shown.forEach(mv=>{
           const fromF = flats[mv.frees], k = mv.moves.length;
           const r = el("button","row move");
           r.append(el("div","id", fromF.id));
@@ -5296,10 +5601,24 @@ function openIssueForm(fi, day){
       [...fRow.children].forEach(c=>c.setAttribute("aria-pressed", c.textContent===fault));
       const h = fault ? faultHistory(fi, fault, DAYS) : null;
       flag.hidden = !h;
-      if(h) flag.innerHTML = `<div class="ff-l"><b>${h.times}${ordinalSuffix(h.times)} `
-        + `${esc(fault.toLowerCase())} fault in ${esc(fl.id)}.</b> `
-        + (h.last.fixer ? `${esc(h.last.fixer)} saw it last.` : "Nobody recorded who fixed it last.")
-        + `</div>`;
+      if(h){
+        flag.textContent = "";
+        const line = el("div","ff-l");
+        line.innerHTML = `<b>${h.times}${ordinalSuffix(h.times)} `
+          + `${esc(fault.toLowerCase())} fault in ${esc(fl.id)}.</b> `
+          + (h.last.fixer ? `${esc(h.last.fixer)} saw it last.` : "Nobody recorded who fixed it last.");
+        flag.appendChild(line);
+        // the name is only useful attached to the number — otherwise it is
+        // trivia, and the operator goes hunting through their phone for it
+        if(h.last.fixer && h.last.fixer_phone){
+          const a = el("div","ff-a");
+          const call = el("a","ff-call", "Call " + h.last.fixer);
+          call.href = "tel:" + h.last.fixer_phone.replace(/[^\d+]/g,"");
+          a.append(call);
+          flag.appendChild(a);
+        }
+      }
+      paintSymptoms();
     };
     fRow.appendChild(b);
   });
@@ -5307,12 +5626,17 @@ function openIssueForm(fi, day){
   const uCap = el("div","bkcap"); uCap.append(el("span",null,"How much can it wait"));
   const uSay = el("div","bkstate");
   const win = batchWindow(fi, 1);
+  const nextIn = resv.filter(r => r.fi === fi && !isBlock(r) && r.end > 0)
+                     .sort((a,b)=> a.start - b.start)[0];
+  const whoNext = !nextIn ? "nobody is booked in for nine weeks"
+    : nextIn.start <= 0 ? `${nextIn.guest} is in there until ${fmt(nextIn.end)}`
+    : `${nextIn.guest} arrives ${fmt(nextIn.start)}`;
   const uWhy = {
     whenever: win ? `Goes on the list. It can ride along the next time someone is there — ${flats[fi].id} is empty from ${fmt(win.from)}.`
                   : `Goes on the list, to be picked up whenever someone is next at the flat.`,
     soon:     win ? `Worth a visit of its own if nobody is going anyway. ${flats[fi].id} sits empty from ${fmt(win.from)} for ${win.nights} night${win.nights>1?"s":""}, which costs nothing.`
                   : `Worth a visit of its own — this flat has no empty stretch coming up.`,
-    urgent:   `Deal with it before the next guest arrives. If it cannot wait for them, take the flat out of service instead — this note leaves it on sale.`,
+    urgent:   `Deal with it before the next guest — ${whoNext}. If it cannot wait for them, take the flat out of service instead; this note leaves it on sale.`,
   };
   const uRow = el("div","tyRow");
   [["whenever","Can wait"],["soon","Soon"],["urgent","Urgent"]].forEach(([k,label])=>{
@@ -5327,10 +5651,33 @@ function openIssueForm(fi, day){
   });
   uSay.textContent = uWhy[urgency];
 
+  const nCap = el("div","bkcap");
+  nCap.append(el("span",null,"What exactly"), el("span",null,"tap one, or type"));
+  const sRow = el("div","tyRow soft");
   const noteRow = el("div","r");
   const note = el("input");
-  note.type = "text"; note.placeholder = "What's wrong — e.g. geyser slow to heat";
+  note.type = "text"; note.placeholder = "In your own words";
   noteRow.appendChild(note);
+  /* The symptoms follow whatever broke, so the second tap is nearly always one
+     of four — and the note ends up in words that read back sensibly months
+     later, instead of blank because typing on a phone mid-corridor is a chore. */
+  function paintSymptoms(){
+    sRow.textContent = "";
+    const list = SYMPTOMS[fault] || [];
+    sRow.hidden = !list.length;
+    nCap.children[1].textContent = list.length ? "tap one, or type" : "";
+    list.forEach(s=>{
+      const b = el("button",null,s);
+      b.setAttribute("aria-pressed", note.value.trim().toLowerCase() === s);
+      b.onclick = ()=>{
+        const on = note.value.trim().toLowerCase() === s;
+        note.value = on ? "" : s; haptic(8);
+        [...sRow.children].forEach(c=>c.setAttribute("aria-pressed", !on && c.textContent === s));
+      };
+      sRow.appendChild(b);
+    });
+  }
+  paintSymptoms();
 
   const acts = el("div","invActs");
   const go = el("button","invSave","Log it");
@@ -5342,7 +5689,7 @@ function openIssueForm(fi, day){
   const cancel = el("button","invDel","Cancel");
   cancel.onclick = ()=>{ haptic(8); openSheet(fi, day); };
   acts.append(go, cancel);
-  form.append(fRow, flag, uCap, uRow, uSay, noteRow, acts);
+  form.append(fRow, flag, nCap, sRow, noteRow, uCap, uRow, uSay, acts);
   sheetB.append(form);
 
   const hint = el("p");
@@ -5351,7 +5698,8 @@ function openIssueForm(fi, day){
     + `Nothing here costs you a night.`;
   sheetB.append(hint);
   sheet.classList.add("on"); scrim.classList.add("on");
-  setTimeout(()=> note.focus(), 80);
+  // no autofocus: the fast path here is two taps, and a keyboard that opens
+  // itself covers the chips that make it fast
 }
 
 /* ══════════════ opening a room ══════════════════════════════════════════════
@@ -5605,11 +5953,19 @@ const SVG_BAG = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stro
   + '<path d="M7.6 6.6V4.4a1.4 1.4 0 0 1 1.4-1.4h2a1.4 1.4 0 0 1 1.4 1.4v2.2"/>'
   + '<path d="M3.2 11.4h13.6"/></svg>';
 
-function openMove(mv, askDay, onFreed){
+/* two rooms trading places — the same idea as the bag, at label size */
+const SVG_SWAP = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"'
+  + ' stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+  + '<path d="M3.5 7h11M11.5 4 14.5 7l-3 3"/>'
+  + '<path d="M16.5 13h-11M8.5 16 5.5 13l3-3"/></svg>';
+
+function openMove(mv, askDay, onFreed, opts){
+  opts = opts || {};
   const from = flats[mv.frees], n = mv.moves.length;
   sheetH.textContent = ""; sheetB.textContent = "";
   const t = el("div");
-  t.innerHTML = `<div class="n">Free up ${esc(from.id)}</div>`
+  // the same shuffle serves two different intentions and should say which
+  t.innerHTML = `<div class="n">${esc(opts.title || "Free up " + from.id)}</div>`
               + `<div class="m">${n === 1 ? "one guest moves" : n + " guests move"} · nobody loses a night</div>`;
   const x = el("button", null, "✕"); x.setAttribute("aria-label","Close");
   let booked = false, abandoned = null, done = [];
@@ -5639,7 +5995,7 @@ function openMove(mv, askDay, onFreed){
                    + '<span class="who"><b>' + esc(m.booking.guest) + '</b>'
                    + '<s>' + esc(fmt(m.booking.start)) + '–' + esc(fmt(m.booking.end)) + '</s>'
                    + '</span></div>';
-    chip.style.top = (44 + k * 44) + "px";
+    chip.style.top = (44 + k * 54) + "px";
     a.appendChild(chip);                     // they stand IN the room, not above it
     chips.push({chip, row, m});
   });
@@ -5667,7 +6023,7 @@ function openMove(mv, askDay, onFreed){
   sheet.classList.add("on"); scrim.classList.add("on");
   sheetB.scrollTop = 0;
 
-  go.onclick = ()=>{
+  const start = ()=>{
     if(go.disabled) return;
     go.disabled = true;
     haptic(12);
@@ -5703,7 +6059,7 @@ function openMove(mv, askDay, onFreed){
       why.innerHTML = `<b class="ok">${esc(from.id)} is free.</b> `
         + (n === 1 ? `${esc(mv.moves[0].booking.guest)} is in ${esc(flats[mv.moves[0].to].id)}`
                    : `All ${n} are in their new rooms`) + ` for the same nights.`;
-      go.textContent = `Book ${from.id}`;
+      go.textContent = opts.cta || `Book ${from.id}`;
       go.disabled = false;
       go.onclick = ()=>{
         haptic(14); booked = true;
@@ -5713,6 +6069,36 @@ function openMove(mv, askDay, onFreed){
       note.textContent = n === 1
         ? "Tell them the new room number when you next speak to them."
         : `Tell all ${n} their new room numbers when you next speak to them.`;
+
+      /* Walking them back is the same walk in reverse. A jump cut would leave
+         you wondering whether it had undone anything at all. */
+      const undo = el("button","moveundo", n === 1 ? "↩ Put them back" : `↩ Put all ${n} back`);
+      undo.onclick = ()=>{
+        undo.disabled = true; go.disabled = true; haptic(10);
+        stage.classList.remove("carrying","landed");
+        void stage.offsetWidth;                      // restart the animation
+        stage.classList.add("returning");
+        setTimeout(()=>{
+          const failed = [];
+          done.slice().reverse().forEach(d=>{ if(!moveBooking(d.booking, d.was)) failed.push(d); });
+          done = failed;
+          haptic(14); refreshScreen();
+          if(failed.length){
+            toast("bad", `<b>${failed.length} could not go back</b> — those rooms have been taken since.`, null);
+            stage.classList.remove("returning"); stage.classList.add("landed");
+            undo.disabled = false; go.disabled = false;
+            return;
+          }
+          a.classList.remove("emptied");
+          undo.remove();
+          why.innerHTML = `Back as they were. Nothing has changed.`;
+          go.textContent = n === 1 ? `Move ${mv.moves[0].booking.guest}` : `Move all ${n}`;
+          go.disabled = false;
+          go.onclick = start;                        // and it can be done again
+          stage.classList.remove("returning");
+        }, calm ? 10 : 470 + (n - 1) * 110);
+      };
+      sheetB.insertBefore(undo, note);
 
       /* Moved for a booking that never happened is moved for nothing. */
       abandoned = ()=>{
@@ -5732,6 +6118,7 @@ function openMove(mv, askDay, onFreed){
       };
     }, calm ? 10 : 470 + (n - 1) * 110);
   };
+  go.onclick = start;
 }
 
 /* ── booking, on its own screen ───────────────────────────────────────────────
@@ -5924,26 +6311,55 @@ function openBlockForm(fi, day){
     b.onclick = ()=>{
       fault = fault === fx ? "" : fx; haptic(8);
       [...fRow.children].forEach(c=>c.setAttribute("aria-pressed", c.textContent === fault));
-      paintFlag();
+      paintFlag(); paintFixers();
     };
     fRow.appendChild(b);
   });
 
+  /* Two bare boxes asking the operator to remember a name and a number the app
+     already holds. It knows who fixed this exact fault in this exact flat, what
+     each has cost, and whose work comes back — so it offers people rather than
+     an empty field, carrying the one number that decides who to ring. */
+  const whoCap = el("div","bkcap");
+  whoCap.append(el("span",null,"Who is fixing it"), el("span",null,"tap one, or type"));
   const whoRow = el("div","r");
   const who = el("input");
-  who.type = "text"; who.placeholder = "Who is fixing it";
+  who.type = "text"; who.placeholder = "Name";
   who.setAttribute("aria-label","Name of the person fixing it");
   const ph = el("input");
   ph.type = "tel"; ph.inputMode = "numeric"; ph.placeholder = "Their number";
   ph.setAttribute("aria-label","Their phone number");
   whoRow.append(who, ph);
-  const known = fixers();
-  const knownRow = el("div","tyRow soft");
-  known.slice(0,6).forEach(g=>{
-    const b = el("button",null,g.name);
-    b.onclick = ()=>{ who.value = g.name; ph.value = g.phone || ""; haptic(8); };
-    knownRow.appendChild(b);
-  });
+
+  const knownRow = el("div","fixers");
+  function paintFixers(){
+    knownRow.textContent = "";
+    const all = fixers();
+    if(!all.length){ knownRow.hidden = true; return; }
+    knownRow.hidden = false;
+    // whoever last touched this fault in this flat leads: they hold the
+    // warranty and they owe the explanation
+    const last = fault ? (faultHistory(fi, fault, from) || {}).last : null;
+    const lastName = last && last.fixer ? last.fixer.trim().toLowerCase() : null;
+    all.slice().sort((x,y)=>
+      (y.name.toLowerCase() === lastName) - (x.name.toLowerCase() === lastName)
+      || (x.back / x.jobs) - (y.back / y.jobs)
+    ).slice(0,4).forEach(g=>{
+      const card = el("button","fixer");
+      const line = el("div","fx-n");
+      line.append(el("b", null, g.name));
+      if(g.name.toLowerCase() === lastName) line.append(el("em", null, "did this one"));
+      const rec = el("div","fx-r");
+      rec.textContent = g.back ? `${g.jobs} job${g.jobs>1?"s":""} · ${g.back} came back`
+                               : `${g.jobs} job${g.jobs>1?"s":""} · none came back`;
+      if(g.back) rec.classList.add("bad");
+      card.append(line, rec);
+      card.onclick = ev=>{ ev.preventDefault(); who.value = g.name; ph.value = g.phone || "";
+        haptic(8); [...knownRow.children].forEach(c=>c.classList.remove("on"));
+        card.classList.add("on"); };
+      knownRow.appendChild(card);
+    });
+  }
 
   function paintFlag(){
     const h = fault ? faultHistory(fi, fault, from) : null;
@@ -6011,9 +6427,11 @@ function openBlockForm(fi, day){
     }
   };
 
-  form.append(whenCap, whenRow, state, rCap, rChips, fCap, fRow, flag, whoRow);
-  if(known.length) form.append(knownRow);
-  form.append(noteRow, go);
+  // people first, empty boxes second: the boxes are for somebody new, and
+  // putting them on top made the app look like it remembered nobody
+  form.append(whenCap, whenRow, state, rCap, rChips, fCap, fRow, flag,
+              whoCap, knownRow, whoRow, noteRow, go);
+  paintFixers();
   sheetB.append(form);
   paint();
   sheet.classList.add("on"); scrim.classList.add("on");
