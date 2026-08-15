@@ -112,8 +112,9 @@ button{background:none;border:0;padding:0;cursor:pointer}
   background:var(--bar);backdrop-filter:blur(20px) saturate(160%);
   -webkit-backdrop-filter:blur(20px) saturate(160%);
   border-bottom:1px solid var(--line);
-  display:flex;align-items:center;gap:12px;
+  display:flex;flex-direction:column;align-items:stretch;gap:0;
 }
+.topbar-r{display:flex;align-items:center;gap:12px}
 /* large title condenses on scroll — transform/opacity only, never layout */
 .topbar h1{margin:0;font-size:19px;font-weight:650;letter-spacing:-.022em;flex:1;min-width:0;
   transform-origin:left center;transition:transform .2s var(--out);will-change:transform}
@@ -734,48 +735,40 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
 .vbar.on{opacity:1;transform:translateY(-3px)}
 @media (prefers-reduced-motion:reduce){ .vbar,.vsay{transition:none} }
 
-/* ── the Pulse segment bar ────────────────────────────────────────────────────
-   Five questions on different clocks, not one queue. Sticky, because the answer
-   to "where am I" should not require scrolling back up.                       */
-.segbar{
+/* ── the Pulse segment bar, which lives in the header ─────────────────────────
+   It used to be a sticky element inside the scrolling area, and every version of
+   that was wrong in the same way: a strip of page background parked under the
+   title, reading as a black band with content sliding behind it. Sticky also
+   resolves against the scroll container's PADDING box, so the screen's 22px was
+   a floor no margin could cross.
+
+   None of that is a styling problem. The bar is CHROME — it does not scroll, it
+   is always true, and it belongs to the header. Put it there and the sticky
+   maths, the gradient, the z-index and the band all stop existing. It inherits
+   the header's own blurred material for free.                                 */
+.tabseg{
   display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;
-  /* top is NEGATIVE by exactly the screen's padding, because sticky resolves
-     against the scroll container's padding box: -22px makes the floor the border
-     box instead, so the bar parks flush under the title bar rather than 22px
-     adrift with scrolling content showing through the gap. The matching
-     negative margin cancels it at rest, and the 22px top padding it carries is
-     the solid ground the chips sit on once content slides underneath. */
-  position:sticky;top:-22px;z-index:6;
-  /* The screen is a flex column with a 30px gap and 22px of top padding, which
-     left a ~42px empty band under the title. The gap below is clawed back with a
-     negative margin; the space ABOVE cannot be, because sticky `top:0` resolves
-     against the scroll container's PADDING box — the 22px is a floor, and a
-     negative top margin only moves the static position before sticky pulls it
-     back down. So the bar simply carries no top padding of its own, and the
-     screen's own 22px becomes its breathing room, exactly as on every other
-     tab. The 8px it does keep is the gradient it needs once content scrolls
-     underneath it. */
-  margin:-22px -20px -20px;padding:22px 20px 12px;
-  /* solid behind the chips, fading only through the bottom padding — a gradient
-     that starts at the chips lets the card titles read straight through them */
-  background:linear-gradient(var(--bg) calc(100% - 14px), transparent);
+  margin:11px -20px 0;padding:0 20px 1px;
 }
-.segbar::-webkit-scrollbar{display:none}
-.segbar button{
-  position:relative;flex:0 0 auto;padding:9px 14px;border-radius:10px;
+.tabseg[hidden]{display:none}
+.tabseg::-webkit-scrollbar{display:none}
+.tabseg button{
+  position:relative;flex:0 0 auto;padding:8px 13px;border-radius:9px;
   background:var(--surface-2);border:1px solid var(--line);
-  font-size:13px;font-weight:600;color:var(--txt-3);white-space:nowrap;
+  font-size:12.5px;font-weight:600;color:var(--txt-3);white-space:nowrap;
   transition:transform .38s var(--spring), background .18s, color .18s;
 }
-.segbar button:active{transform:scale(.95);transition-duration:.085s}
-.segbar button[aria-pressed="true"]{background:var(--free);color:var(--free-ink);border-color:transparent}
+.tabseg button:active{transform:scale(.95);transition-duration:.085s}
+.tabseg button[aria-selected="true"]{background:var(--free);color:var(--free-ink);border-color:transparent}
 /* something is waiting under Now — the only badge in the app, so it means it */
-.segbar button i.dot{
-  position:absolute;top:6px;right:7px;width:5px;height:5px;border-radius:50%;
+.tabseg button i.dot{
+  position:absolute;top:5px;right:6px;width:5px;height:5px;border-radius:50%;
   background:var(--now);
 }
-.segbar button[aria-pressed="true"] i.dot{background:var(--free-ink);opacity:.55}
-/* the deck arrives from the side you travelled */
+.tabseg button[aria-selected="true"] i.dot{background:var(--free-ink);opacity:.55}
+/* the title row condenses on scroll; the chips ride with it rather than jumping */
+.topbar.tight .tabseg{margin-top:8px}
+
 @keyframes segIn{from{opacity:0;transform:translateX(var(--from,20px))}}
 .deck.slide{animation:segIn .26s var(--out) both}
 @media (prefers-reduced-motion:reduce){ .deck.slide{animation:none} }
@@ -995,6 +988,17 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 @keyframes toastIn{from{opacity:0;transform:translateY(14px) scale(.97)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){ .toast{animation:none} }
 
+/* ── the preview strip inside a form ──────────────────────────────────────────
+   The same nine weeks, with the pending change painted on. "4 nights from
+   16 Aug" is a sentence; this is the picture, and it moves as the steppers do,
+   so the consequence is seen before it is agreed to.                         */
+.prevwrap{margin:0 0 2px}
+.strip.prev{height:34px;padding:0;gap:1px}
+.strip.prev i{transition:background .18s var(--out), transform .22s var(--spring)}
+.strip.prev i.pending{background:var(--now);transform:scaleY(1.14)}
+.strip.prev i.b.pending{height:100%;align-self:stretch}
+.prevk{display:flex;justify-content:space-between;padding:6px 2px 0}
+
 /* ── what broke, and who fixed it ─────────────────────────────────────────────
    The flag appears the moment a fault is chosen, inside the block form, so the
    history arrives while the decision is being made rather than in a report. */
@@ -1095,9 +1099,12 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 
 <div class="app">
   <header class="topbar">
-    <h1 id="scrTitle">Rooms<span class="sub" id="scrSub"></span></h1>
-    <button class="pill" id="acctBtn" aria-label="Account and sync"><i></i><span id="acctTxt">Demo data</span></button>
-    <button class="ghost" id="themeBtn" aria-label="Switch theme"><span id="themeIc">◐</span></button>
+    <div class="topbar-r">
+      <h1 id="scrTitle">Rooms<span class="sub" id="scrSub"></span></h1>
+      <button class="pill" id="acctBtn" aria-label="Account and sync"><i></i><span id="acctTxt">Demo data</span></button>
+      <button class="ghost" id="themeBtn" aria-label="Switch theme"><span id="themeIc">◐</span></button>
+    </div>
+    <div class="tabseg" id="tabseg" hidden role="tablist" aria-label="Pulse sections"></div>
   </header>
 
   <div class="screens">
@@ -3810,6 +3817,8 @@ function renderTrends(){
      the first card reads curve[0]. Reachable in one move: clear the sample
      inventory before adding your own. Say so instead of showing a blank tab. */
   if(!NF){
+    const tsg = document.getElementById("tabseg");
+    if(tsg){ tsg.hidden = true; tsg.textContent = ""; }
     const e = el("div","tcard");
     e.append(el("h3",null,"Nothing to read yet"),
              el("div","cap","there are no flats in the book"));
@@ -3831,10 +3840,13 @@ function renderTrends(){
   const SEGS = [["now","Now"],["money","Money"],["rooms","Rooms"],
                 ["guests","Guests"],["upkeep","Upkeep"]];
   const seg = SEGS.some(s=>s[0] === pulseSeg) ? pulseSeg : "now";
-  const bar = el("div","segbar");
+  // the chips live in the header, not in this scroll — see .tabseg
+  const bar = document.getElementById("tabseg");
+  bar.textContent = ""; bar.hidden = false;
   SEGS.forEach(([k,label])=>{
     const b2 = el("button", null, label);
-    b2.setAttribute("aria-pressed", k === seg);
+    b2.setAttribute("role","tab");
+    b2.setAttribute("aria-selected", k === seg);
     if(k === "now" && todayBoard().count) b2.append(el("i","dot"));
     b2.onclick = ()=>{
       if(k === seg) return;
@@ -3843,11 +3855,8 @@ function renderTrends(){
     };
     bar.appendChild(b2);
   });
-  s.appendChild(bar);
-  // keep the live chip in view — the bar scrolls, and a selected chip you cannot
-  // see is worse than no bar at all
   requestAnimationFrame(()=>{
-    const on = bar.querySelector('[aria-pressed="true"]');
+    const on = bar.querySelector('[aria-selected="true"]');
     if(on && on.scrollIntoView) on.scrollIntoView({block:"nearest", inline:"center"});
   });
 
@@ -5069,6 +5078,53 @@ function openPayment(r, fi){
 
 /* Report a fault without taking the flat off the market. Two taps and a word:
    what it is, and how much it can wait. */
+
+/* ── a preview of the change, on the flat's own nine weeks ────────────────────
+   Both of these forms used to be a stack of fields describing something
+   abstract: "4 nights from 16 Aug" is a sentence, not a picture, and you had to
+   hold the calendar in your head to know whether it landed anywhere awkward.
+   This paints the pending block straight onto the timeline as you move the
+   steppers, so the consequence is visible before it is committed.            */
+function previewStrip(fi){
+  const wrap = el("div","prevwrap");
+  const strip = el("div","strip prev");
+  strip.setAttribute("role","img");
+  for(let d=0; d<DAYS; d++){
+    const i = el("i");
+    if(!occ[fi][d]) i.classList.add("f");
+    else if(blk[fi][d]) i.classList.add("b");
+    if(d === 0) i.classList.add("td");
+    strip.appendChild(i);
+  }
+  const k = el("div","prevk");
+  const kl = el("span","lbl","Today"), kr = el("span","lbl","+9 weeks");
+  k.append(kl, kr);
+  wrap.append(strip, k);
+  wrap.paint = (from, n)=>{
+    [...strip.children].forEach((b, d)=>{
+      const inRange = d >= from && d < from + n;
+      b.classList.toggle("pending", inRange);
+    });
+  };
+  return wrap;
+}
+
+/* Chips ordered by what this flat actually breaks, then by what breaks most
+   across the portfolio. The right answer should not be the eleventh chip. */
+function faultsFor(fi){
+  const mine = {}, all = {};
+  resv.filter(r => isBlock(r) && r.fault).forEach(r=>{
+    all[r.fault] = (all[r.fault] || 0) + 1;
+    if(r.fi === fi) mine[r.fault] = (mine[r.fault] || 0) + 1;
+  });
+  issues.filter(x => x.fault).forEach(x=>{
+    all[x.fault] = (all[x.fault] || 0) + 1;
+    if(x.fi === fi) mine[x.fault] = (mine[x.fault] || 0) + 1;
+  });
+  return FAULTS.slice().sort((a,b)=>
+    (mine[b]||0) - (mine[a]||0) || (all[b]||0) - (all[a]||0) || FAULTS.indexOf(a) - FAULTS.indexOf(b));
+}
+
 function openIssueForm(fi, day){
   const fl = flats[fi];
   sheetH.textContent = ""; sheetB.textContent = "";
@@ -5079,11 +5135,17 @@ function openIssueForm(fi, day){
   x.onclick = ()=> openSheet(fi, day);
   sheetH.append(t, x);
 
-  const form = el("div","invForm"); form.style.margin = "14px 20px 0";
+  const form = el("div","bkform");
   let fault = "", urgency = "soon";
+  const prev = previewStrip(fi);
+  const win0 = batchWindow(fi, 1);
+  prev.paint(win0 ? win0.from : 0, 0);
+  form.appendChild(prev);
+  const fCap = el("div","bkcap"); fCap.append(el("span",null,"What is wrong"));
+  form.appendChild(fCap);
   const fRow = el("div","tyRow faultRow");
   const flag = el("div","faultFlag"); flag.hidden = true;
-  FAULTS.forEach(fx=>{
+  faultsFor(fi).forEach(fx=>{
     const b = el("button",null,fx);
     b.setAttribute("aria-pressed","false");
     b.onclick = ()=>{
@@ -5099,14 +5161,28 @@ function openIssueForm(fi, day){
     fRow.appendChild(b);
   });
 
+  const uCap = el("div","bkcap"); uCap.append(el("span",null,"How much can it wait"));
+  const uSay = el("div","bkstate");
+  const win = batchWindow(fi, 1);
+  const uWhy = {
+    whenever: win ? `Goes on the list. It can ride along the next time someone is there — ${flats[fi].id} is empty from ${fmt(win.from)}.`
+                  : `Goes on the list, to be picked up whenever someone is next at the flat.`,
+    soon:     win ? `Worth a visit of its own if nobody is going anyway. ${flats[fi].id} sits empty from ${fmt(win.from)} for ${win.nights} night${win.nights>1?"s":""}, which costs nothing.`
+                  : `Worth a visit of its own — this flat has no empty stretch coming up.`,
+    urgent:   `Deal with it before the next guest arrives. If it cannot wait for them, take the flat out of service instead — this note leaves it on sale.`,
+  };
   const uRow = el("div","tyRow");
   [["whenever","Can wait"],["soon","Soon"],["urgent","Urgent"]].forEach(([k,label])=>{
     const b = el("button",null,label);
     b.setAttribute("aria-pressed", k === urgency);
     b.onclick = ()=>{ urgency = k; haptic(8);
-      [...uRow.children].forEach((c,i)=>c.setAttribute("aria-pressed", i === URGENCY.indexOf(urgency))); };
+      [...uRow.children].forEach((c,i)=>c.setAttribute("aria-pressed", i === URGENCY.indexOf(urgency)));
+      uSay.textContent = uWhy[urgency];
+      uSay.classList.toggle("bad", urgency === "urgent");
+    };
     uRow.appendChild(b);
   });
+  uSay.textContent = uWhy[urgency];
 
   const noteRow = el("div","r");
   const note = el("input");
@@ -5123,16 +5199,13 @@ function openIssueForm(fi, day){
   const cancel = el("button","invDel","Cancel");
   cancel.onclick = ()=>{ haptic(8); openSheet(fi, day); };
   acts.append(go, cancel);
-  form.append(fRow, flag, uRow, noteRow, acts);
+  form.append(fRow, flag, uCap, uRow, uSay, noteRow, acts);
   sheetB.append(form);
 
   const hint = el("p");
   hint.style.cssText = "margin:11px 20px 0;font-size:12px;line-height:1.55;color:var(--txt-3)";
-  const win = batchWindow(fi, 1);
-  hint.textContent = win
-    ? `${fl.id} stays on sale. It is empty ${fmt(win.from)} for ${win.nights} night${win.nights>1?"s":""} — `
-      + `get this and anything else outstanding done then, and it costs nothing.`
-    : `${fl.id} stays on sale — this is a note, not a block.`;
+  hint.textContent = `${fl.id} stays on sale — this is a note, not a block. `
+    + `Nothing here costs you a night.`;
   sheetB.append(hint);
   sheet.classList.add("on"); scrim.classList.add("on");
   setTimeout(()=> note.focus(), 80);
@@ -5517,6 +5590,8 @@ function openBlockForm(fi, day){
   const capFrom = d => { let k = 0; while(k < 60 && d + k < DAYS && !occ[fi][d + k]) k++; return Math.max(1, k); };
 
   const form = el("div","bkform");
+  const prev = previewStrip(fi);
+  form.appendChild(prev);
 
   const whenCap = el("div","bkcap");
   whenCap.append(el("span",null,"Out from"), el("span",null,"Nights out"));
@@ -5532,19 +5607,28 @@ function openBlockForm(fi, day){
   whenRow.append(dayBox, nBox);
   const state = el("div","bkstate");
 
+  const rCap = el("div","bkcap"); rCap.append(el("span",null,"Why is it out"));
   const rChips = el("div","tyRow");
   BLOCK_REASONS.forEach(rz=>{
     const b = el("button",null,rz);
     b.setAttribute("aria-pressed", rz === reason);
     b.onclick = ()=>{ reason = rz; haptic(8);
-      [...rChips.children].forEach(c=>c.setAttribute("aria-pressed", c.textContent === reason)); };
+      [...rChips.children].forEach(c=>c.setAttribute("aria-pressed", c.textContent === reason));
+      // "what broke" is only a question for maintenance — a deep clean did not
+      // break, and fifteen chips on screen at once is most of why this felt
+      // like a form rather than a decision
+      const wanted = reason === "Maintenance";
+      fCap.hidden = fRow.hidden = !wanted;
+      if(!wanted && fault){ fault = ""; [...fRow.children].forEach(c=>c.setAttribute("aria-pressed","false")); }
+      paintFlag();
+    };
     rChips.appendChild(b);
   });
 
   const fCap = el("div","bkcap"); fCap.append(el("span",null,"What broke"));
   const fRow = el("div","tyRow faultRow");
   const flag = el("div","faultFlag"); flag.hidden = true;
-  FAULTS.forEach(fx=>{
+  faultsFor(fi).forEach(fx=>{
     const b = el("button",null,fx);
     b.setAttribute("aria-pressed","false");
     b.onclick = ()=>{
@@ -5622,6 +5706,7 @@ function openBlockForm(fi, day){
       : `${fl.id} is already taken on ${fmtL(from)}`;
     go.textContent = ok ? `Block ${outN} night${outN>1?"s":""}` : "Not available";
     go.disabled = !ok;
+    prev.paint(from, ok ? outN : 0);
     paintFlag();
   }
   dLess.onclick = ()=>{ from = Math.max(0, from-1); haptic(5); paint(); };
@@ -5636,7 +5721,7 @@ function openBlockForm(fi, day){
     }
   };
 
-  form.append(whenCap, whenRow, state, rChips, fCap, fRow, flag, whoRow);
+  form.append(whenCap, whenRow, state, rCap, rChips, fCap, fRow, flag, whoRow);
   if(known.length) form.append(knownRow);
   form.append(noteRow, go);
   sheetB.append(form);
@@ -6061,6 +6146,9 @@ function switchTo(i, focusInput){
     tabbar.children[j].setAttribute("aria-selected", j===i);
   });
   // the entrance is a first impression, not a toll paid on every swipe back
+  // the segment chips belong to Pulse alone
+  const tabseg = document.getElementById("tabseg");
+  if(tabseg && SCREENS[i].id !== "trends"){ tabseg.hidden = true; tabseg.textContent = ""; }
   const cur = document.getElementById("scr-"+SCREENS[i].id);
   if(!cur.classList.contains("seen"))
     setTimeout(()=> cur.classList.add("seen"), calm ? 0 : 480);

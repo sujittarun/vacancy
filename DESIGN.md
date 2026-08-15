@@ -106,6 +106,24 @@ Anything that tracks a finger — the condensing title, the strip playhead — i
 either untransitioned or under 200ms, because a curve between the finger and the
 pixel reads as lag.
 
+## Chrome versus content
+
+A control that does not scroll, is always true, and belongs to the screen rather than to
+the data is **chrome**, and chrome lives in the header. The Pulse segment bar was built
+three times as a sticky element inside the scroll area and was wrong the same way each
+time — a strip of page background parked under the title, reading as a black band with
+content sliding behind it.
+
+The trap worth recording: **`position: sticky; top: 0` resolves against the scroll
+container's padding box, not its border box.** A screen with 22px of top padding gives a
+sticky child a 22px floor that no negative margin can cross; the margin only moves the
+static position before sticky pulls it back. Every fix that stays inside the scroll area is
+therefore arithmetic against that floor, which is the smell that says the element is in the
+wrong place.
+
+Moved into the header it inherits the blurred material, needs no z-index, no gradient and
+no offsets, and the failure mode cannot recur.
+
 ## References considered and declined
 
 **BoardUI** (a React dashboard system, 50+ components, 400+ tokens) was raised as a
