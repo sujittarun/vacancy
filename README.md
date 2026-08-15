@@ -453,8 +453,21 @@ you are deciding, it refuses and says so rather than double-booking.
 that never happened was shuffled for nothing, so closing the sheet says so and puts them
 back in one tap.
 
-It only handles **one** guest. A room blocked by two separate bookings inside your dates
-cannot be freed by a single move, and the app does not pretend otherwise — see *Status*.
+**It moves as many guests as the room needs.** A room held by three bookings across your
+dates takes three moves, and it will offer them — ranked so the option that disturbs the
+fewest people comes first, with the count on the row (*"3 moves"*) so the cost is visible
+before you tap. There is no cap on the operator's judgement, only a practical ceiling of
+four: past that it is not a shuffle, it is a reorganisation.
+
+**Two rules are hard, not preferences**, because getting either wrong is a complaint the
+operator did not earn:
+
+- **Nobody is ever moved to a smaller flat.** A guest who booked a 3 BHK does not end up in
+  a studio so a different booking can be taken.
+- **Nobody already checked in is asked to pack.** Only stays that have not started can move.
+
+Same building is strongly preferred and *named* when it cannot be had — five buildings
+across Hyderabad are five different journeys to work, and the guest chose one of them.
 
 ### Pulse
 
@@ -591,9 +604,8 @@ Good enough to run a real day on, signed in. Honest limits before you rely on it
   connection is not confirmed until the pill says *Live* — which is exactly what it says.
 - **One login for the property.** Adding a second person is a row in the database, not yet
   a screen in the app.
-- **A room move shifts one guest, not two.** If a room is held by two separate bookings
-  across the nights you want, freeing it needs both moved and the app will not offer it.
-  That is the common case for a long stay, so *One move away* is mostly a short-stay tool.
+- **A room move handles at most four guests.** Past that the app stops offering, on the
+  grounds that it is no longer a shuffle.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for how the multi-tenant database is put together
 and why it was built as one project rather than one per host.

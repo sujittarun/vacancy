@@ -774,7 +774,9 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
   margin:18px 20px 0;
 }
 .mroom{
-  flex:1;min-width:0;border-radius:14px;padding:14px 14px 46px;
+  position:relative;
+  flex:1;min-width:0;border-radius:14px;
+  padding:14px 14px calc(var(--rows,1) * 44px + 12px);
   background:var(--held);border:1px solid var(--line);
   display:flex;flex-direction:column;gap:2px;
   transition:background .45s var(--out), border-color .45s var(--out);
@@ -782,6 +784,16 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
 .mroom b{font-size:16px;font-weight:670;letter-spacing:-.02em;color:var(--held-ink)}
 .mroom s{text-decoration:none;font-size:11.5px;color:var(--txt-3)}
 .mroom.b{background:var(--surface-2)}
+/* one destination row per guest — the same picture whether it is one move or
+   four, so nothing new has to be learned when the shuffle gets bigger */
+.mdests{flex:1;min-width:0;display:flex;flex-direction:column;gap:10px;justify-content:center}
+.mdest{
+  border-radius:11px;padding:8px 11px;background:var(--surface-2);
+  border:1px solid var(--line);display:flex;align-items:baseline;gap:7px;min-height:34px;
+}
+.mdest{flex-wrap:wrap;min-height:34px;align-items:center}
+.mdest b{font-size:13.5px;font-weight:660;letter-spacing:-.02em;color:var(--txt);white-space:nowrap}
+.mdest s{text-decoration:none;font-size:10.5px;color:var(--txt-3);white-space:nowrap}
 /* the room they left, lit — this app's whole language for "sellable" */
 .mroom.a.emptied{background:var(--free);border-color:transparent}
 .mroom.a.emptied b{color:var(--free-ink)}
@@ -799,15 +811,17 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
 
 /* the guest, parked in the left room until they are asked to move */
 .mguest{
-  position:absolute;left:14px;bottom:12px;z-index:2;
+  position:absolute;left:12px;top:0;z-index:2;
   display:flex;align-items:center;gap:7px;
   padding:7px 11px 7px 8px;border-radius:10px;
   background:var(--surface);border:1px solid var(--line-2);
   box-shadow:var(--shadow-sm);
   font-size:12.5px;font-weight:620;color:var(--txt);white-space:nowrap;
-  max-width:calc(50% - 26px);
+  max-width:calc(100% - 24px);
 }
-.mguest b{overflow:hidden;text-overflow:ellipsis;font-weight:620}
+.mguest .who{display:flex;flex-direction:column;min-width:0;line-height:1.2}
+.mguest b{overflow:hidden;text-overflow:ellipsis;font-weight:620;white-space:nowrap}
+.mguest s{text-decoration:none;font-size:10.5px;font-weight:520;color:var(--txt-3);white-space:nowrap}
 .mguest .bag{flex:0 0 auto;width:15px;height:15px;color:var(--txt-2);display:block}
 .mguest .bag svg{width:15px;height:15px;display:block}
 
@@ -819,17 +833,22 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
    timing, which is how an arc is actually built. */
 @keyframes carryX{ from{transform:translateX(0)} to{transform:translateX(var(--dx,120px))} }
 @keyframes carryY{
-  0%,100%{transform:translateY(0) scale(1) rotate(0deg)}
-  50%    {transform:translateY(-22px) scale(1.06) rotate(-1.5deg)}
+  0%  {transform:translateY(0) scale(1) rotate(0deg)}
+  50% {transform:translateY(calc(var(--dy,0px) * .5 - 20px)) scale(1.06) rotate(-1.5deg)}
+  100%{transform:translateY(var(--dy,0px)) scale(1) rotate(0deg)}
 }
 @keyframes carryLift{ 0%,100%{box-shadow:var(--shadow-sm)} 50%{box-shadow:var(--shadow)} }
+/* they leave one after another rather than as a block — a queue reads as people
+   and a simultaneous slide reads as rows updating */
 .movestage.carrying .mguest{
-  animation:carryX .46s cubic-bezier(.45,0,.15,1) forwards;
+  animation:carryX .46s cubic-bezier(.45,0,.15,1) var(--delay,0ms) forwards;
 }
 .movestage.carrying .mguest-in{
-  animation:carryY .46s cubic-bezier(.37,0,.63,1), carryLift .46s linear;
+  animation:carryY .46s cubic-bezier(.37,0,.63,1) var(--delay,0ms) forwards,
+            carryLift .46s linear var(--delay,0ms);
 }
 .movestage.landed .mguest{transform:translateX(var(--dx,120px))}
+.movestage.landed .mguest-in{transform:translateY(var(--dy,0px))}
 .mguest-in{display:flex;align-items:center;gap:7px}
 
 .movewhy{margin:16px 20px 0;font-size:13px;line-height:1.55;color:var(--txt-2)}
@@ -3321,34 +3340,74 @@ const soonestFor = (n, from) => { for(let d=from; d<=DAYS-n; d++) if(countFreeFo
 
 /* ── One move away ──────────────────────────────────────────────────────────
    When nothing is free for a stay, a hotel manager doesn't say no — they shuffle
-   a room. This finds every stay you COULD take by relocating exactly one existing
-   guest to a room that is free for their whole stay. Ranked so the move nobody
-   notices (same building, same size) comes first.                              */
+   a room. This finds every stay you COULD take by relocating the guests who are
+   in the way.
+
+   TWO RULES ARE HARD, not preferences, because getting either wrong is a guest
+   complaint the operator did not earn:
+
+     never smaller  — somebody who booked a 3 BHK does not get moved into a
+                      studio to make room for a different booking. Ever.
+     never in-house — a guest who has already checked in is not being asked to
+                      pack. Only stays that have not started can move.
+
+   Same building is strongly preferred and clearly declared when it cannot be
+   had, because five buildings across Hyderabad are five different journeys to
+   work, and a guest chose one of them.
+
+   There is no cap on how many guests may be moved. That is the operator's call,
+   not the software's — three moves for one long booking might be obviously
+   worth it in December and obviously not in June — so the count is put in front
+   of them and the options are ranked fewest-first. The only ceiling is a
+   practical one: past four this is not a shuffle, it is a reorganisation.    */
+const MOVE_CEILING = 4;
+
 function roomMoves(a, b, pool){
   const out = [];
   pool.forEach(({f: fl, i: fi})=>{
     if(freeRange(fi, a, b)) return;                      // already free, no move needed
     const blockers = resv.filter(r => r.fi === fi && r.start < b && r.end > a);
-    if(blockers.length !== 1) return;                    // two guests to move is not "one move"
-    const B = blockers[0];
-    if(B.start < 0) return;                              // already checked in — can't move them now
-    let best = null;
-    for(let j = 0; j < NF; j++){
-      if(j === fi) continue;
-      if(!freeRange(j, B.start, B.end)) continue;        // destination must take their whole stay
-      const cand = {
-        to: j,
-        sameType: flats[j].type === fl.type,
-        sameBuilding: flats[j].code === fl.code,
-        biggerOrEqual: SIZE[flats[j].type] >= SIZE[fl.type],
-      };
-      cand.score = (cand.sameType ? 4 : 0) + (cand.sameBuilding ? 2 : 0) + (cand.biggerOrEqual ? 1 : 0);
-      if(!best || cand.score > best.score) best = cand;
-      if(cand.score === 7) break;
+    if(!blockers.length || blockers.length > MOVE_CEILING) return;
+    // a block is out of service, not a guest, and cannot be asked to move;
+    // neither can somebody already in the room
+    if(blockers.some(r => isBlock(r) || r.start < 0)) return;
+
+    /* Hardest first — the longest stay has the fewest places it can go, so
+       placing it last is how a solvable shuffle gets wrongly rejected. */
+    const order = blockers.slice().sort((x,y)=> (y.end - y.start) - (x.end - x.start));
+    const claimed = [];                                  // destinations taken by earlier moves
+    const moves = [];
+    for(const B of order){
+      const from = flats[B.fi];
+      let best = null;
+      for(let j = 0; j < NF; j++){
+        if(j === fi) continue;
+        if(SIZE[flats[j].type] < SIZE[from.type]) continue;          // never smaller — hard
+        if(!freeRange(j, Math.max(B.start, 0), B.end)) continue;
+        // two guests cannot be sent to the same flat for overlapping nights
+        if(claimed.some(c => c.fi === j && c.start < B.end && c.end > B.start)) continue;
+        const cand = {to: j,
+          sameType: flats[j].type === from.type,
+          sameBuilding: flats[j].code === from.code,
+          bigger: SIZE[flats[j].type] > SIZE[from.type]};
+        cand.score = (cand.sameType ? 4 : 0) + (cand.sameBuilding ? 2 : 0) + (cand.bigger ? 1 : 0);
+        if(!best || cand.score > best.score) best = cand;
+        if(cand.score === 7) break;
+      }
+      if(!best) return;                                  // this room cannot be freed
+      claimed.push({fi: best.to, start: Math.max(B.start, 0), end: B.end});
+      moves.push({booking: B, ...best});
     }
-    if(best) out.push({ frees: fi, booking: B, ...best });
+    if(!moves.length) return;
+    out.push({
+      frees: fi, moves,
+      sameBuilding: moves.every(m => m.sameBuilding),
+      sameType: moves.every(m => m.sameType),
+      score: moves.reduce((s,m)=> s + m.score, 0) / moves.length,
+    });
   });
-  return out.sort((x,y)=> y.score - x.score);
+  // fewest guests disturbed first, then the least noticeable move
+  return out.sort((x,y)=> x.moves.length - y.moves.length || y.score - x.score);
 }
 const SIZE = {"Studio":0, "1 BHK":1, "2 BHK":2, "3 BHK":3};
 
@@ -4849,18 +4908,23 @@ function renderAsk(focus){
       const moves = roomMoves(a, b, pool);
       if(moves.length){
         const mh = el("div","sect");
-        mh.append(el("span","lbl","One move away"),
+        const fewest = moves[0].moves.length;
+        mh.append(el("span","lbl", fewest === 1 ? "One move away" : `${fewest} moves away`),
                   el("span","lbl", `${moves.length} option${moves.length>1?"s":""}`));
         const mcard = el("div","card");
         moves.slice(0,4).forEach(mv=>{
-          const from = flats[mv.frees], to = flats[mv.to], B = mv.booking;
+          const fromF = flats[mv.frees], k = mv.moves.length;
           const r = el("button","row move");
-          r.append(el("div","id", from.id));
+          r.append(el("div","id", fromF.id));
           const m = el("div","meta");
-          m.innerHTML = `Move <b>${B.guest}</b> to <b>${to.id}</b>`
-            + `<em>${fmt(B.start)}–${fmt(B.end)} · ${to.type}${mv.sameBuilding ? ", same building" : ` at ${to.bshort}`}`
-            + `${mv.sameType ? ", same size" : ""} · then ${from.id} is yours</em>`;
-          r.append(m, el("span","pill now","frees it"));
+          const who = k === 1
+            ? `Move <b>${esc(mv.moves[0].booking.guest)}</b> to <b>${esc(flats[mv.moves[0].to].id)}</b>`
+            : `Move <b>${k} guests</b> — ${mv.moves.map(x=>esc(x.booking.guest)).join(", ")}`;
+          m.innerHTML = who
+            + `<em>${mv.sameBuilding ? "same building" : "one changes building"}`
+            + `${mv.sameType ? ", same size" : ", never smaller"}`
+            + ` · then ${esc(fromF.id)} is yours</em>`;
+          r.append(m, el("span","pill now", k === 1 ? "1 move" : `${k} moves`));
           // it used to open the room that WOULD be freed, having moved nobody
           r.onclick = ()=>{ haptic(10); openMove(mv, a, fi => openBooking(fi, a, p.n)); };
           mcard.appendChild(r);
@@ -5542,45 +5606,62 @@ const SVG_BAG = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stro
   + '<path d="M3.2 11.4h13.6"/></svg>';
 
 function openMove(mv, askDay, onFreed){
-  const B = mv.booking, from = flats[mv.frees], to = flats[mv.to];
+  const from = flats[mv.frees], n = mv.moves.length;
   sheetH.textContent = ""; sheetB.textContent = "";
   const t = el("div");
-  t.innerHTML = `<div class="n">Move ${esc(B.guest)}</div>`
-              + `<div class="m">${esc(from.id)} → ${esc(to.id)} · ${esc(fmt(B.start))}–${esc(fmt(B.end))}</div>`;
-  let booked = false, abandoned = null;
+  t.innerHTML = `<div class="n">Free up ${esc(from.id)}</div>`
+              + `<div class="m">${n === 1 ? "one guest moves" : n + " guests move"} · nobody loses a night</div>`;
   const x = el("button", null, "✕"); x.setAttribute("aria-label","Close");
+  let booked = false, abandoned = null, done = [];
   x.onclick = ()=>{ closeSheet(); if(abandoned) abandoned(); };
   sheetH.append(t, x);
 
-  /* the two rooms, and the guest standing in one of them */
+  /* The room being emptied on the left with everyone still in it, and one
+     destination row per guest on the right. With one guest this is the pair of
+     rooms it always was; with three it is the same picture and does not need a
+     different idea. */
   const stage = el("div","movestage");
-  const mkRoom = (fl, cls)=>{
-    const r = el("div","mroom " + cls);
-    r.append(el("b", null, fl.id), el("s", null, fl.type + " · " + fl.bshort));
-    return r;
-  };
-  const a = mkRoom(from, "a"), bRoom = mkRoom(to, "b");
-  const gap = el("div","mgap");
-  gap.innerHTML = '<i></i>';
-  // two nested elements so the two axes can carry their own timing — see the
-  // note above @keyframes carryX
-  const guest = el("div","mguest");
-  guest.innerHTML = '<div class="mguest-in"><span class="bag">' + SVG_BAG
-                  + '</span><b>' + esc(B.guest) + '</b></div>';
-  stage.append(a, gap, bRoom, guest);
+  const a = el("div","mroom a");
+  a.append(el("b", null, from.id), el("s", null, from.type + " · " + from.bshort));
+  const gap = el("div","mgap"); gap.innerHTML = '<i></i>';
+  const dests = el("div","mdests");
+  const chips = [];
+  mv.moves.forEach((m, k)=>{
+    const to = flats[m.to];
+    const row = el("div","mdest");
+    // the row says WHERE; the chip beside it says who and when, and they line up
+    row.append(el("b", null, to.id), el("s", null, to.type + " · " + to.bshort));
+    dests.appendChild(row);
+    const chip = el("div","mguest");
+    // the dates belong to the guest, not to the room they are going to — three
+    // people can share one destination and only their nights tell them apart
+    chip.innerHTML = '<div class="mguest-in"><span class="bag">' + SVG_BAG + '</span>'
+                   + '<span class="who"><b>' + esc(m.booking.guest) + '</b>'
+                   + '<s>' + esc(fmt(m.booking.start)) + '–' + esc(fmt(m.booking.end)) + '</s>'
+                   + '</span></div>';
+    chip.style.top = (44 + k * 44) + "px";
+    a.appendChild(chip);                     // they stand IN the room, not above it
+    chips.push({chip, row, m});
+  });
+  stage.append(a, gap, dests);
+  stage.style.setProperty("--rows", n);
 
   const why = el("p","movewhy");
-  why.innerHTML = `Same nights, ${esc(fmt(B.start))}–${esc(fmt(B.end))}. `
+  const worst = mv.moves.find(m => !m.sameBuilding);
+  why.innerHTML = `Everyone keeps their own nights, their room is never smaller. `
     + (mv.sameBuilding && mv.sameType
-        ? `<b>Same building, same size</b> — the kind of move a guest never notices.`
-        : mv.sameBuilding
-        ? `Same building, ${mv.biggerOrEqual ? "and no smaller" : `a ${esc(to.type)} instead of a ${esc(from.type)}`}.`
-        : `A different building — ${esc(to.bname)} rather than ${esc(from.bname)}, so this one is worth a call.`);
+        ? `<b>Same building, same size</b> throughout — the kind of move nobody notices.`
+        : worst
+        ? `<b>${esc(flats[worst.booking.fi].bname)} → ${esc(flats[worst.to].bname)}</b> for `
+          + `${esc(worst.booking.guest)} — a different building, so that one is worth a call.`
+        : `Same building throughout${mv.sameType ? "" : ", and nobody ends up in a smaller flat"}.`);
 
-  const go = el("button","bkgo", `Move ${B.guest} to ${to.id}`);
+  const go = el("button","bkgo", n === 1
+    ? `Move ${mv.moves[0].booking.guest}` : `Move all ${n}`);
   const note = el("p","movenote");
-  note.textContent = "Nothing else changes — same dates, same money, same guest. "
-    + "They will need telling their room number.";
+  note.textContent = n === 1
+    ? "Nothing else changes — same dates, same money, same guest. They will need telling their room number."
+    : `Nothing else changes — same dates, same money. All ${n} will need telling their new room number.`;
 
   sheetB.append(stage, why, go, note);
   sheet.classList.add("on"); scrim.classList.add("on");
@@ -5589,58 +5670,67 @@ function openMove(mv, askDay, onFreed){
   go.onclick = ()=>{
     if(go.disabled) return;
     go.disabled = true;
-    const dx = bRoom.getBoundingClientRect().left - a.getBoundingClientRect().left;
-    stage.style.setProperty("--dx", dx.toFixed(1) + "px");
     haptic(12);
+    chips.forEach(({chip, row}, k)=>{
+      const cr = chip.getBoundingClientRect(), rr = row.getBoundingClientRect();
+      chip.style.setProperty("--dx", (rr.left - cr.left + 10).toFixed(1) + "px");
+      chip.style.setProperty("--dy", (rr.top - cr.top + 6).toFixed(1) + "px");
+      chip.style.setProperty("--delay", (k * 110) + "ms");
+    });
     stage.classList.add("carrying");
-
-    // the room empties as they step out of it, not when they arrive
-    setTimeout(()=>{ a.classList.add("emptied"); haptic(6); }, calm ? 0 : 260);
+    // the room empties as the last of them steps out, not as the first arrives
+    setTimeout(()=>{ a.classList.add("emptied"); haptic(6); },
+               calm ? 0 : 240 + (n - 1) * 110);
 
     setTimeout(()=>{
-      const done = moveBooking(B, mv.to);
-      if(!done){
-        stage.classList.remove("carrying");
-        a.classList.remove("emptied");
-        go.disabled = false;
-        toast("warn", `<b>${esc(to.id)} went while you were deciding.</b> `
-          + `${esc(B.guest)} has not been moved.`, mv.to);
-        return;
+      done = [];
+      for(const {m} of chips){
+        const r = moveBooking(m.booking, m.to);
+        if(!r){
+          done.slice().reverse().forEach(d => moveBooking(d.booking, d.was));   // put back what moved
+          stage.classList.remove("carrying"); a.classList.remove("emptied");
+          go.disabled = false;
+          toast("warn", `<b>${esc(flats[m.to].id)} went while you were deciding.</b> `
+            + `Nobody has been moved.`, m.to);
+          return;
+        }
+        done.push({booking: m.booking, was: r.from});
       }
       haptic(16);
       stage.classList.add("landed");
       refreshScreen();
 
-      // the point of the whole manoeuvre: the room it freed, offered
-      why.innerHTML = `<b class="ok">${esc(from.id)} is free.</b> ${esc(B.guest)} is in `
-        + `${esc(to.id)} for the same nights.`;
+      why.innerHTML = `<b class="ok">${esc(from.id)} is free.</b> `
+        + (n === 1 ? `${esc(mv.moves[0].booking.guest)} is in ${esc(flats[mv.moves[0].to].id)}`
+                   : `All ${n} are in their new rooms`) + ` for the same nights.`;
       go.textContent = `Book ${from.id}`;
       go.disabled = false;
       go.onclick = ()=>{
-        haptic(14); booked = true;                 // the move earned its keep
+        haptic(14); booked = true;
         if(onFreed) onFreed(mv.frees);
         else openBooking(mv.frees, askDay, 1);
       };
-      note.textContent = "Tell them the new room number when you next speak to them.";
+      note.textContent = n === 1
+        ? "Tell them the new room number when you next speak to them."
+        : `Tell all ${n} their new room numbers when you next speak to them.`;
 
-      /* The move is real the moment it happens — but if the booking it was
-         meant to enable never gets taken, the guest was shuffled for nothing.
-         Closing without booking says so, and offers it back. */
-      booked = false;
+      /* Moved for a booking that never happened is moved for nothing. */
       abandoned = ()=>{
-        if(booked) return;
-        toast("warn", `<b>${esc(B.guest)} was moved to ${esc(to.id)}</b> but `
-          + `${esc(from.id)} was never booked — so nobody was moved for a reason.`,
-          null, {label:`Put ${B.guest} back in ${from.id}`, run:()=>{
-            if(!moveBooking(B, mv.frees)){
-              toast("bad", `<b>${esc(from.id)} has gone.</b> ${esc(B.guest)} stays in ${esc(to.id)}.`, null);
-              return;
-            }
+        if(booked || !done.length) return;
+        toast("warn", `<b>${n === 1 ? esc(mv.moves[0].booking.guest) + " was moved"
+                                    : n + " guests were moved"}</b> but ${esc(from.id)} was `
+          + `never booked — so nobody was moved for a reason.`,
+          null, {label: n === 1 ? "Put them back" : `Put all ${n} back`, run:()=>{
+            const failed = [];
+            done.slice().reverse().forEach(d=>{ if(!moveBooking(d.booking, d.was)) failed.push(d); });
             haptic(14); refreshScreen();
-            toast("", `<b>${esc(B.guest)} is back in ${esc(from.id)}.</b>`, null);
+            toast(failed.length ? "bad" : "",
+              failed.length
+                ? `<b>${failed.length} could not go back</b> — those rooms have been taken since.`
+                : `<b>Everyone is back where they were.</b>`, null);
           }});
       };
-    }, calm ? 10 : 460);
+    }, calm ? 10 : 470 + (n - 1) * 110);
   };
 }
 
