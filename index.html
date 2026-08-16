@@ -1845,10 +1845,10 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
      inside a sheet is already standing on a surface that normalised its
      backdrop, so a second full-strength tint there would be paying twice and
      would flatten what little is left showing. Cards get the light one. */
-  /* Enough to keep a card clean rather than dishwater, little enough that the
-     sheet still shows through it. Over the page it lands at 250 against the
-     page's 229 — a pane lying ON the ground, never a stain in it. */
-  --lg-fill-2:rgba(255,255,255,.32);   /* cards, over an already-tinted pane */
+  /* The only card that still gets a fill is one INSIDE a sheet, where there is
+     a real material behind it to separate from. On the page there is nothing
+     behind a card but a gradient, and a card there gets no fill at all. */
+  --lg-fill-2:rgba(255,255,255,.34);   /* a card over the sheet, and only there */
   /* a trough is the same pane cut INTO the surface: the light comes from under
      the lip instead of over it, so the rim inverts */
   --lg-rim-sunk:
@@ -1975,16 +1975,36 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
   background-color:var(--lg-sheet-fill);
   -webkit-backdrop-filter:var(--lg-sheet-tint); backdrop-filter:var(--lg-sheet-tint);
 }
-/* L1 · content — cards, day cells, the ops row. These stand on a surface that
-   has already normalised its backdrop, so they take the light tint. */
+/* ── L1 · content does not get a pane at all ─────────────────────────────────
+   This is the part I kept getting wrong by trying to solve it with numbers.
+   There is nothing behind a card on these screens except a smooth gradient,
+   and a blurred smooth gradient is the same smooth gradient — so a "glass"
+   card could only ever be near-white (which reads as a card), grey (which
+   reads as a stain: that was the 217-against-229 bug), or absent. Absent is
+   the honest one, and it is what the material actually asks for.
+
+   Glass is for the things that FLOAT — the two bars, the sheet, a toast, a
+   callout, a control under your thumb. Content sits ON the surface. A card
+   stacked on a page that is itself a pane is the old card idiom wearing a
+   glass costume, and it is why every screen still looked like cream boxes
+   however clear I made them.
+
+   What groups a list now is what should always have grouped it: a label above
+   it, the space around it, and the hairline already drawn between its rows. */
 :root[data-theme="light"] .card,
 :root[data-theme="light"] .tcard,
 :root[data-theme="light"] .ops-row{
+  background:none;
+  -webkit-backdrop-filter:none; backdrop-filter:none;
+  border-color:transparent;
+  box-shadow:none;
+}
+/* the one exception: a card INSIDE a sheet still needs to separate itself from
+   the sheet's own material, and there it has something real behind it */
+:root[data-theme="light"] .sheet .card{
   background-color:var(--lg-fill-2);
-  background-image:var(--lg-sheen);
-  -webkit-backdrop-filter:var(--lg-tint); backdrop-filter:var(--lg-tint);
-  border-color:var(--lg-edge);
-  box-shadow:var(--lg-rim);
+  border-color:rgba(255,255,255,.5);
+  box-shadow:0 1px 2px rgba(13,16,23,.07);
 }
 /* ── the day cells are DATA, and data stays crisp ────────────────────────────
    .day and .night were in the list above and should never have been. A rim
@@ -1995,13 +2015,16 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
    here: thirty-five backdrop-filters is a frame-rate bill with nothing bought,
    and a counted number is the one thing on this screen that must stay sharp.
    So they get the fill and nothing else: no rim, no blur, no sheen. */
+   They are also the last white blocks on the page now that the cards have gone,
+   so they come down to a whisper: enough lift to read as a tappable cell, not
+   enough to be a row of tiles on a tray. */
 :root[data-theme="light"] .night,
 :root[data-theme="light"] .day{
-  background-color:rgba(255,255,255,.62);
+  background-color:rgba(255,255,255,.40);
   background-image:none;
   -webkit-backdrop-filter:none; backdrop-filter:none;
-  border-color:rgba(13,16,23,.07);
-  box-shadow:0 1px 2px rgba(13,16,23,.06);
+  border-color:rgba(13,16,23,.06);
+  box-shadow:none;
 }
 /* A pad cell is not a day. It is the empty run before the first of the month
    and it should not be a pane at all — .day.pad has said background:transparent
