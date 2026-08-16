@@ -1157,6 +1157,11 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
 .rowx.arm{width:auto;padding:0 11px;background:var(--hot);color:#fff;border-color:transparent;
   font-size:12px;font-weight:650}
 .rowend{display:flex;align-items:center;gap:8px}
+/* the move glyph: same footprint as the cancel, quieter than it */
+.rowmv svg{width:15px;height:15px;display:block}
+.rowmv{color:var(--txt-3)}
+.rowmv:active{color:var(--txt-2)}
+.row.move.warn .pill{background:color-mix(in srgb,var(--hot) 14%,var(--surface));color:var(--hot)}
 
 .dataTools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 
@@ -2014,8 +2019,33 @@ const SRC = ["Airbnb","Direct call","Walk-in","Booking.com","Repeat guest"];
    runs during boot, well before that block is evaluated. */
 const PAY_METHODS = ["Cash","UPI","Bank","Card","Platform"];
 const PLATFORMS = ["Airbnb","Booking.com"];
-const FAULTS = ["AC","Geyser","Plumbing","Electrical","Wi-Fi","Fridge",
-                "Washing machine","Furniture","Pest control","Other"];
+/* The things a serviced flat actually has. The kitchen was three appliances
+   short — a chimney, a microwave and a gas stove are not "Other", they are
+   what breaks. */
+const FAULTS_BASE = ["AC","Geyser","Plumbing","Electrical","Wi-Fi","Fridge",
+                     "Washing machine","Chimney","Microwave","Gas stove",
+                     "Furniture","Pest control","Other"];
+/* And the list learns. Anything typed against "Other" is remembered as its own
+   kind, so the second time the geyser filter goes it is a tap rather than a
+   sentence — and every one of them then carries its own history, its own repeat
+   warning and its own set of people who have fixed it. */
+let customFaults = [];
+const titleCase = s => s.trim().replace(/\s+/g," ")
+  .replace(/^./, c => c.toUpperCase()).slice(0, 28);
+function allFaults(){
+  // "Other" stays last however many are learned — it is the escape hatch
+  const base = FAULTS_BASE.filter(f => f !== "Other");
+  return base.concat(customFaults, ["Other"]);
+}
+function learnFault(name){
+  const t = titleCase(name || "");
+  if(t.length < 2) return "";
+  const known = allFaults().find(f => f.toLowerCase() === t.toLowerCase());
+  if(known) return known;                       // already a kind, use its casing
+  customFaults.push(t);
+  save();
+  return t;
+}
 /* What each of those actually turns out to be, in the words an operator would
    use on the phone to the person fixing it. The free-text box was asking them
    to type a sentence the app could have offered — and a note nobody types is a
@@ -2918,6 +2948,7 @@ function save(){
   try{
     localStorage.setItem(STORE, JSON.stringify({
       savedOn: isoDay(today),
+      customFaults,                       // the kinds this operator has taught it
       issues: issues.map(x=>({...x, id2:flats[x.fi] && flats[x.fi].id})),
       rows: resv.map(r=>({ id:flats[r.fi].id, start:r.start, end:r.end,
                            guest:r.guest, src:r.src, manual:!!r.manual,
@@ -2935,6 +2966,9 @@ function load(){
     if(!raw) return false;
     const d = JSON.parse(raw);
     if(!d || !Array.isArray(d.rows)) return false;
+    customFaults = Array.isArray(d.customFaults)
+      ? d.customFaults.filter(x => typeof x === "string" && x.trim()).slice(0, 40)
+      : [];
     const savedOn = new Date(d.savedOn + "T00:00:00");
     savedOn.setHours(0,0,0,0);
     const shift = Math.round((savedOn - today) / 86400000);
@@ -4347,6 +4381,98 @@ function roomMoves(a, b, pool){
   return out.sort((x,y)=> x.moves.length - y.moves.length || y.score - x.score);
 }
 
+
+/* ── moving somebody for no reason but your own ───────────────────────────────
+   Every other move in this app is a consequence: a booking needs the room, or a
+   repair does. Sometimes it is neither — a guest asks for a quieter side, two
+   parties should be on the same floor, a long stay should not sit in the flat
+   you keep showing people. So the guest's own row carries a small control, and
+   this is what it lists.
+
+   The two hard rules elsewhere are softened by exactly one step, because this
+   is deliberate rather than derived: in-house guests still cannot be asked to
+   pack, but a SMALLER flat is offered — separately, and labelled as a downgrade
+   — since choosing to put a solo guest in a studio to free a 3 BHK is a real
+   decision an operator makes, and refusing to show it would just be the app
+   deciding for them. */
+function whereCouldGo(b){
+  if(!b || isBlock(b) || b.start < 0) return {same:[], smaller:[]};
+  const from = flats[b.fi], a = Math.max(b.start, 0);
+  const same = [], smaller = [];
+  for(let j = 0; j < NF; j++){
+    if(j === b.fi) continue;
+    if(!freeRange(j, a, b.end)) continue;
+    const to = flats[j];
+    const o = {to: j,
+      sameType: to.type === from.type,
+      sameBuilding: to.code === from.code,
+      bigger: SIZE[to.type] > SIZE[from.type]};
+    o.score = (o.sameType ? 4 : 0) + (o.sameBuilding ? 2 : 0) + (o.bigger ? 1 : 0);
+    (SIZE[to.type] < SIZE[from.type] ? smaller : same).push(o);
+  }
+  const rank = (x, y)=> y.score - x.score || x.to - y.to;
+  return {same: same.sort(rank), smaller: smaller.sort(rank)};
+}
+
+/* The picker. One row per flat, saying why it is on the list — a room number on
+   its own tells you nothing you did not already know. */
+function openGuestMove(b, backTo){
+  const from = flats[b.fi];
+  sheetWipe();
+  const t = el("div");
+  t.innerHTML = `<div class="n">Move ${esc(b.guest)}</div>`
+    + `<div class="m">${esc(fmt(Math.max(b.start,0)))}–${esc(fmt(b.end))} · `
+    + `${b.nights} night${b.nights>1?"s":""} · in ${esc(from.id)} now</div>`;
+  const x = el("button", null, "‹"); x.setAttribute("aria-label","Back to the room");
+  x.onclick = backTo;
+  sheetH.append(t, x);
+
+  const wrap = el("div","bkform");
+  const {same, smaller} = whereCouldGo(b);
+
+  const list = (rows, capL, capR, cls)=>{
+    if(!rows.length) return;
+    const cap = el("div","bkcap");
+    cap.append(el("span",null,capL), el("span",null,capR));
+    wrap.append(cap);
+    const card = el("div","card"); card.style.margin = "0";
+    rows.slice(0, 8).forEach(o=>{
+      const to = flats[o.to];
+      const r = el("button","row move" + (cls ? " " + cls : ""));
+      r.append(el("div","id", to.id));
+      const m = el("div","meta");
+      m.innerHTML = `<b>${esc(to.type)}</b> · ${esc(to.bshort)}`
+        + `<em>${o.sameBuilding ? "same building" : "a different building"}`
+        + `${o.sameType ? ", same size" : o.bigger ? ", bigger" : ", smaller"}</em>`;
+      r.append(m, el("span","pill" + (o.sameBuilding && o.sameType ? " good" : ""),
+        o.sameBuilding && o.sameType ? "easiest" : o.sameBuilding ? "same block" : "across town"));
+      r.onclick = ()=>{
+        haptic(10);
+        const mv = {frees: b.fi, moves: [{booking: b, ...o}],
+                    sameBuilding: o.sameBuilding, sameType: o.sameType, score: o.score};
+        openMove(mv, Math.max(b.start, 0), ()=> backTo(),
+          {title: `Move ${b.guest}`, cta: `Done — back to ${from.id}`});
+      };
+      card.appendChild(r);
+    });
+    wrap.append(card);
+  };
+
+  list(same, "Where to", "same size or bigger");
+  list(smaller, "Smaller", "they would be downgraded", "warn");
+
+  if(!same.length && !smaller.length){
+    const none = el("p","movenote");
+    none.style.margin = "4px 0 0";
+    none.innerHTML = `Nowhere is free for all ${b.nights} of `
+      + `<b>${esc(b.guest)}</b>'s nights, so there is nobody to swap with either. `
+      + `Shorten the stay or wait for a cancellation.`;
+    wrap.append(none);
+  }
+  sheetB.append(wrap);
+  sheet.classList.add("on"); scrim.classList.add("on");
+  sheetB.scrollTop = 0;
+}
 
 /* ── the wall, and whether it can be moved ────────────────────────────────────
    An out-of-service run stops dead the day a guest arrives, and the app used to
@@ -6257,8 +6383,9 @@ function faultsFor(fi){
     all[x.fault] = (all[x.fault] || 0) + 1;
     if(x.fi === fi) mine[x.fault] = (mine[x.fault] || 0) + 1;
   });
-  return FAULTS.slice().sort((a,b)=>
-    (mine[b]||0) - (mine[a]||0) || (all[b]||0) - (all[a]||0) || FAULTS.indexOf(a) - FAULTS.indexOf(b));
+  const list = allFaults();
+  return list.slice().sort((a,b)=>
+    (mine[b]||0) - (mine[a]||0) || (all[b]||0) - (all[a]||0) || list.indexOf(a) - list.indexOf(b));
 }
 
 function openIssueForm(fi, day){
@@ -6447,7 +6574,11 @@ function openIssueForm(fi, day){
 
   go.onclick = ()=>{
     if(go.disabled) return;
-    addIssue(fi, fault, [note.value, who ? "for " + who : ""].filter(s=>s && s.trim()).join(" · "), urgency);
+    // same rule here: a named "Other" becomes a kind of its own
+    let saveFault = fault;
+    if((!fault || fault === "Other") && note.value.trim() && note.value.trim().length <= 28)
+      saveFault = learnFault(note.value) || fault;
+    addIssue(fi, saveFault, [note.value, who ? "for " + who : ""].filter(s=>s && s.trim()).join(" · "), urgency);
     haptic(18); openSheet(fi, day); refreshScreen();
   };
 
@@ -6621,6 +6752,17 @@ function openSheet(fi, day){
       clearTimeout(t2); haptic(20);
       cancelWithUndo(r, fi); closeSheet(); refreshScreen();
     };
+    /* Small on purpose. Moving a guest is a real thing to want and a rare thing
+       to do, so it sits on the guest's own row at the size of a glyph — not a
+       pill, not a card, not a third route competing with Book. */
+    if(!isBlock(r) && r.start >= 0){
+      const mvb = el("button","rowx rowmv");
+      mvb.innerHTML = SVG_SWAP;
+      mvb.setAttribute("aria-label", `Move ${r.guest} to another flat`);
+      mvb.onclick = ev=>{ ev.stopPropagation(); haptic(9);
+        openGuestMove(r, ()=> openSheet(fi, day)); };
+      end.appendChild(mvb);
+    }
     end.appendChild(x2);
     row.append(m, end);
     bl.appendChild(row);
@@ -7134,14 +7276,19 @@ const FAULT_ICON = {
   "Washing machine":'<rect x="4" y="2.5" width="16" height="19" rx="3"/><circle cx="12" cy="14" r="4.5"/><circle cx="8" cy="6" r="1"/>',
   "Furniture":'<path d="M4 11V8.5A2.5 2.5 0 0 1 6.5 6h11A2.5 2.5 0 0 1 20 8.5V11"/><path d="M3 11h18v6H3z"/><path d="M6 17v2M18 17v2"/>',
   "Pest control":'<circle cx="12" cy="13" r="5"/><path d="M12 8V6M9 5l1.5 2M15 5l-1.5 2M7 11l-3-1M7 16l-3 2M17 11l3-1M17 16l3 2"/>',
+  "Chimney":'<path d="M3 14.5l9-6 9 6"/><path d="M5.5 13v7.5h13V13"/><path d="M9.5 20.5v-4h5v4"/><path d="M9 5.5c0-1.2 1.2-1.6 1.2-2.8M14 5.5c0-1.2 1.2-1.6 1.2-2.8"/>',
+  "Microwave":'<rect x="2.5" y="5" width="19" height="14" rx="3"/><rect x="5.5" y="8" width="9.5" height="8" rx="1.6"/><path d="M18.5 9v1.5M18.5 13v1.5"/>',
+  "Gas stove":'<circle cx="12" cy="13" r="6"/><path d="M12 9.5c1.6 1 2 2 2 3a2 2 0 0 1-4 0c0-1 .4-2 2-3z"/><path d="M4 5.5h16"/>',
   "Other":'<circle cx="6" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="18" cy="12" r="1.4"/>',
+  /* anything the operator taught it — a spanner, because it could be anything */
+  "*":'<path d="M14.5 6.5a4.2 4.2 0 0 0 5.4 5.4l-8 8a2.4 2.4 0 0 1-3.4-3.4z"/><path d="M14.5 6.5l3-3 3 3-3 3"/>',
   "Deep clean":'<path d="M9 3l1.6 4.2L15 9l-4.4 1.8L9 15l-1.6-4.2L3 9l4.4-1.8z"/><path d="M17 13l.9 2.3 2.3.9-2.3.9-.9 2.3-.9-2.3-2.3-.9 2.3-.9z"/>',
   "Owner use":'<circle cx="8.5" cy="8.5" r="4"/><path d="M11.4 11.4L20 20M17 17l2-2M14.5 14.5l2-2"/>',
   "Renovation":'<path d="M14.5 3.5l6 6-3 3-6-6z"/><path d="M11.5 6.5L3.5 14.5V20h5.5l8-8"/>',
   "Not ready":'<circle cx="12" cy="12" r="8.5"/><path d="M12 7v5.4l3.4 2"/>'
 };
 const faultSvg = k => '<svg viewBox="0 0 24 24" aria-hidden="true">'
-  + (FAULT_ICON[k] || FAULT_ICON["Other"]) + '</svg>';
+  + (FAULT_ICON[k] || FAULT_ICON["*"]) + '</svg>';
 
 /* Everything that can take a flat out of service, in one list. "Maintenance"
    plus "AC" was always one fact asked twice — a broken thing IS the reason — so
@@ -7159,6 +7306,9 @@ const FAULT_ALIAS = {
   "Fridge":"refrigerator freezer cooling",
   "Washing machine":"washer laundry washing drum",
   "Furniture":"sofa bed wardrobe chair table cupboard door drawer",
+  "Chimney":"chimney hood extractor exhaust kitchen smoke filter suction",
+  "Microwave":"microwave oven kitchen heating turntable",
+  "Gas stove":"gas stove hob burner cooktop kitchen flame regulator cylinder",
   "Pest control":"cockroach roach ants rats rodents mosquito bugs pest",
   "Other":"something else anything",
   "Deep clean":"clean cleaning deep",
@@ -7463,10 +7613,16 @@ function openBlockForm(fi, day){
 
   go.onclick = ()=>{
     if(go.disabled) return;
-    const extra = [note.value, chosen === "Other" ? otherIn.value : ""].filter(x=>x && x.trim()).join(" · ");
+    /* "Other" plus a name is a new kind of thing that breaks. Remember it, so
+       next time it is a tile and a search word rather than a sentence — and so
+       it accrues its own history, its own repeat warning and its own people. */
+    let saveFault = fault;
+    if(chosen === "Other" && otherIn.value.trim()) saveFault = learnFault(otherIn.value) || fault;
+    const extra = [note.value, (chosen === "Other" && !saveFault) ? otherIn.value : ""]
+      .filter(x=>x && x.trim()).join(" · ");
     const person = newHand ? handName.value : who;
     const num = newHand ? handPh.value : phone;
-    if(addBlock(fi, from, outN, reason, extra, {fault, fixer:person, phone:num, cost:bill.value})){
+    if(addBlock(fi, from, outN, reason, extra, {fault:saveFault, fixer:person, phone:num, cost:bill.value})){
       haptic(18); closeSheet(); refreshScreen();
     }
   };

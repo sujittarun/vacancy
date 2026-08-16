@@ -119,6 +119,20 @@ user's "Bajarahills".
   in words that read back sensibly months later instead of blank. The person fixing it is
   offered as a card carrying their record — jobs done, how many came back, and whoever
   touched this exact fault in this exact flat first, because they hold the warranty.
+- **A guest can be moved for no reason but yours.** Every other move in the app is a
+  consequence — a booking needs the room, or a repair does. Sometimes it is neither: a guest
+  asks for a quieter side, two parties should share a floor, a long stay should not sit in the
+  flat you keep showing people. So the guest's own row carries a control the size of a glyph,
+  and it lists where they could go and why. The two hard rules soften by exactly one step,
+  because this is deliberate rather than derived: somebody already checked in still cannot be
+  asked to pack, but a **smaller** flat is offered — separately and labelled as a downgrade —
+  since putting a solo guest in a studio to free a 3 BHK is a real decision, and hiding it
+  would only be the app deciding instead of the operator.
+- **The list of things that break learns.** The flats have a chimney, a microwave and a gas
+  stove, so those are kinds of their own rather than "Other". And anything typed against
+  *Other* is remembered as a new kind: the second time the water purifier goes it is a tap and
+  a search word, not a sentence — and from then on it carries its own history, its own repeat
+  warning, and its own set of people who have fixed it.
 - **Taking a flat out of service offers, it does not interrogate.** A renovation must not
   cost six presses on "+" while a phone is at an ear, so the two lengths that are actually
   likely are one tap each: every free night there is, and however long the last one of these
