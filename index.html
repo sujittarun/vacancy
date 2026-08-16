@@ -1905,15 +1905,27 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
      Still no hue with a job: amber is the only colour in this app allowed to
      mean anything, and this is light and shade with a cool cast, not a
      palette. */
+  /* The amplitude is the second half of the problem, and it is a different one
+     from the frequency. The first pass swung between PURE WHITE and a cool
+     tint, which gave the glass plenty to reveal but broke the screen into
+     bright and cool patches — one material has to look like one material.
+     So: same bloom size, same count, half the swing. Searched rather than
+     eyeballed, over base tone and both amplitudes, keeping only grounds whose
+     REGIONAL spread stays under 9 and whose darkest point stays above 150 so
+     type survives on it. Of the 99 that qualified this leaves the most local
+     variation:
+        before   local 54, regional spread 16   — glassy but patchy
+        now      local 30, regional spread  9   — still glassy, reads as one
+     The darkest region also lifts 165 to 183, so every ink on it gains. */
   background:
-    radial-gradient(420px 420px at 12% 2%,   rgba(255,255,255,.95), rgba(255,255,255,0) 70%),
-    radial-gradient(380px 380px at 88% 10%,  rgba(146,167,206,.75), rgba(146,167,206,0) 70%),
-    radial-gradient(340px 340px at 62% 34%,  rgba(255,255,255,.80), rgba(255,255,255,0) 70%),
-    radial-gradient(360px 360px at 15% 46%,  rgba(135,155,196,.62), rgba(135,155,196,0) 70%),
-    radial-gradient(400px 400px at 92% 62%,  rgba(255,255,255,.70), rgba(255,255,255,0) 70%),
-    radial-gradient(420px 420px at 38% 78%,  rgba(128,150,194,.68), rgba(128,150,194,0) 70%),
-    radial-gradient(380px 380px at 80% 98%,  rgba(255,255,255,.62), rgba(255,255,255,0) 70%),
-    #D4DBE9;
+    radial-gradient(400px 400px at 14% 4%,   rgba(255,255,255,.42),  rgba(255,255,255,0) 70%),
+    radial-gradient(380px 380px at 86% 12%,  rgba(158,175,210,.54),  rgba(158,175,210,0) 70%),
+    radial-gradient(360px 360px at 60% 32%,  rgba(255,255,255,.36),  rgba(255,255,255,0) 70%),
+    radial-gradient(370px 370px at 16% 48%,  rgba(150,168,204,.49),  rgba(150,168,204,0) 70%),
+    radial-gradient(390px 390px at 90% 64%,  rgba(255,255,255,.34),  rgba(255,255,255,0) 70%),
+    radial-gradient(400px 400px at 36% 80%,  rgba(148,166,202,.51),  rgba(148,166,202,0) 70%),
+    radial-gradient(380px 380px at 82% 97%,  rgba(255,255,255,.32),  rgba(255,255,255,0) 70%),
+    #D8DFEC;
   background-attachment:fixed;
 }
 
@@ -2097,6 +2109,22 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
   box-shadow:inset 0 1px 0 rgba(255,255,255,.22),
              inset 0 -1px 0 rgba(0,0,0,.34),
              0 3px 9px -3px rgba(13,16,23,.32);
+}
+
+/* ── a container that holds a GRID needs no pane ─────────────────────────────
+   Everywhere else a card is filled edge to edge, so its pane reads as material.
+   The month calendar is not: it has empty regions inside it by definition — the
+   pad days before the 1st and the gap after the 31st — and a pane behind those
+   is a lit rectangle with nothing in it. That is what reads as a tray.
+   The cells ARE the content and they sit on the ground like every other row on
+   these screens. Specificity beats the glass rule above deliberately, and the
+   filter is turned off too, which an inline background never could. */
+.card.bare,
+:root[data-theme="light"] .card.bare{
+  background:none;
+  border:0;
+  box-shadow:none;
+  -webkit-backdrop-filter:none; backdrop-filter:none;
 }
 
 /* recessed — the same pane, cut in rather than laid on */
@@ -5262,8 +5290,13 @@ function renderMonth(){
   const soft = softDates(norm);
   const softSet = new Set(soft.map(x=>x.d));
 
-  const cal = el("div","card");
-  cal.style.cssText = "padding:14px;background:transparent;border:0;box-shadow:none";
+  /* `bare` rather than an inline background:transparent. The inline rule
+     suppressed the FILL but a stylesheet backdrop-filter is invisible to it,
+     and a brightness lift over the calendar's empty regions — the pad days
+     before the 1st, the gap after the 31st — is exactly the lit rectangle that
+     made this look like a tray. The class turns the whole material off. */
+  const cal = el("div","card bare");
+  cal.style.padding = "14px";
   const dow = el("div","dow");
   ["M","T","W","T","F","S","S"].forEach(d=>dow.appendChild(el("span",null,d)));
   const grid = el("div","cal");
