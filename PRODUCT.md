@@ -119,6 +119,16 @@ user's "Bajarahills".
   in words that read back sensibly months later instead of blank. The person fixing it is
   offered as a card carrying their record — jobs done, how many came back, and whoever
   touched this exact fault in this exact flat first, because they hold the warranty.
+- **A pull refreshes and lands where you were.** Added to the home screen the app runs
+  standalone: no address bar, no reload button, and no way back to a fresh start short of
+  killing it. The pull is the gesture every phone owner already has, so it answers to that
+  — and it returns to the same tab and the same Pulse segment, because being dumped on
+  Rooms every time is worse than not reloading at all.
+- **The move cap is eight, and what it hides is said out loud.** There is a number — six
+  people repacking for one arrival is a reorganisation, not a shuffle — but it sits where a
+  real operator would already have said no, not where the search happened to get cheap. Any
+  room that could have been freed by moving more than eight guests is counted and named, so
+  "no options" never quietly means "options you were not shown".
 - **No check-in/check-out state.** Any status a human must remember to maintain decays, and
   decayed data is worse than none. Presence is derived from dates and is always correct;
   the single manual action is recording money, which carries information dates cannot.

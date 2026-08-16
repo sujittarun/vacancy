@@ -24,16 +24,68 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
 <meta name="theme-color" content="#08090C">
 
+<!-- ── the theme is decided before the first pixel ──────────────────────────────
+     Blocking and in the head on purpose. Two things depend on it:
+       1. No flash. A theme applied from the main script runs after the first
+          paint, so a light-mode phone would open on a black screen and blink.
+       2. One code path. Because data-theme is ALWAYS present from here on, the
+          stylesheet needs no @media (prefers-color-scheme) block and every
+          light-only rule is written once, under :root[data-theme="light"].
+     It also fixes a real bug: the toggle used to forget your choice on reload.
+     Choosing a theme pins it; never choosing follows the phone, live.        -->
+<script>
+(function(){
+  var KEY = "vacancy.theme", root = document.documentElement, saved = null;
+  try{ saved = localStorage.getItem(KEY); }catch(e){}
+  var sys = matchMedia("(prefers-color-scheme: light)");
+  var apply = function(t){
+    root.setAttribute("data-theme", t);
+    var m = document.querySelector('meta[name="theme-color"]');
+    if(m) m.setAttribute("content", t === "light" ? "#E5E9F0" : "#08090C");
+  };
+  apply(saved === "light" || saved === "dark" ? saved : (sys.matches ? "light" : "dark"));
+  // a phone that switches at sunset should switch with it, unless told otherwise
+  sys.addEventListener("change", function(e){
+    try{ if(localStorage.getItem(KEY)) return; }catch(err){}
+    apply(e.matches ? "light" : "dark");
+  });
+  window.setTheme = function(t){
+    apply(t); try{ localStorage.setItem(KEY, t); }catch(e){}
+  };
+})();
+</script>
+
 <style>
 /* ══════════════════════ tokens ══════════════════════ */
 :root{
   --bg:#08090C; --surface:#101219; --surface-2:#181B24; --surface-3:#1F2330;
   --line:rgba(255,255,255,.08); --line-2:rgba(255,255,255,.14);
-  --txt:#FFFFFF; --txt-2:#98A1B5; --txt-3:#5C6579;
-  --free:#EAEFF9; --free-ink:#0A0C11; --held:#1B1F2A; --held-ink:#69738A;
+  /* --txt-3 was #5C6579 and failed AA on every ground it is used on — 3.41 on
+     --bg, 3.20 on --surface, 2.94 on --surface-2, against a 4.5 floor, across
+     roughly forty-five rules of 10.5px uppercase label. --held-ink was #69738A
+     and measured 3.46 on --held: that is the room number on every booked tile,
+     and PRODUCT.md names reading the wrong row as THE failure mode of this app.
+     Booked stays the recessed state — the fill still carries that — but its
+     number is now readable. Found by measuring the rendered page rather than
+     reading the table, while checking light. */
+  --txt:#FFFFFF; --txt-2:#98A1B5; --txt-3:#868FA2;
+  --free:#EAEFF9; --free-ink:#0A0C11; --held:#1B1F2A; --held-ink:#7E8AA3;
   --oos:#4E586E;
-  --now:#FFA23A; --hot:#FF5F52;
+  --now:#FFA23A; --now-ink:#FFA23A; --hot:#FF5F52;
+  /* --ink is --free under another name. They hold the same value here, but they
+     are not the same idea: --free is a WORLD STATE (this room is sellable) and
+     --ink is a UI ROLE (this control is primary). Light mode is free to move one
+     without the other, and this split is what stops the next person reaching for
+     --free as a generic dark fill. */
+  --ink:#EAEFF9; --ink-on:#0A0C11;
+  /* One step above whatever it sits on. Dark's ladder climbs toward white and
+     light's descends from it, so "raised" is not one colour — an element keyed
+     to a fixed surface reads raised in one theme and recessed in the other,
+     which in a system whose only rule is "the vacant room is the lit one" is a
+     language error, not a shade being slightly off. */
+  --raise:#1F2330;
   --bar:rgba(12,14,20,.72);
+  --scrim:rgba(0,0,0,.55);
   --shadow:0 1px 2px rgba(0,0,0,.5), 0 12px 32px -10px rgba(0,0,0,.75);
   --shadow-sm:0 1px 2px rgba(0,0,0,.4), 0 4px 12px -4px rgba(0,0,0,.5);
   --spring:linear(0,.0088,.0352 2.2%,.1428 4.9%,.5106 12%,.6672,.7896,.8752,.9345 20.6%,.9707,.9955 26.2%,1.0122,1.0202 32.1%,1.0193 37.1%,1.0083 45.4%,1.0003 55.4%,.9986 71%,1);
@@ -41,38 +93,58 @@
   --ui:-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,"Segoe UI",Roboto,sans-serif;
   --safe-b:env(safe-area-inset-bottom,0px);
 }
-@media (prefers-color-scheme:light){
-  :root{
-    --bg:#F4F5F8; --surface:#FFFFFF; --surface-2:#ECEEF3; --surface-3:#E2E5ED;
-    --line:rgba(9,11,16,.10); --line-2:rgba(9,11,16,.16);
-    --txt:#0B0D13; --txt-2:#5A6377; --txt-3:#8A93A6;
-    --free:#0B0D13; --free-ink:#FFFFFF; --held:#DDE1EA; --held-ink:#98A1B5;
-    --oos:#9AA4B6;
-    --now:#C96A00; --hot:#D93A2B;
-    --bar:rgba(250,251,253,.78);
-    --shadow:0 1px 2px rgba(9,11,16,.07), 0 12px 32px -12px rgba(9,11,16,.18);
-    --shadow-sm:0 1px 2px rgba(9,11,16,.06), 0 4px 12px -4px rgba(9,11,16,.12);
-  }
-}
+/* There is no @media (prefers-color-scheme:light) block. The theme is stamped
+   onto <html> as data-theme before first paint (see the head script below), so
+   light has exactly ONE code path. The two-guard version of this file needed
+   every light-only rule written twice, and a rule added to one guard and not
+   the other breaks only for users who touched the toggle — which is precisely
+   the silent-regression shape that produced this rewrite. */
 :root[data-theme="light"]{
-  --bg:#F4F5F8; --surface:#FFFFFF; --surface-2:#ECEEF3; --surface-3:#E2E5ED;
-  --line:rgba(9,11,16,.10); --line-2:rgba(9,11,16,.16);
-  --txt:#0B0D13; --txt-2:#5A6377; --txt-3:#8A93A6;
-  --free:#0B0D13; --free-ink:#FFFFFF; --held:#DDE1EA; --held-ink:#98A1B5;
-    --oos:#9AA4B6;
-  --now:#C96A00; --hot:#D93A2B;
-  --bar:rgba(250,251,253,.78);
-  --shadow:0 1px 2px rgba(9,11,16,.07), 0 12px 32px -12px rgba(9,11,16,.18);
-  --shadow-sm:0 1px 2px rgba(9,11,16,.06), 0 4px 12px -4px rgba(9,11,16,.12);
+  /* ── LIGHT IS ITS OWN DESIGN, NOT AN INVERSION ────────────────────────────
+     The first light mode was the dark palette flipped. Flipping puts --bg,
+     --surface, --surface-2, --surface-3 and --held inside a 7%-lightness fog
+     where nothing reads as raised, and it resolves "vacant = maximum contrast"
+     into a solid near-black tile — which on a white page reads as a redaction,
+     not as a lit window. Measured casualties: the room number on 45 booked
+     tiles at 1.98:1, its type label at 1.50:1, every 10.5px uppercase label at
+     ~3.0:1, the out-of-service hatch at 1.087:1 (invisible), the top bar at
+     1.044:1 against the page.
+
+     So: a real floor (--bg drops 7.8 L* below white) with white as the only
+     ceiling, a strictly monotonic ladder down from it, and --free lifted off
+     pure black to a deep slate that carries a shadow — an object lying on the
+     page rather than a hole cut through it. --surface-3 deliberately sits BELOW
+     --held here: light has no headroom above white, so depth runs downward and
+     surface-3 is the pressed well, not a raised plate. Do not "fix" that.      */
+  --bg:#E5E9F0; --surface:#FFFFFF; --surface-2:#DBDFE9; --surface-3:#B7C0D2;
+  --line:rgba(13,16,23,.15); --line-2:rgba(13,16,23,.26);
+  --txt:#0D1017; --txt-2:#454D5E; --txt-3:#596174;
+  --free:#1C2331; --free-ink:#F2F5FB; --held:#C9D0DE; --held-ink:#3E4657;
+  --oos:#747E92;
+  /* One orange cannot be both a live fill and 4.5:1 text on white. --now is the
+     fill and keeps dark's hue (OkLCh H 64.7 against dark's 64.2, so the accent
+     is the same colour in both themes); --now-ink is every accented word, rule
+     and thin bar. The old #C96A00 was not desaturated, it was dark — 41.8 L*
+     below its ground, which is the definition of brown. */
+  --now:#F59300; --now-ink:#8A4A00; --hot:#B8281A;
+  --ink:#1C2331; --ink-on:#F2F5FB;
+  --raise:#FFFFFF;
+  --bar:rgba(255,255,255,.88);
+  --scrim:rgba(28,32,42,.42);
+  --shadow:0 1px 2px rgba(13,16,23,.15), 0 12px 32px -12px rgba(13,16,23,.38);
+  --shadow-sm:0 1px 2px rgba(13,16,23,.12), 0 4px 12px -4px rgba(13,16,23,.22);
 }
 :root[data-theme="dark"]{
   --bg:#08090C; --surface:#101219; --surface-2:#181B24; --surface-3:#1F2330;
   --line:rgba(255,255,255,.08); --line-2:rgba(255,255,255,.14);
-  --txt:#FFFFFF; --txt-2:#98A1B5; --txt-3:#5C6579;
-  --free:#EAEFF9; --free-ink:#0A0C11; --held:#1B1F2A; --held-ink:#69738A;
+  --txt:#FFFFFF; --txt-2:#98A1B5; --txt-3:#868FA2;
+  --free:#EAEFF9; --free-ink:#0A0C11; --held:#1B1F2A; --held-ink:#7E8AA3;
   --oos:#4E586E;
-  --now:#FFA23A; --hot:#FF5F52;
+  --now:#FFA23A; --now-ink:#FFA23A; --hot:#FF5F52;
+  --ink:#EAEFF9; --ink-on:#0A0C11;
+  --raise:#1F2330;
   --bar:rgba(12,14,20,.72);
+  --scrim:rgba(0,0,0,.55);
   --shadow:0 1px 2px rgba(0,0,0,.5), 0 12px 32px -10px rgba(0,0,0,.75);
   --shadow-sm:0 1px 2px rgba(0,0,0,.4), 0 4px 12px -4px rgba(0,0,0,.5);
 }
@@ -131,6 +203,36 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .ghost:active{transform:scale(.94);background:var(--surface-3)}
 
 .screens{flex:1;min-height:0;position:relative}
+/* ── pull down to reload ──────────────────────────────────────────────────────
+   Added to the home screen this runs standalone: no address bar, no reload
+   button, and therefore no way to start the app again short of killing it. The
+   gesture every phone owner already has is the pull, so that is the one it
+   answers to.
+
+   It sits BEHIND the screens rather than being pushed ahead of them. A screen
+   is `position:absolute;inset:0`, so translating it down uncovers this instead
+   of shoving a strip of chrome around, and the whole indicator costs one
+   transform on an element nobody scrolls.                                    */
+.ptr{
+  position:absolute;left:0;right:0;top:0;height:64px;z-index:0;
+  display:grid;place-items:center;pointer-events:none;
+}
+.ptr i{
+  display:block;width:22px;height:22px;border-radius:50%;
+  border:2px solid var(--line-2);border-top-color:var(--txt-3);
+  opacity:var(--ptr-o,0);
+  transform:rotate(calc(var(--ptr-p,0) * 300deg)) scale(calc(.55 + var(--ptr-p,0) * .45));
+}
+/* armed: it stops following the finger and starts spinning, which is the only
+   moment the gesture has to promise something is actually going to happen */
+.ptr.armed i{border-top-color:var(--now);animation:ptrSpin .7s linear infinite}
+@keyframes ptrSpin{to{transform:rotate(360deg) scale(1)}}
+.screen.pulling{transition:none}
+.screen.letgo{transition:transform .42s var(--spring)}
+@media (prefers-reduced-motion:reduce){
+  .ptr.armed i{animation:none;border-top-color:var(--now)}
+  .screen.letgo{transition:transform .16s linear}
+}
 .screen{
   position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;
   -webkit-overflow-scrolling:touch;overscroll-behavior:contain;
@@ -615,7 +717,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .heard{display:flex;gap:6px;flex-wrap:wrap;margin-top:13px}
 
 /* ══════════════════════ room sheet ══════════════════════ */
-.scrim{position:absolute;inset:0;z-index:50;background:rgba(0,0,0,.55);
+.scrim{position:absolute;inset:0;z-index:50;background:var(--scrim);
   opacity:0;pointer-events:none;transition:opacity .3s var(--out)}
 .scrim.on{opacity:1;pointer-events:auto}
 .sheet{
@@ -769,104 +871,118 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
    somebody carrying something. The room they leave goes light the moment they
    step out of it, not when they arrive, which is the half-second that makes the
    whole thing legible.                                                        */
+/* ── the move: across, not down ───────────────────────────────────────────────
+   The room being emptied on the left, where everyone goes on the right, and the
+   guests walk across the gap. Across is the right reading — it is a picture of
+   a journey, and a vertical stack is a picture of a list.
+
+   What was broken was never the direction. It was that the finished picture was
+   a pile of transforms rather than a layout: the chips stayed children of the
+   LEFT room while sitting over the RIGHT column (measured: 109x48px of a
+   destination covered), the emptied room kept 120px of padding reserved for
+   guests who had left, and `.mroom.a.emptied b` cascaded into the chips so a
+   landed guest's name computed near-black on a near-black chip — invisible in
+   both themes.
+
+   So the DOM's final state is now the truth. After the move each guest is a real
+   flow child of their destination card, and a hard refresh would draw exactly
+   what you see. The crossing is FLIP: measure where the chip is, reparent it,
+   measure again, play the difference off. Nothing survives the flight but
+   ordinary layout.                                                            */
 .movestage{
-  position:relative;display:flex;align-items:stretch;gap:0;
-  margin:18px 20px 0;
+  position:relative;isolation:isolate;      /* its own stacking context, so no
+     sibling needs the invisible "never gain a transform" constraint */
+  margin:18px 20px 0;display:flex;align-items:flex-start;gap:0;
 }
-.mroom{
-  position:relative;
-  flex:1;min-width:0;border-radius:14px;
-  padding:14px 14px calc(var(--rows,1) * 54px + 12px);
-  background:var(--held);border:1px solid var(--line);
-  display:flex;flex-direction:column;gap:2px;
-  transition:background .45s var(--out), border-color .45s var(--out);
+.mroom,.mdest{
+  border-radius:14px;padding:9px 10px;
+  display:flex;flex-direction:column;border:1px solid var(--line);
 }
-.mroom b{font-size:16px;font-weight:670;letter-spacing:-.02em;color:var(--held-ink)}
-.mroom s{text-decoration:none;font-size:11.5px;color:var(--txt-3)}
-.mroom.b{background:var(--surface-2)}
-/* one destination row per guest — the same picture whether it is one move or
-   four, so nothing new has to be learned when the shuffle gets bigger */
-.mdests{flex:1;min-width:0;display:flex;flex-direction:column;gap:14px;justify-content:center}
-.mdest{
-  border-radius:11px;padding:8px 11px;background:var(--surface-2);
-  border:1px solid var(--line);display:flex;align-items:baseline;gap:7px;min-height:34px;
-}
-.mdest{flex-wrap:wrap;min-height:40px;align-items:center}
-.mdest b{font-size:13.5px;font-weight:660;letter-spacing:-.02em;color:var(--txt);white-space:nowrap}
-.mdest s{text-decoration:none;font-size:10.5px;color:var(--txt-3);white-space:nowrap}
-/* the room they left, lit — this app's whole language for "sellable" */
-.mroom.a.emptied{background:var(--free);border-color:transparent}
-.mroom.a.emptied b{color:var(--free-ink)}
-.mroom.a.emptied s{color:color-mix(in srgb, var(--free-ink) 55%, transparent)}
-.mgap{flex:0 0 34px;display:grid;place-items:center}
-.mgap i{
-  display:block;width:100%;height:1px;background:var(--line-2);
-  position:relative;
-}
-.mgap i::after{
-  content:"";position:absolute;right:0;top:-3px;width:7px;height:7px;
-  border-top:1px solid var(--line-2);border-right:1px solid var(--line-2);
-  transform:rotate(45deg);
-}
+.mroom{flex:1;min-width:0;background:var(--held);
+  transition:background .42s var(--out), border-color .42s var(--out)}
+.mroom.lit{background:var(--free);border-color:transparent}
+.mdests{flex:1;min-width:0;display:flex;flex-direction:column;gap:9px}
+.mdest{background:var(--surface-2);
+  transition:border-color .3s var(--out), box-shadow .3s var(--out)}
+.mdest.filled{border-color:var(--line-2);box-shadow:var(--shadow-sm)}
 
-/* the guest, parked in the left room until they are asked to move */
-.mguest{
-  position:absolute;left:12px;top:0;z-index:2;
-  /* scenery, not a control — a finger reaching for the button underneath must
-     never be caught by a guest standing in the way */
-  pointer-events:none;
-  display:flex;align-items:center;gap:7px;
-  padding:7px 11px 7px 8px;border-radius:10px;
-  background:var(--surface);border:1px solid var(--line-2);
-  box-shadow:var(--shadow-sm);
-  font-size:12.5px;font-weight:620;color:var(--txt);white-space:nowrap;
-  max-width:calc(100% - 24px);
-}
-.mguest .who{display:flex;flex-direction:column;min-width:0;line-height:1.2}
-.mguest b{overflow:hidden;text-overflow:ellipsis;font-weight:620;white-space:nowrap}
-.mguest s{text-decoration:none;font-size:10.5px;font-weight:520;color:var(--txt-3);white-space:nowrap}
-.mguest .bag{flex:0 0 auto;width:15px;height:15px;color:var(--txt-2);display:block}
-.mguest .bag svg{width:15px;height:15px;display:block}
+/* Two narrow columns, so the nameplate stacks: number and count on one line,
+   the description under it. It also sits ABOVE the traffic — a guest walking in
+   passes BEHIND it, so the room being walked into never has its name covered,
+   which is what the old flight did for 3000-7000px² of every landing. */
+.mhead{position:relative;z-index:2;display:grid;grid-template-columns:1fr auto;
+  align-items:baseline;gap:0 6px;min-width:0}
+.mhead>b{grid-area:1/1;font-size:14px;font-weight:670;letter-spacing:-.02em;
+  color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mhead>.mtag{grid-area:1/2;font-size:9.5px;font-weight:650;letter-spacing:.07em;
+  text-transform:uppercase;color:var(--txt-2);white-space:nowrap}
+.mhead>s{grid-area:2/1/auto/-1;text-decoration:none;font-size:10.5px;color:var(--txt-2);
+  min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* every colour rule is scoped to a DIRECT child of the head. The old block
+   styled `.mroom b`, which reached into the guest chips and repainted their
+   names the moment the room lit up. */
+.mroom.lit>.mhead>b{color:var(--free-ink)}
+.mroom.lit>.mhead>s,.mroom.lit>.mhead>.mtag{color:color-mix(in srgb,var(--free-ink) 72%,transparent)}
+.mroom>.mhead>b,.mroom>.mhead>s,.mroom>.mhead>.mtag{transition:color .42s var(--out)}
 
-/* An arc is TWO motions, and they do not share a curve: across is one long
-   ease-out, up-and-down is a symmetric rise and fall. Putting both in a single
-   multi-stop keyframe applies the easing between EVERY pair of stops — five
-   stops meant four separate ease-outs, and the result stutters, which is
-   exactly what it looked like. Nested elements let each axis keep its own
-   timing, which is how an arc is actually built. */
-@keyframes carryX{ from{transform:translateX(0)} to{transform:translateX(var(--dx,120px))} }
-@keyframes carryY{
+.mparty{flex:0 0 auto;display:flex;flex-direction:column;gap:6px}
+.mparty:not(:empty){margin-top:7px}
+
+/* the guest is three boxes, and each one has exactly one job:
+     .mguest      the shell FLIP translates — nothing else touches its transform
+     .mguest-fx   the visible card: it swells, tilts and lifts along the arc
+     .mguest-in   the content, which never transforms and so never overhangs
+   Collapsing fx into in was the old bug: the arc ran on a box with no
+   background, so at the apex the text leaned out past its own chip edge.    */
+.mguest{position:relative;z-index:1;display:block;min-width:0;pointer-events:none}
+.mguest-fx{
+  display:block;padding:6px 8px 6px 7px;border-radius:8px;
+  background:var(--raise);border:1px solid var(--line-2);box-shadow:var(--shadow-sm);
+}
+.mguest-in{display:flex;align-items:center;gap:6px;min-width:0}
+.mguest .bag{flex:0 0 auto;width:14px;height:14px;color:var(--txt-2)}
+.mguest .bag svg{width:14px;height:14px;display:block}
+/* in two narrow columns the name and the nights stack — they do not compete for
+   one line and then clip the one that matters */
+.mguest .who{display:flex;flex-direction:column;min-width:0;line-height:1.22}
+/* Two narrow columns cannot hold every name on one line, and an unbreakable
+   one would otherwise stack four deep and make its chip twice the height of
+   the chip beside it. Two lines then an ellipsis: the chips stay a set, and
+   the room number — which is what actually has to be read back — never moves. */
+.mguest b{font-size:12px;font-weight:620;letter-spacing:-.01em;color:var(--txt);
+  overflow-wrap:anywhere;overflow:hidden;text-overflow:ellipsis;
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+.mguest s{text-decoration:none;font-size:10px;font-weight:520;color:var(--txt-2);
+  white-space:nowrap;font-variant-numeric:tabular-nums}
+/* the empty place kept for someone who has not moved yet. Named .berth and not
+   .ghost because .ghost is already a button class in this file, and it was
+   quietly handing these its font-size and its transition. */
+.mguest.berth>.mguest-fx{background:none;border-style:dashed;box-shadow:none}
+.mguest.berth b,.mguest.berth s,.mguest.berth .bag{color:var(--txt-2)}
+
+.mgap{flex:0 0 30px;align-self:stretch;display:grid;place-items:center;color:var(--txt-3)}
+.mgap i{display:block;width:8px;height:8px;
+  border-top:1.5px solid currentColor;border-right:1.5px solid currentColor;
+  border-radius:0 2px 0 0;transform:translateX(-1px) rotate(45deg)}
+
+/* An arc is two motions and they do not share a curve: across is one long
+   ease-out, the rise and fall is symmetric. A single multi-stop keyframe eases
+   between EVERY pair of stops, which is why the first version stuttered. */
+@keyframes flipTravel{from{transform:translate3d(var(--fx,0px),var(--fy,0px),0)}}
+@keyframes flipArc{
   0%  {transform:translateY(0) scale(1) rotate(0deg)}
-  50% {transform:translateY(calc(var(--dy,0px) * .5 - 20px)) scale(1.06) rotate(-1.5deg)}
-  100%{transform:translateY(var(--dy,0px)) scale(1) rotate(0deg)}
+  50% {transform:translateY(calc(var(--bow,12px) * -1)) scale(1.05) rotate(-1.5deg)}
+  100%{transform:translateY(0) scale(1) rotate(0deg)}
 }
-@keyframes carryLift{ 0%,100%{box-shadow:var(--shadow-sm)} 50%{box-shadow:var(--shadow)} }
-/* they leave one after another rather than as a block — a queue reads as people
-   and a simultaneous slide reads as rows updating */
-.movestage.carrying .mguest{
-  animation:carryX .46s cubic-bezier(.45,0,.15,1) var(--delay,0ms) forwards;
-}
-.movestage.carrying .mguest-in{
-  animation:carryY .46s cubic-bezier(.37,0,.63,1) var(--delay,0ms) forwards,
-            carryLift .46s linear var(--delay,0ms);
-}
-.movestage.landed .mguest{transform:translateX(var(--dx,120px))}
-.movestage.landed .mguest-in{transform:translateY(var(--dy,0px))}
-/* undoing it is the same walk the other way, not a jump cut */
-@keyframes carryXBack{ from{transform:translateX(var(--dx,120px))} to{transform:translateX(0)} }
-@keyframes carryYBack{
-  0%  {transform:translateY(var(--dy,0px)) scale(1)}
-  50% {transform:translateY(calc(var(--dy,0px) * .5 - 20px)) scale(1.06) rotate(1.5deg)}
-  100%{transform:translateY(0) scale(1)}
-}
-.movestage.returning .mguest{
-  animation:carryXBack .46s cubic-bezier(.45,0,.15,1) var(--delay,0ms) forwards;
-}
-.movestage.returning .mguest-in{
-  animation:carryYBack .46s cubic-bezier(.37,0,.63,1) var(--delay,0ms) forwards,
-            carryLift .46s linear var(--delay,0ms);
-}
-/* a quiet way back, beside the thing you actually came to do */
+@keyframes flipLift{0%,100%{box-shadow:var(--shadow-sm)}50%{box-shadow:var(--shadow)}}
+/* .flying, not .mguest — the berths and anyone already parked are standing
+   still, and the old selector had them performing the carry too */
+.movestage .mguest.flying{z-index:6;will-change:transform;
+  animation:flipTravel var(--fly,460ms) cubic-bezier(.45,0,.15,1) var(--delay,0ms) both}
+.movestage .mguest.flying>.mguest-fx{
+  animation:flipArc var(--fly,460ms) cubic-bezier(.37,0,.63,1) var(--delay,0ms) both,
+            flipLift var(--fly,460ms) linear var(--delay,0ms) both}
+
 .moveundo{
   display:inline-flex;align-items:center;gap:6px;margin:10px 20px 0;
   padding:8px 12px;border-radius:10px;background:none;border:1px solid var(--line);
@@ -874,20 +990,21 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
   transition:transform .3s var(--spring), color .18s;
 }
 .moveundo:active{transform:scale(.95);transition-duration:.085s;color:var(--txt-2)}
-.mguest-in{display:flex;align-items:center;gap:7px}
-
+/* reserved from the start and hidden with visibility, so the sheet does not
+   grow under your thumb when it appears — and so it is out of the a11y tree
+   and out of hit-testing while it is not there */
+.moveundo.away{visibility:hidden}
 .movewhy{margin:16px 20px 0;font-size:13px;line-height:1.55;color:var(--txt-2)}
 .movewhy b{color:var(--txt);font-weight:640}
 .movewhy b.ok{color:var(--now)}
 .movenote{margin:10px 20px 0;font-size:12px;line-height:1.55;color:var(--txt-3)}
-.movestage + .movewhy + .bkgo{margin:16px 20px 0;width:calc(100% - 40px)}
+.bkgo.movego{margin:16px 20px 0;width:calc(100% - 40px)}
 
+@keyframes chipIn{from{opacity:0}}
 @media (prefers-reduced-motion:reduce){
-  .movestage.carrying .mguest{animation:none;transform:translateX(var(--dx,120px))}
-  .movestage.carrying .mguest-in{animation:none}
-  .movestage.returning .mguest{animation:none;transform:translateX(0)}
-  .movestage.returning .mguest-in{animation:none;transform:none}
-  .mroom{transition:none}
+  .movestage .mguest.flying{animation:chipIn .18s var(--out) both}
+  .movestage .mguest.flying>.mguest-fx{animation:none}
+  .mroom,.mdest,.mroom>.mhead>b,.mroom>.mhead>s,.mroom>.mhead>.mtag{transition:none}
 }
 
 /* ── the room card ────────────────────────────────────────────────────────────
@@ -1144,6 +1261,9 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 @keyframes flagIn{from{opacity:0;transform:translateY(-4px)}}
 @media (prefers-reduced-motion:reduce){.faultFlag{animation:none}}
 
+/* what the ceiling hid, said plainly rather than left as silence */
+.movecap{margin:9px 4px 0;font-size:11.5px;line-height:1.45;color:var(--txt-3)}
+
 /* ── the way past the wall ────────────────────────────────────────────────────
    Sits under the stepper only once the stepper has run out of room, so it reads
    as the answer to the sentence above it rather than as a permanent option. */
@@ -1276,6 +1396,92 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
   .sheet{left:50%;transform:translate(-50%,101%);width:min(560px,100%);border-radius:22px 22px 0 0}
   .sheet.on{transform:translate(-50%,0)}
 }
+/* ══════════════════════ light only ══════════════════════════════════════════
+   Everything below exists because a rule that is right on a dark ground is not
+   automatically right on a light one. They are grouped by the reason they are
+   here, not by where they appear on screen, so the next person can tell whether
+   a new rule belongs in this block at all.
+
+   There is one guard, not two, because data-theme is stamped before first paint.
+   Add to this block and it works in both the system-preference case and the
+   manual toggle; there is no second copy to forget.                           */
+
+/* 1 — the vacant tile is an object lying on the page, not a hole cut through it.
+   Light has no headroom above white, so elevation is the only depth it owns. */
+:root[data-theme="light"] .tile.free{box-shadow:0 1px 2px rgba(13,16,23,.20), 0 4px 10px -4px rgba(13,16,23,.26), inset 0 1px 0 rgba(242,245,251,.10)}
+
+/* 2 — recession is carried by the fill, never by the legibility of the room
+   number. On 45 booked tiles that number was shipping at 1.98:1 and its type
+   label at 1.50:1 — against the one thing PRODUCT.md calls a safety feature. */
+:root[data-theme="light"] .tile:not(.free) s{opacity:.9}
+
+/* 3 — out of service is a third MATERIAL, not a third shade. Its old hatch
+   measured 1.087:1 against the tile, i.e. it was not there. */
+:root[data-theme="light"] .tile.oos{background:repeating-linear-gradient(135deg,var(--oos) 0 3px,var(--surface-2) 3px 7px)}
+:root[data-theme="light"] .tile.oos b,:root[data-theme="light"] .tile.oos s{color:var(--held-ink);opacity:1}
+
+/* 4 — DESIGN.md: no colour on a booked cell. Shape carries the turnover. */
+:root[data-theme="light"] .tile.turn::after{background:var(--held-ink)}
+:root[data-theme="light"] .tile.turn s{color:var(--held-ink);opacity:1}
+
+/* 5 — the affirmative is stated IN the vacancy material, not in a wash of it.
+   --free is a fill in this system and never a text colour: it sits 1.209:1 from
+   --txt, so `color:var(--free)` cannot read as emphasis. */
+:root[data-theme="light"] .pill.good{background:var(--free);color:var(--free-ink);border-color:transparent}
+:root[data-theme="light"] .allclear .tick{background:var(--free);color:var(--free-ink)}
+:root[data-theme="light"] .answer .y{color:var(--free-ink);background:var(--free);border-radius:6px;padding:0 .18em;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+:root[data-theme="light"] .day.rng{background:color-mix(in srgb,var(--free) 30%,var(--surface));border-color:color-mix(in srgb,var(--free) 60%,transparent)}
+
+/* 6 — today stops being a tint. No amber tint over white clears 1.2:1, so the
+   mark becomes a filled chip with a solid rule around the cell. */
+:root[data-theme="light"] .night.today{background:color-mix(in srgb,var(--now) 16%,var(--surface));border-color:var(--now-ink)}
+:root[data-theme="light"] .night.today .d{color:var(--now-ink)}
+:root[data-theme="light"] .day.today{border-color:var(--now-ink)}
+:root[data-theme="light"] .night.today .d em,:root[data-theme="light"] .day.today .dd{background:var(--now);color:var(--txt);border-radius:5px;padding:1px 5px;margin:-1px -2px}
+
+/* 7 — the accent splits by role. --now is the fill; --now-ink is every accented
+   word, every accent hairline and every thin quantity bar. */
+:root[data-theme="light"] .pill.now,:root[data-theme="light"] .op.alert b,:root[data-theme="light"] .op.alert s,:root[data-theme="light"] .mcap em,:root[data-theme="light"] .tcard .said .hi,:root[data-theme="light"] .dcell .d,:root[data-theme="light"] .dcell.urgent .n,:root[data-theme="light"] .advert-head,:root[data-theme="light"] .exts-head u,:root[data-theme="light"] .vbar.acc .v,:root[data-theme="light"] .vbar.acc .k,:root[data-theme="light"] .patrow.low .k,:root[data-theme="light"] .patrow.low .v,:root[data-theme="light"] .wkcol.low .p,:root[data-theme="light"] .wkcol.low .d,:root[data-theme="light"] .insight .hi,:root[data-theme="light"] .day.soft:not(.none) .fn,:root[data-theme="light"] .movewhy b.ok,:root[data-theme="light"] .bkback,:root[data-theme="light"] .paid.due,:root[data-theme="light"] .invAdd,:root[data-theme="light"] .vsay-go,:root[data-theme="light"] .toast .tclose,:root[data-theme="light"] .faultFlag em,:root[data-theme="light"] .fixer:not(.on) .fx-n em,:root[data-theme="light"] .fixer:not(.on) .fx-r.bad,:root[data-theme="light"] .opp.hot:not(.zero) b,:root[data-theme="light"] .wm-h svg{color:var(--now-ink)}
+:root[data-theme="light"] :focus-visible{outline-color:var(--now-ink)}
+:root[data-theme="light"] .dcell.urgent,:root[data-theme="light"] .advert,:root[data-theme="light"] .field:focus-within,:root[data-theme="light"] .paid.due,:root[data-theme="light"] .toast.warn,:root[data-theme="light"] .faultFlag.hot,:root[data-theme="light"] .book input:focus,:root[data-theme="light"] .invForm input:focus{border-color:var(--now-ink)}
+:root[data-theme="light"] .pill.now,:root[data-theme="light"] .dcell .d,:root[data-theme="light"] .dcell.urgent,:root[data-theme="light"] .advert,:root[data-theme="light"] .vsay-go,:root[data-theme="light"] .paid.due,:root[data-theme="light"] .invAdd,:root[data-theme="light"] .faultFlag.hot{background:color-mix(in srgb,var(--now) 16%,var(--surface))}
+:root[data-theme="light"] .mbar i.soon,:root[data-theme="light"] .day.soft:not(.none) .gg i,:root[data-theme="light"] .vbar.acc .col i,:root[data-theme="light"] .patrow.low .t i,:root[data-theme="light"] .wkcol.low .bar i,:root[data-theme="light"] .strip.prev i.pending{background:var(--now-ink)}
+
+/* 8 — a bare amber dot on near-white is 1.9:1. Give it a boundary rather than
+   claim a decorative exemption for something that carries meaning. */
+:root[data-theme="light"] .op .dot,:root[data-theme="light"] .act.good .mark,:root[data-theme="light"] .day.soft::after,:root[data-theme="light"] .pill.wait i,:root[data-theme="light"] .tabseg button:not([aria-selected="true"]) i.dot{box-shadow:0 0 0 1px var(--now-ink)}
+
+/* 9 — alerts mix into --surface, never into transparent. */
+:root[data-theme="light"] .decide{background:color-mix(in srgb,var(--hot) 12%,var(--surface));border-color:var(--hot)}
+:root[data-theme="light"] .pill.warn{background:color-mix(in srgb,var(--hot) 12%,var(--surface))}
+:root[data-theme="light"] .gate .err{background:color-mix(in srgb,var(--hot) 12%,var(--surface));border-color:var(--hot)}
+:root[data-theme="light"] .toast.bad{border-color:var(--hot)}
+
+/* 10 — the live dot was a third hue, and 1.68:1 here. One accent, two semantics. */
+:root[data-theme="light"] .pill.live i{background:var(--free)}
+
+/* 11 — the turnover seam. `var(--bg)` as a FOREGROUND only works while --bg is
+   the darkest value in the system, which is true in dark and false here. */
+:root[data-theme="light"] .strip i.edge{box-shadow:inset 1px 0 0 var(--txt-3)}
+:root[data-theme="light"] .strip i.f.edge,:root[data-theme="light"] .strip i.b.edge{box-shadow:inset 1px 0 0 var(--surface)}
+:root[data-theme="light"] .strip i.td,:root[data-theme="light"] .strip i.f.td.edge,:root[data-theme="light"] .strip i.b.td.edge{box-shadow:inset 0 0 0 1px var(--now-ink), inset 0 -4px 0 var(--now)}
+:root[data-theme="light"] .playhead{background:var(--now-ink);box-shadow:0 0 0 1px var(--surface)}
+
+/* 12 — the last text pairs under AA, each on --held or --surface-3. */
+:root[data-theme="light"] .mroom>.mhead>s{color:var(--held-ink)}
+:root[data-theme="light"] .faultFlag{background:var(--surface-2)}
+:root[data-theme="light"] .roomRoutes button:active s{color:var(--txt-2)}
+:root[data-theme="light"] .bkform input:focus::placeholder,:root[data-theme="light"] .gate input:focus::placeholder{color:var(--txt-2)}
+
+/* 13 — the top bar's entire boundary was a 1.236:1 hairline over a 1.044:1
+   material. --surface is already at the white ceiling, so the separation has to
+   come from the shadow. */
+:root[data-theme="light"] .topbar{box-shadow:0 1px 0 rgba(13,16,23,.05), 0 8px 20px -12px rgba(13,16,23,.28)}
+
+/* 14 — a hard-coded #fff on --hot measures 3.00:1 in DARK, a live AA failure in
+   the theme that ships today. --ink-on is correct in both. */
+.rowx.arm,.invDel.arm{color:var(--ink-on)}
+
 </style>
 
 <div class="app">
@@ -1289,6 +1495,7 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
   </header>
 
   <div class="screens">
+  <div class="ptr" id="ptr" aria-hidden="true"><i></i></div>
     <section class="screen on" id="scr-rooms"></section>
     <section class="screen" id="scr-month"></section>
     <section class="screen" id="scr-ask"></section>
@@ -2007,8 +2214,14 @@ let occ = [], chg = [], blk = [];
 function freeRange(fi,a,b){ for(let d=a;d<b;d++){ if(d<0||d>=DAYS||occ[fi][d]) return false; } return true; }
 function runFrom(fi,d){ let n=0; while(d+n<DAYS && !occ[fi][d+n]) n++; return n; }
 const SIZE = {"Studio":0, "1 BHK":1, "2 BHK":2, "3 BHK":3};
-/* past four this is not a shuffle, it is a reorganisation */
-const MOVE_CEILING = 4;
+/* How many guests one booking may be worth disturbing. There IS a number — six
+   people repacking for one arrival is a reorganisation, not a shuffle, and the
+   search cost grows with it — but the number is not the app's opinion to keep
+   to itself, and it should sit where a real operator would already have said no
+   — eight, not four. Anything beyond it is counted and said out loud, so
+   "no options" never quietly means "options you were not shown". */
+const MOVE_CEILING = 8;
+let movesBeyondCeiling = 0;
 
 /* A block is an entry with kind:"block" — a flat out of service for maintenance,
    a deep clean or owner use. It occupies nights exactly like a booking so it can
@@ -3345,7 +3558,7 @@ async function exportBook(btn){
 function openAccount(){
   if(!CLOUD_ENABLED) return openDataSheet();
   const live = MODE === "live";
-  sheetH.textContent = ""; sheetB.textContent = "";
+  sheetWipe();
   const t = el("div");
   t.innerHTML = live
     ? `<div class="n">${esc(hostName || "Signed in")}</div>`
@@ -3431,7 +3644,7 @@ function openAccount(){
    data is: what is in the book, how to get it out, and the plain fact that it
    lives on this phone and nowhere else. */
 function openDataSheet(){
-  sheetH.textContent = ""; sheetB.textContent = "";
+  sheetWipe();
   const t = el("div");
   t.innerHTML = `<div class="n">Your data</div><div class="m">on this phone</div>`;
   const x = el("button", null, "✕"); x.setAttribute("aria-label","Close");
@@ -3628,10 +3841,16 @@ const soonestFor = (n, from) => { for(let d=from; d<=DAYS-n; d++) if(countFreeFo
    (MOVE_CEILING, declared with the other primitives above).                  */
 function roomMoves(a, b, pool){
   const out = [];
+  movesBeyondCeiling = 0;
   pool.forEach(({f: fl, i: fi})=>{
     if(freeRange(fi, a, b)) return;                      // already free, no move needed
     const blockers = resv.filter(r => r.fi === fi && r.start < b && r.end > a);
-    if(!blockers.length || blockers.length > MOVE_CEILING) return;
+    if(!blockers.length) return;
+    if(blockers.length > MOVE_CEILING){
+      // only counts as "beyond the ceiling" if it could otherwise have worked
+      if(!blockers.some(r => isBlock(r) || r.start < 0)) movesBeyondCeiling++;
+      return;
+    }
     // a block is out of service, not a guest, and cannot be asked to move;
     // neither can somebody already in the room
     if(blockers.some(r => isBlock(r) || r.start < 0)) return;
@@ -4232,6 +4451,8 @@ function pulseGo(dir){
 function renderTrends(){
   const s = document.getElementById("scr-trends");
   s.textContent = "";
+  // one chokepoint: both ways of changing segment come through here
+  try{ sessionStorage.setItem("vacancy.seg", pulseSeg); }catch(e){}
   /* Every panel below reads a distribution across the portfolio, and with no
      flats there is no distribution — the occupancy curve comes back empty and
      the first card reads curve[0]. Reachable in one move: clear the sample
@@ -5235,6 +5456,14 @@ function renderAsk(focus){
           mcard.appendChild(r);
         });
         listWrap.append(mh, mcard);
+        // a cap the operator cannot see is a cap that lies about the answer
+        if(movesBeyondCeiling){
+          const over = el("p","movecap");
+          over.innerHTML = `${movesBeyondCeiling} more room${movesBeyondCeiling>1?"s":""} `
+            + `could be freed, but ${movesBeyondCeiling>1?"each needs":"it needs"} more than `
+            + `${MOVE_CEILING} guests moved — not a shuffle any more.`;
+          listWrap.appendChild(over);
+        }
       }
       h.append(el("span","lbl","What is possible instead"),
                el("span","lbl", `${p.n} nights from ${fmt(a)}`));
@@ -5458,7 +5687,7 @@ function moneyPill(r, fi){
 /* Recording money is two touches: the amount is already the balance, and the
    method defaults to how this booking's source is actually settled. */
 function openPayment(r, fi){
-  sheetH.textContent = ""; sheetB.textContent = "";
+  sheetWipe();
   const t = el("div");
   t.innerHTML = `<div class="n">${money(dueFrom(r))} due</div>`
               + `<div class="m">${esc(r.guest)} · ${flats[r.fi].id} · ${fmt(Math.max(r.start,0))} → ${fmt(r.end)}</div>`;
@@ -5575,7 +5804,7 @@ function faultsFor(fi){
 
 function openIssueForm(fi, day){
   const fl = flats[fi];
-  sheetH.textContent = ""; sheetB.textContent = "";
+  sheetWipe();
   const t = el("div");
   t.innerHTML = `<div class="n">${esc(fl.id)}</div>`
               + `<div class="m">something needs fixing · stays on sale</div>`;
@@ -5717,7 +5946,7 @@ function openIssueForm(fi, day){
    them never feels like leaving the room. */
 function roomHead(fi, backTo){
   const fl = flats[fi];
-  sheetH.textContent = "";
+  sheetWipe();                       // it hands off to a form that fills the body
   const t = el("div");
   t.innerHTML = `<div class="n">${esc(fl.id)}</div>`
               + `<div class="m">${esc(fl.type)} · ${esc(fl.bname)} · floor ${fl.floor}</div>`;
@@ -5781,7 +6010,6 @@ function nextFree(fi, from){
 function openSheet(fi, day){
   const fl = flats[fi];
   roomHead(fi);
-  sheetB.textContent = "";
 
   const S = roomStrip(fi);
   sheetB.append(S.wrap, S.foot);
@@ -5959,168 +6187,271 @@ const SVG_SWAP = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" str
   + '<path d="M3.5 7h11M11.5 4 14.5 7l-3 3"/>'
   + '<path d="M16.5 13h-11M8.5 16 5.5 13l3-3"/></svg>';
 
+const MOVE_TRAVEL = 460, MOVE_STEP = 110, MOVE_SETTLE = 340;
+
 function openMove(mv, askDay, onFreed, opts){
   opts = opts || {};
   const from = flats[mv.frees], n = mv.moves.length;
-  sheetH.textContent = ""; sheetB.textContent = "";
+  let booked = false, done = [], busy = false;
+  const timers = [];
+  const later = (fn, ms)=>{
+    const id = setTimeout(()=>{ const i = timers.indexOf(id); if(i>=0) timers.splice(i,1); fn(); }, ms);
+    timers.push(id); return id;
+  };
+  /* Moved for a booking that never happened is moved for nothing — and this is
+     owed however the sheet goes away, including being taken over by a toast. */
+  const abandoned = ()=>{
+    if(booked || !done.length) return;
+    const k = done.length, names = done.map(d => d.c.m.booking.guest);
+    toast("warn", `<b>${k === 1 ? esc(names[0]) + " was moved" : k + " guests were moved"}</b> `
+      + `but ${esc(from.id)} was never booked — so nobody was moved for a reason.`,
+      null, {label: k === 1 ? "Put them back" : `Put all ${k} back`, run:()=>{
+        const failed = [];
+        done.slice().reverse().forEach(d=>{ if(!moveBooking(d.booking, d.was)) failed.push(d); });
+        haptic(14); refreshScreen();
+        toast(failed.length ? "bad" : "",
+          failed.length ? `<b>${failed.length} could not go back</b> — those rooms have been taken since.`
+                        : `<b>Everyone is back where they were.</b>`, null);
+      }});
+  };
+
+  sheetWipe();
+  sheetOwn(()=>{ timers.splice(0).forEach(clearTimeout); abandoned(); });
+
   const t = el("div");
-  // the same shuffle serves two different intentions and should say which
   t.innerHTML = `<div class="n">${esc(opts.title || "Free up " + from.id)}</div>`
               + `<div class="m">${n === 1 ? "one guest moves" : n + " guests move"} · nobody loses a night</div>`;
   const x = el("button", null, "✕"); x.setAttribute("aria-label","Close");
-  let booked = false, abandoned = null, done = [];
-  x.onclick = ()=>{ closeSheet(); if(abandoned) abandoned(); };
+  x.onclick = ()=> closeSheet();
   sheetH.append(t, x);
 
-  /* The room being emptied on the left with everyone still in it, and one
-     destination row per guest on the right. With one guest this is the pair of
-     rooms it always was; with three it is the same picture and does not need a
-     different idea. */
+  /* One column, read top to bottom: the room being emptied, then where each
+     guest goes. The same picture at one guest and at four. */
   const stage = el("div","movestage");
-  const a = el("div","mroom a");
-  a.append(el("b", null, from.id), el("s", null, from.type + " · " + from.bshort));
-  const gap = el("div","mgap"); gap.innerHTML = '<i></i>';
-  const dests = el("div","mdests");
-  const chips = [];
-  mv.moves.forEach((m, k)=>{
-    const to = flats[m.to];
-    const row = el("div","mdest");
-    // the row says WHERE; the chip beside it says who and when, and they line up
-    row.append(el("b", null, to.id), el("s", null, to.type + " · " + to.bshort));
-    dests.appendChild(row);
-    const chip = el("div","mguest");
-    // the dates belong to the guest, not to the room they are going to — three
-    // people can share one destination and only their nights tell them apart
-    chip.innerHTML = '<div class="mguest-in"><span class="bag">' + SVG_BAG + '</span>'
-                   + '<span class="who"><b>' + esc(m.booking.guest) + '</b>'
-                   + '<s>' + esc(fmt(m.booking.start)) + '–' + esc(fmt(m.booking.end)) + '</s>'
-                   + '</span></div>';
-    chip.style.top = (44 + k * 54) + "px";
-    a.appendChild(chip);                     // they stand IN the room, not above it
-    chips.push({chip, row, m});
-  });
-  stage.append(a, gap, dests);
-  stage.style.setProperty("--rows", n);
+  stage.setAttribute("role","group");
+  stage.setAttribute("aria-label", (n === 1 ? "One guest moves" : n + " guests move") + " out of " + from.id);
 
-  const why = el("p","movewhy");
+  const src = el("div","mroom"); src.setAttribute("role","group");
+  const srcHead = el("div","mhead"), srcTag = el("span","mtag");
+  srcHead.append(el("b", null, from.id), el("s", null, from.type + " · " + from.bshort), srcTag);
+  const srcParty = el("div","mparty");
+  src.append(srcHead, srcParty);
+
+  const gap = el("div","mgap"); gap.setAttribute("aria-hidden","true"); gap.appendChild(el("i"));
+  const dests = el("div","mdests");
+
+  const chipFor = (m, berth)=>{
+    const c = el("div","mguest" + (berth ? " berth" : ""));
+    c.innerHTML = '<div class="mguest-fx"><div class="mguest-in">'
+      + '<span class="bag">' + SVG_BAG + '</span>'
+      + '<span class="who"><b>' + esc(m.booking.guest) + '</b>'
+      + '<s>' + esc(fmt(m.booking.start)) + '–' + esc(fmt(m.booking.end)) + '</s></span>'
+      + '</div></div>';
+    return c;
+  };
+
+  /* Guests in date order, and one card per destination FLAT — two people can
+     share a flat across non-overlapping nights and must not get two cards. */
+  const rooms = new Map(), chips = [];
+  mv.moves.map((m,i)=>({m,i}))
+    .sort((a,b)=> (a.m.booking.start - b.m.booking.start) || (a.i - b.i))
+    .forEach(({m})=>{
+      const to = flats[m.to];
+      let d = rooms.get(m.to);
+      if(!d){
+        const row = el("div","mdest"); row.setAttribute("role","group");
+        const head = el("div","mhead");
+        head.append(el("b", null, to.id), el("s", null, to.type + " · " + to.bshort));
+        const party = el("div","mparty");
+        row.append(head, party); dests.appendChild(row);
+        d = {row, party, fi:m.to, want:[]}; rooms.set(m.to, d);
+      }
+      const chip = chipFor(m, false), berth = chipFor(m, true);
+      berth.setAttribute("aria-label", m.booking.guest + " would move here, "
+        + fmt(m.booking.start) + " to " + fmt(m.booking.end));
+      srcParty.appendChild(chip); d.party.appendChild(berth); d.want.push(m.booking.guest);
+      chips.push({chip, berth, m, dest:d});
+    });
+  stage.append(src, gap, dests);
+
   const worst = mv.moves.find(m => !m.sameBuilding);
-  why.innerHTML = `Everyone keeps their own nights, their room is never smaller. `
+  const pitch = `Everyone keeps their own nights, their room is never smaller. `
     + (mv.sameBuilding && mv.sameType
         ? `<b>Same building, same size</b> throughout — the kind of move nobody notices.`
         : worst
         ? `<b>${esc(flats[worst.booking.fi].bname)} → ${esc(flats[worst.to].bname)}</b> for `
           + `${esc(worst.booking.guest)} — a different building, so that one is worth a call.`
         : `Same building throughout${mv.sameType ? "" : ", and nobody ends up in a smaller flat"}.`);
-
-  const go = el("button","bkgo", n === 1
-    ? `Move ${mv.moves[0].booking.guest}` : `Move all ${n}`);
-  const note = el("p","movenote");
-  note.textContent = n === 1
+  const firstNote = n === 1
     ? "Nothing else changes — same dates, same money, same guest. They will need telling their room number."
     : `Nothing else changes — same dates, same money. All ${n} will need telling their new room number.`;
 
-  sheetB.append(stage, why, go, note);
-  sheet.classList.add("on"); scrim.classList.add("on");
-  sheetB.scrollTop = 0;
+  const why = el("p","movewhy");
+  const go = el("button","bkgo movego");
+  const undoBtn = el("button","moveundo away");
+  const note = el("p","movenote");
 
-  const start = ()=>{
-    if(go.disabled) return;
-    go.disabled = true;
-    haptic(12);
-    chips.forEach(({chip, row}, k)=>{
-      const cr = chip.getBoundingClientRect(), rr = row.getBoundingClientRect();
-      chip.style.setProperty("--dx", (rr.left - cr.left + 10).toFixed(1) + "px");
-      chip.style.setProperty("--dy", (rr.top - cr.top + 6).toFixed(1) + "px");
-      chip.style.setProperty("--delay", (k * 110) + "ms");
+  const inRoom = ()=> chips.filter(c => c.chip.parentNode === srcParty);
+
+  /* One painter. Class, tag, ARIA and copy move together or the room spends a
+     third of a second painted booked while already labelled free — which is
+     also what a screen reader was being told, before anyone had moved. */
+  const restate = (incoming)=>{
+    const staying = srcParty.children.length + (incoming || 0);
+    src.classList.toggle("lit", !staying);
+    srcTag.textContent = staying ? (staying === 1 ? "1 guest" : staying + " guests") : "Free";
+    src.setAttribute("aria-label", from.id + ", " + from.type + ", " + from.bshort
+      + (staying ? " — " + staying + (staying === 1 ? " guest to move" : " guests to move") : " — free"));
+    rooms.forEach(d=>{
+      const here = [...d.party.children].filter(c => !c.classList.contains("berth"));
+      d.row.classList.toggle("filled", here.length > 0);
+      d.row.setAttribute("aria-label", flats[d.fi].id + ", " + flats[d.fi].type + ", " + flats[d.fi].bshort
+        + (here.length ? " — now holding " + here.map(c => c.querySelector("b").textContent).join(", ")
+                       : " — free, " + d.want.join(" and ") + " would move here"));
     });
-    stage.classList.add("carrying");
-    // the room empties as the last of them steps out, not as the first arrives
-    setTimeout(()=>{ a.classList.add("emptied"); haptic(6); },
-               calm ? 0 : 240 + (n - 1) * 110);
+  };
 
-    setTimeout(()=>{
-      done = [];
-      for(const {m} of chips){
-        const r = moveBooking(m.booking, m.to);
-        if(!r){
-          done.slice().reverse().forEach(d => moveBooking(d.booking, d.was));   // put back what moved
-          stage.classList.remove("carrying"); a.classList.remove("emptied");
-          go.disabled = false;
-          toast("warn", `<b>${esc(flats[m.to].id)} went while you were deciding.</b> `
-            + `Nobody has been moved.`, m.to);
-          return;
-        }
-        done.push({booking: m.booking, was: r.from});
-      }
-      haptic(16);
-      stage.classList.add("landed");
-      refreshScreen();
-
+  const speak = ()=>{
+    restate();
+    const left = inRoom(), m = left.length;
+    if(!m){
       why.innerHTML = `<b class="ok">${esc(from.id)} is free.</b> `
-        + (n === 1 ? `${esc(mv.moves[0].booking.guest)} is in ${esc(flats[mv.moves[0].to].id)}`
+        + (n === 1 ? `${esc(chips[0].m.booking.guest)} is in ${esc(flats[chips[0].m.to].id)}`
                    : `All ${n} are in their new rooms`) + ` for the same nights.`;
       go.textContent = opts.cta || `Book ${from.id}`;
-      go.disabled = false;
-      go.onclick = ()=>{
-        haptic(14); booked = true;
-        if(onFreed) onFreed(mv.frees);
-        else openBooking(mv.frees, askDay, 1);
-      };
+      go.onclick = ()=>{ haptic(14); booked = true; sheetOwn(null);
+        if(onFreed) onFreed(mv.frees); else openBooking(mv.frees, askDay, 1); };
       note.textContent = n === 1
         ? "Tell them the new room number when you next speak to them."
         : `Tell all ${n} their new room numbers when you next speak to them.`;
-
-      /* Walking them back is the same walk in reverse. A jump cut would leave
-         you wondering whether it had undone anything at all. */
-      const undo = el("button","moveundo", n === 1 ? "↩ Put them back" : `↩ Put all ${n} back`);
-      undo.onclick = ()=>{
-        undo.disabled = true; go.disabled = true; haptic(10);
-        stage.classList.remove("carrying","landed");
-        void stage.offsetWidth;                      // restart the animation
-        stage.classList.add("returning");
-        setTimeout(()=>{
-          const failed = [];
-          done.slice().reverse().forEach(d=>{ if(!moveBooking(d.booking, d.was)) failed.push(d); });
-          done = failed;
-          haptic(14); refreshScreen();
-          if(failed.length){
-            toast("bad", `<b>${failed.length} could not go back</b> — those rooms have been taken since.`, null);
-            stage.classList.remove("returning"); stage.classList.add("landed");
-            undo.disabled = false; go.disabled = false;
-            return;
-          }
-          a.classList.remove("emptied");
-          undo.remove();
-          why.innerHTML = `Back as they were. Nothing has changed.`;
-          go.textContent = n === 1 ? `Move ${mv.moves[0].booking.guest}` : `Move all ${n}`;
-          go.disabled = false;
-          go.onclick = start;                        // and it can be done again
-          stage.classList.remove("returning");
-        }, calm ? 10 : 470 + (n - 1) * 110);
-      };
-      sheetB.insertBefore(undo, note);
-
-      /* Moved for a booking that never happened is moved for nothing. */
-      abandoned = ()=>{
-        if(booked || !done.length) return;
-        toast("warn", `<b>${n === 1 ? esc(mv.moves[0].booking.guest) + " was moved"
-                                    : n + " guests were moved"}</b> but ${esc(from.id)} was `
-          + `never booked — so nobody was moved for a reason.`,
-          null, {label: n === 1 ? "Put them back" : `Put all ${n} back`, run:()=>{
-            const failed = [];
-            done.slice().reverse().forEach(d=>{ if(!moveBooking(d.booking, d.was)) failed.push(d); });
-            haptic(14); refreshScreen();
-            toast(failed.length ? "bad" : "",
-              failed.length
-                ? `<b>${failed.length} could not go back</b> — those rooms have been taken since.`
-                : `<b>Everyone is back where they were.</b>`, null);
-          }});
-      };
-    }, calm ? 10 : 470 + (n - 1) * 110);
+    }else if(m === n){
+      why.innerHTML = pitch;
+      go.textContent = n === 1 ? `Move ${chips[0].m.booking.guest}` : `Move all ${n}`;
+      go.onclick = start;
+      note.textContent = firstNote;
+    }else{
+      // some went, some could not come back — say which, and leave both routes open
+      const stuck = done.map(d => d.c.m.booking.guest);
+      why.innerHTML = `<b>${esc(from.id)} is not free.</b> `
+        + `${esc(stuck.join(" and "))} ${stuck.length === 1 ? "is" : "are"} still moved; `
+        + `${m === 1 ? "one guest is" : m + " guests are"} back in ${esc(from.id)}.`;
+      go.textContent = m === 1 ? `Move ${left[0].m.booking.guest} again` : `Move the other ${m}`;
+      go.onclick = start;
+      note.textContent = "Nothing else changes — same dates, same money.";
+    }
+    // the way back stays available whenever anyone is still moved, including
+    // after a partial undo — otherwise the stuck guests have no route home
+    undoBtn.classList.toggle("away", !done.length);
+    undoBtn.textContent = done.length === 1 ? "↩ Put them back" : `↩ Put all ${done.length} back`;
+    undoBtn.disabled = false;
+    go.disabled = false;
   };
-  go.onclick = start;
-}
 
+  speak();                       // before the append, so the live region does
+  why.setAttribute("role","status");        // not announce the opening pitch
+  why.setAttribute("aria-live","polite");
+  sheetB.append(stage, why, go, undoBtn, note);
+  sheet.classList.add("on"); scrim.classList.add("on"); sheetB.scrollTop = 0;
+  /* The stage keeps the height it opened at. Across two columns the emptied
+     room is just a shorter card beside a taller one — which is what a
+     two-column layout does — so nothing below has to be animated back into
+     place, and the button under your thumb never moves. */
+  requestAnimationFrame(()=>{ stage.style.minHeight = stage.getBoundingClientRect().height + "px"; });
+
+  /* How tall a party would be holding these as well — measured on clones, so
+     the real chips are never briefly in the wrong parent. */
+  const heightWith = (party, incoming)=>{
+    const marks = incoming.map(c=>{ const g = c.cloneNode(true); party.appendChild(g); return g; });
+    const hgt = party.getBoundingClientRect().height;
+    marks.forEach(g => g.remove());
+    return hgt;
+  };
+
+  /* FLIP. Measure First, swap, measure Last, play the difference off. */
+  const flight = (pairs, after)=>{
+    if(!pairs.length){ if(after) after(); return; }
+    const still = calm;
+    busy = true;
+    pairs.forEach((p,i)=>{ p.slot = i; p.first = p.chip.getBoundingClientRect(); });
+    const pin = srcParty.getBoundingClientRect().height;
+    srcParty.style.height = pin + "px";
+    pairs.forEach(p => p.swap());
+    restate();
+    pairs.forEach(p=>{
+      const last = p.chip.getBoundingClientRect();
+      const dx = p.first.left - last.left, dy = p.first.top - last.top;
+      p.chip.classList.add("flying");
+      p.chip.style.setProperty("--fx", dx.toFixed(1) + "px");
+      p.chip.style.setProperty("--fy", dy.toFixed(1) + "px");
+      p.chip.style.setProperty("--bow", Math.max(9, Math.min(20, Math.hypot(dx,dy) * .11)).toFixed(0) + "px");
+      p.chip.style.setProperty("--delay", (still ? 0 : p.slot * MOVE_STEP) + "ms");
+      p.chip.style.setProperty("--fly", (still ? 180 : MOVE_TRAVEL) + "ms");
+    });
+    void stage.offsetWidth;
+
+    /* Cleanup is idempotent and runs on whichever comes first — the last
+       animation ending, or a backstop for the case where it never fires. */
+    let settled = false;
+    const settle = ()=>{
+      if(settled) return; settled = true;
+      pairs.forEach(p=>{
+        p.chip.classList.remove("flying");
+        ["--fx","--fy","--bow","--delay","--fly"].forEach(v => p.chip.style.removeProperty(v));
+      });
+      srcParty.style.height = "";
+      busy = false; if(after) after();
+    };
+    const last = pairs[pairs.length - 1].chip;
+    last.addEventListener("animationend", settle, {once:true});
+    later(settle, (still ? 180 : MOVE_TRAVEL + (pairs.length - 1) * MOVE_STEP) + 90);
+  };
+
+  function start(){
+    if(busy) return;
+    const going = inRoom();
+    if(!going.length) return;
+    go.disabled = true; undoBtn.disabled = true; haptic(12);
+    const moved = [];
+    for(const c of going){
+      const r = moveBooking(c.m.booking, c.m.to);
+      if(!r){
+        moved.slice().reverse().forEach(d => moveBooking(d.booking, d.was));
+        go.disabled = false; undoBtn.disabled = false; haptic(20);
+        toast("warn", `<b>${esc(flats[c.m.to].id)} went while you were deciding.</b> `
+          + `Nobody has been moved.`, c.m.to);
+        return;
+      }
+      moved.push({booking:c.m.booking, was:r.from, c});
+    }
+    done = done.concat(moved);
+    refreshScreen();
+    if(dests.scrollHeight) dests.scrollIntoView({block:"nearest", behavior: calm ? "auto" : "smooth"});
+    flight(going.map(c=>({chip:c.chip, swap:()=> c.dest.party.replaceChild(c.chip, c.berth)})),
+           ()=>{ haptic(16); speak(); });
+  }
+
+  undoBtn.onclick = ()=>{
+    if(busy || !done.length) return;
+    undoBtn.disabled = true; go.disabled = true; haptic(10);
+    const returned = [], stuck = [];
+    done.slice().reverse().forEach(d=>{ (moveBooking(d.booking, d.was) ? returned : stuck).push(d); });
+    returned.reverse(); stuck.reverse();      // both were walked backwards
+    done = stuck;
+    refreshScreen();
+    if(stuck.length)
+      toast("bad", `<b>${stuck.length} could not go back</b> — `
+        + `${stuck.length === 1 ? "that room has" : "those rooms have"} been taken since.`, null);
+    if(!returned.length){ speak(); return; }
+    /* The source has to be tall enough to hold them before anyone walks back,
+       or FLIP measures the landing at the wrong height and they arrive skewed. */
+    restate(returned.length);
+    srcParty.style.height = heightWith(srcParty, returned.map(d => d.c.chip)) + "px";
+    flight(returned.map(d=>({chip:d.c.chip, swap:()=>{
+      d.c.dest.party.replaceChild(d.c.berth, d.c.chip);
+      srcParty.appendChild(d.c.chip);
+    }})), ()=>{ haptic(14); speak(); });
+  };
+}
 /* ── booking, on its own screen ───────────────────────────────────────────────
    It sets its own dates. The old form inherited them from the Rooms tab and
    apologised for it in help text — "change the dates on the Rooms tab" — which
@@ -6128,7 +6459,6 @@ function openMove(mv, askDay, onFreed, opts){
 function openBooking(fi, from, nights){
   const fl = flats[fi];
   roomHead(fi, ()=> openSheet(fi, from));
-  sheetB.textContent = "";
 
   let day = Math.max(0, Math.min(from|0, DAYS-1));
   let n   = Math.max(1, nights|0 || 1);
@@ -6258,7 +6588,6 @@ function openBooking(fi, from, nights){
 function openBlockForm(fi, day){
   const fl = flats[fi];
   roomHead(fi, ()=> openSheet(fi, day));
-  sheetB.textContent = "";
 
   let from = Math.max(0, Math.min(pickedNight, DAYS-1));
   while(from < DAYS && occ[fi][from]) from++;                 // start where it can actually go out
@@ -6447,7 +6776,7 @@ function openOps(kind, d){
     departures:"Nobody is checking out.",
     turnovers:"No room has a check-out and a check-in on the same day — no rush cleans."
   };
-  sheetH.textContent = ""; sheetB.textContent = "";
+  sheetWipe();
 
   const t = el("div");
   t.innerHTML = `<div class="n">${TITLE[kind]}</div><div class="m">${fmtL(d)}${d===0?" · today":""}</div>`;
@@ -6493,7 +6822,7 @@ function openOps(kind, d){
 
 /* ── inventory editor ─────────────────────────────────────────────────────── */
 function openInventory(editing){
-  sheetH.textContent = ""; sheetB.textContent = "";
+  sheetWipe();
 
   const t = el("div");
   t.innerHTML = `<div class="n">Inventory</div><div class="m">${NF} flats · ${buildingsOf().length} buildings</div>`;
@@ -6697,7 +7026,7 @@ function buildingForm(){
 /* One sheet for every "show me the flats" tap. Rows carry a flat, a line of
    detail and a pill; an optional broadcast button copies a ready message. */
 function openFlatList(title, sub, rows, broadcast){
-  sheetH.textContent = ""; sheetB.textContent = "";
+  sheetWipe();
   const t = el("div");
   t.innerHTML = `<div class="n">${title}</div><div class="m">${sub}</div>`;
   const x = el("button",null,"✕"); x.setAttribute("aria-label","Close"); x.onclick = closeSheet;
@@ -6779,7 +7108,25 @@ function advertBlock(rows, depth, when){
   return wrap;
 }
 
-function closeSheet(){ sheet.classList.remove("on"); scrim.classList.remove("on"); }
+/* ── who owns the sheet ───────────────────────────────────────────────────────
+   One sheet, nine screens that fill it, and one of them — the move — arms
+   timers and owes the operator a warning if it goes away with guests shuffled
+   for a booking that never happened. Leaving that to a convention ("remember to
+   clean up") is how it gets lost: a toast sits at z-index 80 with
+   pointer-events above the sheet's 51, so tapping one during a flight opens a
+   room and quietly replaces the body underneath. Every screen therefore claims
+   the sheet through sheetWipe(), and whoever needs cleaning up registers it. */
+let sheetTeardown = null;
+function sheetWipe(){
+  const t = sheetTeardown; sheetTeardown = null;
+  if(t) t();
+  sheetH.textContent = ""; sheetB.textContent = "";
+}
+function sheetOwn(teardown){ sheetTeardown = teardown || null; }
+function closeSheet(){
+  sheet.classList.remove("on"); scrim.classList.remove("on");
+  const t = sheetTeardown; sheetTeardown = null; if(t) t();
+}
 scrim.onclick = closeSheet;
 document.addEventListener("keydown", e=>{ if(e.key==="Escape") closeSheet(); });
 
@@ -6881,6 +7228,78 @@ function switchTo(i, focusInput){
   });
 })();
 
+/* ── pull down to reload ──────────────────────────────────────────────────────
+   Standalone from the home screen there is no address bar and no reload button,
+   so this is the only way back to a fresh start — and the tab has to survive it,
+   because being dumped on Rooms every time is worse than not reloading at all.
+   switchTo already writes the tab into the hash and boot reads it back; Pulse's
+   segment is the one thing the hash does not carry, so it rides in
+   sessionStorage. A reload is genuinely a reload: same tab, same segment, book
+   re-read from storage.                                                       */
+let pulling = false;
+(function(){
+  const host = document.querySelector(".screens"), ptr = document.getElementById("ptr");
+  const REACH = 96, TRIP = 68;                 // travel, and where it commits
+  let y0 = null, x0 = null, scr = null, pull = 0, armed = false, live = false;
+
+  const paint = (d)=>{
+    pull = d;
+    const p = Math.min(1, d / TRIP);
+    scr.style.transform = d ? `translate3d(0,${d.toFixed(1)}px,0)` : "";
+    ptr.style.setProperty("--ptr-p", p.toFixed(3));
+    ptr.style.setProperty("--ptr-o", Math.min(1, d / 26).toFixed(3));
+  };
+  const release = ()=>{
+    if(!live) return;
+    live = false; pulling = false;
+    host.classList.remove("held");
+    scr.classList.remove("pulling"); scr.classList.add("letgo");
+    if(armed){
+      // hold it at the indicator so the spin is visible for a beat, then go
+      scr.style.transform = `translate3d(0,${TRIP}px,0)`;
+      haptic(16);
+      setTimeout(()=> location.reload(), calm ? 60 : 260);
+      return;
+    }
+    scr.style.transform = "";
+    ptr.style.setProperty("--ptr-o", "0");
+    const s = scr;
+    setTimeout(()=>{ s.classList.remove("letgo"); }, 460);
+    y0 = null; scr = null;
+  };
+
+  host.addEventListener("touchstart", e=>{
+    if(sheet.classList.contains("on") || e.touches.length > 1) return;
+    scr = document.getElementById("scr-" + SCREENS[curScreen].id);
+    if(!scr || scr.scrollTop > 0){ scr = null; return; }
+    y0 = e.touches[0].clientY; x0 = e.touches[0].clientX;
+    armed = false; live = false; pull = 0;
+  }, {passive:true});
+
+  host.addEventListener("touchmove", e=>{
+    if(y0 === null || !scr) return;
+    const dy = e.touches[0].clientY - y0, dx = e.touches[0].clientX - x0;
+    if(!live){
+      // it only becomes a pull once it is clearly vertical and clearly downward,
+      // so the tab swipe and ordinary scrolling both keep working
+      if(dy < 12 || Math.abs(dx) > Math.abs(dy) * .8) { if(Math.abs(dx) > 10) y0 = null; return; }
+      live = true; pulling = true;
+      scr.classList.add("pulling"); scr.classList.remove("letgo");
+    }
+    if(scr.scrollTop > 0){ release(); return; }
+    e.preventDefault();
+    // resistance: the first pixels are free, the last ones are not
+    const d = REACH * (1 - Math.exp(-Math.max(0, dy) / REACH));
+    const was = armed;
+    armed = d >= TRIP - 2;
+    if(armed !== was){ ptr.classList.toggle("armed", armed); if(armed) haptic(10); }
+    paint(d);
+  }, {passive:false});
+
+  host.addEventListener("touchend", release, {passive:true});
+  host.addEventListener("touchcancel", release, {passive:true});
+})();
+
 /* horizontal swipe between screens */
 (function(){
   let x0=null,y0=null;
@@ -6892,7 +7311,7 @@ function switchTo(i, focusInput){
     x0=e.touches[0].clientX; y0=e.touches[0].clientY;
   },{passive:true});
   document.querySelector(".screens").addEventListener("touchend",e=>{
-    if(x0===null || sweepLive) return;
+    if(x0===null || sweepLive || pulling) return;
     const dx=e.changedTouches[0].clientX-x0, dy=e.changedTouches[0].clientY-y0;
     if(Math.abs(dx)>62 && Math.abs(dx)>Math.abs(dy)*1.6){
       const nx = Math.max(0, Math.min(SCREENS.length-1, curScreen + (dx<0?1:-1)));
@@ -6953,15 +7372,22 @@ function switchTo(i, focusInput){
   scr.addEventListener("touchcancel", release);
 })();
 
-/* theme toggle */
+/* Theme toggle. The head script owns the decision and the persistence; this is
+   only the button, so the two can never disagree about what "current" means. */
 const themeBtn = document.getElementById("themeBtn");
 themeBtn.onclick = ()=>{
-  const now = document.documentElement.getAttribute("data-theme")
-    || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-  document.documentElement.setAttribute("data-theme", now==="dark" ? "light" : "dark");
+  setTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark");
   haptic(8);
 };
 
+/* Where you were. The hash carries the tab — switchTo writes it on every
+   change — and sessionStorage carries the one thing the hash does not, which is
+   which of Pulse's five segments you were reading. Set before the first render,
+   so a reload repaints the place you were rather than flashing through Now. */
+try{
+  const seg = sessionStorage.getItem("vacancy.seg");
+  if(seg && PULSE_SEGS.indexOf(seg) >= 0) pulseSeg = seg;
+}catch(e){}
 const deep = SCREENS.findIndex(s=>s.id === location.hash.replace("#",""));
 switchTo(deep >= 0 ? deep : 0);
 

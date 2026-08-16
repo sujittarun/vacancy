@@ -40,22 +40,83 @@ Strategy: **Restrained** — a monochrome data field plus one accent. Semantic c
 
 | Token | Dark | Light | Role |
 |---|---|---|---|
-| `--bg` | `#08090C` | `#F4F5F8` | Page ground |
+| `--bg` | `#08090C` | `#E5E9F0` | Page ground |
 | `--surface` | `#101219` | `#FFFFFF` | Cards, sheets |
-| `--surface-2` | `#181B24` | `#ECEEF3` | Raised controls |
-| `--line` | `rgba(255,255,255,.08)` | `rgba(9,11,16,.10)` | Hairlines |
-| `--txt` | `#FFFFFF` | `#0B0D13` | Primary |
-| `--txt-2` | `#98A1B5` | `#5A6377` | Secondary |
-| `--txt-3` | `#5C6579` | `#8A93A6` | Tertiary / labels |
-| `--free` | `#EAEFF9` | `#0B0D13` | **Vacant** — the lit state |
-| `--held` | `#1B1F2A` | `#DDE1EA` | **Booked** — recessed |
-| `--oos` | `#4E586E` | `#9AA4B6` | **Out of service** — a third state, never a shade of booked |
-| `--now` | `#FFA23A` | `#C96A00` | Today / live. The single accent. |
-| `--hot` | `#FF5F52` | `#D93A2B` | Orphan nights, fully-booked alerts |
+| `--surface-2` | `#181B24` | `#DBDFE9` | Raised controls (dark) / recessed trough (light) |
+| `--surface-3` | `#1F2330` | `#B7C0D2` | Pressed well |
+| `--raise` | `#1F2330` | `#FFFFFF` | One step **above** whatever it sits on |
+| `--line` / `--line-2` | 8% / 14% white | 15% / 26% ink | Hairlines |
+| `--txt` | `#FFFFFF` | `#0D1017` | Primary |
+| `--txt-2` | `#98A1B5` | `#454D5E` | Secondary |
+| `--txt-3` | `#868FA2` | `#596174` | Tertiary / labels |
+| `--free` | `#EAEFF9` | `#1C2331` | **Vacant** — the lit state |
+| `--free-ink` | `#0A0C11` | `#F2F5FB` | Knockout on it |
+| `--held` | `#1B1F2A` | `#C9D0DE` | **Booked** — recessed |
+| `--held-ink` | `#7E8AA3` | `#3E4657` | The room number on a booked tile |
+| `--oos` | `#4E586E` | `#747E92` | **Out of service** — a third material |
+| `--now` | `#FFA23A` | `#F59300` | The accent, **as a fill** |
+| `--now-ink` | `#FFA23A` | `#8A4A00` | The accent **as text, rule and thin bar** |
+| `--hot` | `#FF5F52` | `#B8281A` | Orphan nights, alerts |
+| `--ink` / `--ink-on` | = `--free` pair | = `--free` pair | Primary **action**, not world state |
+| `--scrim` | 55% black | `rgba(28,32,42,.42)` | Behind the sheet |
 
 Amber is the only accent. It marks *now* and primary actions, nothing else. Blue is
 deliberately absent — it is the default accent of every scheduling tool in the
 category and carries no meaning here.
+
+### Light is its own design, not an inversion
+
+The first light mode was the dark palette flipped, and flipping breaks in two ways that
+no amount of nudging fixes.
+
+**The ladder collapses.** `--bg`, `--surface`, `--surface-2`, `--surface-3` and `--held`
+all landed inside a ~7% lightness band. Cards did not read as raised, sections did not
+separate, a pill was grey on grey. Dark has headroom *above* its ground; light has none
+above white, so light's depth must run **downward** from a white ceiling — which is why
+`--surface-3` deliberately sits *below* `--held` here, the opposite of dark. That is not
+a mistake to clean up.
+
+**"Maximum contrast" resolves to a redaction.** On a light ground the rule turned every
+vacant tile into a solid near-black block, which is heavy and — to most eyes — reads as
+*occupied*, the exact opposite of what the dark theme communicates. `--free` is now a deep
+slate carrying a real drop shadow and an inset highlight: an object lying on the page
+rather than a hole cut through it.
+
+**One orange cannot do both jobs.** `#C96A00` was not desaturated, it was *dark* — 41.8 L\*
+below its ground, which is the definition of brown. The accent splits: `--now` is the
+fill and keeps dark's hue (OkLCh H 64.7 against dark's 64.2, so it is the same colour in
+both themes), and `--now-ink` is every accented word, hairline and thin bar. In dark the
+two are identical, so dark does not move.
+
+### Measure the page, not the table
+
+Every ratio above was recomputed from the rendered DOM — walking the real background
+stack, compositing `rgba` and `color-mix`, and resolving `color(srgb …)` through a canvas.
+A first pass that parsed `color(srgb 0.99 0.93 0.84)` with a naïve number regex invented
+failures that were not there; the palette was fine and the ruler was broken.
+
+Doing it properly found two failures in **dark** — the theme that ships, and that nobody
+had thought to check:
+
+| | was | now |
+|---|---|---|
+| `--txt-3` on `--bg` / `--surface` / `--surface-2` | 3.41 / 3.20 / 2.94 | 5.9 / 5.5 / 5.3 |
+| `--held-ink` on `--held` — the room number on 45 booked tiles | **3.46** | 4.71 |
+
+Booked stays the recessed state; the fill still carries that. But PRODUCT.md names reading
+the wrong row as *the* failure mode of this app, and a room number below AA is that failure
+waiting to happen. All four screens and all five Pulse segments now measure clean in both
+themes.
+
+### One code path
+
+`data-theme` is stamped onto `<html>` by a blocking head script before the first paint, so
+there is no `@media (prefers-color-scheme)` block at all and every light-only rule is
+written **once**. The two-guard version needed each rule twice, and a rule added to one
+guard and not the other breaks only for people who touched the toggle — which is the
+silent-regression shape that produced this rewrite. It also fixed a real bug: the toggle
+used to forget your choice on reload. Choosing pins it; never choosing follows the phone,
+live.
 
 ## Type
 
@@ -123,6 +184,46 @@ wrong place.
 
 Moved into the header it inherits the blurred material, needs no z-index, no gradient and
 no offsets, and the failure mode cannot recur.
+
+## The finished picture must be a layout, not a pile of transforms
+
+The guest-move stage flies a chip from the room being emptied into the room the guest is
+going to. The flight was right and the landing was wrong in a way that could not be styled
+out: the chips stayed children of the **left** room while sitting over the **right**
+column (measured: 109×48px of a destination row covered), the emptied room kept 120px of
+padding reserved for guests who had left, and `.mroom.a.emptied b` cascaded into the chip
+so a landed guest's name computed near-black on a near-black chip — invisible in *both*
+themes.
+
+Three symptoms, one cause: **the finished state was a set of transforms rather than a
+layout.** The fix is architectural. The DOM's final state is now the truth — after the
+move each guest is a real flow child of their destination card, and a hard refresh would
+draw exactly what you see. The animation is FLIP: measure where the chip is, reparent it,
+measure again, play the difference off. Nothing survives the flight but ordinary layout.
+
+Three rules fell out of it and are worth keeping:
+
+- **Style direct children, not descendants.** `.mroom b` reached into the guest chips. Every
+  colour rule on a card is now scoped to `> .mhead > b`.
+- **An element that animates needs its own class.** `.movestage.carrying .mguest` matched the
+  dashed placeholder berths too, so two motionless elements performed the carry. It is
+  `.mguest.flying` now.
+- **One box per job.** The shell takes the FLIP translate, an inner box takes the arc and the
+  lift, and a third holds the content. Collapsing the middle one meant the arc ran on a box
+  with no background, and at the apex the text leaned 12.5px out past its own chip edge.
+
+Horizontal was always the right reading — across is a picture of a journey, a vertical
+stack is a picture of a list. A rewrite that "fixes" a component by changing what it says
+has not fixed it.
+
+## Raised means raised in both themes
+
+`.mguest` was `--surface` on a `--surface-2` card: darker than its card in dark, lighter
+than its card in light. In a system whose one rule is *the vacant room is the lit one*, an
+element that reads raised in one theme and recessed in the other is a language error, not
+a shade being slightly off. `--raise` is the token for "one step above whatever this sits
+on" — `#1F2330` in dark, `#FFFFFF` in light — because dark's ladder climbs and light's
+descends, so "raised" is genuinely not one colour.
 
 ## A dead end still answers
 
