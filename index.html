@@ -4700,6 +4700,18 @@ let sweptJustNow = false, sweepLive = false;
 /* Press-and-hold on a date, then drag: the calendar becomes a range picker and
    the readout above it counts rooms free for the WHOLE span as you move. This
    is the question a caller actually asks, answered by dragging a finger. */
+/* The touch pair below has to sit on the WINDOW — a touch that ends off the grid
+   must still clean up — but renderMonth() rebuilds grid and hud and calls
+   attachSweep on every paint, and a window listener outlives the nodes it closed
+   over. Binding them per call added two permanent listeners per render, each
+   holding a detached grid and hud alive: six Rooms↔Month switches measured six of
+   each added and none removed, on the tab PRODUCT.md says is swiped fifty times a
+   day. So the window keeps ONE pair for the life of the page and attachSweep only
+   swaps what they call. attachStripScrub states this rule in its own comment. */
+let sweepNow = null;
+addEventListener("touchend",    ()=>{ sweepNow && sweepNow.end();    }, {passive:true});
+addEventListener("touchcancel", ()=>{ sweepNow && sweepNow.cancel(); }, {passive:true});
+
 function attachSweep(grid, hud){
   let hold = null, live = false, a = null, b = null;
 
@@ -4765,9 +4777,8 @@ function attachSweep(grid, hud){
     e.preventDefault();
     move(e.touches[0].clientX, e.touches[0].clientY);
   }, {passive:false});
-  // bound on the window as well: a touch that ends off the grid must still clean up
-  addEventListener("touchend", end, {passive:true});
-  addEventListener("touchcancel", ()=>{ reset(); clear(); hud.classList.remove("on"); }, {passive:true});
+  // hand this render's handlers to the window pair registered once above
+  sweepNow = {end, cancel: ()=>{ reset(); clear(); hud.classList.remove("on"); }};
 
   // desktop: hold the mouse down and drag
   grid.addEventListener("mousedown", e=>{
