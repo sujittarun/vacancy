@@ -119,6 +119,7 @@
      warns about above, not a shade being slightly off. It is also how the
      "1 night" chip shipped for a moment as white type on a white pane. */
   --sunk-edge:rgba(255,255,255,.09);
+  --g-sunk-inner:inset 0 1px 2px rgba(0,0,0,.45), inset 0 -1px 0 rgba(255,255,255,.06);
   --pane:var(--raise);
   --pane-inner:inset 0 1px 0 rgba(255,255,255,.14);
   --press:rgba(46,53,70,.86);   /* the pane brightening under a finger */
@@ -156,7 +157,16 @@
      surface-3 is the pressed well, not a raised plate. Do not "fix" that.      */
   --bg:#E5E9F0; --surface:#FFFFFF; --surface-2:#DBDFE9; --surface-3:#B7C0D2;
   --line:rgba(13,16,23,.15); --line-2:rgba(13,16,23,.26);
-  --txt:#0D1017; --txt-2:#454D5E; --txt-3:#596174;
+  /* Both secondaries are darker than a light theme would normally want them,
+     and that is the price of a sheet you can see through. Measured: over the
+     worst ground the sheet can sit on — a run of near-black FREE tiles, dimmed
+     by the scrim, seen through the pane — the lightest ink that still clears
+     4.5 is rgb(57,63,78). The old --txt-3 (#596174) managed 2.67 there. So the
+     greys come down to meet the glass.
+     Hierarchy therefore stops being carried by lightness and is carried by
+     size and weight instead, which is what the top bar already does and what
+     this design system says type should be doing anyway. */
+  --txt:#0D1017; --txt-2:#2D3442; --txt-3:#363C4A;
   --free:#1C2331; --free-ink:#F2F5FB; --held:#C9D0DE; --held-ink:#3E4657;
   --oos:#747E92;
   /* One orange cannot be both a live fill and 4.5:1 text on white. --now is the
@@ -219,6 +229,7 @@
      warns about above, not a shade being slightly off. It is also how the
      "1 night" chip shipped for a moment as white type on a white pane. */
   --sunk-edge:rgba(255,255,255,.09);
+  --g-sunk-inner:inset 0 1px 2px rgba(0,0,0,.45), inset 0 -1px 0 rgba(255,255,255,.06);
   --pane:var(--raise);
   --pane-inner:inset 0 1px 0 rgba(255,255,255,.14);
   --press:rgba(46,53,70,.86);   /* the pane brightening under a finger */
@@ -1721,12 +1732,15 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
                and --txt, which clear at .56. So it gets to be the glassiest
                thing on screen, and it is the one you watch the rooms move
                under. .58.
-       sheet   carries 11px --txt-3 over a scrimmed page, and that measures 4.10
-               even at the .80 it already shipped at — the one surface with no
-               room to give. Unchanged, and now it says so out loud. */
+       sheet   carries 11px --txt-3 over a scrimmed page. It could not move
+               while the greys were where they were — it measured 4.10 even at
+               .80. The greys came down to meet it, so now it can: .62, where
+               the same worst case measures above its floor again. This is the
+               surface everything else sits ON, so nothing inside the sheet
+               could look like glass until this one did. */
   --g1:rgba(255,255,255,.40);   /* L1 content — cards, day cells            */
   --g2:rgba(255,255,255,.52);   /* L2 chrome  — bars: big type, real backdrop */
-  --g3:rgba(255,255,255,.80);   /* L3 floating— sheet, toasts: small type   */
+  --g3:rgba(255,255,255,.62);   /* L3 floating— sheet, toasts: small type   */
   --g-tab:rgba(255,255,255,.58);/* the tab bar alone: only strong ink on it  */
   --g-sunk:rgba(13,16,23,.06);  /* recessed: an ink tint, never a paler white */
   --g-edge:rgba(255,255,255,.95);
@@ -1749,7 +1763,14 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
   --lift:0 1px 1px rgba(13,16,23,.14), 0 3px 7px -3px rgba(13,16,23,.20);
   --lift-2:0 1px 2px rgba(13,16,23,.16), 0 9px 20px -10px rgba(13,16,23,.30);
   /* state, not depth — see the dark block for why these are tokens */
-  --sunk-edge:rgba(255,255,255,.5);
+  /* An INK hairline, not a white one. A trough on a light pane used to be
+     ringed in 50% white, which on an 80%-white sheet was a white line on a
+     white surface — the search field on the fault form had a 6% fill and an
+     invisible border, so there was no box on screen at all, only a placeholder
+     floating in space. A recess has to be drawn by something darker than what
+     it is cut into. */
+  --sunk-edge:rgba(13,16,23,.14);
+  --g-sunk-inner:inset 0 1px 2px rgba(13,16,23,.10), inset 0 -1px 0 rgba(255,255,255,.65);
   --pane:rgba(255,255,255,.94);
   --pane-inner:inset 0 1px 0 #fff;
   --press:rgba(255,255,255,.86);
@@ -1790,10 +1811,14 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 
 /* ── L1 · content ────────────────────────────────────────────────────────────
    Readable first. Light translucency, gentle blur, the softer sweep.        */
+/* .ops-row was the largest opaque thing left on the screen — a solid white
+   panel carrying arriving / leaving / turnaround. It is a content surface like
+   any card, so it takes the content material. */
 .card,
 .tcard,
 .night,
-.day{
+.day,
+.ops-row{
   background-color:var(--g1);
   background-image:var(--sheen-soft);
   -webkit-backdrop-filter:var(--blur-1); backdrop-filter:var(--blur-1);
@@ -1873,10 +1898,31 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 .ftile:not([aria-pressed="true"]),
 .mate:not([aria-pressed="true"]),
 .dcell:not(.urgent),
+/* Everything else that was still a flat --surface-2 chip. These were the last
+   opaque neutrals on screen: the small round buttons on a booking row, the
+   copy button, the "still out" answer, the pills, the two accessories in the
+   Ask field, and the explanation panel under a room's main action. They are
+   the same kind of thing as the chips above them and there was no reason for
+   them to be a different material — they were simply written before there was
+   one. The guards keep every SELECTED and every SEMANTIC state out: a chosen
+   chip, the dark primary answers, the amber and red washes all keep their own
+   surface, because state and meaning both beat material. */
+.rowx,
+.copybtn,
+.actWhy,
+.line,
+.nudgeBtn:not(.yes),
+.pill:not(.good):not(.now):not(.warn):not(.live):not(.due),
+.field button.slot,
+.field button.mic:not(.on),
 .wallmove{
   background-color:var(--g-sunk);
-  -webkit-backdrop-filter:blur(12px) saturate(150%); backdrop-filter:blur(12px) saturate(150%);
+  -webkit-backdrop-filter:var(--blur-1); backdrop-filter:var(--blur-1);
   border-color:var(--sunk-edge);
+  /* the cut edge: a shadow along the TOP inside, which is what tells the eye a
+     thing is set into a surface rather than laid on it. Without it a trough is
+     only a slightly darker rectangle, which at 6% is no rectangle at all. */
+  box-shadow:var(--g-sunk-inner);
 }
 /* and the thing that lifts back OUT of a trough is the brightest pane there is
    — brightest RELATIVE to its theme, which in dark is a lighter dark. */
