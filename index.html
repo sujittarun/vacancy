@@ -1815,7 +1815,17 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
      dark enough to stop being glass at all. Dark keeps the frosted pane it
      already has and already measures clean. */
   --lg-fill:rgba(255,255,255,.10);
-  --lg-tint:blur(3px) saturate(180%) brightness(1.25) contrast(.7);
+  /* LIFT ONLY. This carried contrast(.7) and it made every card paint DARKER
+     than the page it sat on — grey blocks behind the calendar, the to-do list,
+     the room lists, the money cards. The mechanism is the clamp: brightness
+     pushes a bright backdrop past 255, it pins at white, and then contrast(<1)
+     drags that white back DOWN toward mid-grey. 229 went in, 217 came out.
+     A tint on a light theme must never darken. Everything on this tint sits
+     either over the page, which is bright, or over the sheet, which has
+     already lifted its own backdrop — neither can present the near-black
+     tile that contrast() was there to rescue. So it goes, and brightness
+     alone does the lifting: it cannot darken, because it cannot go below 1. */
+  --lg-tint:blur(3px) saturate(170%) brightness(1.08);
   /* The SHEET's own version. It needs a stronger tint and a heavier fill than a
      button does, because a button sits on the already-normalised sheet while
      the sheet sits on raw page — a near-black FREE tile one moment and white
@@ -1835,7 +1845,10 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
      inside a sheet is already standing on a surface that normalised its
      backdrop, so a second full-strength tint there would be paying twice and
      would flatten what little is left showing. Cards get the light one. */
-  --lg-fill-2:rgba(255,255,255,.20);   /* cards, over an already-tinted pane */
+  /* Enough to keep a card clean rather than dishwater, little enough that the
+     sheet still shows through it. Over the page it lands at 250 against the
+     page's 229 — a pane lying ON the ground, never a stain in it. */
+  --lg-fill-2:rgba(255,255,255,.32);   /* cards, over an already-tinted pane */
   /* a trough is the same pane cut INTO the surface: the light comes from under
      the lip instead of over it, so the rim inverts */
   --lg-rim-sunk:
