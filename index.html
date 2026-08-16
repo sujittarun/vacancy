@@ -4644,12 +4644,22 @@ function renderRooms(){
 
       const moves = roomMoves(d, d+n, flats.map((f,i)=>({f,i})));
       if(moves.length){
-        const mv = moves[0], from = flats[mv.frees], to = flats[mv.to], B = mv.booking;
+        /* roomMoves returns {frees, moves:[{booking, to, …}], …} — one entry per
+           room, carrying EVERY guest that has to shift. This read used the shape
+           from before the multi-guest shuffle landed (mv.to, mv.booking), which
+           are both undefined now, so the dead-end card threw on B.guest and took
+           the whole room grid down with it. moves[] is sorted fewest-first. */
+        const mv = moves[0], from = flats[mv.frees], k = mv.moves.length;
+        const B = mv.moves[0].booking, to = flats[mv.moves[0].to];
         const p = el("p");
         p.style.cssText = "margin:10px 0 0;font-size:13px;color:var(--txt-2);line-height:1.55";
-        p.innerHTML = `But you are <b style="color:var(--now)">one move away</b> — shift `
-          + `<b style="color:var(--txt)">${B.guest}</b> from ${from.id} to ${to.id} `
-          + `(${fmt(B.start)}–${fmt(B.end)}${mv.sameType ? ", same size" : ""}) and ${from.id} opens up.`;
+        p.innerHTML = k === 1
+          ? `But you are <b style="color:var(--now)">one move away</b> — shift `
+            + `<b style="color:var(--txt)">${esc(B.guest)}</b> from ${from.id} to ${to.id} `
+            + `(${fmt(B.start)}–${fmt(B.end)}${mv.sameType ? ", same size" : ""}) and ${from.id} opens up.`
+          : `But <b style="color:var(--now)">${k} moves</b> would free it — shift `
+            + `<b style="color:var(--txt)">${k} guests</b> out of ${from.id}, starting with `
+            + `${esc(B.guest)} to ${to.id}${mv.sameType ? ", same size" : ""}.`;
         box.appendChild(p);
       }
       if(soon >= 0){
