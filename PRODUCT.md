@@ -119,6 +119,17 @@ user's "Bajarahills".
   in words that read back sensibly months later instead of blank. The person fixing it is
   offered as a card carrying their record — jobs done, how many came back, and whoever
   touched this exact fault in this exact flat first, because they hold the warranty.
+- **Taking a flat out of service offers, it does not interrogate.** A renovation must not
+  cost six presses on "+" while a phone is at an ear, so the two lengths that are actually
+  likely are one tap each: every free night there is, and however long the last one of these
+  took in this flat. Both are *offered* and never pre-filled — nights loaded behind a tap you
+  did not mean is money spent unread. And when the work could happen in a window where the
+  flat is empty anyway, the app says so and will move it there, because that is the one thing
+  on this screen that changes what it costs.
+- **The bill is half of what upkeep costs, and it was the missing half.** Every outage has an
+  invoice and a set of nights that could not be sold; the app was counting only the nights —
+  the half every operator already knows. A short optional amount beside the note completes it,
+  so "what upkeep costs" stops under-reporting.
 - **A pull refreshes and lands where you were.** Added to the home screen the app runs
   standalone: no address bar, no reload button, and no way back to a fresh start short of
   killing it. The pull is the gesture every phone owner already has, so it answers to that

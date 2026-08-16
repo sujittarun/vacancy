@@ -1404,6 +1404,25 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 .mate.new{border-style:dashed;background:none}
 .crewidle{font-size:12px;color:var(--txt-3);line-height:1.5}
 
+/* ── offers, not restatements ────────────────────────────────────────────────
+   A renovation must not cost six presses on "+" while a phone is at an ear.
+   These are one-tap jumps to the two numbers that are actually likely: every
+   free night there is, and the length the last one of these took here. Offered,
+   never pre-filled — nights loaded behind a tap you did not mean is money spent
+   unread. */
+.bkjump{display:flex;flex-wrap:wrap;gap:6px;margin-top:-4px}
+.bkjump button{
+  padding:7px 11px;border-radius:9px;font-size:12px;font-weight:600;
+  color:var(--txt-2);background:var(--surface-2);border:1px dashed var(--line-2);
+  transition:transform .3s var(--spring),background .18s,color .18s;
+}
+.bkjump button:active{transform:scale(.95);transition-duration:.085s}
+.bkjump button b{color:var(--txt);font-weight:660}
+/* the note and the bill share a line: the bill is short and always optional */
+.bkpair{display:flex;gap:8px}
+.bkpair input:first-child{flex:1;min-width:0}
+.bkpair input.money{flex:0 0 112px;text-align:right;font-variant-numeric:tabular-nums}
+
 /* the running total, stated once at the top rather than boxed in the middle */
 .bkline{margin:0;font-size:12px;line-height:1.5;color:var(--txt-2)}
 .bkline b{color:var(--txt);font-weight:640}
@@ -7225,6 +7244,7 @@ function openBlockForm(fi, day){
   nLess.setAttribute("aria-label","Fewer nights out"); nMore.setAttribute("aria-label","More nights out");
   nBox.append(nLess, nLab, nMore);
   whenRow.append(dayBox, nBox);
+  const jump = el("div","bkjump");
 
   /* ── who is fixing it ───────────────────────────────────────────────────── */
   const whoCap = el("div","bkcap");
@@ -7238,10 +7258,17 @@ function openBlockForm(fi, day){
   handPh.placeholder = "Their number"; handPh.setAttribute("aria-label","Their phone number");
   handRow.append(handName, handPh);
 
-  const noteRow = el("div","r");
+  const noteRow = el("div","bkpair");
   const note = el("input");
   note.type = "text"; note.placeholder = "Note — e.g. compressor replaced";
-  noteRow.appendChild(note);
+  note.setAttribute("aria-label","A note about the work");
+  /* The bill. addBlock has always accepted it and this form has never sent one,
+     so "what upkeep costs" has been counting lost nights and nothing else —
+     which is the half everybody already knows. */
+  const bill = el("input","money");
+  bill.type = "text"; bill.inputMode = "numeric"; bill.placeholder = "₹ bill";
+  bill.setAttribute("aria-label","What the work cost, if you know yet");
+  noteRow.append(note, bill);
   const go = el("button","bkgo","");
 
   function paintGrid(){
@@ -7341,6 +7368,40 @@ function openBlockForm(fi, day){
     }
   }
 
+  /* Two jumps worth offering, and only when they are not what is already set. */
+  function paintJumps(cap){
+    jump.textContent = "";
+    if(cap > outN){
+      const b = el("button");
+      b.innerHTML = `take all <b>${cap}</b> free night${cap>1?"s":""}`;
+      b.setAttribute("aria-label", `Take all ${cap} free nights, back on sale ${fmtL(from + cap)}`);
+      b.onclick = ()=>{ outN = cap; haptic(8); paint(); };
+      jump.appendChild(b);
+    }
+    const hist = fault ? faultHistory(fi, fault, from) : null;
+    const k = hist && hist.last && hist.last.nights;
+    if(k && k !== outN && k <= cap){
+      const b = el("button");
+      b.innerHTML = `take <b>${k}</b> — same as the last ${esc(fault)} here`;
+      b.setAttribute("aria-label", `Take ${k} nights, the same as the last ${fault} in ${fl.id}`);
+      b.onclick = ()=>{ outN = k; haptic(8); paint(); };
+      jump.appendChild(b);
+    }
+    /* And the window where the work costs nothing sold. Only worth saying when
+       it is somewhere else — otherwise it restates where you already are. */
+    const win = batchWindow(fi, outN);
+    if(win && win.from !== from && win.nights >= outN){
+      const b = el("button");
+      // the same word the line above uses, or the chip and the sentence disagree
+      b.innerHTML = `do it <b>${win.from === 0 ? "today" : esc(fmt(win.from))}</b> instead`
+        + ` — ${win.nights} free night${win.nights>1?"s":""} there`;
+      b.setAttribute("aria-label",
+        `Start ${fmtL(win.from)} instead, where ${fl.id} has ${win.nights} free nights`);
+      b.onclick = ()=>{ from = win.from; haptic(8); paint(); };
+      jump.appendChild(b);
+    }
+  }
+
   function paint(){
     const cap = capFrom(from);
     outN = Math.max(1, Math.min(outN, cap));
@@ -7349,16 +7410,20 @@ function openBlockForm(fi, day){
     dLess.disabled = from <= 0; dMore.disabled = from >= DAYS-1;
     nLess.disabled = outN <= 1; nMore.disabled = outN >= cap;
     const ok = freeRange(fi, from, from + outN);
-    const lost = outN * (fl.rate || 0);
     line.classList.toggle("bad", !ok);
+    /* No money in this line. The nightly rate times the nights is a number the
+       app can always compute and almost never means anything: these nights were
+       not sold, so nothing is being lost — quoting a figure makes an ordinary
+       repair look like a bill. What the operator needs here is the two dates
+       and the wall. The real cost lives in Upkeep, where the invoice sits
+       beside it and the sum is true. */
     line.innerHTML = ok
       ? `Out <b>${esc(from === 0 ? "today" : fmt(from))}</b> for <b>${outN} night${outN>1?"s":""}</b>`
         + ` · back on sale <b>${esc(fmt(from + outN))}</b>`
-        + (lost ? ` · about <b>${money(lost)}</b> off the market` : "")
         + (outN >= cap ? ` · <span class="acc">a guest holds the night after</span>` : "")
       : `<b>${esc(fl.id)} is already taken on ${esc(fmtL(from))}</b>`;
     otherRow.hidden = chosen !== "Other";
-    paintGrid(); paintCrew(); paintFlag();
+    paintGrid(); paintCrew(); paintFlag(); paintJumps(cap);
     go.textContent = !chosen ? "Say what is happening first"
       : ok ? `Take ${fl.id} out for ${outN} night${outN>1?"s":""}` : "Not available";
     go.disabled = !ok || !chosen;
@@ -7377,13 +7442,13 @@ function openBlockForm(fi, day){
     const extra = [note.value, chosen === "Other" ? otherIn.value : ""].filter(x=>x && x.trim()).join(" · ");
     const person = newHand ? handName.value : who;
     const num = newHand ? handPh.value : phone;
-    if(addBlock(fi, from, outN, reason, extra, {fault, fixer:person, phone:num})){
+    if(addBlock(fi, from, outN, reason, extra, {fault, fixer:person, phone:num, cost:bill.value})){
       haptic(18); closeSheet(); refreshScreen();
     }
   };
 
   form.append(prev, line, fCap, find, grid, otherRow, flag,
-              whenCap, whenRow, whoCap, crew, handRow, noteRow, go);
+              whenCap, whenRow, jump, whoCap, crew, handRow, noteRow, go);
   sheetB.append(form);
   paint();
   sheet.classList.add("on"); scrim.classList.add("on");
