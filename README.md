@@ -120,7 +120,7 @@ Tap the amber amount to record money: the figure is already the balance and the 
 already the one that source is usually settled by, so it is two touches. Cash, UPI, bank,
 card or platform. A negative amount is a refund.
 
-**Arrivals with a balance surface in Pulse** — *"Collect ₹72,200 from 11 arrivals today"* —
+**Arrivals with a balance surface in Business** — *"Collect ₹72,200 from 11 arrivals today"* —
 because that is money you can only take while the guest is standing in front of you.
 Platform bookings are deliberately absent from that list.
 
@@ -221,7 +221,7 @@ Taking a flat out of service is easy. *Putting it back* is what gets forgotten �
 marked "AC repair" in March is still blocked in June because nobody revisited it, silently
 out of inventory the whole time.
 
-So around the date the flat was due back, **Pulse asks**:
+So around the date the flat was due back, **Business asks**:
 
 > **TT-104 · Maintenance** — comes back tomorrow · AC — technician booked.
 > Is it ready to sell again?    **[ Back on sale ]  [ Still out · +7 days ]**
@@ -333,7 +333,7 @@ month.
 ### Month
 
 The calendar, and what you selected. It used to be seven stacked sections — a progress bar,
-a caption, two explanatory paragraphs — with the calendar as one of them. Pulse owns
+a caption, two explanatory paragraphs — with the calendar as one of them. Business owns
 occupancy analysis now, so the month's fullness is a caption in the title row and the
 teaching text is gone: what survives under the grid is the one line that is *news*, a date
 running emptier than that weekday usually does.
@@ -469,7 +469,7 @@ operator did not earn:
 Same building is strongly preferred and *named* when it cannot be had — five buildings
 across Hyderabad are five different journeys to work, and the guest chose one of them.
 
-### Pulse
+### Business
 
 Opens with **Worth doing now** — one card, and only things that are true **today or
 tomorrow** and stop being true if you ignore them. Each kind gets **one row**, with the

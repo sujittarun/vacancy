@@ -88,6 +88,52 @@ fill and keeps dark's hue (OkLCh H 64.7 against dark's 64.2, so it is the same c
 both themes), and `--now-ink` is every accented word, hairline and thin bar. In dark the
 two are identical, so dark does not move.
 
+### Light is glass, not paint
+
+Two opaque planes separated by a hairline is not a material, it is a diagram. Apple's
+surfaces read as glass because of three things, and the blur is the least of them:
+
+1. **Something behind them worth refracting.** The light ground is not one flat fill but a
+   soft light source — three very low-contrast washes, brightest top-left. Blur over a flat
+   colour returns the same flat colour.
+2. **A saturation lift.** `saturate(180%)` so what shows through gains colour rather than grey.
+3. **A specular edge.** `inset 0 1px 0 rgba(255,255,255,.9)` along the top, a soft shadow
+   under the bottom. This is what actually says *a pane sits here*.
+
+Two rules keep it from becoming a texture:
+
+- **A recessed control is a translucent ink tint, never a paler white.** White on white has
+  nowhere to go — the first pass made every trough and ghost button disappear.
+- **A surface that means something keeps its meaning.** The alert and accent washes take the
+  glass *behaviour* — blur, saturation, edge — with their own colour mixed into the pane
+  rather than replaced by it. Plain glass over `.decide` turned "needs a decision" into a card.
+
+Scope: chrome and content cards. **Not** the 45 room tiles — they are the data field, data
+stays crisp, and 45 backdrop-filters on a scrolling grid is a frame-rate bill with nothing
+bought. Measured 61fps with 55 blurred elements live. Dark is untouched: it already has
+depth, and glass over near-black is grey.
+
+### A ring is one ring
+
+`border-color: X; box-shadow: 0 0 0 1px X` looks like a 2px ring and is two rings. The
+outer spread inherits the element's `border-radius` rather than radius + spread, so it runs
+wide at the corners and tight on the straights — a black edge of visibly uneven thickness,
+which is what the user saw and what sent me looking. An **inset** ring shares the border's
+own rounded rect exactly, so `border` + `inset 0 0 0 1px` reads as one clean ring on every
+side.
+
+The same card was also carrying *two different* rings — `.sel` wanted ink, `.today` wanted
+amber — which is legible in dark, where `--free` is near-white, and a black halo in light.
+Selection owns the ring; today owns the tint and the amber date chip. They compose instead
+of competing.
+
+### A room number never breaks
+
+`TT-` on one line and `203` on the next is the wrong-row error PRODUCT.md calls this app's
+failure mode, with extra steps. Room numbers in prose carry `.rm { white-space: nowrap }`.
+The move row also stopped ellipsising: it is one line elsewhere, but here the sentence ends
+in the destination room and *"Move S. Kulkarni to TT-2…"* is not an answer.
+
 ### Measure the page, not the table
 
 Every ratio above was recomputed from the rendered DOM — walking the real background
@@ -105,7 +151,7 @@ had thought to check:
 
 Booked stays the recessed state; the fill still carries that. But PRODUCT.md names reading
 the wrong row as *the* failure mode of this app, and a room number below AA is that failure
-waiting to happen. All four screens and all five Pulse segments now measure clean in both
+waiting to happen. All four screens and all five Business segments now measure clean in both
 themes.
 
 ### One code path
@@ -170,7 +216,7 @@ pixel reads as lag.
 ## Chrome versus content
 
 A control that does not scroll, is always true, and belongs to the screen rather than to
-the data is **chrome**, and chrome lives in the header. The Pulse segment bar was built
+the data is **chrome**, and chrome lives in the header. The Business segment bar was built
 three times as a sticky element inside the scroll area and was wrong the same way each
 time — a strip of page background parked under the title, reading as a black band with
 content sliding behind it.
@@ -184,6 +230,30 @@ wrong place.
 
 Moved into the header it inherits the blurred material, needs no z-index, no gradient and
 no offsets, and the failure mode cannot recur.
+
+## The fourth tab is called Business
+
+It was **Pulse**, and Pulse was the one word in `Rooms · Month · Ask · Pulse` that came
+from the category's stock cupboard — the same reason blue is banned here. It also lied
+twice: a pulse is a reading taken at this instant, and fourteen of this screen's fifteen
+cards are a nine-week projection or a history; and a pulse is something you *take*, while
+the lead segment has buttons that change the book.
+
+The deciding test was not the segment names but **what is on screen when you land**: two
+*"Is BH-101 back in service?"* cards with buttons, *"Clean 2 flats today"*, *"Collect
+₹11,700"*. That is a to-do list, not a figure — which is why **Numbers**, the obvious
+plain-English candidate, mislabels it just as surely.
+
+What every card here actually has in common is that it is a question the operator would
+ask about their own business: *what a night is worth · what you are owed · where bookings
+come from · how your book fills · which nights sell · how long people stay · what upkeep
+costs · whose work sticks · what is worth doing now.* The screen's own subtitle had been
+saying it all along — **"What to act on, and how the book looks"** — and that sentence
+reads correctly under a plain noun and awkwardly under a metaphor.
+
+`Rooms` remains both a tab and a segment inside Business, by the user's decision. In speech
+the two now disambiguate by their container ("the Rooms tab" against "Business, Rooms"),
+which is weaker than distinct words but is a known, chosen cost rather than an oversight.
 
 ## The finished picture must be a layout, not a pile of transforms
 
@@ -246,7 +316,7 @@ written for a known sibling count silently claims the one-child case too.
 
 **BoardUI** (a React dashboard system, 50+ components, 400+ tokens) was raised as a
 reference. Its *thinking* is worth having — dense cards, clear metric hierarchy, an action
-beside every number — and the Pulse rebuild uses it. Its **look** is deliberately not
+beside every number — and the Business rebuild uses it. Its **look** is deliberately not
 adopted. This app has one committed world: vacancy is the lit thing, near-monochrome, a
 single accent that only ever means *now*. A general-purpose dashboard skin over that would
 cost the only property that makes it not look like every other tool.

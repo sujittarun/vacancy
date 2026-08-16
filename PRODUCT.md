@@ -122,7 +122,7 @@ user's "Bajarahills".
 - **A pull refreshes and lands where you were.** Added to the home screen the app runs
   standalone: no address bar, no reload button, and no way back to a fresh start short of
   killing it. The pull is the gesture every phone owner already has, so it answers to that
-  — and it returns to the same tab and the same Pulse segment, because being dumped on
+  — and it returns to the same tab and the same Business segment, because being dumped on
   Rooms every time is worse than not reloading at all.
 - **The move cap is eight, and what it hides is said out loud.** There is a number — six
   people repacking for one arrival is a reorganisation, not a shuffle — but it sits where a

@@ -361,6 +361,14 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .row .meta{font-size:12.5px;color:var(--txt-2);line-height:1.35;min-width:0;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .row .meta em{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* A room row is one line and ellipsises — right for "3 BHK · TreeTops", wrong
+   for a move, where the sentence ends in the destination room number and that
+   number is the whole answer. "Move S. Kulkarni to TT-2…" is not an answer. */
+.row.move .meta{white-space:normal;overflow:visible;text-overflow:clip}
+/* a room number never breaks across a line. PRODUCT.md calls confusing TT-203
+   with TT-204 the failure mode of this app, and "TT-" on one line with "203" on
+   the next is the same mistake with extra steps. */
+.row.move .meta .rm{white-space:nowrap;text-decoration:none}
 .row.move .meta em{white-space:normal;line-height:1.4}
 .row.move{align-items:flex-start}
 .row.move .id, .row.move .pill{margin-top:2px}
@@ -410,7 +418,13 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .night.today .d{color:var(--now)}
 .night.full .n{color:var(--hot)}
 .night.full .t i{background:var(--hot)}
-.night.sel{border-color:var(--free);box-shadow:0 0 0 1px var(--free)}
+/* A selection ring made of a 1px border PLUS a 1px outer spread shadow is two
+   rings, and they cannot stay parallel: the outer one inherits the element's
+   border-radius rather than radius+spread, so it runs wide at the corners and
+   tight on the straights. That is the uneven black edge. An INSET ring shares
+   the border's own rounded rect exactly, so border + inset reads as one clean
+   2px ring on every side. Same fix wherever a ring is doubled. */
+.night.sel{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
 
 .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:7px}
 
@@ -638,7 +652,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .day.today .dd{color:var(--now)}
 .day.none .fn{color:var(--hot)}
 .day.none .gg i{background:var(--hot)}
-.day.sel{border-color:var(--free);box-shadow:0 0 0 1px var(--free), var(--shadow-sm)}
+.day.sel{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink), var(--shadow-sm)}
 
 /* press-and-hold, then sweep across dates to pick a stay */
 .cal{touch-action:pan-y}
@@ -1434,9 +1448,10 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 
 /* 6 — today stops being a tint. No amber tint over white clears 1.2:1, so the
    mark becomes a filled chip with a solid rule around the cell. */
-:root[data-theme="light"] .night.today{background:color-mix(in srgb,var(--now) 16%,var(--surface));border-color:var(--now-ink)}
+:root[data-theme="light"] .night.today{background:color-mix(in srgb,var(--now) 16%,var(--surface))}
+:root[data-theme="light"] .night.today:not(.sel){border-color:var(--now-ink)}
 :root[data-theme="light"] .night.today .d{color:var(--now-ink)}
-:root[data-theme="light"] .day.today{border-color:var(--now-ink)}
+:root[data-theme="light"] .day.today:not(.sel){border-color:var(--now-ink)}
 :root[data-theme="light"] .night.today .d em,:root[data-theme="light"] .day.today .dd{background:var(--now);color:var(--txt);border-radius:5px;padding:1px 5px;margin:-1px -2px}
 
 /* 7 — the accent splits by role. --now is the fill; --now-ink is every accented
@@ -1445,7 +1460,18 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 :root[data-theme="light"] :focus-visible{outline-color:var(--now-ink)}
 :root[data-theme="light"] .dcell.urgent,:root[data-theme="light"] .advert,:root[data-theme="light"] .field:focus-within,:root[data-theme="light"] .paid.due,:root[data-theme="light"] .toast.warn,:root[data-theme="light"] .faultFlag.hot,:root[data-theme="light"] .book input:focus,:root[data-theme="light"] .invForm input:focus{border-color:var(--now-ink)}
 :root[data-theme="light"] .pill.now,:root[data-theme="light"] .dcell .d,:root[data-theme="light"] .dcell.urgent,:root[data-theme="light"] .advert,:root[data-theme="light"] .vsay-go,:root[data-theme="light"] .paid.due,:root[data-theme="light"] .invAdd,:root[data-theme="light"] .faultFlag.hot{background:color-mix(in srgb,var(--now) 16%,var(--surface))}
-:root[data-theme="light"] .mbar i.soon,:root[data-theme="light"] .day.soft:not(.none) .gg i,:root[data-theme="light"] .vbar.acc .col i,:root[data-theme="light"] .patrow.low .t i,:root[data-theme="light"] .wkcol.low .bar i,:root[data-theme="light"] .strip.prev i.pending{background:var(--now-ink)}
+/* A thin bar has to be dark to read as a quantity on a pale track. A LARGE
+   fill does not — it is a labelled graphic, and painting a whole column in the
+   accent's text colour puts the brown back on screen, which was the thing this
+   palette set out to remove. Big fills take the live accent and a hairline;
+   only the 4-6px ones take the ink. */
+:root[data-theme="light"] .mbar i.soon,
+:root[data-theme="light"] .day.soft:not(.none) .gg i,
+:root[data-theme="light"] .strip.prev i.pending{background:var(--now-ink)}
+:root[data-theme="light"] .vbar.acc .col i,
+:root[data-theme="light"] .patrow.low .t i,
+:root[data-theme="light"] .wkcol.low .bar i{
+  background:var(--now);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--now-ink) 45%,transparent)}
 
 /* 8 — a bare amber dot on near-white is 1.9:1. Give it a boundary rather than
    claim a decorative exemption for something that carries meaning. */
@@ -1481,6 +1507,119 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 /* 14 — a hard-coded #fff on --hot measures 3.00:1 in DARK, a live AA failure in
    the theme that ships today. --ink-on is correct in both. */
 .rowx.arm,.invDel.arm{color:var(--ink-on)}
+
+/* ══════════════════ light: glass, not paint ═════════════════════════════════
+   Flat white cards on a flat grey page are two opaque planes, and the only
+   thing separating them is a hairline. Apple's materials read as glass because
+   of three things, and the blur is the least of them:
+
+     1. something behind them worth refracting — so the ground gets a soft,
+        very low-contrast light source rather than one flat fill;
+     2. a saturation lift, so what shows through gains colour rather than grey;
+     3. a specular edge — a bright hairline along the top and a soft shadow
+        under the bottom, which is what actually says "a pane sits here".
+
+   Applied to CHROME and CONTENT CARDS only. The 45 room tiles stay solid: they
+   are the data field, DESIGN.md keeps data crisp and chrome soft, and 45
+   backdrop-filters on a scrolling grid is a frame-rate bill with nothing bought.
+   Dark is untouched — it already has depth, and glass over near-black is grey. */
+:root[data-theme="light"] body{
+  background:
+    radial-gradient(1100px 620px at 12% -8%, rgba(255,255,255,.95), rgba(255,255,255,0) 62%),
+    radial-gradient(900px 520px at 96% 4%,  rgba(176,193,224,.42), rgba(176,193,224,0) 58%),
+    radial-gradient(760px 700px at 50% 108%, rgba(203,212,232,.5), rgba(203,212,232,0) 60%),
+    var(--bg);
+  background-attachment:fixed;
+}
+:root[data-theme="light"]{
+  --glass:rgba(255,255,255,.72);
+  /* A recessed control cannot be a paler white: white on white has nowhere to
+     go. It is a translucent INK tint over the same pane, so a trough still
+     reads as cut into the card while staying glass. */
+  --glass-2:rgba(13,16,23,.055);
+  --glass-edge:inset 0 1px 0 rgba(255,255,255,.9);
+  --glass-blur:blur(22px) saturate(180%);
+}
+:root[data-theme="light"] .card,
+:root[data-theme="light"] .tcard,
+:root[data-theme="light"] .night,
+:root[data-theme="light"] .day,
+:root[data-theme="light"] .peek,
+:root[data-theme="light"] .toast{
+  background-color:var(--glass);
+  -webkit-backdrop-filter:var(--glass-blur);
+  backdrop-filter:var(--glass-blur);
+  box-shadow:var(--shadow-sm), var(--glass-edge);
+  border-color:rgba(255,255,255,.65);
+}
+/* the recessed family — troughs, chips and controls — is the same pane with
+   less of it, so a control still reads as sunk into the card it sits on */
+:root[data-theme="light"] .seg,
+:root[data-theme="light"] .field,
+:root[data-theme="light"] .ghost,
+:root[data-theme="light"] .chips button,
+:root[data-theme="light"] .tyRow button,
+:root[data-theme="light"] .step,
+:root[data-theme="light"] .stepWide,
+:root[data-theme="light"] .srcRow button,
+:root[data-theme="light"] .fixer,
+:root[data-theme="light"] .wallmove{
+  background-color:var(--glass-2);
+  -webkit-backdrop-filter:blur(14px) saturate(160%);
+  backdrop-filter:blur(14px) saturate(160%);
+  border-color:rgba(255,255,255,.55);
+}
+/* A surface that means something keeps its meaning. These carry an alert or an
+   accent wash, so they take the glass BEHAVIOUR — blur, saturation, specular
+   edge — while their own colour is mixed into the pane rather than replaced by
+   it. Painting plain glass over them turned "needs a decision" into a card. */
+:root[data-theme="light"] .decide{
+  background-color:color-mix(in srgb, var(--hot) 13%, rgba(255,255,255,.78));
+  border-color:color-mix(in srgb, var(--hot) 55%, transparent);
+}
+:root[data-theme="light"] .advert,
+:root[data-theme="light"] .dcell.urgent{
+  background-color:color-mix(in srgb, var(--now) 17%, rgba(255,255,255,.78));
+}
+:root[data-theme="light"] .decide,
+:root[data-theme="light"] .advert,
+:root[data-theme="light"] .dcell{
+  -webkit-backdrop-filter:var(--glass-blur);
+  backdrop-filter:var(--glass-blur);
+  box-shadow:var(--shadow-sm), var(--glass-edge);
+}
+
+/* the pane that lifts OUT of the card keeps a true white and a real edge —
+   that is the difference between "on the glass" and "under it" */
+:root[data-theme="light"] .seg-ind,
+:root[data-theme="light"] .mguest-fx{
+  background:rgba(255,255,255,.94);
+  box-shadow:var(--shadow-sm), inset 0 1px 0 #fff;
+  border-color:rgba(255,255,255,.9);
+}
+/* floating chrome was already glass; it only needed the same saturation lift
+   and a light edge so it belongs to the same material family */
+:root[data-theme="light"] .topbar,
+:root[data-theme="light"] .tabbar,
+:root[data-theme="light"] .sheet{
+  -webkit-backdrop-filter:blur(26px) saturate(185%);
+  backdrop-filter:blur(26px) saturate(185%);
+}
+:root[data-theme="light"] .sheet{background:rgba(255,255,255,.86)}
+:root[data-theme="light"] .tabbar{box-shadow:var(--shadow), var(--glass-edge)}
+/* Safari repaints a backdrop-filter subtree on every scroll frame if it also
+   animates; the entrance already runs on these, so pin them to the compositor */
+:root[data-theme="light"] .card,
+:root[data-theme="light"] .tcard{contain:paint}
+@media (prefers-reduced-transparency:reduce){
+  :root[data-theme="light"] .card,:root[data-theme="light"] .tcard,
+  :root[data-theme="light"] .night,
+  :root[data-theme="light"] .day,:root[data-theme="light"] .toast{
+    background-color:var(--surface);backdrop-filter:none;-webkit-backdrop-filter:none}
+  :root[data-theme="light"] .seg,:root[data-theme="light"] .field,
+  :root[data-theme="light"] .ghost,:root[data-theme="light"] .chips button{
+    background-color:var(--surface-2);backdrop-filter:none;-webkit-backdrop-filter:none}
+}
 
 </style>
 
@@ -2411,12 +2550,21 @@ function seedFullHouse(){
   resv = resv.filter(r => !(r.start < B && r.end > A));
   const cash = (f, n) => Math.round(f.rate * n / 100) * 100;
   const num = i => "9" + String(100000000 + i * 7919).slice(0, 9);
+  /* Two flats are deliberately held by MORE than one stay, so the shuffle has
+     something bigger than a single move to offer. Without them every option in
+     the window is one guest and the multi-guest case is invisible in the demo. */
+  const chain = (i, f, cuts)=>{
+    cuts.forEach(([s,e],k)=> resv.push({fi:i, start:s, end:e, nights:e-s,
+      guest:NAMES[(3 + k*6 + i) % NAMES.length], src:SRC[(k+i) % SRC.length],
+      phone:num(i + k*40), pax:2, amount:cash(f, e-s), pays:[]}));
+  };
   flats.forEach((f, i)=>{
-    if(i === 2){
-      resv.push({fi:i, start:A, end:A+1, nights:1, guest:NAMES[3], src:"Direct call",
-                 phone:num(i), pax:2, amount:cash(f,1), pays:[]});
-      resv.push({fi:i, start:A+1, end:B, nights:FULL_NIGHTS-1, guest:NAMES[9], src:"Airbnb",
-                 phone:num(i+40), pax:2, amount:cash(f,FULL_NIGHTS-1), pays:[]});
+    if(i === 2){                                   // two guests → a 2-move option
+      chain(i, f, [[A, A+1], [A+1, B]]);
+      return;
+    }
+    if(i === 4){                                   // three guests → a 3-move option
+      chain(i, f, [[A, A+1], [A+1, A+2], [A+2, B]]);
       return;
     }
     const front = i % 2 === 0;
@@ -5426,11 +5574,16 @@ function renderAsk(focus){
            operator never learns the app can do it at all. So the shortlist is
            the best four, plus the best multi-guest option if none made the cut.
            It is a different shape of answer, not a worse one. */
-        const shown = moves.slice(0,4);
-        if(!shown.some(m => m.moves.length > 1)){
-          const multi = moves.find(m => m.moves.length > 1);
-          if(multi) shown.push(multi);
-        }
+        /* Cheapest first — but with forty single-guest options the bigger
+           shuffles fall off the end and the operator never learns the app can
+           do them at all. So: the best three outright, then the best example of
+           every larger size not yet on the list. The ladder is visible without
+           the cheap answers losing their place at the top. */
+        const shown = moves.slice(0,3);
+        const sizes = new Set(shown.map(m => m.moves.length));
+        moves.forEach(m=>{
+          if(shown.length < 6 && !sizes.has(m.moves.length)){ sizes.add(m.moves.length); shown.push(m); }
+        });
         const fewest = shown[0].moves.length;
         const most = Math.max(...shown.map(m => m.moves.length));
         mh.append(el("span","lbl", fewest === most
@@ -5444,12 +5597,12 @@ function renderAsk(focus){
           r.append(el("div","id", fromF.id));
           const m = el("div","meta");
           const who = k === 1
-            ? `Move <b>${esc(mv.moves[0].booking.guest)}</b> to <b>${esc(flats[mv.moves[0].to].id)}</b>`
+            ? `Move <b>${esc(mv.moves[0].booking.guest)}</b> to <b class="rm">${esc(flats[mv.moves[0].to].id)}</b>`
             : `Move <b>${k} guests</b> — ${mv.moves.map(x=>esc(x.booking.guest)).join(", ")}`;
           m.innerHTML = who
             + `<em>${mv.sameBuilding ? "same building" : "one changes building"}`
             + `${mv.sameType ? ", same size" : ", never smaller"}`
-            + ` · then ${esc(fromF.id)} is yours</em>`;
+            + ` · then <u class="rm">${esc(fromF.id)}</u> is yours</em>`;
           r.append(m, el("span","pill now", k === 1 ? "1 move" : `${k} moves`));
           // it used to open the room that WOULD be freed, having moved nobody
           r.onclick = ()=>{ haptic(10); openMove(mv, a, fi => openBooking(fi, a, p.n)); };
@@ -7162,7 +7315,16 @@ const SCREENS = [
   {id:"rooms",  label:"Rooms",  title:"Rooms",  render:renderRooms},
   {id:"month",  label:"Month",  title:"Month",  render:renderMonth},
   {id:"ask",    label:"Ask",    title:"Ask",    render:renderAsk},
-  {id:"trends", label:"Pulse",  title:"Pulse",  render:renderTrends},
+  /* Not "Pulse". A pulse is a reading taken at this instant, and this screen is
+     mostly a nine-week projection and a history — it also has buttons that
+     change the book, which is not what monitoring means. The deciding test was
+     what is on screen when you land: two "Is BH-101 back in service?" cards
+     with buttons, "Clean 2 flats today", "Collect ₹11,700". That is not a
+     number, so "Numbers" would mislabel it too. Every card here is a question
+     the operator would ask about their own business — what a night is worth,
+     what you are owed, which nights sell, whose work sticks, what is worth
+     doing now — and the subtitle already said so before the tab did.        */
+  {id:"trends", label:"Business", title:"Business", render:renderTrends},
 ];
 const tabbar = document.getElementById("tabbar");
 const scrTitle = document.getElementById("scrTitle");
