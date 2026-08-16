@@ -84,7 +84,44 @@
      which in a system whose only rule is "the vacant room is the lit one" is a
      language error, not a shade being slightly off. */
   --raise:#1F2330;
-  --bar:rgba(12,14,20,.72);
+  /* CRYSTAL, in the dark. The material was light-only, so a phone that prefers
+     dark — which is the default this app opens in — saw no glass at all. Same
+     optics inverted: a narrow bright streak, a rim that is a light hairline
+     rather than a white edge, and the pane's thickness read as a dark line
+     under the bottom instead of a bright one on top.
+
+     The opacities are higher than light's. That is arithmetic again: in dark a
+     FREE room tile is near-white, so chrome text sits on a pale backdrop rather
+     than a dark one, and 52% would put white type on mid-grey. At 68% the grid
+     still moves visibly under the bar and the type still clears. */
+  --g1:rgba(24,28,38,.64);
+  --g2:rgba(14,17,25,.68);
+  --g3:rgba(19,23,32,.88);
+  --g-sunk:rgba(255,255,255,.055);
+  --g-edge:rgba(255,255,255,.13);
+  --g-edge-2:rgba(255,255,255,.20);
+  --g-inner:inset 0 1px 0 rgba(255,255,255,.16), inset 0 -1px 0 rgba(0,0,0,.5);
+  --blur-1:blur(6px) saturate(140%);
+  --blur-2:blur(9px) saturate(150%);
+  --blur-3:blur(12px) saturate(155%);
+  --sheen:linear-gradient(128deg, rgba(255,255,255,.11) 0%, rgba(255,255,255,.02) 17%,
+                          rgba(255,255,255,0) 34%);
+  --sheen-soft:linear-gradient(128deg, rgba(255,255,255,.07) 0%, rgba(255,255,255,0) 32%);
+  --lift:0 1px 1px rgba(0,0,0,.5), 0 3px 7px -3px rgba(0,0,0,.62);
+  --lift-2:0 1px 2px rgba(0,0,0,.55), 0 9px 20px -10px rgba(0,0,0,.72);
+  --on-glass:#EDF1F8;
+  /* The two materials that carry STATE rather than depth: a trough cut into a
+     pane, and the pane that lifts back out of it. They are tokens rather than
+     literals because dark's raised pane is a LIGHTER DARK, not a near-white.
+     Near-white is the vacancy semantic in this theme — every free room tile is
+     one — so lending it to a selected control is the language error the file
+     warns about above, not a shade being slightly off. It is also how the
+     "1 night" chip shipped for a moment as white type on a white pane. */
+  --sunk-edge:rgba(255,255,255,.09);
+  --pane:var(--raise);
+  --pane-inner:inset 0 1px 0 rgba(255,255,255,.14);
+  --press:rgba(46,53,70,.86);   /* the pane brightening under a finger */
+  --bar:var(--g2);
   --scrim:rgba(0,0,0,.55);
   --shadow:0 1px 2px rgba(0,0,0,.5), 0 12px 32px -10px rgba(0,0,0,.75);
   --shadow-sm:0 1px 2px rgba(0,0,0,.4), 0 4px 12px -4px rgba(0,0,0,.5);
@@ -146,7 +183,44 @@
   --now:#FFA23A; --now-ink:#FFA23A; --hot:#FF5F52;
   --ink:#EAEFF9; --ink-on:#0A0C11;
   --raise:#1F2330;
-  --bar:rgba(12,14,20,.72);
+  /* CRYSTAL, in the dark. The material was light-only, so a phone that prefers
+     dark — which is the default this app opens in — saw no glass at all. Same
+     optics inverted: a narrow bright streak, a rim that is a light hairline
+     rather than a white edge, and the pane's thickness read as a dark line
+     under the bottom instead of a bright one on top.
+
+     The opacities are higher than light's. That is arithmetic again: in dark a
+     FREE room tile is near-white, so chrome text sits on a pale backdrop rather
+     than a dark one, and 52% would put white type on mid-grey. At 68% the grid
+     still moves visibly under the bar and the type still clears. */
+  --g1:rgba(24,28,38,.64);
+  --g2:rgba(14,17,25,.68);
+  --g3:rgba(19,23,32,.88);
+  --g-sunk:rgba(255,255,255,.055);
+  --g-edge:rgba(255,255,255,.13);
+  --g-edge-2:rgba(255,255,255,.20);
+  --g-inner:inset 0 1px 0 rgba(255,255,255,.16), inset 0 -1px 0 rgba(0,0,0,.5);
+  --blur-1:blur(6px) saturate(140%);
+  --blur-2:blur(9px) saturate(150%);
+  --blur-3:blur(12px) saturate(155%);
+  --sheen:linear-gradient(128deg, rgba(255,255,255,.11) 0%, rgba(255,255,255,.02) 17%,
+                          rgba(255,255,255,0) 34%);
+  --sheen-soft:linear-gradient(128deg, rgba(255,255,255,.07) 0%, rgba(255,255,255,0) 32%);
+  --lift:0 1px 1px rgba(0,0,0,.5), 0 3px 7px -3px rgba(0,0,0,.62);
+  --lift-2:0 1px 2px rgba(0,0,0,.55), 0 9px 20px -10px rgba(0,0,0,.72);
+  --on-glass:#EDF1F8;
+  /* The two materials that carry STATE rather than depth: a trough cut into a
+     pane, and the pane that lifts back out of it. They are tokens rather than
+     literals because dark's raised pane is a LIGHTER DARK, not a near-white.
+     Near-white is the vacancy semantic in this theme — every free room tile is
+     one — so lending it to a selected control is the language error the file
+     warns about above, not a shade being slightly off. It is also how the
+     "1 night" chip shipped for a moment as white type on a white pane. */
+  --sunk-edge:rgba(255,255,255,.09);
+  --pane:var(--raise);
+  --pane-inner:inset 0 1px 0 rgba(255,255,255,.14);
+  --press:rgba(46,53,70,.86);   /* the pane brightening under a finger */
+  --bar:var(--g2);
   --scrim:rgba(0,0,0,.55);
   --shadow:0 1px 2px rgba(0,0,0,.5), 0 12px 32px -10px rgba(0,0,0,.75);
   --shadow-sm:0 1px 2px rgba(0,0,0,.4), 0 4px 12px -4px rgba(0,0,0,.5);
@@ -1519,104 +1593,6 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
   .sheet{left:50%;transform:translate(-50%,101%);width:min(560px,100%);border-radius:22px 22px 0 0}
   .sheet.on{transform:translate(-50%,0)}
 }
-/* ══════════════════════ light only ══════════════════════════════════════════
-   Everything below exists because a rule that is right on a dark ground is not
-   automatically right on a light one. They are grouped by the reason they are
-   here, not by where they appear on screen, so the next person can tell whether
-   a new rule belongs in this block at all.
-
-   There is one guard, not two, because data-theme is stamped before first paint.
-   Add to this block and it works in both the system-preference case and the
-   manual toggle; there is no second copy to forget.                           */
-
-/* 1 — the vacant tile is an object lying on the page, not a hole cut through it.
-   Light has no headroom above white, so elevation is the only depth it owns. */
-:root[data-theme="light"] .tile.free{box-shadow:0 1px 2px rgba(13,16,23,.20), 0 4px 10px -4px rgba(13,16,23,.26), inset 0 1px 0 rgba(242,245,251,.10)}
-
-/* 2 — recession is carried by the fill, never by the legibility of the room
-   number. On 45 booked tiles that number was shipping at 1.98:1 and its type
-   label at 1.50:1 — against the one thing PRODUCT.md calls a safety feature. */
-:root[data-theme="light"] .tile:not(.free) s{opacity:.9}
-
-/* 3 — out of service is a third MATERIAL, not a third shade. Its old hatch
-   measured 1.087:1 against the tile, i.e. it was not there. */
-:root[data-theme="light"] .tile.oos{background:repeating-linear-gradient(135deg,var(--oos) 0 3px,var(--surface-2) 3px 7px)}
-:root[data-theme="light"] .tile.oos b,:root[data-theme="light"] .tile.oos s{color:var(--held-ink);opacity:1}
-
-/* 4 — DESIGN.md: no colour on a booked cell. Shape carries the turnover. */
-:root[data-theme="light"] .tile.turn::after{background:var(--held-ink)}
-:root[data-theme="light"] .tile.turn s{color:var(--held-ink);opacity:1}
-
-/* 5 — the affirmative is stated IN the vacancy material, not in a wash of it.
-   --free is a fill in this system and never a text colour: it sits 1.209:1 from
-   --txt, so `color:var(--free)` cannot read as emphasis. */
-:root[data-theme="light"] .pill.good{background:var(--free);color:var(--free-ink);border-color:transparent}
-:root[data-theme="light"] .allclear .tick{background:var(--free);color:var(--free-ink)}
-:root[data-theme="light"] .answer .y{color:var(--free-ink);background:var(--free);border-radius:6px;padding:0 .18em;-webkit-box-decoration-break:clone;box-decoration-break:clone}
-:root[data-theme="light"] .day.rng{background:color-mix(in srgb,var(--free) 30%,var(--surface));border-color:color-mix(in srgb,var(--free) 60%,transparent)}
-
-/* 6 — today stops being a tint. No amber tint over white clears 1.2:1, so the
-   mark becomes a filled chip with a solid rule around the cell. */
-:root[data-theme="light"] .night.today{background:color-mix(in srgb,var(--now) 16%,var(--surface))}
-:root[data-theme="light"] .night.today:not(.sel){border-color:var(--now-ink)}
-:root[data-theme="light"] .night.today .d{color:var(--now-ink)}
-:root[data-theme="light"] .day.today:not(.sel){border-color:var(--now-ink)}
-:root[data-theme="light"] .night.today .d em,:root[data-theme="light"] .day.today .dd{background:var(--now);color:var(--txt);border-radius:5px;padding:1px 5px;margin:-1px -2px}
-
-/* 7 — the accent splits by role. --now is the fill; --now-ink is every accented
-   word, every accent hairline and every thin quantity bar. */
-:root[data-theme="light"] .pill.now,:root[data-theme="light"] .op.alert b,:root[data-theme="light"] .op.alert s,:root[data-theme="light"] .mcap em,:root[data-theme="light"] .tcard .said .hi,:root[data-theme="light"] .dcell .d,:root[data-theme="light"] .dcell.urgent .n,:root[data-theme="light"] .advert-head,:root[data-theme="light"] .exts-head u,:root[data-theme="light"] .vbar.acc .v,:root[data-theme="light"] .vbar.acc .k,:root[data-theme="light"] .patrow.low .k,:root[data-theme="light"] .patrow.low .v,:root[data-theme="light"] .wkcol.low .p,:root[data-theme="light"] .wkcol.low .d,:root[data-theme="light"] .insight .hi,:root[data-theme="light"] .day.soft:not(.none) .fn,:root[data-theme="light"] .movewhy b.ok,:root[data-theme="light"] .bkback,:root[data-theme="light"] .paid.due,:root[data-theme="light"] .invAdd,:root[data-theme="light"] .vsay-go,:root[data-theme="light"] .toast .tclose,:root[data-theme="light"] .faultFlag em,:root[data-theme="light"] .fixer:not(.on) .fx-n em,:root[data-theme="light"] .fixer:not(.on) .fx-r.bad,:root[data-theme="light"] .opp.hot:not(.zero) b,:root[data-theme="light"] .wm-h svg{color:var(--now-ink)}
-:root[data-theme="light"] :focus-visible{outline-color:var(--now-ink)}
-:root[data-theme="light"] .dcell.urgent,:root[data-theme="light"] .advert,:root[data-theme="light"] .field:focus-within,:root[data-theme="light"] .paid.due,:root[data-theme="light"] .toast.warn,:root[data-theme="light"] .faultFlag.hot,:root[data-theme="light"] .book input:focus,:root[data-theme="light"] .invForm input:focus{border-color:var(--now-ink)}
-:root[data-theme="light"] .pill.now,:root[data-theme="light"] .dcell .d,:root[data-theme="light"] .dcell.urgent,:root[data-theme="light"] .advert,:root[data-theme="light"] .vsay-go,:root[data-theme="light"] .paid.due,:root[data-theme="light"] .invAdd,:root[data-theme="light"] .faultFlag.hot{background:color-mix(in srgb,var(--now) 16%,var(--surface))}
-/* A thin bar has to be dark to read as a quantity on a pale track. A LARGE
-   fill does not — it is a labelled graphic, and painting a whole column in the
-   accent's text colour puts the brown back on screen, which was the thing this
-   palette set out to remove. Big fills take the live accent and a hairline;
-   only the 4-6px ones take the ink. */
-:root[data-theme="light"] .mbar i.soon,
-:root[data-theme="light"] .day.soft:not(.none) .gg i,
-:root[data-theme="light"] .strip.prev i.pending{background:var(--now-ink)}
-:root[data-theme="light"] .vbar.acc .col i,
-:root[data-theme="light"] .patrow.low .t i,
-:root[data-theme="light"] .wkcol.low .bar i{
-  background:var(--now);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--now-ink) 45%,transparent)}
-
-/* 8 — a bare amber dot on near-white is 1.9:1. Give it a boundary rather than
-   claim a decorative exemption for something that carries meaning. */
-:root[data-theme="light"] .op .dot,:root[data-theme="light"] .act.good .mark,:root[data-theme="light"] .day.soft::after,:root[data-theme="light"] .pill.wait i,:root[data-theme="light"] .tabseg button:not([aria-selected="true"]) i.dot{box-shadow:0 0 0 1px var(--now-ink)}
-
-/* 9 — alerts mix into --surface, never into transparent. */
-:root[data-theme="light"] .decide{background:color-mix(in srgb,var(--hot) 12%,var(--surface));border-color:var(--hot)}
-:root[data-theme="light"] .pill.warn{background:color-mix(in srgb,var(--hot) 12%,var(--surface))}
-:root[data-theme="light"] .gate .err{background:color-mix(in srgb,var(--hot) 12%,var(--surface));border-color:var(--hot)}
-:root[data-theme="light"] .toast.bad{border-color:var(--hot)}
-
-/* 10 — the live dot was a third hue, and 1.68:1 here. One accent, two semantics. */
-:root[data-theme="light"] .pill.live i{background:var(--free)}
-
-/* 11 — the turnover seam. `var(--bg)` as a FOREGROUND only works while --bg is
-   the darkest value in the system, which is true in dark and false here. */
-:root[data-theme="light"] .strip i.edge{box-shadow:inset 1px 0 0 var(--txt-3)}
-:root[data-theme="light"] .strip i.f.edge,:root[data-theme="light"] .strip i.b.edge{box-shadow:inset 1px 0 0 var(--surface)}
-:root[data-theme="light"] .strip i.td,:root[data-theme="light"] .strip i.f.td.edge,:root[data-theme="light"] .strip i.b.td.edge{box-shadow:inset 0 0 0 1px var(--now-ink), inset 0 -4px 0 var(--now)}
-:root[data-theme="light"] .playhead{background:var(--now-ink);box-shadow:0 0 0 1px var(--surface)}
-
-/* 12 — the last text pairs under AA, each on --held or --surface-3. */
-:root[data-theme="light"] .mroom>.mhead>s{color:var(--held-ink)}
-:root[data-theme="light"] .faultFlag{background:var(--surface-2)}
-:root[data-theme="light"] .roomRoutes button:active s{color:var(--txt-2)}
-:root[data-theme="light"] .bkform input:focus::placeholder,:root[data-theme="light"] .gate input:focus::placeholder{color:var(--txt-2)}
-
-/* 13 — the top bar's entire boundary was a 1.236:1 hairline over a 1.044:1
-   material. --surface is already at the white ceiling, so the separation has to
-   come from the shadow. */
-:root[data-theme="light"] .topbar{box-shadow:0 1px 0 rgba(13,16,23,.05), 0 8px 20px -12px rgba(13,16,23,.28)}
-
-/* 14 — a hard-coded #fff on --hot measures 3.00:1 in DARK, a live AA failure in
-   the theme that ships today. --ink-on is correct in both. */
-.rowx.arm,.invDel.arm{color:var(--ink-on)}
-
 /* ══════════════════ light: a material, not a coat of paint ══════════════════
    Apple's own guidance is the part most "liquid glass" work skips: the material
    belongs to the layer you REACH FOR — navigation, controls, things that float
@@ -1676,6 +1652,11 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
   /* tight shadows: a thin pane sits close to what it is on */
   --lift:0 1px 1px rgba(13,16,23,.14), 0 3px 7px -3px rgba(13,16,23,.20);
   --lift-2:0 1px 2px rgba(13,16,23,.16), 0 9px 20px -10px rgba(13,16,23,.30);
+  /* state, not depth — see the dark block for why these are tokens */
+  --sunk-edge:rgba(255,255,255,.5);
+  --pane:rgba(255,255,255,.94);
+  --pane-inner:inset 0 1px 0 #fff;
+  --press:rgba(255,255,255,.86);
 }
 
 /* ── L0 · the environment ────────────────────────────────────────────────────
@@ -1685,6 +1666,17 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
    default accent of every scheduling tool alive — while amber is the only
    colour allowed to mean anything. So the environment is light and shade, not
    hue: one soft source top-left, cool weight top-right, a low pool beneath. */
+/* A blurred flat colour is the same flat colour in either theme, so dark gets a
+   ground with structure as well — far quieter than light's, because a dark
+   ground shows its seams much sooner. */
+:root[data-theme="dark"] body{
+  background:
+    radial-gradient(900px 520px at 6% -12%,  rgba(58,68,92,.55),  rgba(58,68,92,0) 52%),
+    radial-gradient(700px 420px at 104% 2%,  rgba(38,46,66,.58),  rgba(38,46,66,0) 50%),
+    radial-gradient(760px 640px at 42% 112%, rgba(30,36,52,.68),  rgba(30,36,52,0) 55%),
+    var(--bg);
+  background-attachment:fixed;
+}
 :root[data-theme="light"] body{
   /* A blurred flat colour is the same flat colour, so a card floating on a
      smooth ground shows nothing however transparent it is. The ground therefore
@@ -1702,10 +1694,10 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 
 /* ── L1 · content ────────────────────────────────────────────────────────────
    Readable first. Light translucency, gentle blur, the softer sweep.        */
-:root[data-theme="light"] .card,
-:root[data-theme="light"] .tcard,
-:root[data-theme="light"] .night,
-:root[data-theme="light"] .day{
+.card,
+.tcard,
+.night,
+.day{
   background-color:var(--g1);
   background-image:var(--sheen-soft);
   -webkit-backdrop-filter:var(--blur-1); backdrop-filter:var(--blur-1);
@@ -1717,12 +1709,12 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 
 /* ── L2 · chrome ─────────────────────────────────────────────────────────────
    The layer you reach for. Stronger blur, clearer edge, the full sweep.     */
-:root[data-theme="light"] .topbar,
-:root[data-theme="light"] .tabbar,
-:root[data-theme="light"] .tabseg{
+.topbar,
+.tabbar,
+.tabseg{
   -webkit-backdrop-filter:var(--blur-2); backdrop-filter:var(--blur-2);
 }
-:root[data-theme="light"] .tabbar{
+.tabbar{
   background-color:var(--g3);
   background-image:var(--sheen);
   border-color:var(--g-edge);
@@ -1730,31 +1722,32 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
   box-shadow:var(--lift-2), var(--g-inner);
 }
 /* the selected tab is a pane set INTO the bar, not a chip painted on it */
-:root[data-theme="light"] .tabbar button[aria-selected="true"]{
-  background:rgba(255,255,255,.92);
-  box-shadow:inset 0 0 0 1px rgba(255,255,255,.9), 0 2px 8px -3px rgba(13,16,23,.22);
+.tabbar button[aria-selected="true"]{
+  background:var(--raise);
+  box-shadow:inset 0 0 0 1px var(--g-edge-2), 0 2px 8px -3px rgba(13,16,23,.22);
 }
-:root[data-theme="light"] .topbar{
+.topbar{
   box-shadow:0 1px 0 rgba(13,16,23,.05), 0 10px 24px -16px rgba(13,16,23,.30);
 }
 /* the two strings that ride over whatever is scrolling underneath */
-:root[data-theme="light"] .topbar .sub,
-:root[data-theme="light"] #scrSub{color:var(--on-glass)}
-:root[data-theme="light"] .tabbar button{color:var(--on-glass)}
-:root[data-theme="light"] .tabbar button[aria-selected="true"]{color:var(--txt)}
+/* the two strings that ride over whatever is scrolling underneath — the ink is
+   a token, so each theme brings its own and the rule is written once */
+.topbar .sub,#scrSub{color:var(--on-glass)}
+.tabbar button{color:var(--on-glass)}
+.tabbar button[aria-selected="true"]{color:var(--txt)}
 
 /* ── L3 · floating ───────────────────────────────────────────────────────────
    Nearest to the eye, so the most opaque and the most blurred — a sheet you
    cannot read through is not a failure of transparency, it is depth.        */
-:root[data-theme="light"] .sheet{
+.sheet{
   background-color:var(--g3);
   background-image:var(--sheen);
   -webkit-backdrop-filter:var(--blur-3); backdrop-filter:var(--blur-3);
   border-top:1px solid var(--g-edge-2);
   border-radius:26px 26px 0 0;
 }
-:root[data-theme="light"] .toast,
-:root[data-theme="light"] .peek{
+.toast,
+.peek{
   background-color:var(--g3);
   background-image:var(--sheen);
   -webkit-backdrop-filter:var(--blur-3); backdrop-filter:var(--blur-3);
@@ -1771,30 +1764,31 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
    and win — which is how a selected chip ended up as near-white text on a
    near-white trough, i.e. invisible, and how the placeholder guests ended up
    looking like they had already moved. State beats material, always. */
-:root[data-theme="light"] .seg,
-:root[data-theme="light"] .field,
-:root[data-theme="light"] .ghost:not(.on),
-:root[data-theme="light"] .chips button:not([aria-pressed="true"]),
-:root[data-theme="light"] .tyRow button:not([aria-pressed="true"]),
-:root[data-theme="light"] .step,
-:root[data-theme="light"] .stepWide,
-:root[data-theme="light"] .srcRow button:not([aria-pressed="true"]),
-:root[data-theme="light"] .fixer:not(.on),
-:root[data-theme="light"] .ffind,
-:root[data-theme="light"] .ftile:not([aria-pressed="true"]),
-:root[data-theme="light"] .mate:not([aria-pressed="true"]),
-:root[data-theme="light"] .dcell:not(.urgent),
-:root[data-theme="light"] .wallmove{
+.seg,
+.field,
+.ghost:not(.on),
+.chips button:not([aria-pressed="true"]),
+.tyRow button:not([aria-pressed="true"]),
+.step,
+.stepWide,
+.srcRow button:not([aria-pressed="true"]),
+.fixer:not(.on),
+.ffind,
+.ftile:not([aria-pressed="true"]),
+.mate:not([aria-pressed="true"]),
+.dcell:not(.urgent),
+.wallmove{
   background-color:var(--g-sunk);
   -webkit-backdrop-filter:blur(12px) saturate(150%); backdrop-filter:blur(12px) saturate(150%);
-  border-color:rgba(255,255,255,.5);
+  border-color:var(--sunk-edge);
 }
-/* and the thing that lifts back OUT of a trough is the brightest pane there is */
-:root[data-theme="light"] .seg-ind,
-:root[data-theme="light"] .mguest:not(.berth)>.mguest-fx{
-  background:rgba(255,255,255,.94);
+/* and the thing that lifts back OUT of a trough is the brightest pane there is
+   — brightest RELATIVE to its theme, which in dark is a lighter dark. */
+.seg-ind,
+.mguest:not(.berth)>.mguest-fx{
+  background:var(--pane);
   background-image:var(--sheen-soft);
-  box-shadow:var(--lift), inset 0 1px 0 #fff;
+  box-shadow:var(--lift), var(--pane-inner);
   border-color:var(--g-edge-2);
 }
 /* An empty place kept for someone is EMPTY. The first glass pass matched
@@ -1802,7 +1796,7 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
    placeholder as a solid chip — so the sheet showed all the guests already
    standing in their new rooms before anyone had agreed to move. A dashed 1px
    border is not a difference. An absent surface is. */
-:root[data-theme="light"] .mguest.berth>.mguest-fx{
+.mguest.berth>.mguest-fx{
   background:transparent;background-image:none;box-shadow:none;
   border-color:color-mix(in srgb, var(--txt-3) 55%, transparent);
 }
@@ -1810,19 +1804,21 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 /* ── a surface that means something keeps its meaning ────────────────────────
    These carry an alert or an accent wash. They take the glass BEHAVIOUR and
    keep their own colour, mixed into the pane rather than replaced by it —
-   plain glass over `.decide` turned "needs a decision" into a card.         */
-:root[data-theme="light"] .decide{
-  background-color:color-mix(in srgb, var(--hot) 13%, rgba(255,255,255,.80));
+   plain glass over `.decide` turned "needs a decision" into a card.
+   The wash mixes into var(--g3), the floating pane of whichever theme is on,
+   so the alert stays an alert on either ground.                            */
+.decide{
+  background-color:color-mix(in srgb, var(--hot) 13%, var(--g3));
   border-color:color-mix(in srgb, var(--hot) 55%, transparent);
 }
-:root[data-theme="light"] .advert,
-:root[data-theme="light"] .dcell.urgent{
-  background-color:color-mix(in srgb, var(--now) 17%, rgba(255,255,255,.80));
+.advert,
+.dcell.urgent{
+  background-color:color-mix(in srgb, var(--now) 17%, var(--g3));
   border-color:color-mix(in srgb, var(--now-ink) 45%, transparent);
 }
-:root[data-theme="light"] .decide,
-:root[data-theme="light"] .advert,
-:root[data-theme="light"] .dcell.urgent{
+.decide,
+.advert,
+.dcell.urgent{
   background-image:var(--sheen-soft);
   -webkit-backdrop-filter:var(--blur-1); backdrop-filter:var(--blur-1);
   box-shadow:var(--lift), var(--g-inner);
@@ -1832,16 +1828,16 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
    No hover on a phone. What a finger gets is the pane brightening under it —
    the press geometry is already the app's own 85ms-down, spring-back rule and
    is deliberately not touched here. */
-:root[data-theme="light"] .card:active,
-:root[data-theme="light"] .tcard:active,
-:root[data-theme="light"] .night:active,
-:root[data-theme="light"] .day:active,
-:root[data-theme="light"] .ghost:active,
-:root[data-theme="light"] .chips button:not([aria-pressed="true"]):active,
-:root[data-theme="light"] .tyRow button:not([aria-pressed="true"]):active,
-:root[data-theme="light"] .fixer:not(.on):active,
-:root[data-theme="light"] .wallmove:active{
-  background-color:rgba(255,255,255,.86);
+.card:active,
+.tcard:active,
+.night:active,
+.day:active,
+.ghost:active,
+.chips button:not([aria-pressed="true"]):active,
+.tyRow button:not([aria-pressed="true"]):active,
+.fixer:not(.on):active,
+.wallmove:active{
+  background-color:var(--press);
 }
 
 /* ── the data field stays out of it ──────────────────────────────────────────
@@ -1949,17 +1945,12 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 
 /* ── when the system says no to transparency, mean it ───────────────────────*/
 @media (prefers-reduced-transparency:reduce){
-  :root[data-theme="light"] .card,:root[data-theme="light"] .tcard,
-  :root[data-theme="light"] .night,:root[data-theme="light"] .day,
-  :root[data-theme="light"] .toast,:root[data-theme="light"] .peek,
-  :root[data-theme="light"] .sheet,:root[data-theme="light"] .tabbar{
+  .card,.tcard,.night,.day,.toast,.peek,.sheet,.tabbar,.topbar{
     background-color:var(--surface);background-image:none;
     backdrop-filter:none;-webkit-backdrop-filter:none;border-color:var(--line)}
-  :root[data-theme="light"] .seg,:root[data-theme="light"] .field,
-  :root[data-theme="light"] .ghost,:root[data-theme="light"] .chips button,
-  :root[data-theme="light"] .dcell{
+  .seg,.field,.ghost,.chips button,.dcell{
     background-color:var(--surface-2);backdrop-filter:none;-webkit-backdrop-filter:none}
-  :root[data-theme="light"] body{background:var(--bg)}
+  body{background:var(--bg)}
 }
 </style>
 
