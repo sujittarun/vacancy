@@ -1889,17 +1889,31 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
   background-attachment:fixed;
 }
 :root[data-theme="light"] body{
-  /* A blurred flat colour is the same flat colour, so a card floating on a
-     smooth ground shows nothing however transparent it is. The ground therefore
-     carries real variation — a bright source top-left, cool mass top-right, a
-     low pool beneath and a band across the middle — enough for a pane to have
-     something to pick up, nowhere near enough to read as decoration. */
+  /* THE GROUND IS THE WHOLE PROBLEM, and it took three redesigns of the cards
+     to see it. A pane can only show what changes underneath it. The old ground
+     had four blooms of 760–1150px, which is two to three times the width of the
+     screen — so inside one card's own 350px footprint the ground shifted by
+     ELEVEN levels out of 255. Effectively a flat colour. Every "glass" card
+     drawn on it sampled one tint and rendered as flat paint, which is why it
+     could only ever look like a white card, a grey stain, or nothing at all.
+     Measured on a 390x844 canvas, sampling the range inside a card-sized
+     window: old ground 11, this one 53.
+
+     So the blooms are smaller than a card rather than larger than the screen,
+     and there are seven of them, alternating light and cool. That is the entire
+     trick — structure at the scale of the thing that has to reveal it.
+     Still no hue with a job: amber is the only colour in this app allowed to
+     mean anything, and this is light and shade with a cool cast, not a
+     palette. */
   background:
-    radial-gradient(1150px 660px at 8% -12%,  rgba(255,255,255,1),    rgba(255,255,255,0) 56%),
-    radial-gradient(760px 460px at 104% 0%,   rgba(139,163,205,.50),  rgba(139,163,205,0) 52%),
-    radial-gradient(900px 520px at 50% 44%,   rgba(255,255,255,.55),  rgba(255,255,255,0) 46%),
-    radial-gradient(860px 760px at 40% 114%,  rgba(158,175,210,.55),  rgba(158,175,210,0) 56%),
-    var(--bg);
+    radial-gradient(420px 420px at 12% 2%,   rgba(255,255,255,.95), rgba(255,255,255,0) 70%),
+    radial-gradient(380px 380px at 88% 10%,  rgba(146,167,206,.75), rgba(146,167,206,0) 70%),
+    radial-gradient(340px 340px at 62% 34%,  rgba(255,255,255,.80), rgba(255,255,255,0) 70%),
+    radial-gradient(360px 360px at 15% 46%,  rgba(135,155,196,.62), rgba(135,155,196,0) 70%),
+    radial-gradient(400px 400px at 92% 62%,  rgba(255,255,255,.70), rgba(255,255,255,0) 70%),
+    radial-gradient(420px 420px at 38% 78%,  rgba(128,150,194,.68), rgba(128,150,194,0) 70%),
+    radial-gradient(380px 380px at 80% 98%,  rgba(255,255,255,.62), rgba(255,255,255,0) 70%),
+    #D4DBE9;
   background-attachment:fixed;
 }
 
@@ -1994,17 +2008,16 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 :root[data-theme="light"] .card,
 :root[data-theme="light"] .tcard,
 :root[data-theme="light"] .ops-row{
-  background:none;
-  -webkit-backdrop-filter:none; backdrop-filter:none;
-  border-color:transparent;
-  box-shadow:none;
+  background-color:rgba(255,255,255,.38);
+  background-image:var(--lg-sheen);
+  -webkit-backdrop-filter:blur(9px) saturate(180%); backdrop-filter:blur(9px) saturate(180%);
+  border-color:rgba(255,255,255,.58);
+  box-shadow:var(--lg-rim);
 }
-/* the one exception: a card INSIDE a sheet still needs to separate itself from
-   the sheet's own material, and there it has something real behind it */
+/* Inside a sheet the material behind is the sheet, which is already lifted, so
+   the pane needs less of its own fill to separate from it. */
 :root[data-theme="light"] .sheet .card{
   background-color:var(--lg-fill-2);
-  border-color:rgba(255,255,255,.5);
-  box-shadow:0 1px 2px rgba(13,16,23,.07);
 }
 /* ── the day cells are DATA, and data stays crisp ────────────────────────────
    .day and .night were in the list above and should never have been. A rim
