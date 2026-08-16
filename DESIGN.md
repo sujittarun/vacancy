@@ -474,6 +474,46 @@ cost the only property that makes it not look like every other tool.
 The rule when a reference arrives: take the reasoning, refuse the surface, unless the brief
 itself asks for a new world.
 
+## A material must exist in the theme the app opens in
+
+Crystal shipped, was verified, and was invisible. Every glass rule had been written
+under `:root[data-theme="light"]`, and the app opens in **dark** — the phone prefers
+it and nothing is saved on a first visit. `--g2` resolved to the empty string, every
+`background-color: var(--g2)` fell through to the flat surface underneath, and the
+honest answer to "is it live?" was *yes, and it was never there*.
+
+The check is one line, not a review: read the token in the theme that actually paints
+on load. A material verified only in the theme you happen to be developing in has not
+been verified.
+
+## A token is what lets one rule serve two themes; a literal is what breaks it
+
+The repair was to drop the light guard so the material rules take their values from
+tokens. That works exactly as far as the tokens go. Three values were still literals
+sitting inside those rules — the pane that lifts out of a trough, the trough's rim,
+and the press state — and un-guarding shipped light's `rgba(255,255,255,.94)` into
+dark, which put white type on a white pane at **1.14:1**. The selected "1 night" chip
+was simply gone.
+
+So: before removing a guard, every colour inside the rule has to be a token. And the
+token's dark value is not the light value inverted. In dark the raised pane is a
+*lighter dark*, because near-white is already spoken for — it is the vacancy
+semantic, and every free room tile is one. Lending it to a selected control is a
+language error, the same class of mistake as colouring a booked cell.
+
+## The rendered-DOM ruler lies for one call after a theme switch
+
+Flipping `data-theme` updates the custom properties on `:root` immediately, but an
+element's computed `color` can still report the previous theme's value for the rest
+of that call — long enough to measure dark tokens against light ink and invent
+failures at 1.05:1, or to hide real ones. Forcing layout does not flush it.
+
+Two defences, both cheap: switch the theme in one call and measure in the next, and
+open every sweep with a sanity check that the ink matches the theme's own token
+before trusting a single number. Screenshots have the same hazard from the other
+end — a shot taken during the 420ms colour transition shows pills mid-fade that look
+like contrast bugs and are not.
+
 ## Prohibitions
 
 - No paper, ruling, stamps, or any ledger device. That world is discarded.
