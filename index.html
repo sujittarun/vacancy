@@ -4135,17 +4135,30 @@ function maxExtend(r){
 /* Bring a flat back into service now: end the block today. */
 function releaseBlock(r, done){
   if(!isBlock(r)) return false;
-  if(r.start >= 0){ cancelBooking(r); return true; }   // never started — just drop it
   /* Who actually turned up and what they charged. The creation form records who
      was LINED UP; this overwrites it only when a name was given, so backing out
-     of the question cannot erase what was already known. */
+     of the question cannot erase what was already known.
+     This runs FIRST now. It used to sit below the drop-it branch, so releasing a
+     block that starts TODAY deleted the row before ever reading the name and the
+     bill the operator had just typed into the close form — the work, the person
+     and the invoice all vanished, and in live mode a `stay-` went with them. */
   if(done){
     if((done.fixer || "").trim())  r.fixer = done.fixer.trim();
     if((done.phone || "").trim())  r.fixer_phone = done.phone.trim();
     const paid = toAmount(done.cost);
     if(paid) r.cost = paid;
   }
-  r.end = 0; r.nights = r.end - r.start;
+  // > 0, not >= 0: a block that starts TODAY has started. Only one that has not
+  // begun yet is a plan to drop; one that began this morning is work that
+  // happened and has a bill attached.
+  if(r.start > 0){ cancelBooking(r); return true; }
+  /* Math.min, because releasing must never push the end FORWARD. blockNudges
+     offers anything ending within [-7,+2], so a block that came back three days
+     ago is on the list — and a flat `r.end = 0` there re-marked the flat out of
+     service for those three nights, up to and including tonight. On a flat a
+     guest had since checked into, that produced a block overlapping a real
+     booking, which is a state nothing else in this app can create. */
+  r.end = Math.min(r.end, 0); r.nights = r.end - r.start;
   if(MODE === "live" && r.sid)
     enqueue({k:"stay~", id:r.sid, body:{ends_on: dayISO(0),
       fixer: r.fixer || null, fixer_phone: r.fixer_phone || null, cost: r.cost || null}});
@@ -4285,12 +4298,26 @@ function cancelWithUndo(r, fi){
                     + `cancellation was on screen, so ${esc(who)} could not be put back.`, fi);
         return;
       }
+      /* The block branch used to call addBlock with five arguments and stop —
+         no `extra` — so undoing a cancelled out-of-service spell brought it
+         back with its fault, its fixer, that person's number and the bill all
+         undefined. The work still showed on the calendar; who did it and what
+         it cost were gone, along with the repeat-fault history that decides
+         whether the next one gets a warning. The comment above this promises
+         the row goes back exactly as it was, so put the rest back too. */
       const restored = isBlock(copy)
-        ? addBlock(copy.fi, Math.max(copy.start,0), copy.end - Math.max(copy.start,0), copy.reason, copy.note)
+        ? addBlock(copy.fi, Math.max(copy.start,0), copy.end - Math.max(copy.start,0),
+                   copy.reason, copy.note,
+                   {fault:copy.fault, fixer:copy.fixer, phone:copy.fixer_phone, cost:copy.cost})
         : addBooking(copy.fi, Math.max(copy.start,0), copy.end - Math.max(copy.start,0),
                      copy.guest, copy.src, {phone:copy.phone, pax:copy.pax, amount:copy.amount});
       if(!restored){ toast("bad", "<b>Could not put it back.</b> Nothing was changed.", fi); return; }
       const back = resv[resv.length - 1];
+      /* And the true dates. Math.max(start,0) is right for the OVERLAP check —
+         you cannot re-take nights already behind you — but writing it into the
+         row shortens a spell that began before today and moves its first night
+         forward, which is a different outage from the one that was cancelled. */
+      if(copy.start < 0){ back.start = copy.start; back.nights = back.end - back.start; recompute(); }
       // the platform auto-payment is re-created by addBooking; carry the rest
       const auto = PLATFORMS.indexOf(copy.src) >= 0;
       (copy.pays || []).forEach(p=>{ if(auto && p.method === "Platform") return;
@@ -6885,7 +6912,10 @@ function openPayment(r, fi){
 
   const go = el("button","bkgo","Record it");
   go.onclick = ()=>{
-    if(addPayment(r, (amt.value||"").replace(/[^\d-]/g,""), method)){ haptic(18); openSheet(fi); }
+    /* toAmount already parses "₹1,500.50" correctly. Pre-stripping to digits
+       first turned 1500.50 into "150050" — a ₹1,501 payment recorded as
+       ₹1,50,050, which then clamps dueFrom to 0 and flips the row to settled. */
+    if(addPayment(r, amt.value, method)){ haptic(18); openSheet(fi); }
   };
   form.append(go);
   sheetB.append(form);
@@ -7884,7 +7914,7 @@ function openBooking(fi, from, nights){
   const take = ()=>{
     if(go.disabled) return;
     if(addBooking(fi, day, n, who.value.trim(), src,
-                  {phone: phone.value, pax, amount: (amt.value||"").replace(/[^\d]/g,"")})){
+                  {phone: phone.value, pax, amount: amt.value}   /* same: keep the decimal */)){
       haptic(18); closeSheet(); refreshScreen();
     }else{
       haptic(30); go.textContent = "Just taken";
@@ -8937,7 +8967,11 @@ let pulling = false;
   };
 
   host.addEventListener("touchstart", e=>{
-    if(sheet.classList.contains("on") || e.touches.length > 1) return;
+    /* Clearing on the way out matters: a bare `return` left y0 and scr from
+       whatever touched last, so the first drag INSIDE an open sheet was
+       measured from the tap that opened it, armed the pull, ate the scroll
+       and reloaded the app — taking anything typed into the form with it. */
+    if(sheet.classList.contains("on") || e.touches.length > 1){ y0 = null; scr = null; return; }
     scr = document.getElementById("scr-" + SCREENS[curScreen].id);
     if(!scr || scr.scrollTop > 0){ scr = null; return; }
     y0 = e.touches[0].clientY; x0 = e.touches[0].clientX;
