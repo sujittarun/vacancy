@@ -916,9 +916,20 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
   transition:background .42s var(--out), border-color .42s var(--out)}
 .mroom.lit{background:var(--free);border-color:transparent}
 .mdests{flex:1;min-width:0;display:flex;flex-direction:column;gap:9px}
+/* Both cards change state, so both should speak the same language. The room
+   being emptied goes from booked to LIT, which is this app's one rule — a
+   vacant room is the lit one. The destinations were doing something else
+   entirely: they started as a neutral card and only gained a border, so the
+   left card made a dramatic colour move and the right ones made almost none,
+   which is why it read as arbitrary. A destination that takes a guest is now
+   BOOKED, and takes the booked material. One room lights up, the others go
+   dark, and the picture states what actually happened. */
 .mdest{background:var(--surface-2);
-  transition:border-color .34s var(--out), box-shadow .34s var(--out)}
-.mdest.filled{border-color:var(--line-2);box-shadow:var(--shadow-sm)}
+  transition:background .34s var(--out), border-color .34s var(--out), box-shadow .34s var(--out)}
+.mdest.filled{background:var(--held);border-color:transparent;box-shadow:var(--shadow-sm)}
+.mdest.filled>.mhead>b{color:var(--held-ink)}
+.mdest.filled>.mhead>s{color:var(--held-ink);opacity:.8}
+.mdest>.mhead>b,.mdest>.mhead>s{transition:color .34s var(--out)}
 
 .mhead{position:relative;z-index:2;display:grid;grid-template-columns:1fr auto;
   align-items:baseline;gap:0 6px;min-width:0}

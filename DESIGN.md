@@ -335,6 +335,17 @@ Horizontal was always the right reading — across is a picture of a journey, a 
 stack is a picture of a list. A rewrite that "fixes" a component by changing what it says
 has not fixed it.
 
+## Both cards change state, so both speak the same language
+
+The room being emptied went from booked to **lit** — this app's one rule, a vacant room is
+the lit one. The destinations did something else entirely: they started as a neutral card
+and only gained a border, so the left card made a dramatic colour move and the right ones
+made almost none. That is why the change read as arbitrary rather than as meaning.
+
+A destination that takes a guest **is booked**, so it now takes the booked material. One
+room lights up, the others go to the booked tone, and the picture states what actually
+happened rather than decorating it.
+
 ## The room opens, then the guest walks in
 
 The destination used to show a dashed outline of the guest before anyone had agreed to
