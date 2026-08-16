@@ -714,6 +714,12 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .insight{padding:0 16px 14px;font-size:12.5px;line-height:1.55;color:var(--txt-2);margin:0}
 .insight b{color:var(--txt)}
 .insight .hi{color:var(--now);font-weight:600}
+/* An accented WORD, as a class rather than an inline style. Three
+   sentences were setting style="color:var(--now)" straight on a <b>, and
+   an inline colour cannot be reached by any stylesheet rule — so light's
+   --now-ink mapping could never correct them and they shipped at 2.03:1.
+   --now is the FILL in this system and never a text colour. */
+.hi-now{color:var(--now)}
 
 /* ══════════════════════ MONTH ══════════════════════ */
 .mnav{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
@@ -1838,7 +1844,14 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
      nothing behind the glass buttons to be glass over. At 6px the tiles keep
      their shape and the sheet finally has a room behind it. */
   --lg-sheet-fill:rgba(255,255,255,.54);
-  --lg-sheet-tint:blur(6px) saturate(180%) brightness(1.5) contrast(.75);
+  /* brightness(1.5) contrast(.75) was sized for a ground whose darkest point
+     was 165. The ground is 183 now, so that much lift only clamps to white and
+     then contrast drags it back — the sheet came out at 221–240, which is why
+     it read as cream while everything around it had a blue cast. A gentle lift
+     with no contrast term leaves it at 202–222: deeper, the ground's colour
+     still in it, and --txt-3 still at 6.87 over the worst spot. Same lesson as
+     the cards two commits ago — on a light theme the tint must only lift. */
+  --lg-sheet-tint:blur(6px) saturate(180%) brightness(1.06);
   /* Two depths, two strengths, and the difference is what each one sits ON.
      The sheet and the bars sit on RAW page — a near-black FREE tile one moment
      and white ground the next — so they carry the strong tint. Everything
@@ -1848,7 +1861,7 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
   /* The only card that still gets a fill is one INSIDE a sheet, where there is
      a real material behind it to separate from. On the page there is nothing
      behind a card but a gradient, and a card there gets no fill at all. */
-  --lg-fill-2:rgba(255,255,255,.22);   /* a card over the sheet, and only there */
+  --lg-fill-2:rgba(255,255,255,.14);   /* a card over the sheet, and only there */
   /* a trough is the same pane cut INTO the surface: the light comes from under
      the lip instead of over it, so the rim inverts */
   --lg-rim-sunk:
@@ -2160,6 +2173,16 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
   border-color:rgba(255,255,255,.45);
   box-shadow:var(--lg-rim);
 }
+/* the guest's name tag — the one chip in the stage still painting --pane, a 94%
+   white slab. It is the thing that travels, so it should read as a pane you
+   could pick up, not a sticker. .berth stays excluded: an empty place kept for
+   somebody has to stay EMPTY, which is a rule this file has broken once before. */
+:root[data-theme="light"] .mguest:not(.berth)>.mguest-fx{
+  background:rgba(255,255,255,.42);
+  -webkit-backdrop-filter:var(--lg-tint); backdrop-filter:var(--lg-tint);
+  border-color:rgba(255,255,255,.60);
+  box-shadow:var(--lg-rim);
+}
 
 /* recessed — the same pane, cut in rather than laid on */
 :root[data-theme="light"] .seg,
@@ -2356,7 +2379,8 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 :root[data-theme="light"] .invAdd,:root[data-theme="light"] .vsay-go,
 :root[data-theme="light"] .toast .tclose,:root[data-theme="light"] .faultFlag em,
 :root[data-theme="light"] .fixer:not(.on) .fx-n em,:root[data-theme="light"] .fixer:not(.on) .fx-r.bad,
-:root[data-theme="light"] .opp.hot:not(.zero) b,:root[data-theme="light"] .wm-h svg{color:var(--now-ink)}
+:root[data-theme="light"] .opp.hot:not(.zero) b,:root[data-theme="light"] .wm-h svg,
+:root[data-theme="light"] .hi-now{color:var(--now-ink)}
 :root[data-theme="light"] :focus-visible{outline-color:var(--now-ink)}
 :root[data-theme="light"] .dcell.urgent,:root[data-theme="light"] .advert,
 :root[data-theme="light"] .field:focus-within,:root[data-theme="light"] .paid.due,
@@ -5134,10 +5158,10 @@ function renderRooms(){
         const p = el("p");
         p.style.cssText = "margin:10px 0 0;font-size:13px;color:var(--txt-2);line-height:1.55";
         p.innerHTML = k === 1
-          ? `But you are <b style="color:var(--now)">one move away</b> — shift `
+          ? `But you are <b class="hi-now">one move away</b> — shift `
             + `<b style="color:var(--txt)">${esc(B.guest)}</b> from ${from.id} to ${to.id} `
             + `(${fmt(B.start)}–${fmt(B.end)}${mv.sameType ? ", same size" : ""}) and ${from.id} opens up.`
-          : `But <b style="color:var(--now)">${k} moves</b> would free it — shift `
+          : `But <b class="hi-now">${k} moves</b> would free it — shift `
             + `<b style="color:var(--txt)">${k} guests</b> out of ${from.id}, starting with `
             + `${esc(B.guest)} to ${to.id}${mv.sameType ? ", same size" : ""}.`;
         box.appendChild(p);
@@ -8421,7 +8445,7 @@ function openOps(kind, d){
   if(kind === "turnovers" && list.length){
     const warn = el("p");
     warn.style.cssText = "margin:16px 20px 0;font-size:13px;line-height:1.55;color:var(--txt-2)";
-    warn.innerHTML = `<b style="color:var(--now)">${list.length} room${list.length>1?"s":""} must be cleaned between a check-out and a check-in on the same day.</b> These are the ones that go wrong.`;
+    warn.innerHTML = `<b class="hi-now">${list.length} room${list.length>1?"s":""} must be cleaned between a check-out and a check-in on the same day.</b> These are the ones that go wrong.`;
     sheetB.appendChild(warn);
   }
 
