@@ -605,6 +605,11 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .dcell.urgent{border-color:color-mix(in srgb,var(--now) 38%,transparent);
   background:color-mix(in srgb,var(--now) 7%,var(--surface-2))}
 .dcell.urgent .n{color:var(--now)}
+/* --txt-3 is calibrated against a plain surface. An urgent cell is not one: it
+   carries an amber wash, and once that wash mixed into the glass pane the label
+   landed at 4.05:1 at 9.5px, under the 4.5 it owes. The wash is the thing that
+   changed, so the ink on it changes too. */
+.dcell.urgent .k{color:var(--txt-2)}
 
 /* one-line rows for everything that is simply a count with a destination */
 .line{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:11px;
@@ -836,7 +841,19 @@ button{background:none;border:0;padding:0;cursor:pointer}
    three things: blocked nights read differently from sold ones, months are
    grouped so the eye has a landmark, and you can put a finger on it and read
    any single night without the strip changing size or the sheet moving.     */
-.stripwrap{position:relative;touch-action:pan-y}
+/* touch-action:none, not pan-y. With pan-y the BROWSER arbitrates: a drag it
+   judges vertical enough becomes a page scroll and the scrub is killed with a
+   pointercancel, from outside our code, where no amount of direction logic can
+   reach it. A one-handed thumb sweep is an arc, so it drifts vertically by
+   definition — which is how "I cannot swipe the timeline" happened on a real
+   phone while every synthetic test passed. Dispatched PointerEvents never
+   exercise this arbitration at all, so the bug was invisible to the way this
+   was checked.
+   The cost is honest and small: a drag that starts on the 46px band no longer
+   scrolls the sheet. The rest of a long sheet still does. Losing the scrub
+   halfway through reading a date to somebody on the phone is the worse of the
+   two, and it is the one that was actually happening. */
+.stripwrap{position:relative;touch-action:none}
 /* height is the BORDER box here, so the 16px of padding was eating most of it —
    the bars have quietly been six pixels tall. Given that this is a thing you put
    a finger on and drag, they get room to be read. */
@@ -873,20 +890,41 @@ button{background:none;border:0;padding:0;cursor:pointer}
 
 /* a playhead, not a highlight: recolouring a booked bar is forbidden here, and
    a cursor says "you are reading this night" without touching the data */
-.playhead{position:absolute;top:10px;height:40px;width:1px;background:var(--now);
+/* It starts 14px ABOVE the bars, in the gap under the readout, so that the top
+   of it is outside the disc a fingertip covers. A marker whose whole length is
+   under the thumb tells you nothing about where you are; this way the column
+   you are reading stays locatable while you are reading it. */
+.playhead{position:absolute;top:-14px;height:54px;width:1px;background:var(--now);
   opacity:0;transition:opacity .15s;pointer-events:none;left:0}
 .stripwrap.reading .playhead{opacity:1}
 
-/* the legend and the readout share one box, so reading a night moves nothing */
-.strip-foot{position:relative;padding:7px 20px 16px;min-height:33px}
-.strip-k{display:flex;justify-content:space-between;transition:opacity .16s}
-.strip-read{position:absolute;left:20px;right:20px;top:7px;display:flex;gap:7px;
-  align-items:baseline;opacity:0;pointer-events:none;transition:opacity .16s}
+/* ── the readout, above the bar ───────────────────────────────────────────────
+   A hand on a phone comes from below, so everything under the contact point is
+   behind it — which is where this used to be. The slot holds its height empty
+   so that reading a night never moves the sheet, and sits far enough above the
+   bars to clear a fingertip: the bar box is 46px, a fingertip covers about 42,
+   and the readout's baseline clears the top of the bars by more than half of
+   that. Fixed position, not a callout chasing the finger, so there is nothing
+   to flip or clamp at either end of the strip. */
+/* 14px of air below the slot, on top of the strip's own 14px of head-room, so
+   the readout's last pixel clears the first bar by ~25px — comfortably past
+   the 21px half-width of a fingertip, even for a thumb that lands high on the
+   bar rather than in the middle of it. */
+.strip-say{position:relative;margin:0 20px 14px;height:19px}
+.strip-read{position:absolute;left:0;right:0;bottom:0;display:flex;gap:7px;
+  align-items:baseline;opacity:0;pointer-events:none;
+  transform:translateY(3px);
+  transition:opacity .16s var(--out), transform .16s var(--out)}
 .strip-read b{font-size:12px;font-weight:660;color:var(--txt);white-space:nowrap}
 .strip-read span{font-size:12px;color:var(--txt-2);overflow:hidden;
   text-overflow:ellipsis;white-space:nowrap}
-.strip-foot.reading .strip-k{opacity:0}
-.strip-foot.reading .strip-read{opacity:1}
+.strip-say.reading .strip-read{opacity:1;transform:none}
+@media (prefers-reduced-motion:reduce){ .strip-read{transition:opacity .16s;transform:none} }
+
+/* the legend below is context and stays put — it no longer blinks out of the
+   way, because it is no longer sharing a box with the readout */
+.strip-foot{position:relative;padding:7px 20px 16px}
+.strip-k{display:flex;justify-content:space-between}
 /* the booking this night belongs to, lit in the list below */
 .card .row.lit{background:var(--surface-2)}
 .sheet-s{padding:14px 20px 8px;display:flex;justify-content:space-between;align-items:baseline;gap:10px}
@@ -6227,12 +6265,9 @@ function nightStory(fi, d){
    things that move are a one-pixel playhead and the touched bar. The gesture
    yields to a vertical scroll rather than fighting it — a strip you cannot
    scroll past would be a worse trade than one you cannot scrub. */
-function attachStripScrub(wrap, strip, head, foot, readD, readW, fi){
+function attachStripScrub(wrap, strip, head, say, readD, readW, fi){
   const bars = strip.children;
-  let live = false, dead = false, at = -1, was = null, x0 = 0, y0 = 0, lock = null;
-  /* How far a finger must travel before the gesture has declared itself. Below
-     this, a touch is a tap and neither axis has won. */
-  const SLOP = 8;
+  let live = false, at = -1, was = null;
   const rowsIn = () => sheetB.querySelectorAll(".card .row");
 
   const dayAt = x => {
@@ -6266,54 +6301,37 @@ function attachStripScrub(wrap, strip, head, foot, readD, readW, fi){
     if(r !== was){ was = r; haptic(5); }
   };
   const start = x => { live = true; at = -1; was = null;
-    wrap.classList.add("reading"); foot.classList.add("reading"); show(dayAt(x)); };
+    wrap.classList.add("reading"); say.classList.add("reading"); show(dayAt(x)); };
   const stop = () => {
     if(!live) return;
     live = false;
     clearSpan();
     at = -1;
-    wrap.classList.remove("reading"); foot.classList.remove("reading");
+    wrap.classList.remove("reading"); say.classList.remove("reading");
     rowsIn().forEach(row => row.classList.remove("lit"));
   };
 
-  // capture, so a finger that strays off the strip keeps reading instead of
-  // dropping the gesture. pointerleave would fire constantly here and is not
-  // an end to the gesture, only a departure from the box.
-  // Claimed only once the scrub has won the axis: capture taken on contact
-  // would also swallow a vertical drag the sheet should have scrolled.
-  const grab = id=>{ try{ wrap.setPointerCapture(id); }catch(err){} };
-
+  /* There is no vertical tripwire and no direction lock any more, because with
+     touch-action:none there is no longer a competing gesture to arbitrate
+     against. The old code abandoned the scrub the moment the finger drifted
+     16px down from where it landed, measured against nothing — not against how
+     far it had travelled sideways. A thumb pivots at its base, so a sweep
+     across 63 nights is an arc, and the drift grows the further along the bar
+     you get. Measured on the real bar: a straight drag tracked all 30 nights, a
+     22px arc died a third of the way in, a 40px arc barely started. Whatever
+     the finger does vertically now, the reading continues. */
   wrap.addEventListener("pointerdown", e=>{
     if(e.pointerType === "mouse" && e.button !== 0) return;
-    dead = false; lock = null; x0 = e.clientX; y0 = e.clientY;
-    /* A mouse has no competing gesture — there is no scroll to protect — so it
-       is scrubbing from the first press. A finger has to declare itself. */
-    if(e.pointerType === "mouse"){ lock = "x"; grab(e.pointerId); }
+    /* Captured on contact. Implicit capture covers touch but NOT mouse or pen,
+       so without this a mouse drag dies the moment it leaves the 46px band —
+       and capture is also what lets a finger stray off the strip and keep
+       reading. pointerleave would fire constantly here and means only that the
+       pointer left the box, never that the gesture ended. */
+    try{ wrap.setPointerCapture(e.pointerId); }catch(err){}
     start(e.clientX);
   });
   wrap.addEventListener("pointermove", e=>{
-    if(!live || dead) return;
-    /* DIRECTION LOCK, not a vertical tripwire. This used to abandon the scrub
-       the moment the finger drifted 16px down, measured from where it landed —
-       no comparison against how far it had travelled sideways. A thumb pivots
-       from its base, so a horizontal sweep across a 63-night strip traces an
-       ARC: the further along the bar, the further from the starting height. It
-       therefore cut out mid-sweep, worse the further you swept, and looked like
-       the strip was dead on some screens and not others. Measured: a straight
-       drag tracked all 30 nights, a 22px arc died a third of the way, a 40px
-       arc — an ordinary one-handed sweep — barely started.
-       What matters is which axis the finger is committed to, so compare them.
-       Once horizontal has won, no amount of arc takes it away again. */
-    if(lock === null){
-      const dx = Math.abs(e.clientX - x0), dy = Math.abs(e.clientY - y0);
-      if(dx < SLOP && dy < SLOP) return;            // still a tap, nothing decided
-      /* Biased toward the scrub, deliberately. Horizontal is the only gesture
-         this control has, while a vertical drag has the whole rest of the sheet
-         to start on, so the tie and the near-tie both go to reading. Vertical
-         has to be clearly meant: half as much again as the sideways travel. */
-      if(dy > dx * 1.5){ dead = true; stop(); return; }
-      lock = "x"; grab(e.pointerId);
-    }
+    if(!live) return;
     if(e.cancelable) e.preventDefault();
     show(dayAt(e.clientX));
   }, {passive:false});
@@ -6735,15 +6753,33 @@ function roomStrip(fi){
   wrap.classList.add("fresh");
   // let it play once, then get out of the way of the scrub's own transforms
   setTimeout(()=> wrap.classList.remove("fresh"), 420);
-  const foot = el("div","strip-foot");
-  const k = el("div","strip-k");
-  k.append(el("span","lbl","Today"), el("span","lbl", `${occPct(fi)}% booked`), el("span","lbl","+9 weeks"));
+  /* The readout goes ABOVE the bar. It used to sit in the foot, and measuring
+     the old layout on a phone put the first line of it 8px BELOW the contact
+     point — inside the ~42px disc a fingertip covers, and under the hand that
+     is doing the scrubbing, which on a phone always arrives from beneath. The
+     one thing you were dragging in order to read was the one thing your thumb
+     was on top of.
+     A fixed slot rather than a callout that chases the finger: this is what
+     Apple's Stocks and Health do, and it costs nothing in edge cases — no
+     flipping near the left or right end, no clamping, no collision with the
+     sheet header — while a following tooltip needs all three. The trade is
+     eye travel, and over a 46px bar there is almost none to trade.
+     The slot keeps its height whether or not anything is in it, so reading a
+     night still moves nothing on the screen. */
+  const say = el("div","strip-say");
   const read = el("div","strip-read");
   read.setAttribute("aria-live","polite");
   const readD = el("b"), readW = el("span");
   read.append(readD, readW);
-  foot.append(k, read);
-  return {wrap, strip, head, foot, readD, readW};
+  say.append(read);
+
+  /* The legend stays below and stays put. It is context, not a readout, so it
+     no longer has to blink out of the way to make room for one. */
+  const foot = el("div","strip-foot");
+  const k = el("div","strip-k");
+  k.append(el("span","lbl","Today"), el("span","lbl", `${occPct(fi)}% booked`), el("span","lbl","+9 weeks"));
+  foot.append(k);
+  return {wrap, strip, head, say, foot, readD, readW};
 }
 
 /* The next run of free nights at or after `from`, which is what turns "not
@@ -6762,8 +6798,8 @@ function openSheet(fi, day){
   roomHead(fi);
 
   const S = roomStrip(fi);
-  sheetB.append(S.wrap, S.foot);
-  attachStripScrub(S.wrap, S.strip, S.head, S.foot, S.readD, S.readW, fi);
+  sheetB.append(S.say, S.wrap, S.foot);
+  attachStripScrub(S.wrap, S.strip, S.head, S.say, S.readD, S.readW, fi);
 
   /* ── the one thing you probably came for ──────────────────────────────────
      Decided by the room's state rather than always being the same button, so
