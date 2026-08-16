@@ -1816,6 +1816,19 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
      already has and already measures clean. */
   --lg-fill:rgba(255,255,255,.10);
   --lg-tint:blur(3px) saturate(180%) brightness(1.25) contrast(.7);
+  /* The SHEET's own version. It needs a stronger tint and a heavier fill than a
+     button does, because a button sits on the already-normalised sheet while
+     the sheet sits on raw page — a near-black FREE tile one moment and white
+     ground the next. Searched rather than picked: of every brightness /
+     contrast / fill combination that keeps 11px --txt-3 at or above 4.5, this
+     is the one that leaves the MOST of the room showing through. 73 levels of
+     variation survive, against 50 for the values I would have chosen by eye.
+     6px of blur, not 34. That is the whole reason the sheet read as a flat
+     cream field: at 34px an 85px room tile is featureless mush, so there was
+     nothing behind the glass buttons to be glass over. At 6px the tiles keep
+     their shape and the sheet finally has a room behind it. */
+  --lg-sheet-fill:rgba(255,255,255,.54);
+  --lg-sheet-tint:blur(6px) saturate(180%) brightness(1.5) contrast(.75);
   --lg-edge:rgba(255,255,255,.55);
   --lg-rim:
     inset 0 1.5px 0 rgba(255,255,255,.85),      /* the top lip, catching light */
@@ -1921,6 +1934,14 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
   -webkit-backdrop-filter:var(--blur-3); backdrop-filter:var(--blur-3);
   border-top:1px solid var(--g-edge-2);
   border-radius:26px 26px 0 0;
+}
+/* The sheet on liquid glass, light only. Everything inside it — the buttons,
+   the cards, the rows — was already on a translucent material and could not
+   look like it, because THIS was a flat cream field behind them. Glass shows
+   only where something is behind it, and 34px of blur meant nothing was. */
+:root[data-theme="light"] .sheet{
+  background-color:var(--lg-sheet-fill);
+  -webkit-backdrop-filter:var(--lg-sheet-tint); backdrop-filter:var(--lg-sheet-tint);
 }
 .toast,
 .peek{
