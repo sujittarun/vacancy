@@ -3476,16 +3476,24 @@ function addBooking(fi, start, nights, guest, src, extra){
    the point of the number is to ring it. */
 function fixers(){
   const seen = new Map();
-  resv.filter(r => isBlock(r) && r.fixer).forEach(r=>{
-    const k = r.fixer.trim().toLowerCase();
-    const g = seen.get(k) || {name:r.fixer.trim(), phone:r.fixer_phone || "", jobs:0,
+  const credit = (name, phone, cost, at)=>{
+    if(!name || !name.trim()) return;
+    const k = name.trim().toLowerCase();
+    const g = seen.get(k) || {name:name.trim(), phone:phone || "", jobs:0,
                               back:0, spend:0, lastAt:-9999};
     g.jobs++;
-    g.spend += r.cost || 0;
-    if(r.fixer_phone) g.phone = r.fixer_phone;
-    if(r.start > g.lastAt){ g.lastAt = r.start; g.name = r.fixer.trim(); }
+    g.spend += cost || 0;
+    if(phone) g.phone = phone;
+    if(at > g.lastAt){ g.lastAt = at; g.name = name.trim(); }
     seen.set(k, g);
-  });
+  };
+  resv.filter(r => isBlock(r) && r.fixer)
+      .forEach(r=> credit(r.fixer, r.fixer_phone, r.cost, r.start));
+  /* Work done while the flat stayed on sale counts too. Without this, whoever
+     only ever fixes things in the gaps — the person costing you nothing —
+     had no record at all, and the crew list could never suggest them. */
+  issues.filter(x => x.fixed != null && x.fixer)
+        .forEach(x=> credit(x.fixer, x.fixer_phone, x.cost, x.fixed));
   // a job "came back" when the same flat had the same fault again soon after
   resv.filter(r => isBlock(r) && r.fault).forEach(r=>{
     const prev = priorFault(r.fi, r.fault, r.start);
@@ -3637,12 +3645,22 @@ function maxExtend(r){
 }
 
 /* Bring a flat back into service now: end the block today. */
-function releaseBlock(r){
+function releaseBlock(r, done){
   if(!isBlock(r)) return false;
   if(r.start >= 0){ cancelBooking(r); return true; }   // never started — just drop it
+  /* Who actually turned up and what they charged. The creation form records who
+     was LINED UP; this overwrites it only when a name was given, so backing out
+     of the question cannot erase what was already known. */
+  if(done){
+    if((done.fixer || "").trim())  r.fixer = done.fixer.trim();
+    if((done.phone || "").trim())  r.fixer_phone = done.phone.trim();
+    const paid = toAmount(done.cost);
+    if(paid) r.cost = paid;
+  }
   r.end = 0; r.nights = r.end - r.start;
   if(MODE === "live" && r.sid)
-    enqueue({k:"stay~", id:r.sid, body:{ends_on: dayISO(0)}});
+    enqueue({k:"stay~", id:r.sid, body:{ends_on: dayISO(0),
+      fixer: r.fixer || null, fixer_phone: r.fixer_phone || null, cost: r.cost || null}});
   recompute(); save(); cacheSave();
   return true;
 }
@@ -5009,13 +5027,25 @@ function upkeepStats(){
   const jobs = resv.filter(isBlock);
   let bill = 0, lost = 0, nights = 0;
   const byFlat = {};
-  jobs.forEach(r=>{
-    const c = outageCost(r);
-    bill += c.bill; lost += c.lost; nights += c.nights;
-    const g = byFlat[r.fi] = byFlat[r.fi] || {fi:r.fi, bill:0, lost:0, jobs:0, nights:0};
-    g.bill += c.bill; g.lost += c.lost; g.jobs++; g.nights += c.nights;
-  });
-  return {bill, lost, nights, total: bill + lost, jobs: jobs.length,
+  const add = (fi, b, l, n)=>{
+    bill += b; lost += l; nights += n;
+    const g = byFlat[fi] = byFlat[fi] || {fi, bill:0, lost:0, jobs:0, nights:0};
+    g.bill += b; g.lost += l; g.jobs++; g.nights += n;
+  };
+  jobs.forEach(r=>{ const c = outageCost(r); add(r.fi, c.bill, c.lost, c.nights); });
+  /* A fault fixed while the flat stayed on sale still has an invoice — it just
+     has no lost nights, which is the whole point of fixing it in a gap. Leaving
+     these out made "what upkeep costs" a total of only the work that also cost
+     you nights, which flatters the number in exactly the wrong direction. */
+  const fixedIssues = issues.filter(x => x.fixed != null && x.cost);
+  fixedIssues.forEach(x=> add(x.fi, x.cost, 0, 0));
+  /* `jobs` stays the count of spells OUT OF SERVICE, because that is the phrase
+     the panel prints. A fault fixed while the flat kept selling is real work
+     with a real invoice, but calling it a spell out of service would be a lie
+     in the one sentence that is meant to separate the two halves. It gets its
+     own count instead — and a high one is the good news on this screen. */
+  return {bill, lost, nights, total: bill + lost,
+          jobs: jobs.length, onSale: fixedIssues.length,
           open: openIssues().length,
           flats: Object.values(byFlat).sort((a,b)=> (b.bill+b.lost) - (a.bill+a.lost))};
 }
@@ -5178,7 +5208,19 @@ function renderTrends(){
         box.append(el("b",null,dcd.title), el("s",null,dcd.why));
         const ans = el("div","nudge");
         const yes = el("button","nudgeBtn yes","Back in service");
-        yes.onclick = ev=>{ ev.stopPropagation(); haptic(18); releaseBlock(dcd.block); refreshScreen(); };
+        yes.onclick = ev=>{
+          ev.stopPropagation(); haptic(12);
+          const r = dcd.block, fl2 = flats[r.fi];
+          openFixedForm({
+            fi: r.fi, fault: r.fault || "",
+            assigned: r.fixer || "", assignedPhone: r.fixer_phone || "",
+            line: `<b>${esc(r.fault || r.reason || "Out of service")}</b> · ${esc(fl2.id)} `
+                + `out since ${fmt(Math.max(r.start, 0))}`,
+            cta: "Back in service",
+            back: closeSheet,
+            onDone: d=>{ releaseBlock(r, d); closeSheet(); refreshScreen(); }
+          });
+        };
         const still = el("button","nudgeBtn","Still out ⌄");
         still.onclick = ev=>{ ev.stopPropagation(); haptic(10);
           // the two answers are replaced by the stepper, so the stepper has to
@@ -5357,7 +5399,8 @@ function renderTrends(){
     const {c,b} = card("What upkeep costs", "the bill, and the nights it took");
     const head = el("div","headline");
     head.append(el("b", null, money(U.total)));
-    head.append(el("s", null, `${U.jobs} spell${U.jobs===1?"":"s"} out of service · ${U.nights} night${U.nights===1?"":"s"} lost`));
+    head.append(el("s", null, `${U.jobs} spell${U.jobs===1?"":"s"} out of service · ${U.nights} night${U.nights===1?"":"s"} lost`
+      + (U.onSale ? ` · ${U.onSale} fixed without going out` : "")));
     b.appendChild(head);
     if(U.total) b.appendChild(vbars([
       {v: U.bill, label: Math.round(U.bill/100)/10 + "k", k:"Invoices"},
@@ -6797,12 +6840,28 @@ function openSheet(fi, day){
                          x2.urgency === "whenever" ? "can wait" : x2.urgency));
       const done = el("button","rowx","✓");
       done.setAttribute("aria-label", `Mark ${x2.fault || "this issue"} fixed`);
-      let armed = false, tm = null;
+      /* This used to arm on the first tap and close on the second, recording
+         nothing. It now opens the form that asks the two things worth keeping,
+         which is its own confirmation — a sheet you can back out of. */
       done.onclick = ()=>{
-        if(!armed){ armed = true; done.classList.add("arm"); done.textContent = "Fixed?"; haptic(10);
-          tm = setTimeout(()=>{ armed=false; done.classList.remove("arm"); done.textContent="✓"; }, 3000);
-          return; }
-        clearTimeout(tm); haptic(20); closeIssue(x2); openSheet(fi, day); refreshScreen();
+        haptic(12);
+        openFixedForm({
+          /* No pre-fill here. A logged fault keeps who was lined up inside its
+             note text ("… · for Ramesh"), and digging a name back out of prose
+             would pre-select the wrong person the first time somebody's note
+             ended in the word "for". The crew list already ranks whoever has
+             done this fault here before, which is the same answer, honestly. */
+          fi, fault: x2.fault || "",
+          assigned: "", assignedPhone: "",
+          line: `<b>${esc(x2.fault || "Issue")}</b> · logged `
+              + `${x2.on === 0 ? "today" : fmt(x2.on)}${x2.note ? " · " + esc(x2.note) : ""}`,
+          cta: "Mark it fixed",
+          back: ()=> openSheet(fi, day),
+          onDone: d=>{
+            closeIssue(x2, d.fixer, d.phone, d.cost);
+            openSheet(fi, day); refreshScreen();
+          }
+        });
       };
       end.appendChild(done);
       row.append(m, end);
@@ -7443,17 +7502,15 @@ function openBlockForm(fi, day){
   handPh.placeholder = "Their number"; handPh.setAttribute("aria-label","Their phone number");
   handRow.append(handName, handPh);
 
-  const noteRow = el("div","bkpair");
+  /* No bill here. Nobody knows what a repair cost before it has been done, so a
+     money box on this form could only ever collect a guess — and a guess is
+     exactly what "what upkeep costs" must not be counting. The bill is asked
+     once, at the end, by openFixedForm. */
+  const noteRow = el("div","r");
   const note = el("input");
   note.type = "text"; note.placeholder = "Note — e.g. compressor";
   note.setAttribute("aria-label","A note about the work");
-  /* The bill. addBlock has always accepted it and this form has never sent one,
-     so "what upkeep costs" has been counting lost nights and nothing else —
-     which is the half everybody already knows. */
-  const bill = el("input","money");
-  bill.type = "text"; bill.inputMode = "numeric"; bill.placeholder = "₹ bill";
-  bill.setAttribute("aria-label","What the work cost, if you know yet");
-  noteRow.append(note, bill);
+  noteRow.append(note);
   const go = el("button","bkgo","");
 
   function paintGrid(){
@@ -7662,11 +7719,7 @@ function openBlockForm(fi, day){
       .filter(x=>x && x.trim()).join(" · ");
     const person = newHand ? handName.value : who;
     const num = newHand ? handPh.value : phone;
-    // toAmount keeps a minus sign, and a negative bill quietly SUBTRACTS from
-    // the upkeep total this field was added to make honest. Payments allow
-    // negatives on purpose — that is a refund. Nothing makes a negative repair.
-    const paid = (bill.value || "").replace(/[^\d.]/g, "");
-    if(addBlock(fi, from, outN, reason, extra, {fault:saveFault, fixer:person, phone:num, cost:paid})){
+    if(addBlock(fi, from, outN, reason, extra, {fault:saveFault, fixer:person, phone:num})){
       haptic(18); closeSheet(); refreshScreen();
     }
   };
@@ -7678,6 +7731,123 @@ function openBlockForm(fi, day){
   sheet.classList.add("on"); scrim.classList.add("on");
   sheetB.scrollTop = 0;
 }
+/* ══════════════ closing a repair: who fixed it, and what it cost ════════════
+   Both questions are asked HERE and nowhere else, because this is the only
+   moment either answer exists. The out-of-service form asks who is *going* to
+   fix it — useful for the phone call, but a name on a plan is not a record of
+   work done, and a bill quoted before the work is a guess. "What upkeep costs"
+   was counting lost nights and nothing else; now it counts the invoice too, and
+   "whose work sticks" finally sees the person who actually turned up.
+
+   One form serves both kinds of work item — a logged fault that stayed on sale,
+   and a flat that was taken out of service — because from here they are the
+   same event: somebody came, it is done, this is the bill.                   */
+function openFixedForm(o){
+  const fi = o.fi, fault = o.fault || "";
+  roomHead(fi, o.back);
+  /* Pre-filled with whoever was lined up, because usually they are the one who
+     came — but it is a normal selected chip, so one tap says otherwise. */
+  let who = (o.assigned || "").trim(), phone = (o.assignedPhone || "").trim();
+  let newHand = false;
+
+  const form = el("div","bkform");
+  const line = el("p","bkline");
+  line.innerHTML = o.line;
+
+  const whoCap = el("div","bkcap");
+  whoCap.append(el("span",null,"Who fixed it"), el("span",null,"tap one"));
+  const crew = el("div","crew");
+  const handRow = el("div","r"); handRow.hidden = true;
+  const handName = el("input"); handName.type = "text"; handName.placeholder = "Name";
+  handName.setAttribute("aria-label","Name of the person who fixed it");
+  const handPh = el("input"); handPh.type = "tel"; handPh.inputMode = "numeric";
+  handPh.placeholder = "Their number"; handPh.setAttribute("aria-label","Their phone number");
+  handRow.append(handName, handPh);
+
+  const costCap = el("div","bkcap");
+  /* "if any", not "leave blank if nothing": the right-hand caption slot is
+     120px and the longer sentence wrapped to two lines. */
+  costCap.append(el("span",null,"What it cost"), el("span",null,"if any"));
+  const costRow = el("div","r");
+  const bill = el("input","money");
+  bill.type = "text"; bill.inputMode = "numeric"; bill.placeholder = "₹ bill";
+  bill.setAttribute("aria-label","What the work cost");
+  costRow.appendChild(bill);
+
+  const go = el("button","bkgo", o.cta);
+
+  function paintCrew(){
+    crew.textContent = "";
+    const list = crewFor(fi, fault);
+    list.forEach(c=>{
+      const b = el("button","mate");
+      b.setAttribute("aria-pressed", !newHand && who === c.name);
+      const t = el("div","mt");
+      t.append(el("b", null, c.name), el("em", null, c.why));
+      b.append(t, el("div","mr" + (c.bad ? " bad" : ""), c.rec));
+      b.onclick = ()=>{
+        if(!newHand && who === c.name){ who = ""; phone = ""; }
+        else { who = c.name; phone = c.phone || ""; newHand = false; }
+        haptic(8); paint();
+      };
+      crew.appendChild(b);
+    });
+    /* The assigned person may not be in the top three this list shows, and
+       dropping them would silently rewrite who did the work. */
+    if(who && !newHand && !list.some(c => c.name === who)){
+      const b = el("button","mate");
+      b.setAttribute("aria-pressed", true);
+      const t = el("div","mt");
+      t.append(el("b", null, who), el("em", null, "who was lined up"));
+      b.append(t);
+      b.onclick = ()=>{ who = ""; phone = ""; haptic(8); paint(); };
+      crew.appendChild(b);
+    }
+    const nu = el("button","mate new");
+    nu.setAttribute("aria-pressed", newHand);
+    const nt = el("div","mt");
+    nt.append(el("b", null, list.length || who ? "Someone else" : "Who fixed it"),
+              el("em", null, "name and number"));
+    nu.append(nt);
+    nu.onclick = ()=>{
+      newHand = !newHand;
+      if(newHand){ who = ""; phone = ""; }
+      haptic(8); paint();
+      if(newHand) handName.focus();
+    };
+    crew.appendChild(nu);
+  }
+
+  function paint(){
+    paintCrew();
+    handRow.hidden = !newHand;
+    const person = (newHand ? handName.value : who).trim();
+    /* Naming somebody is what makes the record worth keeping, so the button
+       says which half is still missing rather than sitting there disabled. */
+    go.textContent = person ? o.cta : "Say who fixed it first";
+    go.disabled = !person;
+  }
+
+  handName.oninput = paint;
+  go.onclick = ()=>{
+    if(go.disabled) return;
+    const person = (newHand ? handName.value : who).trim();
+    const num = (newHand ? handPh.value : phone).trim();
+    /* toAmount keeps a minus sign, and a negative bill quietly SUBTRACTS from
+       the upkeep total this field exists to make honest. Payments allow
+       negatives on purpose — that is a refund. Nothing makes a negative repair. */
+    const paid = (bill.value || "").replace(/[^\d.]/g, "");
+    haptic(18);
+    o.onDone({fixer:person, phone:num, cost:paid});
+  };
+
+  form.append(line, whoCap, crew, handRow, costCap, costRow, go);
+  sheetB.append(form);
+  paint();
+  sheet.classList.add("on"); scrim.classList.add("on");
+  sheetB.scrollTop = 0;
+}
+
 /* arrivals / departures / turnarounds for one day */
 function openOps(kind, d){
   const ops = dayOps(d);
