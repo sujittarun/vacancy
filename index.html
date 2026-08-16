@@ -1848,7 +1848,7 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
   /* The only card that still gets a fill is one INSIDE a sheet, where there is
      a real material behind it to separate from. On the page there is nothing
      behind a card but a gradient, and a card there gets no fill at all. */
-  --lg-fill-2:rgba(255,255,255,.34);   /* a card over the sheet, and only there */
+  --lg-fill-2:rgba(255,255,255,.22);   /* a card over the sheet, and only there */
   /* a trough is the same pane cut INTO the surface: the light comes from under
      the lip instead of over it, so the rim inverts */
   --lg-rim-sunk:
@@ -2005,17 +2005,27 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 
    What groups a list now is what should always have grouped it: a label above
    it, the space around it, and the hairline already drawn between its rows. */
+/* The SAME clarity as the chips and the ask box, which is the one thing on
+   these screens that already read as glass. Those sit at a 5% fill and 3px of
+   blur; this was at 38% and 9px — seven times the fill and three times the
+   blur, which is milk, not glass. It washed the ground out precisely where the
+   ground had just been given something to say.
+   White rather than the chips' ink, because a card carries a lot of small type
+   and white lifts its floor while ink lowers it. 16% is where --txt-3 still
+   clears over the ground's darkest region.
+   The pane now varies 191→255 across its own width, against 199→247 before:
+   MORE of the room shows through, not less, at a third of the blur. */
 :root[data-theme="light"] .card,
 :root[data-theme="light"] .tcard,
 :root[data-theme="light"] .ops-row{
-  background-color:rgba(255,255,255,.38);
+  background-color:rgba(255,255,255,.16);
   background-image:var(--lg-sheen);
-  -webkit-backdrop-filter:blur(9px) saturate(180%); backdrop-filter:blur(9px) saturate(180%);
-  border-color:rgba(255,255,255,.58);
+  -webkit-backdrop-filter:var(--lg-tint); backdrop-filter:var(--lg-tint);
+  border-color:rgba(255,255,255,.50);
   box-shadow:var(--lg-rim);
 }
 /* Inside a sheet the material behind is the sheet, which is already lifted, so
-   the pane needs less of its own fill to separate from it. */
+   the pane needs a little more of its own fill to separate from it. */
 :root[data-theme="light"] .sheet .card{
   background-color:var(--lg-fill-2);
 }
@@ -2065,6 +2075,30 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
   -webkit-backdrop-filter:var(--lg-sheet-tint); backdrop-filter:var(--lg-sheet-tint);
   box-shadow:var(--lg-rim);
 }
+/* ── the dark answers join the material, in their own colour ─────────────────
+   --free is the right COLOUR and stays: it is the vacancy fill, the same one
+   the room tiles carry, so "4 nights free" wearing it is this app saying the
+   thing it always says. What was wrong was the treatment. Thirty-two opaque
+   near-black blocks down one list, on a ground where everything else now shows
+   the room behind it, read as blobs rather than as answers — they were the
+   only things on screen that were not a material.
+   So they take the same 3px optics in a dark tint, with the rim lit from above
+   the way a dark slab catches light. The colour is unchanged; only its
+   thickness is.
+   The 45 room TILES are deliberately not in this list. They are the data
+   field, DESIGN.md keeps that solid and crisp, and 45 backdrop-filters is a
+   frame-rate bill with nothing bought. */
+:root[data-theme="light"] .pill.good,
+:root[data-theme="light"] .nudgeBtn.yes,
+:root[data-theme="light"] .answer .y,
+:root[data-theme="light"] .bigAct{
+  background-color:rgba(28,35,49,.84);
+  -webkit-backdrop-filter:blur(3px) saturate(170%); backdrop-filter:blur(3px) saturate(170%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.22),
+             inset 0 -1px 0 rgba(0,0,0,.34),
+             0 3px 9px -3px rgba(13,16,23,.32);
+}
+
 /* recessed — the same pane, cut in rather than laid on */
 :root[data-theme="light"] .seg,
 :root[data-theme="light"] .field,
