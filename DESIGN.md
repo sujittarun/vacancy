@@ -162,6 +162,22 @@ And the dates and the money moved **out of the middle and up to the top**, as on
 that keeps count: *"Out today for 1 night · back on sale 17 Aug · about ₹2,600 off the market."*
 Boxed in the middle of a form, figures read as something to fill in. They are context.
 
+## An offer has to be better than what you already have
+
+The "do it 22 Aug instead" chip asked `batchWindow(fi, outN)` — and `outN` is **1** when the
+form opens, so it returned the first free night on the calendar however short, then compared
+it to the cursor rather than to the run the cursor sits inside. Measured across the demo: of
+263 offers, **102 restated the very gap the operator was standing in** and **57 pointed at a
+shorter one**. Tapping it threw a nine-night maintenance window away for a two-night one —
+and the chip then vanished, so there was no way back.
+
+It now asks for a window strictly longer than the run in hand and excludes that run by its
+start. Same sweep after: 264 offers, **0 worse, 0 restatements**.
+
+The general rule, because this is the second time a helper has been wrong in exactly the
+state everybody starts in: **a shortcut must be measured against the thing it replaces, not
+against a default.** A default is what the operator has not chosen yet.
+
 ## State beats material
 
 A material rule and a state rule can carry the same specificity. When they do, the one

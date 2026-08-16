@@ -1435,7 +1435,9 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 /* the note and the bill share a line: the bill is short and always optional */
 .bkpair{display:flex;gap:8px}
 .bkpair input:first-child{flex:1;min-width:0}
-.bkpair input.money{flex:0 0 112px;text-align:right;font-variant-numeric:tabular-nums}
+/* 96px, not 112: the note is the field with something to say, and at 112 its
+   own example rendered as "Note — e.g. compressor r". */
+.bkpair input.money{flex:0 0 96px;text-align:right;font-variant-numeric:tabular-nums}
 
 /* the running total, stated once at the top rather than boxed in the middle */
 .bkline{margin:0;font-size:12px;line-height:1.5;color:var(--txt-2)}
@@ -7376,7 +7378,13 @@ function openBlockForm(fi, day){
   if(from >= DAYS) from = Math.max(0, Math.min(pickedNight, DAYS-1));
   let outN = 1, reason = "Maintenance", fault = "", chosen = "";
   let who = "", phone = "", newHand = false, q = "", showAll = false;
-  const capFrom = d => { let k = 0; while(k < 60 && d + k < DAYS && !occ[fi][d + k]) k++; return Math.max(1, k); };
+  /* No 60-night ceiling here. That number is openBooking's, where it is a
+     sensible maximum guest stay; copied onto a repair it made "take all 60"
+     appear on a flat with 63 free nights, left the last three untakeable by any
+     control on the screen, and then told you a guest held a night nobody held.
+     A flat added before it goes on sale is exactly the long-void case this is
+     for. */
+  const capFrom = d => { let k = 0; while(d + k < DAYS && !occ[fi][d + k]) k++; return Math.max(1, k); };
 
   const form = el("div","bkform");
   const prev = previewStrip(fi);
@@ -7434,7 +7442,7 @@ function openBlockForm(fi, day){
 
   const noteRow = el("div","bkpair");
   const note = el("input");
-  note.type = "text"; note.placeholder = "Note — e.g. compressor replaced";
+  note.type = "text"; note.placeholder = "Note — e.g. compressor";
   note.setAttribute("aria-label","A note about the work");
   /* The bill. addBlock has always accepted it and this form has never sent one,
      so "what upkeep costs" has been counting lost nights and nothing else —
@@ -7561,10 +7569,20 @@ function openBlockForm(fi, day){
       b.onclick = ()=>{ outN = k; haptic(8); paint(); };
       jump.appendChild(b);
     }
-    /* And the window where the work costs nothing sold. Only worth saying when
-       it is somewhere else — otherwise it restates where you already are. */
-    const win = batchWindow(fi, outN);
-    if(win && win.from !== from && win.nights >= outN){
+    /* And the window where the work costs nothing sold.
+       This asked batchWindow for `outN` nights, and outN is 1 when the form
+       opens — so it returned the FIRST free night on the calendar however short,
+       and compared it to `from` rather than to the run `from` sits inside.
+       Measured across the demo: of 263 offers, 102 restated the very gap the
+       operator was standing in and 57 pointed at a SHORTER one. Tapping it threw
+       away a nine-night window for a two-night one, and the chip then vanished,
+       so there was no way back.
+       It now asks for a window strictly longer than the run in hand, and
+       excludes that run by its start rather than by the cursor. */
+    let runFrom = from;
+    while(runFrom > 0 && !occ[fi][runFrom - 1]) runFrom--;
+    const win = batchWindow(fi, Math.max(outN, capFrom(runFrom) + 1));
+    if(win && win.from !== runFrom && win.nights > capFrom(runFrom)){
       const b = el("button");
       // the same word the line above uses, or the chip and the sentence disagree
       b.innerHTML = `do it <b>${win.from === 0 ? "today" : esc(fmt(win.from))}</b> instead`
@@ -7594,7 +7612,19 @@ function openBlockForm(fi, day){
     line.innerHTML = ok
       ? `Out <b>${esc(from === 0 ? "today" : fmt(from))}</b> for <b>${outN} night${outN>1?"s":""}</b>`
         + ` · back on sale <b>${esc(fmt(from + outN))}</b>`
-        + (outN >= cap ? ` · <span class="acc">a guest holds the night after</span>` : "")
+        + (()=>{
+            /* "a guest holds the night after" fired whenever the run ended —
+               including at the end of the nine-week calendar, which is 28 of the
+               45 flats. Say it only when somebody is actually there, and say the
+               right thing when what is there is another outage. */
+            const after = from + outN;
+            if(after >= DAYS || !occ[fi][after]) return "";
+            const who2 = resv.find(r => r.fi === fi && r.start <= after && r.end > after);
+            if(!who2) return "";
+            return isBlock(who2)
+              ? ` · <span class="acc">it is already out of service the night after</span>`
+              : ` · <span class="acc">${esc(who2.guest)} holds the night after</span>`;
+          })()
       : `<b>${esc(fl.id)} is already taken on ${esc(fmtL(from))}</b>`;
     otherRow.hidden = chosen !== "Other";
     paintGrid(); paintCrew(); paintFlag(); paintJumps(cap);
@@ -7622,7 +7652,11 @@ function openBlockForm(fi, day){
       .filter(x=>x && x.trim()).join(" · ");
     const person = newHand ? handName.value : who;
     const num = newHand ? handPh.value : phone;
-    if(addBlock(fi, from, outN, reason, extra, {fault:saveFault, fixer:person, phone:num, cost:bill.value})){
+    // toAmount keeps a minus sign, and a negative bill quietly SUBTRACTS from
+    // the upkeep total this field was added to make honest. Payments allow
+    // negatives on purpose — that is a refund. Nothing makes a negative repair.
+    const paid = (bill.value || "").replace(/[^\d.]/g, "");
+    if(addBlock(fi, from, outN, reason, extra, {fault:saveFault, fixer:person, phone:num, cost:paid})){
       haptic(18); closeSheet(); refreshScreen();
     }
   };
