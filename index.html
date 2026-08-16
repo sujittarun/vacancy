@@ -3024,7 +3024,6 @@ const SUPA_URL = "https://hwbquljbvanlgggemchg.supabase.co";
    on its own. Every row is gated by row-level security, so an anonymous caller
    holding this key reads zero rows. */
 const SUPA_KEY = "sb_publishable_i4ZgWEz4uvP4FF0Fk5joUQ_jIohbSs5";
-const APP_VER  = "2026.08.10";
 
 const SESSION_KEY = "vacancy.session.v1";
 /* Set once someone has deliberately chosen to browse the invented book. Without
@@ -3463,7 +3462,6 @@ function addBooking(fi, start, nights, guest, src, extra){
   recompute(); save(); cacheSave();
   return true;
 }
-const BLOCK_REASONS = ["Maintenance","Deep clean","Owner use","Renovation","Not ready"];
 
 /* ══════════════ what broke, and who fixed it ════════════════════════════════
    No new tab, no work-order register, no asset list to populate. A block
@@ -6871,7 +6869,6 @@ const SVG_SWAP = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" str
   + '<path d="M3.5 7h11M11.5 4 14.5 7l-3 3"/>'
   + '<path d="M16.5 13h-11M8.5 16 5.5 13l3-3"/></svg>';
 
-const MOVE_TRAVEL = 460, MOVE_STEP = 110, MOVE_SETTLE = 340;
 
 function openMove(mv, askDay, onFreed, opts){
   opts = opts || {};
