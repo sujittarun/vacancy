@@ -7654,7 +7654,14 @@ function openBlockForm(fi, day){
        it accrues its own history, its own repeat warning and its own people. */
     let saveFault = fault;
     if(chosen === "Other" && otherIn.value.trim()) saveFault = learnFault(otherIn.value) || fault;
-    const extra = [note.value, (chosen === "Other" && !saveFault) ? otherIn.value : ""]
+    /* If the typed name did NOT become a kind, the words still have to land
+       somewhere — the field says "this goes in the note". The old guard asked
+       `!saveFault`, but the Other tile is {key:"Other", fault:"Other"}, so
+       saveFault is the truthy string "Other" whatever happens and the branch
+       never ran. learnFault refuses a single character, so a one-letter answer
+       was learned nowhere and noted nowhere: it just vanished on save. The
+       honest test is whether it is still sitting on the fallback. */
+    const extra = [note.value, (chosen === "Other" && saveFault === "Other") ? otherIn.value : ""]
       .filter(x=>x && x.trim()).join(" · ");
     const person = newHand ? handName.value : who;
     const num = newHand ? handPh.value : phone;
