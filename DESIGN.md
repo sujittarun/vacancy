@@ -113,6 +113,24 @@ stays crisp, and 45 backdrop-filters on a scrolling grid is a frame-rate bill wi
 bought. Measured 61fps with 55 blurred elements live. Dark is untouched: it already has
 depth, and glass over near-black is grey.
 
+### State beats material
+
+A material rule and a state rule can carry the same specificity. When they do, the one
+further down the stylesheet wins — and a material block written last will quietly repaint
+every selected thing in the app. Both of the worst bugs in this pass were that one mistake:
+
+- `.mguest-fx` — the glass pass repainted the dashed placeholder guests as solid chips, so
+  the move sheet showed everyone already standing in their new rooms **before anyone had
+  agreed to move.** A 1px dash is not a difference. An absent surface is.
+- `.tyRow button` — a selected chip lost its dark fill but kept its knockout text, leaving
+  near-white on near-white. The chip the operator had just chosen was the one they could
+  not see.
+
+Every material rule is therefore guarded against its own state —
+`:not([aria-pressed="true"])`, `:not(.on)`, `:not(.urgent)`. It also says the right thing:
+glass is the **default** material, and a control that has been chosen has a material of its
+own.
+
 ### A ring is one ring
 
 `border-color: X; box-shadow: 0 0 0 1px X` looks like a 2px ring and is two rings. The
