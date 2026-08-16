@@ -6428,13 +6428,7 @@ function previewStrip(fi){
   const wrap = el("div","prevwrap");
   const strip = el("div","strip prev");
   strip.setAttribute("role","img");
-  for(let d=0; d<DAYS; d++){
-    const i = el("i");
-    if(!occ[fi][d]) i.classList.add("f");
-    else if(blk[fi][d]) i.classList.add("b");
-    if(d === 0) i.classList.add("td");
-    strip.appendChild(i);
-  }
+  stripBars(fi, false).forEach(i => strip.appendChild(i));
   const k = el("div","prevk");
   const kl = el("span","lbl","Today"), kr = el("span","lbl","+9 weeks");
   k.append(kl, kr);
@@ -6699,18 +6693,18 @@ function roomHead(fi, backTo){
   return x;
 }
 
-/* The nine weeks, scrubbable. Built here rather than inline so the room card
-   stays readable as a list of sections. */
-function roomStrip(fi){
-  const wrap = el("div","stripwrap");
-  const strip = el("div","strip");
-  strip.setAttribute("role","img");
-  strip.setAttribute("aria-label",
-    `${flats[fi].id} over the next nine weeks: ${occPct(fi)} per cent booked. Touch and drag to read a night.`);
-  // where a new stay begins against an occupied night before it — the seam two
-  // back-to-back bookings otherwise hide
+/* One night, one bar — the reading of occ/blk that BOTH strips share. It lived
+   twice, once here and once in previewStrip, so a change to how a night is
+   drawn had to be made in two places or the scrubbable strip and the preview
+   would start disagreeing about the same flat. `seams` is the only real
+   difference: the preview does not draw them because it is showing a range you
+   are about to take, not a history to read. */
+function stripBars(fi, seams){
+  const out = [];
   const startsHere = new Set();
-  resv.filter(r => r.fi === fi).forEach(r=>{
+  if(seams) resv.filter(r => r.fi === fi).forEach(r=>{
+    // where a new stay begins against an occupied night before it — the seam
+    // two back-to-back bookings otherwise hide
     if(r.start > 0 && r.start < DAYS && occ[fi][r.start - 1]) startsHere.add(r.start);
   });
   for(let d=0; d<DAYS; d++){
@@ -6719,9 +6713,23 @@ function roomStrip(fi){
     else if(blk[fi][d]) i.classList.add("b");
     if(d === 0) i.classList.add("td");
     if(startsHere.has(d)) i.classList.add("edge");
+    out.push(i);
+  }
+  return out;
+}
+
+/* The nine weeks, scrubbable. Built here rather than inline so the room card
+   stays readable as a list of sections. */
+function roomStrip(fi){
+  const wrap = el("div","stripwrap");
+  const strip = el("div","strip");
+  strip.setAttribute("role","img");
+  strip.setAttribute("aria-label",
+    `${flats[fi].id} over the next nine weeks: ${occPct(fi)} per cent booked. Touch and drag to read a night.`);
+  stripBars(fi, true).forEach((i, d)=>{
     i.style.animationDelay = (d * 3) + "ms";      // 63 bars, ~190ms end to end
     strip.appendChild(i);
-  }
+  });
   const head = el("i","playhead");
   wrap.append(strip, head);
   wrap.classList.add("fresh");
