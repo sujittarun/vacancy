@@ -88,6 +88,24 @@ fill and keeps dark's hue (OkLCh H 64.7 against dark's 64.2, so it is the same c
 both themes), and `--now-ink` is every accented word, hairline and thin bar. In dark the
 two are identical, so dark does not move.
 
+### The material is Crystal
+
+Chosen from ten working grades. Crystal is **thin, hard glass rather than a frosting**, and
+what makes it read as glass is the optics, not the blur:
+
+- a **narrow, bright specular streak** across one shoulder — light catching an edge, not a
+  soft wash across the whole pane;
+- a **near-white rim** at full strength;
+- a **dark hairline under the bottom inside edge**, which the eye takes for the *thickness*
+  of the pane — the single cheapest way to make a surface read as an object;
+- a **6px blur**, where the usual reach is 20–30. It is by some distance the cheapest
+  translucent material of the ten to render.
+
+One deviation from the sample, stated rather than smuggled: the sample sat at **32%** and
+measured **1.5:1** for body text over a black room tile. Shipped it is **62 / 72 / 86%**
+across the three depth levels, because the character was never the transparency — it is the
+rim, the streak and the hairline, and those survive the opacity intact.
+
 ### Light is glass, not paint
 
 Two opaque planes separated by a hairline is not a material, it is a diagram. Apple's

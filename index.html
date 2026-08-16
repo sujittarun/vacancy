@@ -748,8 +748,10 @@ button{background:none;border:0;padding:0;cursor:pointer}
   display:flex;align-items:flex-start;gap:12px}
 .sheet-h .n{font-size:24px;font-weight:680;letter-spacing:-.03em;line-height:1.1}
 .sheet-h .m{font-size:12.5px;color:var(--txt-2);margin-top:3px}
+/* --txt-2 on --surface-2 is 4.33:1 in dark, just under the floor — and this is
+   the control that closes the sheet, so it is not a place to be marginal. */
 .sheet-h button{margin-left:auto;width:30px;height:30px;border-radius:9px;background:var(--surface-2);
-  display:grid;place-items:center;color:var(--txt-2);flex:0 0 auto}
+  display:grid;place-items:center;color:var(--txt);flex:0 0 auto}
 .sheet-b{overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
   padding-bottom:calc(20px + var(--safe-b))}
 /* ── the nine-week strip ──────────────────────────────────────────────────────
@@ -1354,8 +1356,10 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
   stroke-linecap:round;stroke-linejoin:round}
 .ffind input{flex:1;min-width:0;border:0;background:none;font-size:12.5px;outline:none;color:var(--txt)}
 .ffind input::placeholder{color:var(--txt-3)}
+/* --txt-2 on a --line-2 disc measures 4.09:1 in light and 4.33 in dark — under
+   the floor on a 10px glyph, which is the worst place to be marginal. */
 .ffind button{flex:0 0 auto;width:17px;height:17px;border-radius:50%;background:var(--line-2);
-  color:var(--txt-2);font-size:10px;line-height:1;display:grid;place-items:center}
+  color:var(--txt);font-size:10px;line-height:1;display:grid;place-items:center}
 /* an author display: wins over the UA rule the hidden attribute relies on, so
    the clear button has to opt out explicitly or it is always on screen */
 .ffind button[hidden]{display:none}
@@ -1401,7 +1405,12 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 .mate .mr{flex:0 0 auto;font-size:10.5px;color:var(--txt-3);text-align:right;white-space:nowrap}
 .mate .mr.bad{color:var(--now-ink)}
 .mate[aria-pressed="true"] .mr{color:color-mix(in srgb,var(--free-ink) 62%,transparent)}
-.mate.new{border-style:dashed;background:none}
+/* Scoped to the UNSELECTED state, for the third time in this file. A modifier
+   written after a state rule at equal specificity wins, and "background:none"
+   over a state that had just set a dark fill left white knockout text on a
+   transparent card — invisible. A modifier describes the RESTING look; the
+   state owns what happens when it is chosen. */
+.mate.new:not([aria-pressed="true"]){border-style:dashed;background:none}
 .crewidle{font-size:12px;color:var(--txt-3);line-height:1.5}
 
 /* ── offers, not restatements ────────────────────────────────────────────────
@@ -1610,25 +1619,40 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 
    Four levels, one token set, no per-component CSS.                          */
 :root[data-theme="light"]{
-  /* the closer it floats, the more it obscures */
-  --g1:rgba(255,255,255,.58);   /* L1 content — cards, day cells            */
-  --g2:rgba(255,255,255,.70);   /* L2 chrome  — bars, segmented controls    */
-  --g3:rgba(255,255,255,.82);   /* L3 floating— sheet, toasts, the peek     */
-  --g-sunk:rgba(13,16,23,.055); /* recessed: an ink tint, never a paler white */
-  --g-edge:rgba(255,255,255,.70);
-  --g-edge-2:rgba(255,255,255,.88);
-  --blur-1:blur(18px) saturate(165%);
-  --blur-2:blur(26px) saturate(180%);
-  --blur-3:blur(34px) saturate(190%);
+  /* CRYSTAL — thin, hard glass rather than a frosting.
+     What makes it read as glass is the optics, not the blur: a bright specular
+     streak across one shoulder, a near-white rim, and a dark hairline under the
+     bottom edge that the eye takes for the thickness of the pane. The blur is
+     deliberately tiny — 6px, where the usual reach is 20–30 — which is also why
+     it is the cheapest translucent material of the ten to render.
+
+     One deviation from the sample, stated rather than smuggled: the sample sat
+     at 32% and measured 1.5:1 for body text over a black room tile. These are
+     at 62/72/86%, which keeps every pane comfortably legible and loses none of
+     the character, because the character was never the transparency. */
+  --g1:rgba(255,255,255,.62);   /* L1 content — cards, day cells            */
+  --g2:rgba(255,255,255,.72);   /* L2 chrome  — bars, segmented controls    */
+  --g3:rgba(255,255,255,.86);   /* L3 floating— sheet, toasts, the peek     */
+  --g-sunk:rgba(13,16,23,.06);  /* recessed: an ink tint, never a paler white */
+  --g-edge:rgba(255,255,255,.95);
+  --g-edge-2:rgba(255,255,255,1);
+  /* the cross-section: light along the top inside edge, shadow along the bottom */
+  --g-inner:inset 0 1px 0 rgba(255,255,255,1), inset 0 -1px 0 rgba(13,16,23,.10);
+  --blur-1:blur(6px) saturate(150%);
+  --blur-2:blur(9px) saturate(155%);
+  --blur-3:blur(12px) saturate(160%);
   /* The specular sweep. A real pane catches the light across one shoulder, and
      this is the single strongest tell that a surface is glass rather than a
      translucent rectangle. It rides in background-image, not a ::before, so it
      can never land on top of the content it belongs behind. */
-  --sheen:linear-gradient(147deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.14) 28%,
-                          rgba(255,255,255,0) 52%);
-  --sheen-soft:linear-gradient(147deg, rgba(255,255,255,.38) 0%, rgba(255,255,255,0) 46%);
-  --lift:0 1px 2px rgba(13,16,23,.10), 0 10px 26px -14px rgba(13,16,23,.30);
-  --lift-2:0 1px 2px rgba(13,16,23,.12), 0 18px 44px -18px rgba(13,16,23,.36);
+  /* narrow and bright, the way light catches an edge — not a soft wash */
+  --sheen:linear-gradient(128deg, rgba(255,255,255,.78) 0%, rgba(255,255,255,.06) 17%,
+                          rgba(255,255,255,0) 34%);
+  --sheen-soft:linear-gradient(128deg, rgba(255,255,255,.50) 0%, rgba(255,255,255,.04) 15%,
+                          rgba(255,255,255,0) 32%);
+  /* tight shadows: a thin pane sits close to what it is on */
+  --lift:0 1px 1px rgba(13,16,23,.14), 0 3px 7px -3px rgba(13,16,23,.20);
+  --lift-2:0 1px 2px rgba(13,16,23,.16), 0 9px 20px -10px rgba(13,16,23,.30);
 }
 
 /* ── L0 · the environment ────────────────────────────────────────────────────
@@ -1657,7 +1681,7 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
   background-image:var(--sheen-soft);
   -webkit-backdrop-filter:var(--blur-1); backdrop-filter:var(--blur-1);
   border-color:var(--g-edge);
-  box-shadow:var(--lift), inset 0 1px 0 var(--g-edge-2);
+  box-shadow:var(--lift), var(--g-inner);
 }
 :root[data-theme="light"] .card{border-radius:18px}
 :root[data-theme="light"] .tcard{border-radius:20px}
@@ -1674,7 +1698,7 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
   background-image:var(--sheen);
   border-color:var(--g-edge);
   border-radius:22px;
-  box-shadow:var(--lift-2), inset 0 1px 0 var(--g-edge-2);
+  box-shadow:var(--lift-2), var(--g-inner);
 }
 /* the selected tab is a pane set INTO the bar, not a chip painted on it */
 :root[data-theme="light"] .tabbar button[aria-selected="true"]{
@@ -1701,7 +1725,7 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
   background-image:var(--sheen);
   -webkit-backdrop-filter:var(--blur-3); backdrop-filter:var(--blur-3);
   border-color:var(--g-edge);
-  box-shadow:var(--lift-2), inset 0 1px 0 var(--g-edge-2);
+  box-shadow:var(--lift-2), var(--g-inner);
 }
 
 /* ── recessed ────────────────────────────────────────────────────────────────
@@ -1767,7 +1791,7 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 :root[data-theme="light"] .dcell.urgent{
   background-image:var(--sheen-soft);
   -webkit-backdrop-filter:var(--blur-1); backdrop-filter:var(--blur-1);
-  box-shadow:var(--lift), inset 0 1px 0 var(--g-edge-2);
+  box-shadow:var(--lift), var(--g-inner);
 }
 
 /* ── the material answers the thumb ──────────────────────────────────────────
