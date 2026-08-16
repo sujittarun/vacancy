@@ -106,6 +106,35 @@ measured **1.5:1** for body text over a black room tile. Shipped it is **62 / 72
 across the three depth levels, because the character was never the transparency — it is the
 rim, the streak and the hairline, and those survive the opacity intact.
 
+### Glass is only visible where something is behind it
+
+Crystal shipped and the app did not look like the sample. Two reasons, both measurable:
+
+- **`--bar` never joined the material.** It predates it and sat at 88%, so the top bar — the
+  one surface with the entire screen scrolling under it — was effectively solid while every
+  rule around it said glass. It *is* the L2 material and should not have a second opinion.
+- **A card has nothing behind it.** Measured, the stack under a card is `deck › screen ›
+  screens` and then the page. A blurred flat colour is the same flat colour, so a card is a
+  card however transparent you make it. The ground now carries real variation — a bright
+  source, a cool mass, a band, a low pool — enough for a pane to pick something up and
+  nowhere near enough to read as decoration.
+
+So the transparency went where something *is* behind: **the bars at 52%**, where the room grid
+genuinely passes beneath. The sheet stayed at 80%, because it floats over arbitrary content
+and carries 12–13px body text — a pane you cannot read is not a material, it is a mistake.
+
+### Chrome carries its own ink
+
+At 52% over a free room tile the composite lands near `#929292`, where `--txt-2` measures
+**2.83:1** and the tab labels **4.13:1**. The arithmetic is unforgiving: on a pane that
+transparent, secondary text has to be near-black or it fails. `--on-glass` (`#262A33`) is that
+ink — bar subtitle **4.79:1** worst case, tab labels **9.57:1**, and 13.07:1 on the plain
+ground.
+
+Which means the chrome's hierarchy stops leaning on colour and leans on **size and weight**
+instead — 20px/690 against 11.5px/400. That is what this design system says type should be
+doing anyway; transparency just stopped it having a choice.
+
 ### Light is glass, not paint
 
 Two opaque planes separated by a hairline is not a material, it is a diagram. Apple's

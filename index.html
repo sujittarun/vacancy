@@ -129,8 +129,11 @@
   --now:#F59300; --now-ink:#8A4A00; --hot:#B8281A;
   --ink:#1C2331; --ink-on:#F2F5FB;
   --raise:#FFFFFF;
-  --bar:rgba(255,255,255,.88);
-  --scrim:rgba(28,32,42,.42);
+  /* --bar predates the material and was never folded into it, so the top bar
+     sat at 88% — effectively solid — while every rule around it said glass.
+     It IS the L2 material; it should not have a second opinion. */
+  --bar:var(--g2);
+  --scrim:rgba(28,32,42,.32);   /* the sheet is glass over the screen, not over a blackout */
   --shadow:0 1px 2px rgba(13,16,23,.15), 0 12px 32px -12px rgba(13,16,23,.38);
   --shadow-sm:0 1px 2px rgba(13,16,23,.12), 0 4px 12px -4px rgba(13,16,23,.22);
 }
@@ -1637,9 +1640,22 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
      at 32% and measured 1.5:1 for body text over a black room tile. These are
      at 62/72/86%, which keeps every pane comfortably legible and loses none of
      the character, because the character was never the transparency. */
-  --g1:rgba(255,255,255,.62);   /* L1 content — cards, day cells            */
-  --g2:rgba(255,255,255,.72);   /* L2 chrome  — bars, segmented controls    */
-  --g3:rgba(255,255,255,.86);   /* L3 floating— sheet, toasts, the peek     */
+  /* Transparency goes where something is actually behind it, and where the type
+     can afford it. The top bar has the whole screen scrolling under it and
+     carries one 20px/690 title, so it can be halfway to clear. The sheet has
+     arbitrary content behind it and carries 12–13px body, so it cannot: a pane
+     you cannot read is not a material, it is a mistake. */
+  /* Chrome carries its own secondary ink, and it is nearly as dark as the
+     primary. That is arithmetic, not taste: at 52% over a free room tile the
+     composite lands near #929292, where --txt-2 measures 2.83:1 and anything
+     legible has to be close to black. So the top bar's subtitle and the tab
+     labels stop leaning on colour for hierarchy and lean on size and weight
+     instead — 20px/690 against 11.5px/400 — which is what this design system
+     says type should be doing anyway. */
+  --on-glass:#262A33;
+  --g1:rgba(255,255,255,.56);   /* L1 content — cards, day cells            */
+  --g2:rgba(255,255,255,.52);   /* L2 chrome  — bars: big type, real backdrop */
+  --g3:rgba(255,255,255,.80);   /* L3 floating— sheet, toasts: small type   */
   --g-sunk:rgba(13,16,23,.06);  /* recessed: an ink tint, never a paler white */
   --g-edge:rgba(255,255,255,.95);
   --g-edge-2:rgba(255,255,255,1);
@@ -1670,10 +1686,16 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
    colour allowed to mean anything. So the environment is light and shade, not
    hue: one soft source top-left, cool weight top-right, a low pool beneath. */
 :root[data-theme="light"] body{
+  /* A blurred flat colour is the same flat colour, so a card floating on a
+     smooth ground shows nothing however transparent it is. The ground therefore
+     carries real variation — a bright source top-left, cool mass top-right, a
+     low pool beneath and a band across the middle — enough for a pane to have
+     something to pick up, nowhere near enough to read as decoration. */
   background:
-    radial-gradient(1150px 660px at 8% -10%,  rgba(255,255,255,.96), rgba(255,255,255,0) 58%),
-    radial-gradient(880px 540px at 100% 2%,   rgba(163,181,214,.34), rgba(163,181,214,0) 55%),
-    radial-gradient(820px 720px at 46% 112%,  rgba(190,201,224,.44), rgba(190,201,224,0) 58%),
+    radial-gradient(1150px 660px at 8% -12%,  rgba(255,255,255,1),    rgba(255,255,255,0) 56%),
+    radial-gradient(760px 460px at 104% 0%,   rgba(139,163,205,.50),  rgba(139,163,205,0) 52%),
+    radial-gradient(900px 520px at 50% 44%,   rgba(255,255,255,.55),  rgba(255,255,255,0) 46%),
+    radial-gradient(860px 760px at 40% 114%,  rgba(158,175,210,.55),  rgba(158,175,210,0) 56%),
     var(--bg);
   background-attachment:fixed;
 }
@@ -1715,6 +1737,11 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 :root[data-theme="light"] .topbar{
   box-shadow:0 1px 0 rgba(13,16,23,.05), 0 10px 24px -16px rgba(13,16,23,.30);
 }
+/* the two strings that ride over whatever is scrolling underneath */
+:root[data-theme="light"] .topbar .sub,
+:root[data-theme="light"] #scrSub{color:var(--on-glass)}
+:root[data-theme="light"] .tabbar button{color:var(--on-glass)}
+:root[data-theme="light"] .tabbar button[aria-selected="true"]{color:var(--txt)}
 
 /* ── L3 · floating ───────────────────────────────────────────────────────────
    Nearest to the eye, so the most opaque and the most blurred — a sheet you
