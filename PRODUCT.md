@@ -192,6 +192,16 @@ user's "Bajarahills".
    portrait while holding a phone to the ear.
 5. **Wrong-row error is the real failure mode.** Confusing flat 302 with 303 loses a
    booking and a guest. Alignment and anchoring are safety features, not polish.
+6. **Ask each question at the moment it has an answer.** The bill for a repair sat on
+   the form that takes a flat out of service, where the work has not happened yet, so
+   the only thing it could collect was a guess — and "what upkeep costs" was quietly
+   totalling guesses. Who is *going* to fix it belongs at the start, because that is
+   for the phone call. Who *did* fix it and what they charged belong at the close.
+   A field that cannot be answered honestly where it stands is in the wrong place.
+7. **Do not capture what nothing reads.** `closeIssue` accepted a fixer, a phone and a
+   cost from the day it was written, no caller ever passed one, and no screen ever
+   read the result — so faults recorded their repairs nowhere while looking like they
+   did. Any new field must land somewhere a person can see it, in the same change.
 
 ## Accessibility & Inclusion
 
