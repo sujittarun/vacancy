@@ -1212,6 +1212,24 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
   display:flex;flex-direction:column;gap:1px;text-align:left;
   transition:transform .38s var(--spring), background .18s;
 }
+/* ONE button pair on the liquid-glass material, light only, so it can be judged
+   in place against everything around it before anything else moves. */
+:root[data-theme="light"] .roomRoutes button{
+  background-color:var(--lg-fill);
+  background-image:var(--lg-sheen);
+  -webkit-backdrop-filter:var(--lg-tint); backdrop-filter:var(--lg-tint);
+  border-color:var(--lg-edge);
+  box-shadow:var(--lg-rim);
+}
+/* pressed, the pane thins and the rim tightens — light passing through more of
+   it, which is what a real slab does when you push it against its ground */
+:root[data-theme="light"] .roomRoutes button:active{
+  background-color:rgba(255,255,255,.20);
+  box-shadow:inset 0 1.5px 0 rgba(255,255,255,.95),
+             inset 0 0 0 1px rgba(255,255,255,.28),
+             inset 0 0 22px rgba(255,255,255,.34),
+             0 3px 10px -4px rgba(13,16,23,.28);
+}
 .roomRoutes button:active{transform:scale(.96);transition-duration:.085s;background:var(--surface-3)}
 .roomRoutes button s{text-decoration:none;font-size:11px;font-weight:500;color:var(--txt-3)}
 .rowMore{padding:11px 14px;font-size:12px;color:var(--txt-3);border-top:1px solid var(--line)}
@@ -1774,6 +1792,43 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
   --pane:rgba(255,255,255,.94);
   --pane-inner:inset 0 1px 0 #fff;
   --press:rgba(255,255,255,.86);
+
+  /* ── LIQUID GLASS ─────────────────────────────────────────────────────────
+     Not the same material as the frosted panes above, and the difference is
+     the blur: 3px, not 26. Liquid glass is CLEAR in the middle and busy at the
+     EDGE. Everything that makes it read as glass lives in the rim — a bright
+     top lip, a dark under-edge, an inner glow that falls off fast, and one
+     specular streak across a shoulder. Blurring the middle is frosted bathroom
+     glass, which is the mistake the rest of this file is currently making.
+
+     ADAPTIVE TINT is the other half, and it is what makes a clear pane usable
+     at all. At 3px the backdrop stays legible, which means it competes with
+     the label sitting on it — a near-black room tile under a dark word. So the
+     filter compresses whatever is behind into a narrow band before it reaches
+     the eye: brightness lifts it, contrast(<1) squeezes it toward the middle.
+     Measured through the sheet, a backdrop ranging 150→209 comes out 169→217.
+     The SHAPE of what is behind still shows — that is the glass — but the
+     range it can occupy no longer includes anything the ink cannot beat.
+
+     Light only, deliberately. The same trick inverted for dark needs
+     brightness ~0.25 to keep white type off a near-white tile, and that is
+     dark enough to stop being glass at all. Dark keeps the frosted pane it
+     already has and already measures clean. */
+  --lg-fill:rgba(255,255,255,.10);
+  --lg-tint:blur(3px) saturate(180%) brightness(1.25) contrast(.7);
+  --lg-edge:rgba(255,255,255,.55);
+  --lg-rim:
+    inset 0 1.5px 0 rgba(255,255,255,.85),      /* the top lip, catching light */
+    inset 0 -1.5px 0 rgba(255,255,255,.22),     /* the under-edge, bouncing it */
+    inset 0 20px 26px -20px rgba(255,255,255,.60),
+    inset 0 -22px 30px -22px rgba(255,255,255,.28),
+    inset 0 0 0 1px rgba(255,255,255,.18),      /* the pane's own thickness    */
+    0 12px 28px -12px rgba(13,16,23,.30),       /* what it casts on the page   */
+    0 2px 5px rgba(13,16,23,.13);
+  --lg-sheen:linear-gradient(133deg,
+    rgba(255,255,255,.70) 0%, rgba(255,255,255,.12) 16%,
+    rgba(255,255,255,0) 36%, rgba(255,255,255,0) 70%,
+    rgba(255,255,255,.16) 94%, rgba(255,255,255,.40) 100%);
 }
 
 /* ── L0 · the environment ────────────────────────────────────────────────────
