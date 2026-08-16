@@ -1966,14 +1966,36 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
    has already normalised its backdrop, so they take the light tint. */
 :root[data-theme="light"] .card,
 :root[data-theme="light"] .tcard,
-:root[data-theme="light"] .night,
-:root[data-theme="light"] .day,
 :root[data-theme="light"] .ops-row{
   background-color:var(--lg-fill-2);
   background-image:var(--lg-sheen);
   -webkit-backdrop-filter:var(--lg-tint); backdrop-filter:var(--lg-tint);
   border-color:var(--lg-edge);
   box-shadow:var(--lg-rim);
+}
+/* ── the day cells are DATA, and data stays crisp ────────────────────────────
+   .day and .night were in the list above and should never have been. A rim
+   built for one large button becomes embossed plastic when it is repeated
+   across thirty-five 40px cells — the month grid came out looking like a
+   calculator keypad. DESIGN.md already exempts the 45 room tiles from the
+   material for exactly this reason, and the same argument applies twice over
+   here: thirty-five backdrop-filters is a frame-rate bill with nothing bought,
+   and a counted number is the one thing on this screen that must stay sharp.
+   So they get the fill and nothing else: no rim, no blur, no sheen. */
+:root[data-theme="light"] .night,
+:root[data-theme="light"] .day{
+  background-color:rgba(255,255,255,.62);
+  background-image:none;
+  -webkit-backdrop-filter:none; backdrop-filter:none;
+  border-color:rgba(13,16,23,.07);
+  box-shadow:0 1px 2px rgba(13,16,23,.06);
+}
+/* A pad cell is not a day. It is the empty run before the first of the month
+   and it should not be a pane at all — .day.pad has said background:transparent
+   since it was written, and the rule above simply out-specified it. */
+:root[data-theme="light"] .day.pad{
+  background:none;border-color:transparent;box-shadow:none;
+  -webkit-backdrop-filter:none; backdrop-filter:none;
 }
 /* L2 · chrome — the two bars sit on the raw grid like the sheet does, so they
    take the sheet's tint, not the card's */
