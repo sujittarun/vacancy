@@ -97,13 +97,14 @@
   --g1:rgba(24,28,38,.64);
   --g2:rgba(14,17,25,.68);
   --g3:rgba(19,23,32,.88);
+  --g-tab:rgba(19,23,32,.72);   /* as light's: only strong ink rides on it */
   --g-sunk:rgba(255,255,255,.055);
   --g-edge:rgba(255,255,255,.13);
   --g-edge-2:rgba(255,255,255,.20);
   --g-inner:inset 0 1px 0 rgba(255,255,255,.16), inset 0 -1px 0 rgba(0,0,0,.5);
-  --blur-1:blur(6px) saturate(140%);
-  --blur-2:blur(9px) saturate(150%);
-  --blur-3:blur(12px) saturate(155%);
+  --blur-1:blur(18px) saturate(150%);
+  --blur-2:blur(26px) saturate(160%);
+  --blur-3:blur(34px) saturate(165%);
   --sheen:linear-gradient(128deg, rgba(255,255,255,.11) 0%, rgba(255,255,255,.02) 17%,
                           rgba(255,255,255,0) 34%);
   --sheen-soft:linear-gradient(128deg, rgba(255,255,255,.07) 0%, rgba(255,255,255,0) 32%);
@@ -196,13 +197,14 @@
   --g1:rgba(24,28,38,.64);
   --g2:rgba(14,17,25,.68);
   --g3:rgba(19,23,32,.88);
+  --g-tab:rgba(19,23,32,.72);   /* as light's: only strong ink rides on it */
   --g-sunk:rgba(255,255,255,.055);
   --g-edge:rgba(255,255,255,.13);
   --g-edge-2:rgba(255,255,255,.20);
   --g-inner:inset 0 1px 0 rgba(255,255,255,.16), inset 0 -1px 0 rgba(0,0,0,.5);
-  --blur-1:blur(6px) saturate(140%);
-  --blur-2:blur(9px) saturate(150%);
-  --blur-3:blur(12px) saturate(155%);
+  --blur-1:blur(18px) saturate(150%);
+  --blur-2:blur(26px) saturate(160%);
+  --blur-3:blur(34px) saturate(165%);
   --sheen:linear-gradient(128deg, rgba(255,255,255,.11) 0%, rgba(255,255,255,.02) 17%,
                           rgba(255,255,255,0) 34%);
   --sheen-soft:linear-gradient(128deg, rgba(255,255,255,.07) 0%, rgba(255,255,255,0) 32%);
@@ -1699,17 +1701,41 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
      instead — 20px/690 against 11.5px/400 — which is what this design system
      says type should be doing anyway. */
   --on-glass:#262A33;
-  --g1:rgba(255,255,255,.56);   /* L1 content — cards, day cells            */
+  /* HEAVY blur, not the thin hard pane this started as. The first pass ran at
+     6/9/12px on the argument that the optics do the work and the blur is only
+     cost — true of a thin crystal edge, wrong for the material actually being
+     asked for. What makes Apple's glass read as glass at a glance is the
+     backdrop going soft and saturated behind it, and that also BUYS the
+     transparency: a pane over mush stays legible at an opacity that would be
+     unreadable over a sharp grid. So the blur goes up and the fill comes down
+     together — they are one decision, not two. Saturation is what stops a
+     heavy blur turning everything grey. */
+  /* Three surfaces, three answers, because they do not sit over the same thing
+     and do not carry the same type. Measured, not chosen:
+       cards   float over the page ground, which is light, and still clear AA
+               at .32 — so they can be as thin as they like. .40.
+       bars    scroll over the room grid, where a FREE tile is near-black in
+               this theme. .52 is where the subtitle lands at 4.79 and the next
+               step down fails. It stays.
+       tab bar also floats over that grid, but carries nothing except --on-glass
+               and --txt, which clear at .56. So it gets to be the glassiest
+               thing on screen, and it is the one you watch the rooms move
+               under. .58.
+       sheet   carries 11px --txt-3 over a scrimmed page, and that measures 4.10
+               even at the .80 it already shipped at — the one surface with no
+               room to give. Unchanged, and now it says so out loud. */
+  --g1:rgba(255,255,255,.40);   /* L1 content — cards, day cells            */
   --g2:rgba(255,255,255,.52);   /* L2 chrome  — bars: big type, real backdrop */
   --g3:rgba(255,255,255,.80);   /* L3 floating— sheet, toasts: small type   */
+  --g-tab:rgba(255,255,255,.58);/* the tab bar alone: only strong ink on it  */
   --g-sunk:rgba(13,16,23,.06);  /* recessed: an ink tint, never a paler white */
   --g-edge:rgba(255,255,255,.95);
   --g-edge-2:rgba(255,255,255,1);
   /* the cross-section: light along the top inside edge, shadow along the bottom */
   --g-inner:inset 0 1px 0 rgba(255,255,255,1), inset 0 -1px 0 rgba(13,16,23,.10);
-  --blur-1:blur(6px) saturate(150%);
-  --blur-2:blur(9px) saturate(155%);
-  --blur-3:blur(12px) saturate(160%);
+  --blur-1:blur(18px) saturate(180%);
+  --blur-2:blur(26px) saturate(180%);
+  --blur-3:blur(34px) saturate(180%);
   /* The specular sweep. A real pane catches the light across one shoulder, and
      this is the single strongest tell that a surface is glass rather than a
      translucent rectangle. It rides in background-image, not a ::before, so it
@@ -1785,7 +1811,7 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
   -webkit-backdrop-filter:var(--blur-2); backdrop-filter:var(--blur-2);
 }
 .tabbar{
-  background-color:var(--g3);
+  background-color:var(--g-tab);
   background-image:var(--sheen);
   border-color:var(--g-edge);
   border-radius:22px;
