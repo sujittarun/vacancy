@@ -1339,6 +1339,76 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 .fx-r{font-size:10.5px;color:var(--txt-3);white-space:nowrap}
 .fx-r.bad{color:var(--now)}
 
+
+/* ── what broke: a grid, not a wall of pills ──────────────────────────────────
+   Ten appliances as ten text pills wrapped into three ragged rows and read as a
+   wall. This is the Rooms tab's own tile geometry, reused: even cells, a glyph
+   that carries at a glance, the label under it so nothing is a guessing game,
+   and a badge saying how many times THIS flat has broken THIS thing. Typing
+   filters it, so the long tail never needs a second screen.                   */
+.ffind{display:flex;align-items:center;gap:7px;padding:8px 10px;border-radius:10px;
+  background:var(--surface-2);border:1px solid var(--line)}
+.ffind:focus-within{border-color:var(--now-ink)}
+.ffind svg{width:15px;height:15px;flex:0 0 15px;stroke:var(--txt-3);fill:none;stroke-width:1.6;
+  stroke-linecap:round;stroke-linejoin:round}
+.ffind input{flex:1;min-width:0;border:0;background:none;font-size:12.5px;outline:none;color:var(--txt)}
+.ffind input::placeholder{color:var(--txt-3)}
+.ffind button{flex:0 0 auto;width:17px;height:17px;border-radius:50%;background:var(--line-2);
+  color:var(--txt-2);font-size:10px;line-height:1;display:grid;place-items:center}
+/* an author display: wins over the UA rule the hidden attribute relies on, so
+   the clear button has to opt out explicitly or it is always on screen */
+.ffind button[hidden]{display:none}
+
+.fgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.ftile{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+  height:62px;border-radius:10px;position:relative;
+  background:var(--surface-2);border:1px solid var(--line);color:var(--txt-2);
+  transition:transform .3s var(--spring),background .18s,color .18s;
+}
+.ftile:active{transform:scale(.94);transition-duration:.085s}
+.ftile[aria-pressed="true"]{background:var(--free);color:var(--free-ink);border-color:transparent}
+.ftile svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.5;
+  stroke-linecap:round;stroke-linejoin:round}
+.ftile span{font-size:9px;font-weight:620;letter-spacing:-.01em;text-align:center;
+  line-height:1.12;padding:0 3px;overflow:hidden;display:-webkit-box;
+  -webkit-box-orient:vertical;-webkit-line-clamp:2}
+.ftile i{position:absolute;top:4px;right:5px;font-style:normal;font-size:8px;font-weight:700;
+  color:var(--now-ink);letter-spacing:.02em}
+.ftile[aria-pressed="true"] i{color:var(--free-ink);opacity:.75}
+.fnone{font-size:12px;color:var(--txt-3);padding:4px 2px}
+
+/* ── who is fixing it, chosen by what broke ───────────────────────────────────
+   Not a directory. The people who have actually done THIS thing, in the order
+   the evidence puts them — this flat first, then the other forty-four — with
+   the reason they are on the list, because a name on its own is trivia.
+   Nobody is pre-selected: the app is offering, not deciding.                  */
+.crew{display:flex;flex-direction:column;gap:6px}
+.mate{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;
+  padding:10px 12px;border-radius:11px;text-align:left;
+  background:var(--surface-2);border:1px solid var(--line);color:var(--txt-2);
+  transition:transform .3s var(--spring),background .18s,color .18s;
+}
+.mate:active{transform:scale(.98);transition-duration:.085s}
+.mate[aria-pressed="true"]{background:var(--free);color:var(--free-ink);border-color:transparent}
+.mate .mt{display:flex;flex-direction:column;gap:1px;min-width:0}
+.mate .mt b{font-size:13.5px;font-weight:650;color:var(--txt)}
+.mate[aria-pressed="true"] .mt b{color:var(--free-ink)}
+.mate .mt em{font-style:normal;font-size:11px;color:var(--txt-3)}
+.mate[aria-pressed="true"] .mt em{color:color-mix(in srgb,var(--free-ink) 62%,transparent)}
+.mate .mr{flex:0 0 auto;font-size:10.5px;color:var(--txt-3);text-align:right;white-space:nowrap}
+.mate .mr.bad{color:var(--now-ink)}
+.mate[aria-pressed="true"] .mr{color:color-mix(in srgb,var(--free-ink) 62%,transparent)}
+.mate.new{border-style:dashed;background:none}
+.crewidle{font-size:12px;color:var(--txt-3);line-height:1.5}
+
+/* the running total, stated once at the top rather than boxed in the middle */
+.bkline{margin:0;font-size:12px;line-height:1.5;color:var(--txt-2)}
+.bkline b{color:var(--txt);font-weight:640}
+.bkline .acc{color:var(--now-ink);font-weight:640}
+.bkline.bad b{color:var(--hot)}
+
 /* ── the peek ─────────────────────────────────────────────────────────────────
    Sits above everything, takes no pointer events, and never moves the grid
    underneath it — the whole value is that your place is exactly where you left
@@ -1632,6 +1702,9 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 :root[data-theme="light"] .stepWide,
 :root[data-theme="light"] .srcRow button:not([aria-pressed="true"]),
 :root[data-theme="light"] .fixer:not(.on),
+:root[data-theme="light"] .ffind,
+:root[data-theme="light"] .ftile:not([aria-pressed="true"]),
+:root[data-theme="light"] .mate:not([aria-pressed="true"]),
 :root[data-theme="light"] .dcell:not(.urgent),
 :root[data-theme="light"] .wallmove{
   background-color:var(--g-sunk);
@@ -6155,58 +6228,53 @@ function openIssueForm(fi, day){
   sheetH.append(t, x);
 
   const form = el("div","bkform");
-  let fault = "", urgency = "soon";
+  let fault = "", urgency = "soon", q = "", showAll = false, who = "";
   const prev = previewStrip(fi);
   const win0 = batchWindow(fi, 1);
   prev.paint(win0 ? win0.from : 0, 0);
-  form.appendChild(prev);
-  const fCap = el("div","bkcap"); fCap.append(el("span",null,"What is wrong"));
-  form.appendChild(fCap);
-  const fRow = el("div","tyRow faultRow");
-  const flag = el("div","faultFlag"); flag.hidden = true;
-  faultsFor(fi).forEach(fx=>{
-    const b = el("button",null,fx);
-    b.setAttribute("aria-pressed","false");
-    b.onclick = ()=>{
-      fault = fault === fx ? "" : fx; haptic(8);
-      [...fRow.children].forEach(c=>c.setAttribute("aria-pressed", c.textContent===fault));
-      const h = fault ? faultHistory(fi, fault, DAYS) : null;
-      flag.hidden = !h;
-      if(h){
-        flag.textContent = "";
-        const line = el("div","ff-l");
-        line.innerHTML = `<b>${h.times}${ordinalSuffix(h.times)} `
-          + `${esc(fault.toLowerCase())} fault in ${esc(fl.id)}.</b> `
-          + (h.last.fixer ? `${esc(h.last.fixer)} saw it last.` : "Nobody recorded who fixed it last.");
-        flag.appendChild(line);
-        // the name is only useful attached to the number — otherwise it is
-        // trivia, and the operator goes hunting through their phone for it
-        if(h.last.fixer && h.last.fixer_phone){
-          const a = el("div","ff-a");
-          const call = el("a","ff-call", "Call " + h.last.fixer);
-          call.href = "tel:" + h.last.fixer_phone.replace(/[^\d+]/g,"");
-          a.append(call);
-          flag.appendChild(a);
-        }
-      }
-      paintSymptoms();
-    };
-    fRow.appendChild(b);
-  });
 
-  const uCap = el("div","bkcap"); uCap.append(el("span",null,"How much can it wait"));
-  const uSay = el("div","bkstate");
-  const win = batchWindow(fi, 1);
+  /* the same line the block form leads with, saying the one thing that differs:
+     this costs nothing, because the flat stays on sale */
+  const line = el("p","bkline");
   const nextIn = resv.filter(r => r.fi === fi && !isBlock(r) && r.end > 0)
                      .sort((a,b)=> a.start - b.start)[0];
   const whoNext = !nextIn ? "nobody is booked in for nine weeks"
     : nextIn.start <= 0 ? `${nextIn.guest} is in there until ${fmt(nextIn.end)}`
     : `${nextIn.guest} arrives ${fmt(nextIn.start)}`;
+  line.innerHTML = `<b>${esc(fl.id)} stays on sale</b> · this costs no nights`
+    + (win0 ? ` · empty from <b>${esc(fmt(win0.from))}</b> for ${win0.nights} night${win0.nights>1?"s":""},`
+            + ` so a visit then is free` : "");
+
+  const fCap = el("div","bkcap");
+  fCap.append(el("span",null,"What is wrong"), el("span",null,"tap one"));
+  const find = el("div","ffind");
+  find.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">'
+    + '<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>';
+  const qi = el("input");
+  qi.type = "text"; qi.placeholder = "or type it — geyser, tap, socket…";
+  qi.setAttribute("aria-label","Find what is wrong");
+  const qx = el("button", null, "✕"); qx.setAttribute("aria-label","Clear"); qx.hidden = true;
+  find.append(qi, qx);
+  const grid = el("div","fgrid");
+  const flag = el("div","faultFlag"); flag.hidden = true;
+
+  /* what it actually turns out to be, offered rather than asked for */
+  const nCap = el("div","bkcap");
+  const nCapR = el("span");
+  nCap.append(el("span",null,"What exactly"), nCapR);
+  const sRow = el("div","tyRow soft");
+  const noteRow = el("div","r");
+  const note = el("input");
+  note.type = "text"; note.placeholder = "In your own words";
+  noteRow.appendChild(note);
+
+  const uCap = el("div","bkcap"); uCap.append(el("span",null,"How much can it wait"));
+  const uSay = el("div","bkstate");
   const uWhy = {
-    whenever: win ? `Goes on the list. It can ride along the next time someone is there — ${flats[fi].id} is empty from ${fmt(win.from)}.`
-                  : `Goes on the list, to be picked up whenever someone is next at the flat.`,
-    soon:     win ? `Worth a visit of its own if nobody is going anyway. ${flats[fi].id} sits empty from ${fmt(win.from)} for ${win.nights} night${win.nights>1?"s":""}, which costs nothing.`
-                  : `Worth a visit of its own — this flat has no empty stretch coming up.`,
+    whenever: win0 ? `Goes on the list. It can ride along the next time someone is there — ${fl.id} is empty from ${fmt(win0.from)}.`
+                   : `Goes on the list, to be picked up whenever someone is next at the flat.`,
+    soon:     win0 ? `Worth a visit of its own if nobody is going anyway. ${fl.id} sits empty from ${fmt(win0.from)} for ${win0.nights} night${win0.nights>1?"s":""}, which costs nothing.`
+                   : `Worth a visit of its own — this flat has no empty stretch coming up.`,
     urgent:   `Deal with it before the next guest — ${whoNext}. If it cannot wait for them, take the flat out of service instead; this note leaves it on sale.`,
   };
   const uRow = el("div","tyRow");
@@ -6222,21 +6290,54 @@ function openIssueForm(fi, day){
   });
   uSay.textContent = uWhy[urgency];
 
-  const nCap = el("div","bkcap");
-  nCap.append(el("span",null,"What exactly"), el("span",null,"tap one, or type"));
-  const sRow = el("div","tyRow soft");
-  const noteRow = el("div","r");
-  const note = el("input");
-  note.type = "text"; note.placeholder = "In your own words";
-  noteRow.appendChild(note);
-  /* The symptoms follow whatever broke, so the second tap is nearly always one
-     of four — and the note ends up in words that read back sensibly months
-     later, instead of blank because typing on a phone mid-corridor is a chore. */
+  const whoCap = el("div","bkcap");
+  const whoCapR = el("span");
+  whoCap.append(el("span",null,"Who would do it"), whoCapR);
+  const crew = el("div","crew");
+
+  const acts = el("div","invActs");
+  const go = el("button","invSave","Log it");
+  const cancel = el("button","invDel","Cancel");
+  cancel.onclick = ()=>{ haptic(8); openSheet(fi, day); };
+  acts.append(go, cancel);
+
+  function paintGrid(){
+    grid.textContent = "";
+    const all = faultsFor(fi);
+    const needle = q.trim().toLowerCase();
+    let list = needle ? all.filter(k => faultHit(k, needle)) : all;
+    const capped = !needle && !showAll && list.length > 8;
+    if(capped) list = list.slice(0, 7);
+    if(!list.length){
+      grid.appendChild(el("div","fnone", `Nothing matches “${q.trim()}”. Try fewer letters, or pick Other.`));
+      return;
+    }
+    list.forEach(k=>{
+      const b = el("button","ftile");
+      const on = fault === k;
+      b.setAttribute("aria-pressed", on);
+      const times = faultTimesHere(fi, k);
+      b.setAttribute("aria-label", k + (times ? `, ${times} here before` : ""));
+      b.innerHTML = faultSvg(k);
+      b.append(el("span", null, k));
+      if(times) b.append(el("i", null, times + "×"));
+      b.onclick = ()=>{ fault = on ? "" : k; haptic(8); paint(); };
+      grid.appendChild(b);
+    });
+    if(capped){
+      const m = el("button","ftile");
+      m.innerHTML = faultSvg("Other");
+      m.append(el("span", null, "+" + (all.length - 7) + " more"));
+      m.onclick = ()=>{ showAll = true; haptic(8); paintGrid(); };
+      grid.appendChild(m);
+    }
+  }
+
   function paintSymptoms(){
     sRow.textContent = "";
     const list = SYMPTOMS[fault] || [];
     sRow.hidden = !list.length;
-    nCap.children[1].textContent = list.length ? "tap one, or type" : "";
+    nCapR.textContent = list.length ? "tap one, or type" : "";
     list.forEach(s=>{
       const b = el("button",null,s);
       b.setAttribute("aria-pressed", note.value.trim().toLowerCase() === s);
@@ -6248,20 +6349,68 @@ function openIssueForm(fi, day){
       sRow.appendChild(b);
     });
   }
-  paintSymptoms();
 
-  const acts = el("div","invActs");
-  const go = el("button","invSave","Log it");
+  function paintCrew(){
+    crew.textContent = "";
+    whoCapR.textContent = fault ? "who does " + fault : "";
+    if(!fault){
+      crew.append(el("p","crewidle","The right people appear once you say what is wrong."));
+      return;
+    }
+    const list = crewFor(fi, fault);
+    if(!list.length){
+      crew.append(el("p","crewidle","Nobody recorded yet — the first person you use here becomes the record."));
+      return;
+    }
+    list.forEach(c=>{
+      const b = el("button","mate");
+      b.setAttribute("aria-pressed", who === c.name);
+      const t2 = el("div","mt");
+      t2.append(el("b", null, c.name), el("em", null, c.why));
+      b.append(t2, el("div","mr" + (c.bad ? " bad" : ""), c.rec));
+      b.onclick = ()=>{ who = who === c.name ? "" : c.name; haptic(8); paintCrew(); };
+      crew.appendChild(b);
+    });
+  }
+
+  function paintFlag(){
+    const hist = fault ? faultHistory(fi, fault, DAYS) : null;
+    flag.textContent = "";
+    if(!hist){ flag.hidden = true; return; }
+    flag.hidden = false;
+    const l = el("div","ff-l");
+    l.innerHTML = `<b>${hist.times}${ordinalSuffix(hist.times)} `
+      + `${esc(fault)} fault in ${esc(fl.id)}.</b> `
+      + (hist.last.fixer ? `${esc(hist.last.fixer)} saw it last.` : "Nobody recorded who fixed it last.");
+    flag.append(l);
+    if(hist.last.fixer && hist.last.fixer_phone){
+      const a = el("div","ff-a");
+      const call = el("a","ff-call", "Call " + hist.last.fixer);
+      call.href = "tel:" + hist.last.fixer_phone.replace(/[^\d+]/g,"");
+      a.append(call);
+      flag.append(a);
+    }
+  }
+
+  function paint(){ paintGrid(); paintSymptoms(); paintCrew(); paintFlag();
+    go.textContent = fault || note.value.trim() ? "Log it" : "Say what is wrong first";
+    go.disabled = !fault && !note.value.trim(); }
+
+  qi.oninput = ()=>{ q = qi.value; qx.hidden = !q; paintGrid(); };
+  qx.onclick = ()=>{ q = ""; qi.value = ""; qx.hidden = true; qi.focus(); paintGrid(); };
+  note.oninput = ()=>{ go.disabled = !fault && !note.value.trim();
+    go.textContent = go.disabled ? "Say what is wrong first" : "Log it"; };
+
   go.onclick = ()=>{
-    if(!fault && !note.value.trim()){ note.placeholder = "Say what it is first"; note.focus(); return; }
-    addIssue(fi, fault, note.value, urgency);
+    if(go.disabled) return;
+    addIssue(fi, fault, [note.value, who ? "for " + who : ""].filter(s=>s && s.trim()).join(" · "), urgency);
     haptic(18); openSheet(fi, day); refreshScreen();
   };
-  const cancel = el("button","invDel","Cancel");
-  cancel.onclick = ()=>{ haptic(8); openSheet(fi, day); };
-  acts.append(go, cancel);
-  form.append(fRow, flag, nCap, sRow, noteRow, uCap, uRow, uSay, acts);
+
+  form.append(prev, line, fCap, find, grid, flag, nCap, sRow, noteRow,
+              uCap, uRow, uSay, whoCap, crew, acts);
   sheetB.append(form);
+  paint();
 
   const hint = el("p");
   hint.style.cssText = "margin:11px 20px 0;font-size:12px;line-height:1.55;color:var(--txt-3)";
@@ -6269,10 +6418,9 @@ function openIssueForm(fi, day){
     + `Nothing here costs you a night.`;
   sheetB.append(hint);
   sheet.classList.add("on"); scrim.classList.add("on");
-  // no autofocus: the fast path here is two taps, and a keyboard that opens
-  // itself covers the chips that make it fast
+  // no autofocus: the fast path is two taps, and a keyboard that opens itself
+  // covers the grid that makes it fast
 }
-
 /* ══════════════ opening a room ══════════════════════════════════════════════
    A room used to open onto every form at once: book a guest, log a fault, take
    it out of service, all expanded inline under three read-only lists. Forty-
@@ -6927,6 +7075,103 @@ function openBooking(fi, from, nights){
 }
 
 /* ── out of service, on its own screen ────────────────────────────────────── */
+
+/* ── a glyph for each thing that breaks ───────────────────────────────────────
+   Monoline, 24-box, one weight, no fills — the same drawing rules as the tab
+   icons, so the grid reads as part of this app rather than a sticker sheet. */
+const FAULT_ICON = {
+  "AC":'<path d="M3 6.5h18v7H3z"/><path d="M6.5 17.5c1.2 0 1.2-1.6 2.4-1.6M12 17.5c1.2 0 1.2-1.6 2.4-1.6M6 10h4M14 10h4"/>',
+  "Geyser":'<rect x="6" y="3" width="12" height="13" rx="3"/><path d="M9 19.5c0-1.4 1.5-2 1.5-3.5M14 19.5c0-1.4 1.5-2 1.5-3.5M9.5 7h5"/>',
+  "Plumbing":'<path d="M4 9h7a4 4 0 0 1 4 4v1"/><path d="M8 9V6h6"/><rect x="13" y="14" width="4" height="3" rx="1"/><path d="M15 20.5c0-1.2 1.2-1.8 1.2-3"/>',
+  "Electrical":'<rect x="4" y="3" width="16" height="18" rx="3"/><circle cx="9" cy="10" r="1.1"/><circle cx="15" cy="10" r="1.1"/><path d="M9.5 15h5"/>',
+  "Wi-Fi":'<path d="M2.5 9a15 15 0 0 1 19 0"/><path d="M6 12.5a10 10 0 0 1 12 0"/><path d="M9.5 16a5 5 0 0 1 5 0"/><circle cx="12" cy="19.5" r="1"/>',
+  "Fridge":'<rect x="5" y="2.5" width="14" height="19" rx="3"/><path d="M5 10h14M8.5 6v2M8.5 13v2.5"/>',
+  "Washing machine":'<rect x="4" y="2.5" width="16" height="19" rx="3"/><circle cx="12" cy="14" r="4.5"/><circle cx="8" cy="6" r="1"/>',
+  "Furniture":'<path d="M4 11V8.5A2.5 2.5 0 0 1 6.5 6h11A2.5 2.5 0 0 1 20 8.5V11"/><path d="M3 11h18v6H3z"/><path d="M6 17v2M18 17v2"/>',
+  "Pest control":'<circle cx="12" cy="13" r="5"/><path d="M12 8V6M9 5l1.5 2M15 5l-1.5 2M7 11l-3-1M7 16l-3 2M17 11l3-1M17 16l3 2"/>',
+  "Other":'<circle cx="6" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="18" cy="12" r="1.4"/>',
+  "Deep clean":'<path d="M9 3l1.6 4.2L15 9l-4.4 1.8L9 15l-1.6-4.2L3 9l4.4-1.8z"/><path d="M17 13l.9 2.3 2.3.9-2.3.9-.9 2.3-.9-2.3-2.3-.9 2.3-.9z"/>',
+  "Owner use":'<circle cx="8.5" cy="8.5" r="4"/><path d="M11.4 11.4L20 20M17 17l2-2M14.5 14.5l2-2"/>',
+  "Renovation":'<path d="M14.5 3.5l6 6-3 3-6-6z"/><path d="M11.5 6.5L3.5 14.5V20h5.5l8-8"/>',
+  "Not ready":'<circle cx="12" cy="12" r="8.5"/><path d="M12 7v5.4l3.4 2"/>'
+};
+const faultSvg = k => '<svg viewBox="0 0 24 24" aria-hidden="true">'
+  + (FAULT_ICON[k] || FAULT_ICON["Other"]) + '</svg>';
+
+/* Everything that can take a flat out of service, in one list. "Maintenance"
+   plus "AC" was always one fact asked twice — a broken thing IS the reason — so
+   the faults carry reason "Maintenance" and only the four that are not a
+   breakage stay as reasons of their own. The stored shape does not change. */
+/* The words an operator would actually type. "Plumbing" is the category; "tap"
+   is what is dripping — and a search box that promises "tap, socket" and then
+   finds nothing is worse than no search box. */
+const FAULT_ALIAS = {
+  "AC":"aircon air cooling cool ac",
+  "Geyser":"water heater hot shower boiler",
+  "Plumbing":"tap sink drain leak water toilet flush pipe basin",
+  "Electrical":"socket plug switch light power mcb wiring fuse board",
+  "Wi-Fi":"internet router net broadband signal wifi",
+  "Fridge":"refrigerator freezer cooling",
+  "Washing machine":"washer laundry washing drum",
+  "Furniture":"sofa bed wardrobe chair table cupboard door drawer",
+  "Pest control":"cockroach roach ants rats rodents mosquito bugs pest",
+  "Other":"something else anything",
+  "Deep clean":"clean cleaning deep",
+  "Owner use":"owner personal family",
+  "Renovation":"paint painting renovate remodel tiles work",
+  "Not ready":"ready setup furnishing new"
+};
+/* every word has to land somewhere, so "hot water" finds the geyser even though
+   the alias says "water heater hot" — a phrase match would miss it */
+const faultHit = (k, needle)=>{
+  const hay = (k + " " + (FAULT_ALIAS[k] || "")).toLowerCase();
+  // short words are "no", "is", "the" — requiring them finds nothing for
+  // "no power", which is exactly how somebody types it
+  const words = needle.split(/\s+/).filter(w => w.length > 2);
+  return words.length ? words.every(w => hay.includes(w)) : hay.includes(needle);
+};
+
+const OUT_REASONS = ["Deep clean","Owner use","Renovation","Not ready"];
+function outOptions(fi){
+  return faultsFor(fi).map(f => ({key:f, fault:f, reason:"Maintenance"}))
+    .concat(OUT_REASONS.map(r => ({key:r, fault:"", reason:r})));
+}
+/* How many times THIS flat has had THIS thing — the badge on the tile. */
+function faultTimesHere(fi, fault){
+  if(!fault) return 0;
+  return resv.filter(r => isBlock(r) && r.fi === fi && r.fault === fault).length;
+}
+
+/* ── who has actually done this ───────────────────────────────────────────────
+   Ranked the way the app ranks everything else: this flat first, then the other
+   forty-four, then whoever is simply used most. The "why" line is the point —
+   a name on its own is trivia, and the record beside it is what decides whether
+   you ring this one or the next one. Nobody is pre-selected. */
+function crewFor(fi, fault){
+  const all = fixers();
+  if(!all.length) return [];
+  const here = {}, away = {};
+  if(fault) resv.filter(r => isBlock(r) && r.fault === fault && r.fixer).forEach(r=>{
+    const k = r.fixer.trim().toLowerCase();
+    if(r.fi === fi) here[k] = (here[k] || 0) + 1; else away[k] = (away[k] || 0) + 1;
+  });
+  const said = g=>{
+    const k = g.name.trim().toLowerCase(), n = here[k] || 0, m = away[k] || 0;
+    if(n) return n === 1 ? `did the ${fault} here`
+                         : `did the ${fault} here ${n === 2 ? "twice" : n + " times"}`;
+    if(m) return `${fault} in ${m} other flat${m>1?"s":""}`;
+    return "most used overall";
+  };
+  const rank = g=>{
+    const k = g.name.trim().toLowerCase();
+    return (here[k] ? 200 + here[k] : 0) + (away[k] ? 100 + away[k] : 0) + g.jobs;
+  };
+  return all.slice().sort((a,b)=> rank(b) - rank(a)).slice(0,3)
+    .map(g=>({name:g.name, phone:g.phone, why:said(g),
+              rec:`${g.jobs} job${g.jobs>1?"s":""} · ${g.back ? g.back + " came back" : "none came back"}`,
+              bad:!!g.back}));
+}
+
 function openBlockForm(fi, day){
   const fl = flats[fi];
   roomHead(fi, ()=> openSheet(fi, day));
@@ -6934,15 +7179,40 @@ function openBlockForm(fi, day){
   let from = Math.max(0, Math.min(pickedNight, DAYS-1));
   while(from < DAYS && occ[fi][from]) from++;                 // start where it can actually go out
   if(from >= DAYS) from = Math.max(0, Math.min(pickedNight, DAYS-1));
-  let outN = 1, reason = BLOCK_REASONS[0], fault = "";
+  let outN = 1, reason = "Maintenance", fault = "", chosen = "";
+  let who = "", phone = "", newHand = false, q = "", showAll = false;
   const capFrom = d => { let k = 0; while(k < 60 && d + k < DAYS && !occ[fi][d + k]) k++; return Math.max(1, k); };
 
   const form = el("div","bkform");
   const prev = previewStrip(fi);
-  form.appendChild(prev);
 
+  /* The running total, said once at the top. It is context, not a field: dates
+     and money boxed in the middle of a form read as something to fill in. */
+  const line = el("p","bkline");
+
+  /* ── what broke ─────────────────────────────────────────────────────────── */
+  const fCap = el("div","bkcap");
+  fCap.append(el("span",null,"What is happening"), el("span",null,"tap one"));
+  const find = el("div","ffind");
+  find.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">'
+    + '<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>';
+  const qi = el("input");
+  qi.type = "text"; qi.placeholder = "or type it — geyser, tap, socket…";
+  qi.setAttribute("aria-label","Find what broke");
+  const qx = el("button", null, "✕"); qx.setAttribute("aria-label","Clear"); qx.hidden = true;
+  find.append(qi, qx);
+  const grid = el("div","fgrid");
+  const flag = el("div","faultFlag"); flag.hidden = true;
+  /* "Other" means the list did not have it, so the only useful next thing is a
+     box to say what it actually is. */
+  const otherRow = el("div","r"); otherRow.hidden = true;
+  const otherIn = el("input");
+  otherIn.type = "text"; otherIn.placeholder = "What is it? — this goes in the note";
+  otherRow.appendChild(otherIn);
+
+  /* ── how long ───────────────────────────────────────────────────────────── */
   const whenCap = el("div","bkcap");
-  whenCap.append(el("span",null,"Out from"), el("span",null,"Nights out"));
+  whenCap.append(el("span",null,"Out from"), el("span",null,"Nights"));
   const whenRow = el("div","bkrow");
   const dayBox = el("div","stepWide");
   const dLess = el("button",null,"−"), dMore = el("button",null,"+"), dLab = el("b");
@@ -6953,120 +7223,122 @@ function openBlockForm(fi, day){
   nLess.setAttribute("aria-label","Fewer nights out"); nMore.setAttribute("aria-label","More nights out");
   nBox.append(nLess, nLab, nMore);
   whenRow.append(dayBox, nBox);
-  const state = el("div","bkstate");
 
-  const rCap = el("div","bkcap"); rCap.append(el("span",null,"Why is it out"));
-  const rChips = el("div","tyRow");
-  BLOCK_REASONS.forEach(rz=>{
-    const b = el("button",null,rz);
-    b.setAttribute("aria-pressed", rz === reason);
-    b.onclick = ()=>{ reason = rz; haptic(8);
-      [...rChips.children].forEach(c=>c.setAttribute("aria-pressed", c.textContent === reason));
-      // "what broke" is only a question for maintenance — a deep clean did not
-      // break, and fifteen chips on screen at once is most of why this felt
-      // like a form rather than a decision
-      const wanted = reason === "Maintenance";
-      fCap.hidden = fRow.hidden = !wanted;
-      if(!wanted && fault){ fault = ""; [...fRow.children].forEach(c=>c.setAttribute("aria-pressed","false")); }
-      paintFlag();
-    };
-    rChips.appendChild(b);
-  });
-
-  const fCap = el("div","bkcap"); fCap.append(el("span",null,"What broke"));
-  const fRow = el("div","tyRow faultRow");
-  const flag = el("div","faultFlag"); flag.hidden = true;
-  faultsFor(fi).forEach(fx=>{
-    const b = el("button",null,fx);
-    b.setAttribute("aria-pressed","false");
-    b.onclick = ()=>{
-      fault = fault === fx ? "" : fx; haptic(8);
-      [...fRow.children].forEach(c=>c.setAttribute("aria-pressed", c.textContent === fault));
-      paintFlag(); paintFixers();
-    };
-    fRow.appendChild(b);
-  });
-
-  /* Two bare boxes asking the operator to remember a name and a number the app
-     already holds. It knows who fixed this exact fault in this exact flat, what
-     each has cost, and whose work comes back — so it offers people rather than
-     an empty field, carrying the one number that decides who to ring. */
+  /* ── who is fixing it ───────────────────────────────────────────────────── */
   const whoCap = el("div","bkcap");
-  whoCap.append(el("span",null,"Who is fixing it"), el("span",null,"tap one, or type"));
-  const whoRow = el("div","r");
-  const who = el("input");
-  who.type = "text"; who.placeholder = "Name";
-  who.setAttribute("aria-label","Name of the person fixing it");
-  const ph = el("input");
-  ph.type = "tel"; ph.inputMode = "numeric"; ph.placeholder = "Their number";
-  ph.setAttribute("aria-label","Their phone number");
-  whoRow.append(who, ph);
-
-  const knownRow = el("div","fixers");
-  function paintFixers(){
-    knownRow.textContent = "";
-    const all = fixers();
-    if(!all.length){ knownRow.hidden = true; return; }
-    knownRow.hidden = false;
-    // whoever last touched this fault in this flat leads: they hold the
-    // warranty and they owe the explanation
-    const last = fault ? (faultHistory(fi, fault, from) || {}).last : null;
-    const lastName = last && last.fixer ? last.fixer.trim().toLowerCase() : null;
-    all.slice().sort((x,y)=>
-      (y.name.toLowerCase() === lastName) - (x.name.toLowerCase() === lastName)
-      || (x.back / x.jobs) - (y.back / y.jobs)
-    ).slice(0,4).forEach(g=>{
-      const card = el("button","fixer");
-      const line = el("div","fx-n");
-      line.append(el("b", null, g.name));
-      if(g.name.toLowerCase() === lastName) line.append(el("em", null, "did this one"));
-      const rec = el("div","fx-r");
-      rec.textContent = g.back ? `${g.jobs} job${g.jobs>1?"s":""} · ${g.back} came back`
-                               : `${g.jobs} job${g.jobs>1?"s":""} · none came back`;
-      if(g.back) rec.classList.add("bad");
-      card.append(line, rec);
-      card.onclick = ev=>{ ev.preventDefault(); who.value = g.name; ph.value = g.phone || "";
-        haptic(8); [...knownRow.children].forEach(c=>c.classList.remove("on"));
-        card.classList.add("on"); };
-      knownRow.appendChild(card);
-    });
-  }
-
-  function paintFlag(){
-    const h = fault ? faultHistory(fi, fault, from) : null;
-    flag.textContent = "";
-    if(!h){ flag.hidden = true; return; }
-    flag.hidden = false;
-    flag.classList.toggle("hot", h.insideHold);
-    const line = el("div","ff-l");
-    line.innerHTML = `<b>${h.recent > 2 ? h.recent + ordinalSuffix(h.recent)
-                        : h.times === 2 ? "Second" : h.times + ordinalSuffix(h.times)}`
-      + ` ${esc(fault.toLowerCase())} fault in ${esc(fl.id)}.</b> `
-      + (h.last.fixer
-          ? `${esc(h.last.fixer)} fixed it ${h.gap === 0 ? "and it is still out" : h.gap + " day" + (h.gap>1?"s":"") + " ago"}.`
-          : `Last one ended ${h.gap} day${h.gap===1?"":"s"} ago, nobody recorded.`)
-      + (h.insideHold ? " <em>Inside the month — worth asking for a free look.</em>" : "");
-    flag.append(line);
-    if(h.last.fixer){
-      const a = el("div","ff-a");
-      if(h.last.fixer_phone){
-        const call = el("a","ff-call", "Call " + h.last.fixer);
-        call.href = "tel:" + h.last.fixer_phone.replace(/[^\d+]/g,"");
-        a.append(call);
-      }
-      const same = el("button","ff-same","Same person again");
-      same.onclick = ()=>{ who.value = h.last.fixer; ph.value = h.last.fixer_phone || ""; haptic(8); };
-      a.append(same);
-      flag.append(a);
-    }
-  }
+  const whoCapR = el("span");
+  whoCap.append(el("span",null,"Who is fixing it"), whoCapR);
+  const crew = el("div","crew");
+  const handRow = el("div","r"); handRow.hidden = true;
+  const handName = el("input"); handName.type = "text"; handName.placeholder = "Name";
+  handName.setAttribute("aria-label","Name of the person fixing it");
+  const handPh = el("input"); handPh.type = "tel"; handPh.inputMode = "numeric";
+  handPh.placeholder = "Their number"; handPh.setAttribute("aria-label","Their phone number");
+  handRow.append(handName, handPh);
 
   const noteRow = el("div","r");
   const note = el("input");
   note.type = "text"; note.placeholder = "Note — e.g. compressor replaced";
   noteRow.appendChild(note);
-
   const go = el("button","bkgo","");
+
+  function paintGrid(){
+    grid.textContent = "";
+    const all = outOptions(fi);
+    const needle = q.trim().toLowerCase();
+    let list = needle ? all.filter(o => faultHit(o.key, needle)) : all;
+    // eight cells is two clean rows; the rest are a tap or three letters away
+    const capped = !needle && !showAll && list.length > 8;
+    if(capped) list = list.slice(0, 7);
+    if(!list.length){
+      const none = el("div","fnone", `Nothing matches “${q.trim()}”. Try fewer letters, or pick Other.`);
+      grid.appendChild(none); return;
+    }
+    list.forEach(o=>{
+      const t = el("button","ftile");
+      const on = chosen === o.key;
+      t.setAttribute("aria-pressed", on);
+      const times = faultTimesHere(fi, o.fault);
+      t.setAttribute("aria-label", o.key + (times ? `, ${times} here before` : ""));
+      t.innerHTML = faultSvg(o.key);
+      t.append(el("span", null, o.key));
+      if(times) t.append(el("i", null, times + "×"));
+      t.onclick = ()=>{
+        if(on){ chosen = ""; fault = ""; reason = "Maintenance"; }
+        else { chosen = o.key; fault = o.fault; reason = o.reason; }
+        haptic(8); paint();
+      };
+      grid.appendChild(t);
+    });
+    if(capped){
+      const m = el("button","ftile");
+      m.innerHTML = faultSvg("Other");
+      m.append(el("span", null, "+" + (all.length - 7) + " more"));
+      m.setAttribute("aria-label", "Show the other " + (all.length - 7));
+      m.onclick = ()=>{ showAll = true; haptic(8); paintGrid(); };
+      grid.appendChild(m);
+    }
+  }
+
+  function paintCrew(){
+    crew.textContent = "";
+    whoCapR.textContent = chosen ? "who does " + chosen : "";
+    if(!chosen){
+      crew.append(el("p","crewidle","The right people appear once you say what is happening."));
+      handRow.hidden = true;
+      return;
+    }
+    const list = crewFor(fi, fault);
+    list.forEach(c=>{
+      const b = el("button","mate");
+      b.setAttribute("aria-pressed", who === c.name);
+      const t = el("div","mt");
+      t.append(el("b", null, c.name), el("em", null, c.why));
+      b.append(t, el("div","mr" + (c.bad ? " bad" : ""), c.rec));
+      b.onclick = ()=>{
+        if(who === c.name){ who = ""; phone = ""; }
+        else { who = c.name; phone = c.phone || ""; newHand = false; }
+        haptic(8); paint();
+      };
+      crew.appendChild(b);
+    });
+    const nu = el("button","mate new");
+    nu.setAttribute("aria-pressed", newHand);
+    const nt = el("div","mt");
+    nt.append(el("b", null, list.length ? "Someone else" : "Who is fixing it"),
+              el("em", null, "name and number"));
+    nu.append(nt);
+    nu.onclick = ()=>{ newHand = !newHand; if(newHand){ who = ""; phone = ""; }
+      haptic(8); paint(); if(newHand) handName.focus(); };
+    crew.appendChild(nu);
+    handRow.hidden = !newHand;
+  }
+
+  function paintFlag(){
+    const hist = fault ? faultHistory(fi, fault, from) : null;
+    flag.textContent = "";
+    if(!hist){ flag.hidden = true; return; }
+    flag.hidden = false;
+    flag.classList.toggle("hot", hist.insideHold);
+    const l = el("div","ff-l");
+    l.innerHTML = `<b>${hist.recent > 2 ? hist.recent + ordinalSuffix(hist.recent)
+                        : hist.times === 2 ? "Second" : hist.times + ordinalSuffix(hist.times)}`
+      + ` ${esc(fault)} fault in ${esc(fl.id)}.</b> `
+      + (hist.last.fixer
+          ? `${esc(hist.last.fixer)} fixed it ${hist.gap === 0 ? "and it is still out"
+              : hist.gap + " day" + (hist.gap>1?"s":"") + " ago"}.`
+          : `Last one ended ${hist.gap} day${hist.gap===1?"":"s"} ago, nobody recorded.`)
+      + (hist.insideHold ? " <em>Inside the month — worth asking for a free look.</em>" : "");
+    flag.append(l);
+    if(hist.last.fixer && hist.last.fixer_phone){
+      const a = el("div","ff-a");
+      const call = el("a","ff-call", "Call " + hist.last.fixer);
+      call.href = "tel:" + hist.last.fixer_phone.replace(/[^\d+]/g,"");
+      a.append(call);
+      flag.append(a);
+    }
+  }
+
   function paint(){
     const cap = capFrom(from);
     outN = Math.max(1, Math.min(outN, cap));
@@ -7075,17 +7347,24 @@ function openBlockForm(fi, day){
     dLess.disabled = from <= 0; dMore.disabled = from >= DAYS-1;
     nLess.disabled = outN <= 1; nMore.disabled = outN >= cap;
     const ok = freeRange(fi, from, from + outN);
-    state.classList.toggle("bad", !ok);
     const lost = outN * (fl.rate || 0);
-    state.textContent = ok
-      ? `Back on sale ${fmt(from + outN)}` + (lost ? ` · about ${money(lost)} off the market` : "")
-        + (outN >= cap ? " · a guest holds the night after" : "")
-      : `${fl.id} is already taken on ${fmtL(from)}`;
-    go.textContent = ok ? `Block ${outN} night${outN>1?"s":""}` : "Not available";
-    go.disabled = !ok;
+    line.classList.toggle("bad", !ok);
+    line.innerHTML = ok
+      ? `Out <b>${esc(from === 0 ? "today" : fmt(from))}</b> for <b>${outN} night${outN>1?"s":""}</b>`
+        + ` · back on sale <b>${esc(fmt(from + outN))}</b>`
+        + (lost ? ` · about <b>${money(lost)}</b> off the market` : "")
+        + (outN >= cap ? ` · <span class="acc">a guest holds the night after</span>` : "")
+      : `<b>${esc(fl.id)} is already taken on ${esc(fmtL(from))}</b>`;
+    otherRow.hidden = chosen !== "Other";
+    paintGrid(); paintCrew(); paintFlag();
+    go.textContent = !chosen ? "Say what is happening first"
+      : ok ? `Take ${fl.id} out for ${outN} night${outN>1?"s":""}` : "Not available";
+    go.disabled = !ok || !chosen;
     prev.paint(from, ok ? outN : 0);
-    paintFlag();
   }
+
+  qi.oninput = ()=>{ q = qi.value; qx.hidden = !q; paintGrid(); };
+  qx.onclick = ()=>{ q = ""; qi.value = ""; qx.hidden = true; qi.focus(); paintGrid(); };
   dLess.onclick = ()=>{ from = Math.max(0, from-1); haptic(5); paint(); };
   dMore.onclick = ()=>{ from = Math.min(DAYS-1, from+1); haptic(5); paint(); };
   nLess.onclick = ()=>{ outN = Math.max(1, outN-1); haptic(5); paint(); };
@@ -7093,16 +7372,16 @@ function openBlockForm(fi, day){
 
   go.onclick = ()=>{
     if(go.disabled) return;
-    if(addBlock(fi, from, outN, reason, note.value, {fault, fixer:who.value, phone:ph.value})){
+    const extra = [note.value, chosen === "Other" ? otherIn.value : ""].filter(x=>x && x.trim()).join(" · ");
+    const person = newHand ? handName.value : who;
+    const num = newHand ? handPh.value : phone;
+    if(addBlock(fi, from, outN, reason, extra, {fault, fixer:person, phone:num})){
       haptic(18); closeSheet(); refreshScreen();
     }
   };
 
-  // people first, empty boxes second: the boxes are for somebody new, and
-  // putting them on top made the app look like it remembered nobody
-  form.append(whenCap, whenRow, state, rCap, rChips, fCap, fRow, flag,
-              whoCap, knownRow, whoRow, noteRow, go);
-  paintFixers();
+  form.append(prev, line, fCap, find, grid, otherRow, flag,
+              whenCap, whenRow, whoCap, crew, handRow, noteRow, go);
   sheetB.append(form);
   paint();
   sheet.classList.add("on"); scrim.classList.add("on");

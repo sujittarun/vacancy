@@ -113,7 +113,38 @@ stays crisp, and 45 backdrop-filters on a scrolling grid is a frame-rate bill wi
 bought. Measured 61fps with 55 blurred elements live. Dark is untouched: it already has
 depth, and glass over near-black is grey.
 
-### State beats material
+### Fifteen pills was two questions in a trench coat
+
+The two maintenance screens asked "why is it out" (5 chips) and then "what broke" (10 chips),
+wrapping into five ragged rows, followed by three identical empty boxes — 736px on an 812px
+screen with nothing leading. Three attempts at tidying it failed because the layout was not
+the problem.
+
+**"Maintenance" plus "AC" is one fact stated twice.** A broken thing *is* the reason. So there
+is one question now, and the four answers that are genuinely not a breakage — deep clean,
+owner use, renovation, not ready — sit in the same list as peers. The stored shape is
+unchanged: a fault carries `reason: "Maintenance"`, the other four carry their own.
+
+Three moves made it a decision rather than a form:
+
+- **A grid, not a wall.** The Rooms tab's own four-column tile geometry, reused: even cells, a
+  monoline glyph, the label under it, and a badge saying how many times *this flat* has broken
+  *this thing*. Eight cells is two clean rows; the tail is one tap or three letters away.
+- **Type it, and mean it.** The search matches synonyms, because "Plumbing" is the category and
+  *tap* is what is dripping. Every word must land, short words are ignored — so "no power"
+  finds Electrical and "hot water" finds the geyser. A search box that promises "tap, socket"
+  and then finds nothing is worse than no search box.
+- **Who follows what.** The fixer list is no longer a directory. It is the people who have
+  actually done this thing, ranked this-flat-first then the-other-forty-four, each carrying the
+  reason they are on the list — *"did the AC here twice"* — because a name alone is trivia and
+  the number beside it (*"1 came back"*) is what decides who you ring. Nobody is pre-selected:
+  the app is offering, not deciding.
+
+And the dates and the money moved **out of the middle and up to the top**, as one quiet line
+that keeps count: *"Out today for 1 night · back on sale 17 Aug · about ₹2,600 off the market."*
+Boxed in the middle of a form, figures read as something to fill in. They are context.
+
+## State beats material
 
 A material rule and a state rule can carry the same specificity. When they do, the one
 further down the stylesheet wins — and a material block written last will quietly repaint
