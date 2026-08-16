@@ -1829,6 +1829,19 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
      their shape and the sheet finally has a room behind it. */
   --lg-sheet-fill:rgba(255,255,255,.54);
   --lg-sheet-tint:blur(6px) saturate(180%) brightness(1.5) contrast(.75);
+  /* Two depths, two strengths, and the difference is what each one sits ON.
+     The sheet and the bars sit on RAW page — a near-black FREE tile one moment
+     and white ground the next — so they carry the strong tint. Everything
+     inside a sheet is already standing on a surface that normalised its
+     backdrop, so a second full-strength tint there would be paying twice and
+     would flatten what little is left showing. Cards get the light one. */
+  --lg-fill-2:rgba(255,255,255,.20);   /* cards, over an already-tinted pane */
+  /* a trough is the same pane cut INTO the surface: the light comes from under
+     the lip instead of over it, so the rim inverts */
+  --lg-rim-sunk:
+    inset 0 1.5px 3px rgba(13,16,23,.13),
+    inset 0 -1.5px 0 rgba(255,255,255,.72),
+    inset 0 0 0 1px rgba(13,16,23,.05);
   --lg-edge:rgba(255,255,255,.55);
   --lg-rim:
     inset 0 1.5px 0 rgba(255,255,255,.85),      /* the top lip, catching light */
@@ -1935,13 +1948,79 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
   border-top:1px solid var(--g-edge-2);
   border-radius:26px 26px 0 0;
 }
-/* The sheet on liquid glass, light only. Everything inside it — the buttons,
-   the cards, the rows — was already on a translucent material and could not
-   look like it, because THIS was a flat cream field behind them. Glass shows
-   only where something is behind it, and 34px of blur meant nothing was. */
+/* ══════════ LIQUID GLASS, light only — the whole screen ═══════════════════
+   Everything below replaces the frosted recipe above for light. The frosted
+   one is not a different taste, it is a different material: 18–34px of blur
+   turns whatever is behind a pane into a featureless field, so the pane has
+   nothing to be translucent against and reads as flat paint. Every rule here
+   drops the blur to single digits and spends the difference on the RIM and on
+   the adaptive tint that keeps the type alive. Dark keeps the frosted panes it
+   already has and already measures clean. */
+
+/* L3 · the sheet — sits on RAW page, so it carries the strong tint */
 :root[data-theme="light"] .sheet{
   background-color:var(--lg-sheet-fill);
   -webkit-backdrop-filter:var(--lg-sheet-tint); backdrop-filter:var(--lg-sheet-tint);
+}
+/* L1 · content — cards, day cells, the ops row. These stand on a surface that
+   has already normalised its backdrop, so they take the light tint. */
+:root[data-theme="light"] .card,
+:root[data-theme="light"] .tcard,
+:root[data-theme="light"] .night,
+:root[data-theme="light"] .day,
+:root[data-theme="light"] .ops-row{
+  background-color:var(--lg-fill-2);
+  background-image:var(--lg-sheen);
+  -webkit-backdrop-filter:var(--lg-tint); backdrop-filter:var(--lg-tint);
+  border-color:var(--lg-edge);
+  box-shadow:var(--lg-rim);
+}
+/* L2 · chrome — the two bars sit on the raw grid like the sheet does, so they
+   take the sheet's tint, not the card's */
+:root[data-theme="light"] .topbar,
+:root[data-theme="light"] .tabbar{
+  -webkit-backdrop-filter:var(--lg-sheet-tint); backdrop-filter:var(--lg-sheet-tint);
+}
+:root[data-theme="light"] .tabbar{
+  background-color:var(--lg-sheet-fill);
+  box-shadow:var(--lg-rim);
+}
+/* L3 · the things that float over everything */
+:root[data-theme="light"] .toast,
+:root[data-theme="light"] .peek,
+:root[data-theme="light"] .strip-call{
+  background-color:var(--lg-sheet-fill);
+  background-image:var(--lg-sheen);
+  -webkit-backdrop-filter:var(--lg-sheet-tint); backdrop-filter:var(--lg-sheet-tint);
+  box-shadow:var(--lg-rim);
+}
+/* recessed — the same pane, cut in rather than laid on */
+:root[data-theme="light"] .seg,
+:root[data-theme="light"] .field,
+:root[data-theme="light"] .ghost:not(.on),
+:root[data-theme="light"] .chips button:not([aria-pressed="true"]),
+:root[data-theme="light"] .tyRow button:not([aria-pressed="true"]),
+:root[data-theme="light"] .step,
+:root[data-theme="light"] .stepWide,
+:root[data-theme="light"] .srcRow button:not([aria-pressed="true"]),
+:root[data-theme="light"] .fixer:not(.on),
+:root[data-theme="light"] .ffind,
+:root[data-theme="light"] .ftile:not([aria-pressed="true"]),
+:root[data-theme="light"] .mate:not([aria-pressed="true"]),
+:root[data-theme="light"] .dcell:not(.urgent),
+:root[data-theme="light"] .rowx,
+:root[data-theme="light"] .copybtn,
+:root[data-theme="light"] .actWhy,
+:root[data-theme="light"] .line,
+:root[data-theme="light"] .nudgeBtn:not(.yes),
+:root[data-theme="light"] .pill:not(.good):not(.now):not(.warn):not(.live):not(.due),
+:root[data-theme="light"] .field button.slot,
+:root[data-theme="light"] .field button.mic:not(.on),
+:root[data-theme="light"] .wallmove{
+  background-color:rgba(13,16,23,.05);
+  -webkit-backdrop-filter:var(--lg-tint); backdrop-filter:var(--lg-tint);
+  border-color:rgba(13,16,23,.10);
+  box-shadow:var(--lg-rim-sunk);
 }
 .toast,
 .peek{
