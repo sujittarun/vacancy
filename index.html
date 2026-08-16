@@ -6229,7 +6229,10 @@ function nightStory(fi, d){
    scroll past would be a worse trade than one you cannot scrub. */
 function attachStripScrub(wrap, strip, head, foot, readD, readW, fi){
   const bars = strip.children;
-  let live = false, dead = false, at = -1, was = null, y0 = 0;
+  let live = false, dead = false, at = -1, was = null, x0 = 0, y0 = 0, lock = null;
+  /* How far a finger must travel before the gesture has declared itself. Below
+     this, a touch is a tap and neither axis has won. */
+  const SLOP = 8;
   const rowsIn = () => sheetB.querySelectorAll(".card .row");
 
   const dayAt = x => {
@@ -6273,19 +6276,44 @@ function attachStripScrub(wrap, strip, head, foot, readD, readW, fi){
     rowsIn().forEach(row => row.classList.remove("lit"));
   };
 
+  // capture, so a finger that strays off the strip keeps reading instead of
+  // dropping the gesture. pointerleave would fire constantly here and is not
+  // an end to the gesture, only a departure from the box.
+  // Claimed only once the scrub has won the axis: capture taken on contact
+  // would also swallow a vertical drag the sheet should have scrolled.
+  const grab = id=>{ try{ wrap.setPointerCapture(id); }catch(err){} };
+
   wrap.addEventListener("pointerdown", e=>{
     if(e.pointerType === "mouse" && e.button !== 0) return;
-    dead = false; y0 = e.clientY;
-    // capture, so a finger that strays off the strip keeps reading instead of
-    // dropping the gesture. pointerleave would fire constantly here and is not
-    // an end to the gesture, only a departure from the box.
-    try{ wrap.setPointerCapture(e.pointerId); }catch(err){}
+    dead = false; lock = null; x0 = e.clientX; y0 = e.clientY;
+    /* A mouse has no competing gesture — there is no scroll to protect — so it
+       is scrubbing from the first press. A finger has to declare itself. */
+    if(e.pointerType === "mouse"){ lock = "x"; grab(e.pointerId); }
     start(e.clientX);
   });
   wrap.addEventListener("pointermove", e=>{
     if(!live || dead) return;
-    // they meant to scroll the sheet, not read a night — get out of the way
-    if(e.pointerType !== "mouse" && Math.abs(e.clientY - y0) > 16){ dead = true; stop(); return; }
+    /* DIRECTION LOCK, not a vertical tripwire. This used to abandon the scrub
+       the moment the finger drifted 16px down, measured from where it landed —
+       no comparison against how far it had travelled sideways. A thumb pivots
+       from its base, so a horizontal sweep across a 63-night strip traces an
+       ARC: the further along the bar, the further from the starting height. It
+       therefore cut out mid-sweep, worse the further you swept, and looked like
+       the strip was dead on some screens and not others. Measured: a straight
+       drag tracked all 30 nights, a 22px arc died a third of the way, a 40px
+       arc — an ordinary one-handed sweep — barely started.
+       What matters is which axis the finger is committed to, so compare them.
+       Once horizontal has won, no amount of arc takes it away again. */
+    if(lock === null){
+      const dx = Math.abs(e.clientX - x0), dy = Math.abs(e.clientY - y0);
+      if(dx < SLOP && dy < SLOP) return;            // still a tap, nothing decided
+      /* Biased toward the scrub, deliberately. Horizontal is the only gesture
+         this control has, while a vertical drag has the whole rest of the sheet
+         to start on, so the tie and the near-tie both go to reading. Vertical
+         has to be clearly meant: half as much again as the sideways travel. */
+      if(dy > dx * 1.5){ dead = true; stop(); return; }
+      lock = "x"; grab(e.pointerId);
+    }
     if(e.cancelable) e.preventDefault();
     show(dayAt(e.clientX));
   }, {passive:false});
