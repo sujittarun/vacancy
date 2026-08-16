@@ -910,16 +910,48 @@ button{background:none;border:0;padding:0;cursor:pointer}
    the readout's last pixel clears the first bar by ~25px — comfortably past
    the 21px half-width of a fingertip, even for a thumb that lands high on the
    bar rather than in the middle of it. */
-.strip-say{position:relative;margin:0 20px 14px;height:19px}
-.strip-read{position:absolute;left:0;right:0;bottom:0;display:flex;gap:7px;
-  align-items:baseline;opacity:0;pointer-events:none;
-  transform:translateY(3px);
-  transition:opacity .16s var(--out), transform .16s var(--out)}
-.strip-read b{font-size:12px;font-weight:660;color:var(--txt);white-space:nowrap}
-.strip-read span{font-size:12px;color:var(--txt-2);overflow:hidden;
-  text-overflow:ellipsis;white-space:nowrap}
-.strip-say.reading .strip-read{opacity:1;transform:none}
-@media (prefers-reduced-motion:reduce){ .strip-read{transition:opacity .16s;transform:none} }
+/* The slot holds the card's full height, because .sheet-b scrolls and would
+   otherwise clip whatever grew above it — the date line was being sliced off
+   the top. Height is reserved whether or not the card is showing, so reading a
+   night still moves nothing on the screen. */
+.strip-say{position:relative;margin:0 20px 14px;height:62px}
+/* A floating pane, so it takes the floating material: the most opaque and the
+   most blurred of the three, because it has arbitrary content behind it and
+   carries 12px type. */
+/* Narrow on purpose. On one line the run text made the card almost as wide as
+   the sheet, which is a banner, not a callout — it was clamped at both ends
+   for most of the strip and so never actually tracked anything. Stacked and
+   capped, it is small enough to sit over the night you are on. */
+.strip-call{position:absolute;left:0;bottom:0;box-sizing:border-box;
+  display:flex;flex-direction:column;padding:9px 11px;
+  border-radius:12px;width:max-content;max-width:min(268px,100%);
+  background-color:var(--g3);background-image:var(--sheen);
+  -webkit-backdrop-filter:var(--blur-3); backdrop-filter:var(--blur-3);
+  border:1px solid var(--g-edge-2);
+  box-shadow:var(--lift-2), var(--g-inner);
+  opacity:0;pointer-events:none;
+  /* the fade is animated; the sideways tracking is NOT — a value indicator that
+     eases toward the finger is a value indicator that lies about where it is */
+  transition:opacity .14s var(--out)}
+.strip-say.reading .strip-call{opacity:1}
+.strip-read{display:flex;flex-direction:column;gap:5px;min-width:0}
+.sc-top{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.strip-read b{font-size:12.5px;font-weight:680;color:var(--txt);white-space:nowrap;
+  letter-spacing:-.01em}
+.strip-read span{font-size:11.5px;color:var(--txt-2);line-height:1.3;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* the seven nights around the one under the finger, at a pitch you can
+   actually read — 16px, against the 5.7px the real strip runs at */
+.strip-mini{display:flex;gap:2px;height:16px}
+.strip-mini i{width:14px;border-radius:1.5px;background:var(--held)}
+.strip-mini i.f{background:var(--free)}
+.strip-mini i.b{background:var(--oos);align-self:flex-end;height:52%}
+.strip-mini i.td{box-shadow:inset 0 0 0 1px var(--now)}
+/* the one you are on: taller than its neighbours and ringed, so it reads
+   without colour doing the work */
+.strip-mini i.sel{box-shadow:0 0 0 1.5px var(--now);border-radius:2px}
+.strip-mini i.b.sel{align-self:stretch;height:auto}
+@media (prefers-reduced-motion:reduce){ .strip-call{transition:none} }
 
 /* the legend below is context and stays put — it no longer blinks out of the
    way, because it is no longer sharing a box with the readout */
@@ -6265,10 +6297,31 @@ function nightStory(fi, d){
    things that move are a one-pixel playhead and the touched bar. The gesture
    yields to a vertical scroll rather than fighting it — a strip you cannot
    scroll past would be a worse trade than one you cannot scrub. */
-function attachStripScrub(wrap, strip, head, say, readD, readW, fi){
+function attachStripScrub(wrap, strip, head, say, call, mini, readD, readW, fi){
   const bars = strip.children;
   let live = false, at = -1, was = null;
   const rowsIn = () => sheetB.querySelectorAll(".card .row");
+  /* Seven, because it is the shape of a week and because it is about what a
+     thumb covers. Odd, so the night you are on sits in the middle rather than
+     off to one side. */
+  const MINI = 7;
+  const cells = [];
+  for(let k = 0; k < MINI; k++){ const c = el("i"); cells.push(c); mini.appendChild(c); }
+  /* The window slides to keep the selection centred, except at the two ends,
+     where it stops rather than showing empty space for nights that do not
+     exist. The selected cell then moves within the window instead — the same
+     thing a calendar does in its first and last week. */
+  const paintMini = d => {
+    const from = Math.max(0, Math.min(DAYS - MINI, d - (MINI >> 1)));
+    for(let k = 0; k < MINI; k++){
+      const day = from + k, c = cells[k];
+      c.className = "";
+      if(!occ[fi][day]) c.classList.add("f");
+      else if(blk[fi][day]) c.classList.add("b");
+      if(day === 0) c.classList.add("td");
+      if(day === d) c.classList.add("sel");
+    }
+  };
 
   const dayAt = x => {
     const a = bars[0].getBoundingClientRect(), z = bars[DAYS-1].getBoundingClientRect();
@@ -6295,6 +6348,17 @@ function attachStripScrub(wrap, strip, head, say, readD, readW, fi){
     head.style.transform = `translateX(${(br.left - wr.left + br.width / 2).toFixed(1)}px)`;
     readD.textContent = d === 0 ? "Tonight" : fmtL(d);
     readW.textContent = nightStory(fi, d);
+    paintMini(d);
+    /* The card is centred on the touched night and then clamped inside the
+       strip's own width, so it never hangs off either end. The playhead is NOT
+       clamped — it stays at the true night — so near the ends the two separate
+       slightly and the hairline is what still tells you exactly where you are.
+       That connector is the whole reason an offset callout stays honest. */
+    const sr = say.getBoundingClientRect();
+    const x = br.left - sr.left + br.width / 2;
+    const cw = call.offsetWidth;
+    const left = Math.max(0, Math.min(sr.width - cw, x - cw / 2));
+    call.style.transform = `translateX(${left.toFixed(1)}px)`;
     const r = resv.find(x => x.fi === fi && x.start <= d && x.end > d) || null;
     rowsIn().forEach(row => row.classList.toggle("lit", !!r && row._resv === r));
     // a tick only when the night belongs to something else — not 63 times a sweep
@@ -6767,11 +6831,29 @@ function roomStrip(fi){
      The slot keeps its height whether or not anything is in it, so reading a
      night still moves nothing on the screen. */
   const say = el("div","strip-say");
+  /* The callout. It tracks the finger sideways but never vertically — its y is
+     the strip's, which is fixed, so it cannot bob about while you read. That
+     one decision removes every case a normal tooltip has to handle: no flipping
+     above/below, no collision with the sheet header, no separate placement rule
+     for touch and mouse.
+     It carries the seven nights around the one you are on, because a thumb pad
+     covers roughly EIGHT of these bars — more than a week. What the finger
+     hides is therefore never a single night, it is the run of vacancy around
+     it, which is exactly what the person on the phone is asking about. */
+  const call = el("div","strip-call");
   const read = el("div","strip-read");
   read.setAttribute("aria-live","polite");
   const readD = el("b"), readW = el("span");
-  read.append(readD, readW);
-  say.append(read);
+  const mini = el("div","strip-mini");
+  /* The date and the seven nights share the top line, and the sentence sits
+     under both. Stacked three-high the card outgrew its slot and the sheet's
+     own scroller clipped the date clean off the top — the card cannot overflow
+     upward, so it has to be short enough not to want to. */
+  const top = el("div","sc-top");
+  top.append(readD, mini);
+  read.append(top, readW);
+  call.append(read);
+  say.append(call);
 
   /* The legend stays below and stays put. It is context, not a readout, so it
      no longer has to blink out of the way to make room for one. */
@@ -6779,7 +6861,7 @@ function roomStrip(fi){
   const k = el("div","strip-k");
   k.append(el("span","lbl","Today"), el("span","lbl", `${occPct(fi)}% booked`), el("span","lbl","+9 weeks"));
   foot.append(k);
-  return {wrap, strip, head, say, foot, readD, readW};
+  return {wrap, strip, head, say, call, mini, foot, readD, readW};
 }
 
 /* The next run of free nights at or after `from`, which is what turns "not
@@ -6799,7 +6881,7 @@ function openSheet(fi, day){
 
   const S = roomStrip(fi);
   sheetB.append(S.say, S.wrap, S.foot);
-  attachStripScrub(S.wrap, S.strip, S.head, S.say, S.readD, S.readW, fi);
+  attachStripScrub(S.wrap, S.strip, S.head, S.say, S.call, S.mini, S.readD, S.readW, fi);
 
   /* ── the one thing you probably came for ──────────────────────────────────
      Decided by the room's state rather than always being the same button, so
