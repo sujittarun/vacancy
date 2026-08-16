@@ -2623,29 +2623,6 @@ function todayBoard(){
           count: decide.length + todo.length + days.length + extras.length};
 }
 
-/* One ranked list of things worth doing, newest problem first. The app should
-   say what to do, not hand over charts to interpret. */
-function actionFeed(){
-  const acts = [];
-
-  blockNudges().forEach(n=>{
-    const fl = flats[n.r.fi];
-    acts.push({kind:"block", urgency: n.kind==="due" ? 4 : 1, fi:n.r.fi, block:n.r,
-      title:`${fl.id} · ${n.r.reason}`,
-      body:`${n.when}${n.r.note ? " · " + n.r.note : ""}. Is it ready to sell again?`,
-      tag: n.kind==="due" ? "confirm" : "long block",
-      tone: n.kind==="due" ? "warn" : "", day: Math.max(0, n.due)});
-  });
-
-  dayOps(0).turnovers.forEach(t=>{
-    acts.push({kind:"turn", urgency:3, fi:t.fi,
-      title:`${flats[t.fi].id} · turnaround`,
-      body:`${t.out.guest} out, ${t.in.guest} in — same day. Needs a clean between.`,
-      tag:"today", tone:"warn", day:0});
-  });
-
-  return acts.sort((a,b)=> b.urgency - a.urgency || a.day - b.day);
-}
 
 function leadTimes(){
   const rs = resv.filter(r => typeof r.bookedOn === "number" && r.start >= r.bookedOn);
@@ -2677,15 +2654,6 @@ function weekdayPattern(days){
     for(let i=0;i<NF;i++){ if(blk[i][d]) continue; acc[w].total++; if(occ[i][d]) acc[w].sold++; }
   });
   return acc.map(a => a.total ? a.sold/a.total : null);
-}
-
-function buildingSplit(days){
-  return buildingsOf().map(b=>{
-    const idx = flats.map((f,i)=>({f,i})).filter(o=>o.f.code===b.code).map(o=>o.i);
-    let sold = 0, total = 0;
-    days.forEach(d=> idx.forEach(i=>{ total++; if(occ[i][d]) sold++; }));
-    return {...b, units:idx.length, pct: total ? sold/total : 0};
-  }).sort((a,b)=> a.pct - b.pct);
 }
 
 const buildingsOf = ()=>{
@@ -3723,7 +3691,6 @@ function clearAll(){
   }
   recompute(); save(); cacheSave();
 }
-function resetDemo(){ generateDemo(); usingDemo = true; seedFullHouse(); recompute(); seedDemoBlocks(); seedMoveableWall(); seedDemoIssues(); save(); }
 
 const freeCount = d => { let n=0; for(let i=0;i<NF;i++) if(!occ[i][d]) n++; return n; };
 const occPct    = fi => { let sold=0, avail=0;
