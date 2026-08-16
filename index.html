@@ -2127,6 +2127,40 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
   -webkit-backdrop-filter:none; backdrop-filter:none;
 }
 
+/* ── the top bar and the move stage, still on the old solid style ────────────
+   The bar was painting --bar, which is a flat 52% white with no adaptive tint,
+   so against the structured ground it read as a grey slab rather than glass.
+   It gets the sheet's material: it sits on raw page like the sheet does.
+
+   The move stage keeps its MEANING and takes the material, the same trade the
+   dark answer chips made. The colours are not decoration here — the room being
+   emptied goes from booked to LIT, which is this app's one rule, and a
+   destination that takes a guest goes BOOKED. So the fills stay --held and
+   --free and only their thickness changes. */
+:root[data-theme="light"] .topbar{
+  background:var(--lg-sheet-fill);
+}
+:root[data-theme="light"] .mroom{
+  background:color-mix(in srgb, var(--held) 78%, transparent);
+  -webkit-backdrop-filter:var(--lg-tint); backdrop-filter:var(--lg-tint);
+  border-color:rgba(255,255,255,.45);
+}
+:root[data-theme="light"] .mroom.lit{
+  background:color-mix(in srgb, var(--free) 86%, transparent);
+  border-color:transparent;
+}
+:root[data-theme="light"] .mdest{
+  background:rgba(13,16,23,.05);
+  -webkit-backdrop-filter:var(--lg-tint); backdrop-filter:var(--lg-tint);
+  border-color:rgba(13,16,23,.10);
+  box-shadow:var(--lg-rim-sunk);
+}
+:root[data-theme="light"] .mdest.filled{
+  background:color-mix(in srgb, var(--held) 78%, transparent);
+  border-color:rgba(255,255,255,.45);
+  box-shadow:var(--lg-rim);
+}
+
 /* recessed — the same pane, cut in rather than laid on */
 :root[data-theme="light"] .seg,
 :root[data-theme="light"] .field,
