@@ -335,6 +335,33 @@ Horizontal was always the right reading — across is a picture of a journey, a 
 stack is a picture of a list. A rewrite that "fixes" a component by changing what it says
 has not fixed it.
 
+## The room opens, then the guest walks in
+
+The destination used to show a dashed outline of the guest before anyone had agreed to
+anything. It reserved exactly the right space, which made the animation easy — and it read
+as *already moved*, which is the app answering a question it has not been asked.
+
+So the destination starts empty, and the motion became two beats instead of one, in the
+order those two things happen in life: **the room opens to make space, then the guest walks
+across.** Running them together is what makes an animation feel wrong here — the landing
+point is still moving while something is travelling towards it.
+
+Three rules keep every edge honest through it:
+
+- **What travels is a clone, in a flight layer above everything.** A row that grows must clip
+  its contents, so anything animating *out* of it gets cut in half. Nothing that flies is
+  inside a box that is resizing.
+- **The real chip is already in its destination, hidden.** So the space held open is exactly
+  right, and the landing is a *reveal* rather than a re-layout — no reflow at the moment
+  your eye is on the arrival.
+- **The room resizes on `grid-template-rows`, not `height`.** The row is the only thing that
+  changes, the compositor keeps the chips crisp through it, and there is no half-pixel text
+  reflow on the way.
+
+Reduced motion is the same **event**, not a different one: whoever left still has to stop
+being where they were. The first version landed the arrival without hiding the departure,
+which put the same guest in two rooms at once.
+
 ## Raised means raised in both themes
 
 `.mguest` was `--surface` on a `--surface-2` card: darker than its card in dark, lighter

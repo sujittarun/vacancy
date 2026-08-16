@@ -887,25 +887,25 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
    whole thing legible.                                                        */
 /* ── the move: across, not down ───────────────────────────────────────────────
    The room being emptied on the left, where everyone goes on the right, and the
-   guests walk across the gap. Across is the right reading — it is a picture of
-   a journey, and a vertical stack is a picture of a list.
+   guests walk across the gap. Across is the right reading — it is a picture of a
+   journey, and a vertical stack is a picture of a list.
 
-   What was broken was never the direction. It was that the finished picture was
-   a pile of transforms rather than a layout: the chips stayed children of the
-   LEFT room while sitting over the RIGHT column (measured: 109x48px of a
-   destination covered), the emptied room kept 120px of padding reserved for
-   guests who had left, and `.mroom.a.emptied b` cascaded into the chips so a
-   landed guest's name computed near-black on a near-black chip — invisible in
-   both themes.
+   The destination starts EMPTY. Showing a dashed outline of the guest before
+   anyone agrees to anything is the app answering a question it has not been
+   asked, and it read as "already moved". So the room opens to make space and
+   then the guest walks in, which is also the order those two things happen in
+   real life.
 
-   So the DOM's final state is now the truth. After the move each guest is a real
-   flow child of their destination card, and a hard refresh would draw exactly
-   what you see. The crossing is FLIP: measure where the chip is, reparent it,
-   measure again, play the difference off. Nothing survives the flight but
-   ordinary layout.                                                            */
+   Three rules keep the edges honest through all of it:
+     · the thing that travels is a CLONE in a flight layer above everything, so
+       nothing is ever clipped by the box it is growing out of;
+     · the real chip is already in its destination, hidden — so the space is
+       exactly right and the landing is a reveal, not a re-layout;
+     · the shell translates, an inner box takes the arc, a third holds the text.
+       One transform each. Collapse them and the content leans out past its own
+       chip edge at the apex, which is what the first version did.               */
 .movestage{
-  position:relative;isolation:isolate;      /* its own stacking context, so no
-     sibling needs the invisible "never gain a transform" constraint */
+  position:relative;isolation:isolate;
   margin:18px 20px 0;display:flex;align-items:flex-start;gap:0;
 }
 .mroom,.mdest{
@@ -917,38 +917,35 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
 .mroom.lit{background:var(--free);border-color:transparent}
 .mdests{flex:1;min-width:0;display:flex;flex-direction:column;gap:9px}
 .mdest{background:var(--surface-2);
-  transition:border-color .3s var(--out), box-shadow .3s var(--out)}
+  transition:border-color .34s var(--out), box-shadow .34s var(--out)}
 .mdest.filled{border-color:var(--line-2);box-shadow:var(--shadow-sm)}
 
-/* Two narrow columns, so the nameplate stacks: number and count on one line,
-   the description under it. It also sits ABOVE the traffic — a guest walking in
-   passes BEHIND it, so the room being walked into never has its name covered,
-   which is what the old flight did for 3000-7000px² of every landing. */
 .mhead{position:relative;z-index:2;display:grid;grid-template-columns:1fr auto;
   align-items:baseline;gap:0 6px;min-width:0}
 .mhead>b{grid-area:1/1;font-size:14px;font-weight:670;letter-spacing:-.02em;
   color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mhead>.mtag{grid-area:1/2;font-size:9.5px;font-weight:650;letter-spacing:.07em;
-  text-transform:uppercase;color:var(--txt-2);white-space:nowrap}
+  text-transform:uppercase;color:var(--txt-2);white-space:nowrap;
+  transition:color .42s var(--out)}
 .mhead>s{grid-area:2/1/auto/-1;text-decoration:none;font-size:10.5px;color:var(--txt-2);
   min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-/* every colour rule is scoped to a DIRECT child of the head. The old block
-   styled `.mroom b`, which reached into the guest chips and repainted their
-   names the moment the room lit up. */
+/* scoped to a DIRECT child of the head. The old block styled `.mroom b`, which
+   reached into the guest chips and repainted their names the moment the room lit. */
 .mroom.lit>.mhead>b{color:var(--free-ink)}
 .mroom.lit>.mhead>s,.mroom.lit>.mhead>.mtag{color:color-mix(in srgb,var(--free-ink) 72%,transparent)}
-.mroom>.mhead>b,.mroom>.mhead>s,.mroom>.mhead>.mtag{transition:color .42s var(--out)}
+.mroom>.mhead>b,.mroom>.mhead>s{transition:color .42s var(--out)}
 
-.mparty{flex:0 0 auto;display:flex;flex-direction:column;gap:6px}
-.mparty:not(:empty){margin-top:7px}
+/* The room opens and closes on grid-template-rows rather than height: the row
+   is the only thing that resizes, the compositor keeps the chips crisp through
+   it, and there is no half-pixel text reflow on the way. */
+.mparty{display:grid;grid-template-rows:0fr;transition:grid-template-rows .3s var(--out)}
+.mparty.open{grid-template-rows:1fr}
+.mpin{overflow:hidden;min-height:0;display:flex;flex-direction:column;gap:6px}
+.mparty.open>.mpin{padding-top:7px}
 
-/* the guest is three boxes, and each one has exactly one job:
-     .mguest      the shell FLIP translates — nothing else touches its transform
-     .mguest-fx   the visible card: it swells, tilts and lifts along the arc
-     .mguest-in   the content, which never transforms and so never overhangs
-   Collapsing fx into in was the old bug: the arc ran on a box with no
-   background, so at the apex the text leaned out past its own chip edge.    */
+/* the guest is three boxes, one job each */
 .mguest{position:relative;z-index:1;display:block;min-width:0;pointer-events:none}
+.mguest.away{visibility:hidden}
 .mguest-fx{
   display:block;padding:6px 8px 6px 7px;border-radius:8px;
   background:var(--raise);border:1px solid var(--line-2);box-shadow:var(--shadow-sm);
@@ -956,46 +953,44 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
 .mguest-in{display:flex;align-items:center;gap:6px;min-width:0}
 .mguest .bag{flex:0 0 auto;width:14px;height:14px;color:var(--txt-2)}
 .mguest .bag svg{width:14px;height:14px;display:block}
-/* in two narrow columns the name and the nights stack — they do not compete for
-   one line and then clip the one that matters */
 .mguest .who{display:flex;flex-direction:column;min-width:0;line-height:1.22}
-/* Two narrow columns cannot hold every name on one line, and an unbreakable
-   one would otherwise stack four deep and make its chip twice the height of
-   the chip beside it. Two lines then an ellipsis: the chips stay a set, and
-   the room number — which is what actually has to be read back — never moves. */
+/* Two narrow columns cannot hold every name on one line, and an unbreakable one
+   would stack four deep and make its chip twice the height of the chip beside
+   it. Two lines then an ellipsis: the chips stay a set. */
 .mguest b{font-size:12px;font-weight:620;letter-spacing:-.01em;color:var(--txt);
   overflow-wrap:anywhere;overflow:hidden;text-overflow:ellipsis;
   display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}
 .mguest s{text-decoration:none;font-size:10px;font-weight:520;color:var(--txt-2);
   white-space:nowrap;font-variant-numeric:tabular-nums}
-/* the empty place kept for someone who has not moved yet. Named .berth and not
-   .ghost because .ghost is already a button class in this file, and it was
-   quietly handing these its font-size and its transition. */
-.mguest.berth>.mguest-fx{background:none;border-style:dashed;box-shadow:none}
-.mguest.berth b,.mguest.berth s,.mguest.berth .bag{color:var(--txt-2)}
 
 .mgap{flex:0 0 30px;align-self:stretch;display:grid;place-items:center;color:var(--txt-3)}
 .mgap i{display:block;width:8px;height:8px;
   border-top:1.5px solid currentColor;border-right:1.5px solid currentColor;
-  border-radius:0 2px 0 0;transform:translateX(-1px) rotate(45deg)}
+  border-radius:0 2px 0 0;transform:translateX(-1px) rotate(45deg);
+  transition:transform .34s var(--spring)}
+.movestage.carrying .mgap i{transform:translateX(3px) rotate(45deg)}
 
-/* An arc is two motions and they do not share a curve: across is one long
-   ease-out, the rise and fall is symmetric. A single multi-stop keyframe eases
-   between EVERY pair of stops, which is why the first version stuttered. */
-@keyframes flipTravel{from{transform:translate3d(var(--fx,0px),var(--fy,0px),0)}}
-@keyframes flipArc{
+/* ── the flight layer ────────────────────────────────────────────────────────
+   Above every card, clipped by nothing. What flies is a clone; the real chip is
+   already sitting in its destination with visibility:hidden, holding exactly
+   the right space open. So the landing is a reveal rather than a re-layout, and
+   no edge is ever caught mid-reflow. */
+.mfly{position:absolute;inset:0;z-index:9;pointer-events:none}
+.mflier{position:absolute;top:0;left:0;will-change:transform}
+@keyframes carryX{ from{transform:translate3d(var(--x0),var(--y0),0)}
+                     to{transform:translate3d(var(--x1),var(--y1),0)} }
+@keyframes carryY{
   0%  {transform:translateY(0) scale(1) rotate(0deg)}
-  50% {transform:translateY(calc(var(--bow,12px) * -1)) scale(1.05) rotate(-1.5deg)}
+  50% {transform:translateY(calc(var(--bow,12px) * -1)) scale(1.06) rotate(-1.6deg)}
   100%{transform:translateY(0) scale(1) rotate(0deg)}
 }
-@keyframes flipLift{0%,100%{box-shadow:var(--shadow-sm)}50%{box-shadow:var(--shadow)}}
-/* .flying, not .mguest — the berths and anyone already parked are standing
-   still, and the old selector had them performing the carry too */
-.movestage .mguest.flying{z-index:6;will-change:transform;
-  animation:flipTravel var(--fly,460ms) cubic-bezier(.45,0,.15,1) var(--delay,0ms) both}
-.movestage .mguest.flying>.mguest-fx{
-  animation:flipArc var(--fly,460ms) cubic-bezier(.37,0,.63,1) var(--delay,0ms) both,
-            flipLift var(--fly,460ms) linear var(--delay,0ms) both}
+@keyframes carryLift{0%,100%{box-shadow:var(--shadow-sm)}50%{box-shadow:var(--shadow)}}
+/* An arc is two motions with two curves. One multi-stop keyframe eases between
+   EVERY pair of stops, which is why the first version stuttered. */
+.mflier{animation:carryX var(--fly,460ms) cubic-bezier(.4,0,.15,1) var(--delay,0ms) both}
+.mflier>.mguest-fx{
+  animation:carryY var(--fly,460ms) cubic-bezier(.37,0,.63,1) var(--delay,0ms) both,
+            carryLift var(--fly,460ms) linear var(--delay,0ms) both}
 
 .moveundo{
   display:inline-flex;align-items:center;gap:6px;margin:10px 20px 0;
@@ -1004,9 +999,6 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
   transition:transform .3s var(--spring), color .18s;
 }
 .moveundo:active{transform:scale(.95);transition-duration:.085s;color:var(--txt-2)}
-/* reserved from the start and hidden with visibility, so the sheet does not
-   grow under your thumb when it appears — and so it is out of the a11y tree
-   and out of hit-testing while it is not there */
 .moveundo.away{visibility:hidden}
 .movewhy{margin:16px 20px 0;font-size:13px;line-height:1.55;color:var(--txt-2)}
 .movewhy b{color:var(--txt);font-weight:640}
@@ -1014,11 +1006,9 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
 .movenote{margin:10px 20px 0;font-size:12px;line-height:1.55;color:var(--txt-3)}
 .bkgo.movego{margin:16px 20px 0;width:calc(100% - 40px)}
 
-@keyframes chipIn{from{opacity:0}}
 @media (prefers-reduced-motion:reduce){
-  .movestage .mguest.flying{animation:chipIn .18s var(--out) both}
-  .movestage .mguest.flying>.mguest-fx{animation:none}
-  .mroom,.mdest,.mroom>.mhead>b,.mroom>.mhead>s,.mroom>.mhead>.mtag{transition:none}
+  .mparty,.mroom,.mdest,.mgap i,.mroom>.mhead>b,.mroom>.mhead>s,.mhead>.mtag{transition:none}
+  .mflier,.mflier>.mguest-fx{animation:none}
 }
 
 /* ── the room card ────────────────────────────────────────────────────────────
@@ -6688,8 +6678,8 @@ function openMove(mv, askDay, onFreed, opts){
     const id = setTimeout(()=>{ const i = timers.indexOf(id); if(i>=0) timers.splice(i,1); fn(); }, ms);
     timers.push(id); return id;
   };
-  /* Moved for a booking that never happened is moved for nothing — and this is
-     owed however the sheet goes away, including being taken over by a toast. */
+  const OPEN = 300, FLY = 460, STEP = 110;
+
   const abandoned = ()=>{
     if(booked || !done.length) return;
     const k = done.length, names = done.map(d => d.c.m.booking.guest);
@@ -6715,23 +6705,28 @@ function openMove(mv, askDay, onFreed, opts){
   x.onclick = ()=> closeSheet();
   sheetH.append(t, x);
 
-  /* One column, read top to bottom: the room being emptied, then where each
-     guest goes. The same picture at one guest and at four. */
   const stage = el("div","movestage");
   stage.setAttribute("role","group");
   stage.setAttribute("aria-label", (n === 1 ? "One guest moves" : n + " guests move") + " out of " + from.id);
+  const fly = el("div","mfly"); fly.setAttribute("aria-hidden","true");
+
+  /* a party is a collapsible row: the grid animates, the inner box clips */
+  const party = ()=>{
+    const p = el("div","mparty"), inner = el("div","mpin");
+    p.append(inner); p.inner = inner; return p;
+  };
 
   const src = el("div","mroom"); src.setAttribute("role","group");
   const srcHead = el("div","mhead"), srcTag = el("span","mtag");
   srcHead.append(el("b", null, from.id), el("s", null, from.type + " · " + from.bshort), srcTag);
-  const srcParty = el("div","mparty");
+  const srcParty = party();
   src.append(srcHead, srcParty);
 
   const gap = el("div","mgap"); gap.setAttribute("aria-hidden","true"); gap.appendChild(el("i"));
   const dests = el("div","mdests");
 
-  const chipFor = (m, berth)=>{
-    const c = el("div","mguest" + (berth ? " berth" : ""));
+  const chipFor = m =>{
+    const c = el("div","mguest");
     c.innerHTML = '<div class="mguest-fx"><div class="mguest-in">'
       + '<span class="bag">' + SVG_BAG + '</span>'
       + '<span class="who"><b>' + esc(m.booking.guest) + '</b>'
@@ -6740,8 +6735,6 @@ function openMove(mv, askDay, onFreed, opts){
     return c;
   };
 
-  /* Guests in date order, and one card per destination FLAT — two people can
-     share a flat across non-overlapping nights and must not get two cards. */
   const rooms = new Map(), chips = [];
   mv.moves.map((m,i)=>({m,i}))
     .sort((a,b)=> (a.m.booking.start - b.m.booking.start) || (a.i - b.i))
@@ -6752,17 +6745,21 @@ function openMove(mv, askDay, onFreed, opts){
         const row = el("div","mdest"); row.setAttribute("role","group");
         const head = el("div","mhead");
         head.append(el("b", null, to.id), el("s", null, to.type + " · " + to.bshort));
-        const party = el("div","mparty");
-        row.append(head, party); dests.appendChild(row);
-        d = {row, party, fi:m.to, want:[]}; rooms.set(m.to, d);
+        const pt = party();
+        row.append(head, pt); dests.appendChild(row);
+        d = {row, party:pt, fi:m.to, want:[]}; rooms.set(m.to, d);
       }
-      const chip = chipFor(m, false), berth = chipFor(m, true);
-      berth.setAttribute("aria-label", m.booking.guest + " would move here, "
-        + fmt(m.booking.start) + " to " + fmt(m.booking.end));
-      srcParty.appendChild(chip); d.party.appendChild(berth); d.want.push(m.booking.guest);
-      chips.push({chip, berth, m, dest:d});
+      /* home is where they are; away is the space kept for them, hidden until
+         they land. No dashed outline announcing a move nobody has agreed to. */
+      const home = chipFor(m), away = chipFor(m);
+      away.classList.add("away");
+      srcParty.inner.appendChild(home);
+      d.party.inner.appendChild(away);
+      d.want.push(m.booking.guest);
+      chips.push({home, away, m, dest:d});
     });
-  stage.append(src, gap, dests);
+  srcParty.classList.add("open");
+  stage.append(src, gap, dests, fly);
 
   const worst = mv.moves.find(m => !m.sameBuilding);
   const pitch = `Everyone keeps their own nights, their room is never smaller. `
@@ -6781,20 +6778,19 @@ function openMove(mv, askDay, onFreed, opts){
   const undoBtn = el("button","moveundo away");
   const note = el("p","movenote");
 
-  const inRoom = ()=> chips.filter(c => c.chip.parentNode === srcParty);
+  const atHome = ()=> chips.filter(c => !c.home.classList.contains("away"));
 
-  /* One painter. Class, tag, ARIA and copy move together or the room spends a
-     third of a second painted booked while already labelled free — which is
-     also what a screen reader was being told, before anyone had moved. */
-  const restate = (incoming)=>{
-    const staying = srcParty.children.length + (incoming || 0);
+  const restate = ()=>{
+    const staying = atHome().length;
     src.classList.toggle("lit", !staying);
+    srcParty.classList.toggle("open", staying > 0);
     srcTag.textContent = staying ? (staying === 1 ? "1 guest" : staying + " guests") : "Free";
     src.setAttribute("aria-label", from.id + ", " + from.type + ", " + from.bshort
       + (staying ? " — " + staying + (staying === 1 ? " guest to move" : " guests to move") : " — free"));
     rooms.forEach(d=>{
-      const here = [...d.party.children].filter(c => !c.classList.contains("berth"));
+      const here = [...d.party.inner.children].filter(c => !c.classList.contains("away"));
       d.row.classList.toggle("filled", here.length > 0);
+      d.party.classList.toggle("open", here.length > 0);
       d.row.setAttribute("aria-label", flats[d.fi].id + ", " + flats[d.fi].type + ", " + flats[d.fi].bshort
         + (here.length ? " — now holding " + here.map(c => c.querySelector("b").textContent).join(", ")
                        : " — free, " + d.want.join(" and ") + " would move here"));
@@ -6803,7 +6799,7 @@ function openMove(mv, askDay, onFreed, opts){
 
   const speak = ()=>{
     restate();
-    const left = inRoom(), m = left.length;
+    const left = atHome(), m = left.length;
     if(!m){
       why.innerHTML = `<b class="ok">${esc(from.id)} is free.</b> `
         + (n === 1 ? `${esc(chips[0].m.booking.guest)} is in ${esc(flats[chips[0].m.to].id)}`
@@ -6820,7 +6816,6 @@ function openMove(mv, askDay, onFreed, opts){
       go.onclick = start;
       note.textContent = firstNote;
     }else{
-      // some went, some could not come back — say which, and leave both routes open
       const stuck = done.map(d => d.c.m.booking.guest);
       why.innerHTML = `<b>${esc(from.id)} is not free.</b> `
         + `${esc(stuck.join(" and "))} ${stuck.length === 1 ? "is" : "are"} still moved; `
@@ -6829,76 +6824,67 @@ function openMove(mv, askDay, onFreed, opts){
       go.onclick = start;
       note.textContent = "Nothing else changes — same dates, same money.";
     }
-    // the way back stays available whenever anyone is still moved, including
-    // after a partial undo — otherwise the stuck guests have no route home
     undoBtn.classList.toggle("away", !done.length);
     undoBtn.textContent = done.length === 1 ? "↩ Put them back" : `↩ Put all ${done.length} back`;
     undoBtn.disabled = false;
     go.disabled = false;
   };
 
-  speak();                       // before the append, so the live region does
-  why.setAttribute("role","status");        // not announce the opening pitch
-  why.setAttribute("aria-live","polite");
+  speak();
+  why.setAttribute("role","status"); why.setAttribute("aria-live","polite");
   sheetB.append(stage, why, go, undoBtn, note);
   sheet.classList.add("on"); scrim.classList.add("on"); sheetB.scrollTop = 0;
-  /* The stage keeps the height it opened at. Across two columns the emptied
-     room is just a shorter card beside a taller one — which is what a
-     two-column layout does — so nothing below has to be animated back into
-     place, and the button under your thumb never moves. */
-  requestAnimationFrame(()=>{ stage.style.minHeight = stage.getBoundingClientRect().height + "px"; });
 
-  /* How tall a party would be holding these as well — measured on clones, so
-     the real chips are never briefly in the wrong parent. */
-  const heightWith = (party, incoming)=>{
-    const marks = incoming.map(c=>{ const g = c.cloneNode(true); party.appendChild(g); return g; });
-    const hgt = party.getBoundingClientRect().height;
-    marks.forEach(g => g.remove());
-    return hgt;
-  };
-
-  /* FLIP. Measure First, swap, measure Last, play the difference off. */
-  const flight = (pairs, after)=>{
+  /* ── the flight ────────────────────────────────────────────────────────────
+     Beat one: the room opens. Beat two: the guest walks across. They are two
+     movements because they are two events, and running them together makes the
+     landing point move while something is travelling towards it. */
+  function carry(pairs, after){
     if(!pairs.length){ if(after) after(); return; }
-    const still = calm;
     busy = true;
-    pairs.forEach((p,i)=>{ p.slot = i; p.first = p.chip.getBoundingClientRect(); });
-    const pin = srcParty.getBoundingClientRect().height;
-    srcParty.style.height = pin + "px";
-    pairs.forEach(p => p.swap());
-    restate();
-    pairs.forEach(p=>{
-      const last = p.chip.getBoundingClientRect();
-      const dx = p.first.left - last.left, dy = p.first.top - last.top;
-      p.chip.classList.add("flying");
-      p.chip.style.setProperty("--fx", dx.toFixed(1) + "px");
-      p.chip.style.setProperty("--fy", dy.toFixed(1) + "px");
-      p.chip.style.setProperty("--bow", Math.max(9, Math.min(20, Math.hypot(dx,dy) * .11)).toFixed(0) + "px");
-      p.chip.style.setProperty("--delay", (still ? 0 : p.slot * MOVE_STEP) + "ms");
-      p.chip.style.setProperty("--fly", (still ? 180 : MOVE_TRAVEL) + "ms");
-    });
-    void stage.offsetWidth;
+    const still = calm;
+    pairs.forEach(p => p.openRow());            // make space first
+    if(still){
+      // Reduced motion still has to be the same EVENT, not a different one:
+      // whoever left has to stop being where they were. Landing the arrival
+      // without hiding the departure leaves the same guest in both rooms.
+      pairs.forEach(p =>{ p.fromEl.classList.add("away"); p.land(); });
+      busy = false; if(after) after(); return;
+    }
 
-    /* Cleanup is idempotent and runs on whichever comes first — the last
-       animation ending, or a backstop for the case where it never fires. */
-    let settled = false;
-    const settle = ()=>{
-      if(settled) return; settled = true;
-      pairs.forEach(p=>{
-        p.chip.classList.remove("flying");
-        ["--fx","--fy","--bow","--delay","--fly"].forEach(v => p.chip.style.removeProperty(v));
+    later(()=>{
+      const box = stage.getBoundingClientRect();
+      stage.classList.add("carrying");
+      pairs.forEach((p,i)=>{
+        const a = p.fromEl.getBoundingClientRect();
+        const b = p.toEl.getBoundingClientRect();
+        const f = p.fromEl.cloneNode(true);
+        f.className = "mflier";
+        f.style.width = a.width + "px";
+        f.style.setProperty("--x0", (a.left - box.left).toFixed(1) + "px");
+        f.style.setProperty("--y0", (a.top  - box.top ).toFixed(1) + "px");
+        f.style.setProperty("--x1", (b.left - box.left).toFixed(1) + "px");
+        f.style.setProperty("--y1", (b.top  - box.top ).toFixed(1) + "px");
+        f.style.setProperty("--bow", Math.max(9, Math.min(20,
+          Math.hypot(b.left - a.left, b.top - a.top) * .1)).toFixed(0) + "px");
+        f.style.setProperty("--delay", (i * STEP) + "ms");
+        f.style.setProperty("--fly", FLY + "ms");
+        fly.appendChild(f);
+        p.fromEl.classList.add("away");          // it is in the air now
+        later(()=>{ p.land(); f.remove(); haptic(7); }, i * STEP + FLY - 20);
       });
-      srcParty.style.height = "";
-      busy = false; if(after) after();
-    };
-    const last = pairs[pairs.length - 1].chip;
-    last.addEventListener("animationend", settle, {once:true});
-    later(settle, (still ? 180 : MOVE_TRAVEL + (pairs.length - 1) * MOVE_STEP) + 90);
-  };
+      later(()=>{
+        stage.classList.remove("carrying");
+        fly.textContent = "";
+        busy = false;
+        if(after) after();
+      }, (pairs.length - 1) * STEP + FLY + 40);
+    }, OPEN);
+  }
 
   function start(){
     if(busy) return;
-    const going = inRoom();
+    const going = atHome();
     if(!going.length) return;
     go.disabled = true; undoBtn.disabled = true; haptic(12);
     const moved = [];
@@ -6915,9 +6901,11 @@ function openMove(mv, askDay, onFreed, opts){
     }
     done = done.concat(moved);
     refreshScreen();
-    if(dests.scrollHeight) dests.scrollIntoView({block:"nearest", behavior: calm ? "auto" : "smooth"});
-    flight(going.map(c=>({chip:c.chip, swap:()=> c.dest.party.replaceChild(c.chip, c.berth)})),
-           ()=>{ haptic(16); speak(); });
+    carry(going.map(c=>({
+      fromEl: c.home, toEl: c.away,
+      openRow: ()=>{ c.dest.party.classList.add("open"); c.dest.row.classList.add("filled"); },
+      land: ()=>{ c.away.classList.remove("away"); }
+    })), ()=>{ haptic(16); speak(); });
   }
 
   undoBtn.onclick = ()=>{
@@ -6925,21 +6913,24 @@ function openMove(mv, askDay, onFreed, opts){
     undoBtn.disabled = true; go.disabled = true; haptic(10);
     const returned = [], stuck = [];
     done.slice().reverse().forEach(d=>{ (moveBooking(d.booking, d.was) ? returned : stuck).push(d); });
-    returned.reverse(); stuck.reverse();      // both were walked backwards
+    returned.reverse(); stuck.reverse();
     done = stuck;
     refreshScreen();
     if(stuck.length)
       toast("bad", `<b>${stuck.length} could not go back</b> — `
         + `${stuck.length === 1 ? "that room has" : "those rooms have"} been taken since.`, null);
     if(!returned.length){ speak(); return; }
-    /* The source has to be tall enough to hold them before anyone walks back,
-       or FLIP measures the landing at the wrong height and they arrive skewed. */
-    restate(returned.length);
-    srcParty.style.height = heightWith(srcParty, returned.map(d => d.c.chip)) + "px";
-    flight(returned.map(d=>({chip:d.c.chip, swap:()=>{
-      d.c.dest.party.replaceChild(d.c.berth, d.c.chip);
-      srcParty.appendChild(d.c.chip);
-    }})), ()=>{ haptic(14); speak(); });
+    carry(returned.map(d=>({
+      fromEl: d.c.away, toEl: d.c.home,
+      openRow: ()=>{ srcParty.classList.add("open"); },
+      land: ()=>{
+        d.c.home.classList.remove("away");
+        if(![...d.c.dest.party.inner.children].some(k => !k.classList.contains("away"))){
+          d.c.dest.party.classList.remove("open");
+          d.c.dest.row.classList.remove("filled");
+        }
+      }
+    })), ()=>{ haptic(14); speak(); });
   };
 }
 /* ── booking, on its own screen ───────────────────────────────────────────────
