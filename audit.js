@@ -92,8 +92,30 @@ export function sanity() {
   const probe = document.querySelector(".topbar h1, h1, .id");
   const ink = probe ? parse(getComputedStyle(probe).color) : null;
   const drift = ink ? Math.max(...[0, 1, 2].map(i => Math.abs(ink[i] - token[i]))) : 999;
-  return { theme, settled: drift <= 24, tokenInk: token.slice(0, 3).map(Math.round),
-           renderedInk: ink?.slice(0, 3).map(Math.round) };
+
+  /* The heading is not enough. It settled while the TAB BAR LABELS were still
+     mid-transition, and the sweep then reported 40 dark failures at 1.29:1 on
+     the word "Month" — the same phantom as before, waved through by a sanity
+     check looking at the wrong element. The tab bar is the slowest thing on
+     screen to settle because its labels transition colour AND sit on a pane
+     that is itself transitioning, so it is the honest probe. Its unselected
+     label must be within reach of --txt-3, the token it is painted from. */
+  const t3 = parse(cs.getPropertyValue("--txt-3").trim());
+  const tab = [...document.querySelectorAll(".tabbar button")]
+    .find(b => b.getAttribute("aria-selected") !== "true");
+  const lbl = tab && [...tab.querySelectorAll("span")].find(s => s.textContent.trim());
+  const tabInk = lbl ? parse(getComputedStyle(lbl).color) : null;
+  /* generous: this is asking "is it in the right THEME", not "is it exact" —
+     the label legitimately differs from --txt-3 when the tab is being hovered
+     or the theme paints it brighter. A whole-theme lag is a ~100+ jump. */
+  const tabDrift = tabInk ? Math.min(
+    Math.max(...[0, 1, 2].map(i => Math.abs(tabInk[i] - t3[i]))),
+    Math.max(...[0, 1, 2].map(i => Math.abs(tabInk[i] - token[i])))) : 0;
+
+  return { theme, settled: drift <= 24 && tabDrift <= 60,
+           tokenInk: token.slice(0, 3).map(Math.round),
+           renderedInk: ink?.slice(0, 3).map(Math.round),
+           tabInk: tabInk?.slice(0, 3).map(Math.round) };
 }
 
 /* Transitions and animations DO NOT ADVANCE in a backgrounded tab, and
