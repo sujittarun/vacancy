@@ -4562,18 +4562,22 @@ function exportRows(){
     const key = dt.getFullYear() + "-" + String(dt.getMonth()+1).padStart(2,"0");
     if(!months[key]) return;
     months[key].arrivals++; months[key].billed += r.amount || 0;
-    (r.pays || []).forEach(p=>{
-      const pd = dateAt(p.on || 0);
-      const pk = pd.getFullYear() + "-" + String(pd.getMonth()+1).padStart(2,"0");
-      /* Fall back to the booking's own month. `months` only spans the horizon,
-         so a payment taken before the 1st of this month hit no key and was
-         DISCARDED — while the booking's full amount still landed in billed,
-         so Summary reported the whole stay outstanding and disagreed with the
-         Payments sheet in the same workbook. */
-      (months[pk] || months[key]).paid += p.amount;
-    });
+    /* ONE basis for the whole row: the month the stay ARRIVES.
+       Billed was always counted that way, and collected was counted by the date
+       the money came in, so any advance paid in a different month from the
+       arrival made both rows wrong at once — the arrival month showed the stay
+       fully outstanding while the payment month showed cash against a stay it
+       had no billing for. Subtracting one basis from the other is what made
+       "Outstanding" meaningless rather than merely mis-keyed; the earlier fix
+       stopped the silent discard but left the mixture.
+       So this row now answers one question and answers it exactly: of the stays
+       arriving in this month, how much was agreed and how much has come in.
+       Cash BY DATE has its own sheet — every payment is on Payments with the
+       day it was taken, which is the right place for that question. */
+    (r.pays || []).forEach(p=> months[key].paid += p.amount);
   });
-  const sumRows = [H(["Month","Arrivals","Nights sold","Sellable nights","Occupancy","Billed","Collected","Outstanding"])];
+  const sumRows = [H(["Arrival month","Arrivals","Nights sold","Sellable nights","Occupancy",
+                      "Billed","Collected on those","Still owed on those"])];
   Object.values(months).sort((a,b)=> a.key < b.key ? -1 : 1).forEach(m=> sumRows.push([
     {v:m.label}, {v:m.arrivals, t:"n"}, {v:m.sold, t:"n"}, {v:m.sellable, t:"n"},
     {v: m.sellable ? Math.round(m.sold / m.sellable * 100) + "%" : "—"},
@@ -4863,7 +4867,21 @@ function roomRow(fi, day, tail){
 /* ═══════════════ SCREEN 1 — ROOMS ═══════════════ */
 const STRIP = 14;              // nights answerable without leaving this tab
 const STAYS = [1,2,3,7];
+/* THE CURSOR IS A NIGHT ON THE STRIP, and the strip is STRIP nights long.
+   Anything further out is Month's job, which is why every jump that could land
+   past the strip now routes there instead of writing a number nobody can show.
+
+   That invariant did not exist before and the shape actively hid its absence: a
+   Business jump could write 21 into a 14-night cursor, renderRooms clamped it
+   into a LOCAL without writing back, and the grid painted day 13 while the
+   sheet opened from it booked day 21 — two dates on one screen, each internally
+   consistent. The clamps at the read sites were not safety, they were the thing
+   keeping the disagreement quiet.
+
+   One writer now. Assign through setPickedNight and the guarantee holds
+   everywhere, so the readers can simply read. */
 let pickedNight = 0, stayNights = 1;
+const setPickedNight = d => (pickedNight = Math.max(0, Math.min(d | 0, STRIP - 1)));
 const countFreeFor = (d, n) => { let c=0; for(let i=0;i<NF;i++) if(freeRange(i,d,d+n)) c++; return c; };
 const soonestFor = (n, from) => { for(let d=from; d<=DAYS-n; d++) if(countFreeFor(d,n)) return d; return -1; };
 
@@ -5096,7 +5114,7 @@ function renderRooms(){
     const b = el("button","op");
     const nEl = el("b"), sEl = el("s",null,o.label);
     b.append(nEl, sEl);
-    b.onclick = ()=>{ haptic(10); openOps(o.key, Math.min(pickedNight, STRIP-1)); };
+    b.onclick = ()=>{ haptic(10); openOps(o.key, pickedNight); };
     opsRow.appendChild(b);
     return {b, nEl, key:o.key};
   });
@@ -5132,7 +5150,7 @@ function renderRooms(){
     c.append(lab, el("div","n","0"));
     const t = el("div","t"); t.appendChild(el("i"));
     c.appendChild(t);
-    c.onclick = ()=>{ haptic(9); pickedNight = d; paint(); };
+    c.onclick = ()=>{ haptic(9); setPickedNight(d); paint(); };
     nights.appendChild(c);
   }
   nightsWrap.append(nh, nights);
@@ -5144,7 +5162,7 @@ function renderRooms(){
   reset.textContent = "Today";
   reset.style.cssText = "display:none;margin-left:8px;flex:0 0 auto";
   reset.setAttribute("aria-label","Back to tonight");
-  reset.onclick = ()=>{ haptic(9); pickedNight = 0; paint(); };
+  reset.onclick = ()=>{ haptic(9); setPickedNight(0); paint(); };
   thLeft.style.cssText = "white-space:nowrap;overflow:hidden;text-overflow:ellipsis";
   thRight.style.cssText = "white-space:nowrap;flex:0 0 auto";
   const leftBox = el("div");
@@ -5165,7 +5183,7 @@ function renderRooms(){
   s.append(hero, stayWrap, nightsWrap, tilesWrap, note);
 
   function paint(){
-    const d = Math.min(pickedNight, STRIP-1), n = stayNights;
+    const d = pickedNight, n = stayNights;
 
     // dial
     const si = STAYS.indexOf(n);
@@ -5246,7 +5264,7 @@ function renderRooms(){
         const jump = el("button","copybtn");
         jump.textContent = soon < STRIP ? `Jump to ${fmt(soon)}` : `Open ${fmt(soon)} in Month`;
         jump.onclick = ()=>{ haptic(10);
-          if(soon < STRIP){ pickedNight = soon; paint(); } else goMonth(soon); };
+          if(soon < STRIP){ setPickedNight(soon); paint(); } else goMonth(soon); };
         box.append(p, jump);
       } else {
         const p = el("p");
@@ -6101,7 +6119,7 @@ function renderTrends(){
                    somewhere else. Out of the strip, go to Month — the pattern
                    the insight two cards up already uses. */
                 go: emptiest ? {label:`See ${fmt(emptiest.d)} →`,
-                                run:()=>{ if(emptiest.d < STRIP){ pickedNight = emptiest.d; switchTo(0); }
+                                run:()=>{ if(emptiest.d < STRIP){ setPickedNight(emptiest.d); switchTo(0); }
                                           else goMonth(emptiest.d); }} : null};
       }));
     said(c, `<b>${DOWF[worst]}s</b> run at <span class="hi">${Math.round(wk[worst]*100)}%</span> against ${Math.round(wk[best]*100)}% on ${DOWF[best]}s — a ${Math.round((wk[best]-wk[worst])*100)} point gap. Midweek pricing, or a minimum stay that forces weekend guests to take a shoulder night, is what usually closes it.`);
@@ -6215,6 +6233,15 @@ function renderTrends(){
    These are the things actually asked down a phone, and each is one tap. */
 const SUGGEST = ["tonight","tomorrow","this weekend","3 nights","next week"];
 let lastQuery = "tonight";
+/* What is literally in the box, as opposed to what was asked of the data.
+   The Ask screen re-renders on every refreshScreen() — which is to say after
+   every move, booking, cancel or block done from a sheet opened out of an
+   answer. That render used to blank the input, so backing out of a move you
+   decided against left you looking at an empty box with your question gone and
+   the whole search to type again. Entering the tab fresh still clears it: that
+   is a deliberate choice explained where the input is built. Coming BACK to a
+   question you never left is a different thing. */
+let askText = "";
 /* the last few real questions, so a repeat is a tap rather than retyping */
 let recentAsks = [];
 
@@ -6447,7 +6474,7 @@ function renderAsk(focus){
      and the tab focused it on open, so the keyboard covered the answer before
      anyone had asked anything. What was asked is shown above the answer
      instead, where it belongs. */
-  input.type="text"; input.value = ""; input.autocomplete="off";
+  input.type="text"; input.value = askText; input.autocomplete="off";
   input.placeholder = "Ask, or paste a message";
   input.setAttribute("enterkeyhint","search");
   input.setAttribute("aria-label","Ask about availability in plain words");
@@ -6572,6 +6599,7 @@ function renderAsk(focus){
     // every route in — chip, paste, speech, Enter — lands here, so the slot is
     // kept honest here rather than at each caller
     paintSlot();
+    askText = input.value;                       // survives the next refresh
     lastQuery = input.value.trim() || "tonight";
     // only a deliberate ask becomes history — not every keystroke on the way
     if(!quiet) remember(lastQuery);
@@ -7411,7 +7439,7 @@ function openSheet(fi, day){
      jump that set it past the strip left the grid painted on one date while
      the sheet booked another — the tile said "free from 30 Aug", the button
      said "Book 7 Sep". */
-  const bDay = (day == null ? Math.min(pickedNight, DAYS-1) : day), bN = stayNights;
+  const bDay = (day == null ? pickedNight : day), bN = stayNights;
   const canTake = freeRange(fi, bDay, bDay + bN);
   const act = el("div","roomAct");
 
@@ -8114,9 +8142,9 @@ function openBlockForm(fi, day){
   const fl = flats[fi];
   roomHead(fi, ()=> openSheet(fi, day));
 
-  let from = Math.max(0, Math.min(day == null ? pickedNight : day, DAYS-1));  // same: honour the day passed in
+  let from = Math.max(0, Math.min(day == null ? pickedNight : day, DAYS-1));
   while(from < DAYS && occ[fi][from]) from++;                 // start where it can actually go out
-  if(from >= DAYS) from = Math.max(0, Math.min(pickedNight, DAYS-1));
+  if(from >= DAYS) from = pickedNight;
   let outN = 1, reason = "Maintenance", fault = "", chosen = "";
   let who = "", phone = "", newHand = false, q = "", showAll = false;
   /* No 60-night ceiling here. That number is openBooking's, where it is a
@@ -8965,6 +8993,9 @@ function refreshScreen(){
 }
 
 function switchTo(i, focusInput){
+  // a tab you are ARRIVING at starts clean; a refresh of the one you are on
+  // does not (see askText)
+  if(i !== curScreen && SCREENS[i].id === "ask") askText = "";
   curScreen = i;
   SCREENS.forEach((sc,j)=>{
     document.getElementById("scr-"+sc.id).classList.toggle("on", j===i);
