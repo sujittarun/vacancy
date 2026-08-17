@@ -3028,7 +3028,14 @@ function blockNudges(){
   const out = [];
   resv.filter(isBlock).forEach(r=>{
     const due = r.end;                       // first night back on sale
-    if(due >= -7 && due <= 2){
+    /* "Is it back in service?" is only a sensible question about work that has
+       STARTED. A one-night outage booked for tomorrow lands inside the [-7,+2]
+       window immediately, so the board asked whether a flat was back before it
+       had gone out — and answering that question used to delete the record and
+       the bill with it. A future outage is a plan; it belongs on the calendar,
+       not on the list of things needing a decision today. */
+    if(r.start > 0){ /* has not begun — nothing to decide yet */ }
+    else if(due >= -7 && due <= 2){
       out.push({r, kind:"due", due,
         when: due < 0 ? `came back ${-due} day${-due>1?"s":""} ago`
             : due === 0 ? "comes back today"
@@ -3383,6 +3390,26 @@ let occ = [], chg = [], blk = [];
    happened four times in this file now; keeping the primitives above their
    first caller is the fix that stops it happening a fifth. */
 function freeRange(fi,a,b){ for(let d=a;d<b;d++){ if(d<0||d>=DAYS||occ[fi][d]) return false; } return true; }
+/* freeRange does not mean "free". It means "free AND entirely inside the book",
+   because it returns false for any d >= DAYS. That is right for a question
+   about nights, and wrong for every occupancy CHECK — a stay running past the
+   horizon is not in conflict with anything, there is simply no room left in the
+   array to record it. recompute() has always known this and clamps with
+   Math.min(r.end, DAYS); the guards never did.
+
+   Used as a conflict test it cost real bookings. Undo re-checked the nights it
+   had just freed, the check failed on the horizon rather than on any conflict,
+   and the operator got "Those nights are gone — TT-103 was taken while the
+   cancellation was on screen" naming a guest who does not exist, for a flat I
+   verified was completely empty. The row was already spliced out, so the stay,
+   its phone number, its amount and its payment went with it. Seven such stays
+   in the shipped book. The booking form refused the same stays up front for the
+   same reason, and blamed the same imaginary guest.
+
+   So: check the part of the span the book can actually hold. The caller still
+   has to reject a start outside the horizon — that is a different question, and
+   every caller here already asks it. */
+const freeSpan = (fi,a,b) => a < DAYS && freeRange(fi, Math.max(a,0), Math.min(b, DAYS));
 function runFrom(fi,d){ let n=0; while(d+n<DAYS && !occ[fi][d+n]) n++; return n; }
 /* Derived, not restated. UNIT_TYPES offers "4 BHK" and this table stopped at
    "3 BHK", so SIZE["4 BHK"] was undefined — and every `x < undefined` is
@@ -3662,6 +3689,38 @@ function save(){
   }catch(e){ /* private browsing or storage full — the session still works */ }
 }
 
+/* WHAT SURVIVES A RELOAD.
+   One predicate, three call sites — load(), cacheLoad() and cloudPull() each
+   had their own copy of this filter and they have to agree, because whichever
+   one runs is the one that decides what the operator still owns.
+
+   Blocks already had grace: a week past their end so the app can still ask
+   whether the flat came back, and 120 days if a FAULT was recorded, because
+   that row is the only evidence this is the third time the same AC has failed.
+
+   BOOKINGS HAD NONE, and that erased money. A guest who checks out still owing
+   is exactly what "Already left · has to be chased" on the Money tab is for —
+   and the morning after they left, the storage layer deleted the row the chase
+   list was pointing at. Measured on the shipped book: 455 rows to 439 in one
+   rollover, and ₹79,700 of recorded debt gone, ₹39,900 of it on screen one tab
+   away. It leaves exportRows() and guestByPhone() too, so the debt cannot be
+   recovered from a spreadsheet and the guest is a stranger if they call back.
+
+   A debt does not stop existing because the guest went home. It gets the same
+   window a fault does: long enough to still be chased, bounded so the book does
+   not grow forever.
+
+   Written out rather than calling dueFrom(), which is declared ~450 lines below
+   this and would be in its temporal dead zone at boot. */
+const stillOwed = r => (r.amount || 0) -
+  (r.pays || []).reduce((s,p)=> s + (p.amount || 0), 0);
+const keepOnLoad = r =>
+  r.start < DAYS && (
+    r.kind === "block"
+      ? (r.end >= -7 || (r.fault && r.end >= -REPEAT_WINDOW))
+      : (r.end >= 0 || (stillOwed(r) > 0 && r.end >= -REPEAT_WINDOW))
+  );
+
 function load(){
   try{
     const raw = localStorage.getItem(STORE);
@@ -3688,8 +3747,7 @@ function load(){
       // far longer, because it is the only evidence that this is the third time
       // the same AC has failed. Throwing it away after a week would delete the
       // feature that reads it.
-      .filter(r => r.start < DAYS && (r.kind === "block"
-        ? (r.end >= -7 || (r.fault && r.end >= -REPEAT_WINDOW)) : r.end >= 0));
+      .filter(keepOnLoad);
   issues = (d.issues || []).filter(x => flatIndex[x.id2] !== undefined)
     .map(x => ({...x, fi: flatIndex[x.id2], on: (x.on || 0) + shift,
                 fixed: x.fixed == null ? null : x.fixed + shift}));
@@ -3899,8 +3957,7 @@ async function cloudPull(){
   }).filter(Boolean)
     // same retention rule as the local store: a week for ordinary blocks, the
     // whole repeat window for anything that recorded a fault
-    .filter(r => r.start < DAYS && (r.kind === "block"
-      ? (r.end >= -7 || (r.fault && r.end >= -REPEAT_WINDOW)) : r.end >= 0));
+    .filter(keepOnLoad);
   issues = (iss || []).map(x=>{
     const fi = byUid[x.flat_id];
     if(fi === undefined) return null;
@@ -3947,8 +4004,7 @@ function cacheLoad(){
                  phone:r.phone, pax:r.pax, amount:r.amount,
                  pays: (r.pays || []).map(p => ({...p, on: (p.on || 0) + shift})),
                  bookedOn: typeof r.bookedOn === "number" ? r.bookedOn + shift : undefined }))
-    .filter(r => r.start < DAYS && (r.kind === "block"
-      ? (r.end >= -7 || (r.fault && r.end >= -REPEAT_WINDOW)) : r.end >= 0));
+    .filter(keepOnLoad);
   issues = (d.issues || []).filter(x => flatIndex[x.id2] !== undefined)
     .map(x => ({...x, fi: flatIndex[x.id2], on: (x.on || 0) + shift,
                 fixed: x.fixed == null ? null : x.fixed + shift}));
@@ -4150,7 +4206,7 @@ function addBooking(fi, start, nights, guest, src, extra){
   if(!(fi >= 0 && fi < NF)) return false;
   nights = Math.max(1, Math.min(nights|0, DAYS));
   if(start < 0 || start >= DAYS) return false;
-  if(!freeRange(fi, start, start + nights)) return false;
+  if(!freeSpan(fi, start, start + nights)) return false;
   extra = extra || {};
   const amount = toAmount(extra.amount);
   const row = { fi, start, end:start+nights, nights, manual:true, bookedOn:0,
@@ -4313,7 +4369,7 @@ function addBlock(fi, start, nights, reason, note, extra){
   if(!(fi >= 0 && fi < NF)) return false;
   nights = Math.max(1, Math.min(nights|0, DAYS));
   if(start < 0 || start >= DAYS) return false;
-  if(!freeRange(fi, start, start + nights)) return false;
+  if(!freeSpan(fi, start, start + nights)) return false;
   extra = extra || {};
   const row = { fi, start, end:start+nights, nights, kind:"block", manual:true,
                 reason: reason || "Maintenance", note: (note||"").trim(),
@@ -4385,10 +4441,31 @@ function releaseBlock(r, done){
     const paid = toAmount(done.cost);
     if(paid) r.cost = paid;
   }
-  // > 0, not >= 0: a block that starts TODAY has started. Only one that has not
-  // begun yet is a plan to drop; one that began this morning is work that
-  // happened and has a bill attached.
-  if(r.start > 0){ cancelBooking(r); return true; }
+  /* > 0, not >= 0: a block that starts TODAY has started. Only one that has not
+     begun yet is a plan to drop; one that began this morning is work that
+     happened and has a bill attached.
+
+     But "has not begun" is not the same as "never happened", and the drop was
+     still destroying evidence. A block starting TOMORROW appears on the decide
+     board the moment it is created — blockNudges admits anything due within
+     [-7,+2] regardless of whether the work has started — so the operator is
+     asked "Is TT-102 back in service?" about an outage that has not begun,
+     answers it, types ₹4,500 into "What it cost", and the row is deleted with
+     the invoice, the fault and the fixer's job on it. Measured: Ramesh went
+     from 4 jobs to 3, and nothing on screen said a record had been destroyed.
+
+     So the drop is now only for a plan with nothing recorded against it. The
+     moment the close form supplies a fixer or a cost, the operator is telling
+     us the work is real, and a real job is closed out rather than deleted —
+     zero nights long, so it blocks nothing, but present where Upkeep, fixers()
+     and the repeat-fault history can still read it.
+
+     The board itself is fixed separately: it should not be asking about an
+     outage that has not started. This is the second line of defence, because
+     the first one only has to be wrong once for the bill to be gone. */
+  const recorded = !!(r.fixer || r.cost || r.fault);
+  if(r.start > 0 && !recorded){ cancelBooking(r); return true; }
+  if(r.start > 0){ r.end = r.start; r.nights = 0; recompute(); save(); cacheSave(); return true; }
   /* Math.min, because releasing must never push the end FORWARD. blockNudges
      offers anything ending within [-7,+2], so a block that came back three days
      ago is on the list — and a flat `r.end = 0` there re-marked the flat out of
@@ -4533,11 +4610,15 @@ function cancelWithUndo(r, fi){
   const copy = {...r, pays:(r.pays || []).map(p=>({...p}))};
   const who = isBlock(r) ? (r.reason || "Out of service") : r.guest;
   cancelBooking(r);
+  /* copy.start, not Math.max(copy.start,0) — the toast has to name the stay the
+     operator is being offered back. A guest who arrived before today was being
+     announced as "17–20 Aug" for a 14→20 Aug stay, so the sentence under the
+     Undo button described a shorter booking than the one it would restore. */
   toast("", `<b>${esc(who)}</b> removed from ${esc(flats[fi].id)}, `
-          + `${esc(spanWords(dayISO(Math.max(copy.start,0)), dayISO(copy.end)))}.`,
+          + `${esc(spanWords(dayISO(copy.start), dayISO(copy.end)))}.`,
     null, {label:"Undo", run:()=>{
       // somebody else may have taken the nights in the seconds since
-      if(!freeRange(copy.fi, Math.max(copy.start,0), copy.end)){
+      if(!freeSpan(copy.fi, copy.start, copy.end)){
         toast("warn", `<b>Those nights are gone.</b> ${esc(flats[fi].id)} was taken while the `
                     + `cancellation was on screen, so ${esc(who)} could not be put back.`, fi);
         return;
@@ -4561,11 +4642,32 @@ function cancelWithUndo(r, fi){
          you cannot re-take nights already behind you — but writing it into the
          row shortens a spell that began before today and moves its first night
          forward, which is a different outage from the one that was cancelled. */
-      if(copy.start < 0){ back.start = copy.start; back.nights = back.end - back.start; recompute(); }
-      // the platform auto-payment is re-created by addBooking; carry the rest
-      const auto = PLATFORMS.indexOf(copy.src) >= 0;
-      (copy.pays || []).forEach(p=>{ if(auto && p.method === "Platform") return;
-                                     addPayment(back, p.amount, p.method, p.note); });
+      if(copy.start < 0){
+        back.start = copy.start; back.nights = back.end - back.start; recompute();
+        /* and PERSIST it. This branch corrected the row in memory and stopped.
+           addBooking had already written the clamped start to storage, and the
+           only later write is addPayment's save(), which a row with nothing but
+           Platform payments never reaches. So the screen showed the stay
+           restored correctly and the next pull-to-refresh brought it back three
+           nights short with its arrival moved forward — the export's "Check in"
+           and "Nights" columns wrong with it. Measured on a 14→20 Aug stay:
+           memory {start:-3, end:3}, storage {start:0, end:3}. */
+        save(); cacheSave();
+      }
+      /* PAYMENTS ARE RESTORED, NOT RE-DERIVED.
+         This used to skip every Platform payment in the copy, on the assumption
+         that addBooking's auto-payment already matched it. It does not: the
+         auto-payment is always for the FULL amount, while the copy might hold
+         nothing (the payout had not landed) or a partial. Both directions were
+         wrong and both are reachable — openPayment offers Platform as a chip
+         with a free-text amount. Measured: a ₹2,200 Airbnb stay with no
+         payments came back with a ₹2,200 Platform payment invented, the pill
+         flipped from "₹2,200 due" to "payout due", and owedStats().total fell
+         by exactly that. 20 bookings in the shipped book are in that state.
+         The comment above promises the row goes back exactly as it was, so
+         throw away whatever addBooking guessed and replay what was saved. */
+      back.pays = [];
+      (copy.pays || []).forEach(p=> addPayment(back, p.amount, p.method, p.note));
       haptic(14); refreshScreen();
       toast("", `<b>${esc(who)}</b> is back in ${esc(flats[fi].id)}.`, fi);
     }});
@@ -9537,8 +9639,50 @@ addEventListener("offline", ()=>{ online = false; paintAcct(); });
 
 /* Coming back to the app is the moment the book is most likely to be stale —
    somebody else may have taken a room while the phone was in a pocket. */
+/* ── MIDNIGHT ────────────────────────────────────────────────────────────────
+   `today` is captured once, at load, and every date in the app is an integer
+   offset from it. Added to the home screen this thing runs standalone: no
+   address bar, no reload button, and no reason for the operator ever to close
+   it. Left open across midnight, every date on screen is a day stale — and it
+   gets worse than cosmetic, because save() stamps the stale day too. A booking
+   taken at 00:30 for "tonight" is written against yesterday; the next real load
+   shifts it by −1, and the row ends up holding no night at all. Verified:
+   {start:-1, end:0} gives occ[fi][0] === 0 and freeRange(fi,0,1) === true. The
+   booking is lost AND the flat reads free tonight, so it can be sold twice.
+
+   There is no incremental fix — `today` is a const that hundreds of offsets
+   hang off, and re-deriving them live is the whole of load(). So the app
+   reloads itself, which is exactly what it would do if the operator had pulled
+   to refresh, and the reload re-reads the clock from scratch.
+
+   Two triggers, because neither alone is enough: a timer for the app sitting
+   open and visible at midnight, and the visibility check for the far more
+   common case of a phone that was asleep at midnight and is woken at 7am — a
+   background tab's timers are throttled or suspended and cannot be relied on.
+
+   flush() first where it applies: a reload with unsaved live edits pending
+   would lose them, which is the failure this is meant to prevent. */
+const dayStamp = () => { const d = new Date(); d.setHours(0,0,0,0); return +d; };
+const bootDay = dayStamp();
+let rolling = false;
+function rolloverCheck(){
+  if(rolling || dayStamp() === bootDay) return;
+  rolling = true;
+  try{ if(MODE === "live") flush(); save(); }catch(e){}
+  location.reload();
+}
+function armMidnight(){
+  const next = new Date(); next.setHours(24,0,0,0);
+  /* +2s of slack: a timer that fires a hair early sees the old day, does
+     nothing, and would not re-arm until the following midnight. */
+  setTimeout(()=>{ rolloverCheck(); armMidnight(); },
+             Math.max(1000, next - Date.now() + 2000));
+}
+armMidnight();
+
 addEventListener("visibilitychange", ()=>{
   if(document.visibilityState === "visible"){
+    rolloverCheck();
     if(MODE === "live"){ flush(); cloudPull().then(refreshScreen).catch(()=>{}); }
   }
 });
