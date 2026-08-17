@@ -2629,12 +2629,28 @@ function applyInventory(next, renames){
     const was = flats[r.fi] && flats[r.fi].id;
     return {...r, _id: renames[was] || was};
   });
+  /* Logged faults carry a flat INDEX too, and only resv was ever carried across.
+     Removing a flat therefore shifted every issue after it onto the next flat —
+     silently, and save() below cemented it. An urgent plumbing fault on LP-101
+     came back reading LP-102, and faults on the removed flat survived pointing
+     at its neighbour instead of being dropped, which is the opposite of what
+     that sheet's own footer promises. A fault on the LAST flat was worse: its
+     index went out of range, save() wrote no id, load() dropped it on reload,
+     and if it was urgent todayBoard threw on flats[x.fi].id and took the whole
+     Business tab down with it. Same treatment as resv, computed before the
+     swap while the old ids are still readable. */
+  const heldIssues = issues.map(x => {
+    const was = flats[x.fi] && flats[x.fi].id;
+    return {...x, _id: renames[was] || was};
+  });
   flats = next;
   flats.forEach(f=>{ f.pop = f.pop ?? 0.6; });
   NF = flats.length;
   flatIndex = Object.fromEntries(flats.map((f,i)=>[f.id,i]));
   resv = held.filter(r => flatIndex[r._id] !== undefined)
              .map(r => { const {_id, ...rest} = r; return {...rest, fi:flatIndex[_id]}; });
+  issues = heldIssues.filter(x => flatIndex[x._id] !== undefined)
+                     .map(x => { const {_id, ...rest} = x; return {...rest, fi:flatIndex[_id]}; });
   if(MODE === "live") syncInventory(prev);
   recompute(); saveInventory(); save(); cacheSave();
 }
@@ -3164,7 +3180,13 @@ let occ = [], chg = [], blk = [];
    first caller is the fix that stops it happening a fifth. */
 function freeRange(fi,a,b){ for(let d=a;d<b;d++){ if(d<0||d>=DAYS||occ[fi][d]) return false; } return true; }
 function runFrom(fi,d){ let n=0; while(d+n<DAYS && !occ[fi][d+n]) n++; return n; }
-const SIZE = {"Studio":0, "1 BHK":1, "2 BHK":2, "3 BHK":3};
+/* Derived, not restated. UNIT_TYPES offers "4 BHK" and this table stopped at
+   "3 BHK", so SIZE["4 BHK"] was undefined — and every `x < undefined` is
+   false, which silently switched OFF the one hard rule in the mover: never
+   move somebody to a smaller flat. A 4 BHK guest could be sent to a studio
+   under a row reading "never smaller". Two lists that must agree should be
+   one list. */
+const SIZE = Object.fromEntries(UNIT_TYPES.map((t,i)=>[t,i]));
 /* How many guests one booking may be worth disturbing. There IS a number — six
    people repacking for one arrival is a reorganisation, not a shuffle, and the
    search cost grows with it — but the number is not the app's opinion to keep
@@ -4071,7 +4093,12 @@ function faultHistory(fi, fault, before){
    off the market. Operators consistently see only the first half, and it is
    the half that is usually smaller. */
 function outageCost(r){
-  const nights = Math.max(0, Math.min(r.end, DAYS) - Math.max(r.start, 0));
+  /* The whole spell, not just the part still ahead. bill was summed over every
+     retained block while nights were clamped to today forward, so one figure
+     mixed full-history invoices with horizon-only nights — a finished outage
+     reported 0 nights lost while its invoice still counted, and the total
+     shrank a little every day for facts that had not changed. */
+  const nights = Math.max(0, r.end - r.start);
   const lost = nights * ((flats[r.fi] && flats[r.fi].rate) || 0);
   return {nights, lost, bill: r.cost || 0, total: (r.cost || 0) + lost};
 }
@@ -4114,7 +4141,7 @@ function extendBlock(r, extraNights){
   const from = Math.max(r.end, 0);          // a block that already lapsed resumes today
   let can = 0;
   while(can < Math.max(1, extraNights|0) && from + can < DAYS
-        && !(occ[r.fi][from+can] && !blk[r.fi][from+can])) can++;
+        && !occ[r.fi][from+can]) can++;
   if(!can) return 0;
   r.end = from + can;
   r.nights = r.end - r.start;
@@ -4128,7 +4155,13 @@ function extendBlock(r, extraNights){
 function maxExtend(r){
   const from = Math.max(r.end, 0);
   let n = 0;
-  while(n < 30 && from + n < DAYS && !(occ[r.fi][from+n] && !blk[r.fi][from+n])) n++;
+  /* !occ, not !(occ && !blk). The old test read "free, OR held by a block" —
+     and since `from` starts past this block's own end, the only block it can
+     ever wave through is a DIFFERENT one. So "keep it out longer" would run
+     straight over a second spell, leave two blocks holding the same nights,
+     count those nights twice in Upkeep and hide the second one on the
+     calendar. freeRange has always used the plain test; match it. */
+  while(n < 30 && from + n < DAYS && !occ[r.fi][from+n]) n++;
   return n;
 }
 
@@ -4193,7 +4226,13 @@ function cancelBooking(r){
     // that nothing on this phone remembers.
     const flying = inflight && inflight.id === r.sid;
     const queued = queue.some(op => op.id === r.sid && op !== inflight);
-    queue = queue.filter(op => op.id !== r.sid || op === inflight);
+    /* Also drop ops that merely REFERENCE this stay. A payment op carries its
+       own uuid as id and names the stay in body.stay_id, so pruning by id alone
+       left a pay+ pointing at a stay+ that had just been torn up — it would post
+       against a stay that will never exist. Latent while CLOUD_ENABLED is false;
+       it ships the moment that flag flips. */
+    queue = queue.filter(op => (op.id !== r.sid && !(op.body && op.body.stay_id === r.sid))
+                               || op === inflight);
     jset(QUEUE_KEY, queue);
     if(queued && !flying) paintAcct();
     else enqueue({k:"stay-", id:r.sid});
@@ -4203,7 +4242,8 @@ function cancelBooking(r){
 function clearAll(){
   resv = []; usingDemo = false;
   if(MODE === "live"){
-    queue = queue.filter(op => op.k.indexOf("stay") !== 0);   // every stay op is moot now
+    // every stay op is moot now, and so is every payment that hangs off one
+    queue = queue.filter(op => op.k.indexOf("stay") !== 0 && op.k.indexOf("pay") !== 0);
     enqueue({k:"wipe"});
   }
   recompute(); save(); cacheSave();
@@ -4525,7 +4565,12 @@ function exportRows(){
     (r.pays || []).forEach(p=>{
       const pd = dateAt(p.on || 0);
       const pk = pd.getFullYear() + "-" + String(pd.getMonth()+1).padStart(2,"0");
-      if(months[pk]) months[pk].paid += p.amount;
+      /* Fall back to the booking's own month. `months` only spans the horizon,
+         so a payment taken before the 1st of this month hit no key and was
+         DISCARDED — while the booking's full amount still landed in billed,
+         so Summary reported the whole stay outstanding and disagreed with the
+         Payments sheet in the same workbook. */
+      (months[pk] || months[key]).paid += p.amount;
     });
   });
   const sumRows = [H(["Month","Arrivals","Nights sold","Sellable nights","Occupancy","Billed","Collected","Outstanding"])];
@@ -5244,7 +5289,7 @@ addEventListener("touchend",    ()=>{ sweepNow && sweepNow.end();    }, {passive
 addEventListener("touchcancel", ()=>{ sweepNow && sweepNow.cancel(); }, {passive:true});
 
 function attachSweep(grid, hud){
-  let hold = null, live = false, a = null, b = null;
+  let hold = null, live = false, a = null, b = null, hx = 0, hy = 0;
 
   const cellAt = (x,y)=>{
     const e = document.elementFromPoint(x,y);
@@ -5301,10 +5346,22 @@ function attachSweep(grid, hud){
     const cell = e.target.closest && e.target.closest(".day[data-d]");
     if(!cell) return;
     clearTimeout(hold);
+    hx = e.touches[0].clientX; hy = e.touches[0].clientY;
     hold = setTimeout(()=>begin(cell), 260);
   }, {passive:true});
   grid.addEventListener("touchmove", e=>{
-    if(!live){ clearTimeout(hold); return; }   // a real scroll — let it through
+    /* ANY movement used to cancel the hold, with no slop at all — and nothing on
+       screen says the hold has armed until begin() fires its haptic at 260ms.
+       So a few pixels of thumb tremor while waiting silently disarmed the range
+       sweep and the touch resolved as a plain tap. It only cancels now for a
+       movement that could actually be the vertical scroll the guard is for:
+       past 10px, and more vertical than horizontal. Desktop never had this —
+       mousedown arms the same timer and no mousemove cancels it. */
+    if(!live){
+      const dx = Math.abs(e.touches[0].clientX - hx), dy = Math.abs(e.touches[0].clientY - hy);
+      if(dy > 10 && dy > dx) clearTimeout(hold);
+      return;
+    }
     e.preventDefault();
     move(e.touches[0].clientX, e.touches[0].clientY);
   }, {passive:false});
@@ -6005,7 +6062,10 @@ function renderTrends(){
           if(!blk[j][d] && !occ[j][d]) free++;
         return {text: `<b>${fmt(from)} → ${fmt(to-1)}</b> · ${Math.round(r.v*100)}% booked · `
                     + `<b>${free}</b> room-night${free===1?"":"s"} still to sell`,
-                go: free ? {label:"See that week →", run:()=>{ pickedNight = from; switchTo(1); }} : null};
+                /* goMonth, not pickedNight+switchTo: Month reads monthOffset/sel and never
+   looks at pickedNight, so this used to render "Rest of August", today still
+   selected — a plausible calendar that quietly ignored the week asked for. */
+                go: free ? {label:"See that week →", run:()=> goMonth(from)} : null};
       }));
     const halfway = curve.findIndex(x=> x.pct < near.pct/2);
     const drop = near.pct - far.pct;
@@ -6035,7 +6095,14 @@ function renderTrends(){
         return {text: `<b>${DOWF[dow]}s</b> run at ${Math.round(wk[dow]*100)}%`
                     + (gap > 0 ? ` — <span class="hi">${gap} points</span> under ${DOWF[best]}s` : ` — your strongest night`)
                     + (emptiest ? `. Emptiest is ${fmt(emptiest.d)}, ${emptiest.free} free.` : "."),
-                go: emptiest ? {label:`See ${fmt(emptiest.d)} →`, run:()=>{ pickedNight = emptiest.d; switchTo(0); }} : null};
+                /* Rooms paints a 14-night strip; every weekday bar here points
+                   past it, so sending the cursor there left the grid clamped to
+                   the last strip night while the date named on the button lived
+                   somewhere else. Out of the strip, go to Month — the pattern
+                   the insight two cards up already uses. */
+                go: emptiest ? {label:`See ${fmt(emptiest.d)} →`,
+                                run:()=>{ if(emptiest.d < STRIP){ pickedNight = emptiest.d; switchTo(0); }
+                                          else goMonth(emptiest.d); }} : null};
       }));
     said(c, `<b>${DOWF[worst]}s</b> run at <span class="hi">${Math.round(wk[worst]*100)}%</span> against ${Math.round(wk[best]*100)}% on ${DOWF[best]}s — a ${Math.round((wk[best]-wk[worst])*100)} point gap. Midweek pricing, or a minimum stay that forces weekend guests to take a shoulder night, is what usually closes it.`);
   }
@@ -7339,7 +7406,12 @@ function openSheet(fi, day){
   /* ── the one thing you probably came for ──────────────────────────────────
      Decided by the room's state rather than always being the same button, so
      the largest target on screen is never the wrong one. */
-  const bDay = Math.min(pickedNight, DAYS-1), bN = stayNights;
+  /* The day this sheet was opened FOR, when it was given one. pickedNight is a
+     single global cursor shared by a 14-night strip and a 63-day sheet, so a
+     jump that set it past the strip left the grid painted on one date while
+     the sheet booked another — the tile said "free from 30 Aug", the button
+     said "Book 7 Sep". */
+  const bDay = (day == null ? Math.min(pickedNight, DAYS-1) : day), bN = stayNights;
   const canTake = freeRange(fi, bDay, bDay + bN);
   const act = el("div","roomAct");
 
@@ -8042,7 +8114,7 @@ function openBlockForm(fi, day){
   const fl = flats[fi];
   roomHead(fi, ()=> openSheet(fi, day));
 
-  let from = Math.max(0, Math.min(pickedNight, DAYS-1));
+  let from = Math.max(0, Math.min(day == null ? pickedNight : day, DAYS-1));  // same: honour the day passed in
   while(from < DAYS && occ[fi][from]) from++;                 // start where it can actually go out
   if(from >= DAYS) from = Math.max(0, Math.min(pickedNight, DAYS-1));
   let outN = 1, reason = "Maintenance", fault = "", chosen = "";
@@ -8910,6 +8982,11 @@ function switchTo(i, focusInput){
   SCREENS[i].render(focusInput);
   const s = document.getElementById("scr-"+SCREENS[i].id);
   s.scrollTop = 0;
+  /* The only writer of `tight` is a scroll listener, so switching from a
+     scrolled screen to one already at the top fired no scroll and left the
+     title condensed on a screen sitting at its own top — which also shifts
+     Business's segment strip. Recompute it from the screen arriving. */
+  document.querySelector(".topbar").classList.toggle("tight", s.scrollTop > 56);
   closeSheet();
   history.replaceState(null, "", "#" + SCREENS[i].id);
 }
