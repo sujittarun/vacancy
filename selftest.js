@@ -232,7 +232,7 @@ export async function run(filter) {
     const m = await import("/audit.js?t=" + Date.now());
     await m.setThemeAndSettle("light");
     openSheet(0, 0);
-    await wait(300);
+    await until(() => [...document.querySelectorAll(".rowx")].some(e => e.textContent.trim() === "✕"), "the room sheet to render");
     const x = [...document.querySelectorAll(".rowx")].find(e => e.textContent.trim() === "✕");
     ok(x, "no ✕ on any booking row");
     const rest = freeze(() => getComputedStyle(x).backgroundColor);
@@ -254,7 +254,7 @@ export async function run(filter) {
     addBooking(fi, 0, 2, '<img src=x onerror="window.__pwn=1">Raj', "Direct", { amount: 5000 });
     recompute();
     openOps("arrivals", 0);
-    await wait(300);
+    await until(() => document.querySelector(".sheet .meta"), "the arrivals sheet to render");
     const injected = !!document.querySelector(".sheet img[src='x']");
     const ran = window.__pwn === 1;
     delete window.__pwn;
@@ -299,7 +299,7 @@ export async function run(filter) {
     next.push({ id: "KP-101", code: "KP", bname: "Kondapur", bshort: "Kondapur",
                 type: "2 BHK", floor: 1, rate: 3000 });
     applyInventory(next);
-    await wait(60);
+    await until(() => flats.some(f => f.code === "KP"), "the new building to land in flats");
     const bldg = parseQuery("anything in kondapur tonight").bldg;
     eq(bldg, "KP", "building matched for a name added after boot");
     return "live inventory, not the boot seed";
@@ -384,13 +384,12 @@ export async function run(filter) {
 
   await test("an interrupted sheet drag does not pin the sheet", async () => {
     openSheet(0, 0);
-    await wait(250);
+    await until(() => document.getElementById("grab") && document.querySelector(".sheet.on"), "the sheet to open");
     const grab = document.getElementById("grab"), sheetEl = document.querySelector(".sheet");
     const t = y => new Touch({ identifier: 1, target: grab, clientX: 180, clientY: y });
     grab.dispatchEvent(new TouchEvent("touchstart", { bubbles: true, touches: [t(300)], targetTouches: [t(300)], changedTouches: [t(300)] }));
     grab.dispatchEvent(new TouchEvent("touchmove", { bubbles: true, touches: [t(370)], targetTouches: [t(370)], changedTouches: [t(370)] }));
     grab.dispatchEvent(new TouchEvent("touchcancel", { bubbles: true, touches: [], targetTouches: [], changedTouches: [t(370)] }));
-    await wait(60);
     eq(sheetEl.style.transform, "", "inline transform survives a cancelled drag");
     closeSheet();
     /* wait for the sheet to actually leave, not for a number of milliseconds —
@@ -406,22 +405,28 @@ export async function run(filter) {
 
   await test("a cancelled peek does not eat the next tap", async () => {
     document.querySelectorAll(".tabbar button")[0].click();
-    await wait(250);
+    await until(() => document.querySelector(".tile"), "the Rooms grid");
     const tile = document.querySelector(".tile");
     tile.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 50, clientY: 50, pointerId: 1 }));
-    await wait(400);
+    await until(() => document.querySelector(".peek"), "the peek card to appear");
     tile.dispatchEvent(new PointerEvent("pointercancel", { bubbles: true, pointerId: 1 }));
-    await wait(40);
     ok(!tile._peeked, "the latch was armed by a pointercancel, which no click will ever clear");
     tile.click();
-    await wait(200);
-    ok(document.querySelector(".sheet").classList.contains("on"), "the first real tap did nothing");
+    await until(() => document.querySelector(".sheet.on"), "the first tap to open the sheet");
     return "latch not armed, first tap opens";
   });
 
   await test("the sweep HUD does not move the calendar under a finger", async () => {
     document.querySelectorAll(".tabbar button")[1].click();
-    await wait(400);
+    await until(() => document.querySelector(".cal") && document.querySelectorAll(".day[data-d]").length > 9, "the month grid");
+    /* And wait for the ENTRANCE ANIMATION to finish before measuring geometry.
+       `rise` is translateY(10px) and plays on a screen's first visit only
+       (.screen.on:not(.seen)), so the very first run of this test measured the
+       calendar mid-flight and reported it moving -10px — the animation's own
+       offset, not the HUD's. It passed on retry because .seen had landed by
+       then, which is exactly the shape of a flake that looks like a bug.
+       Any test that measures pixels has to own this. */
+    await until(() => document.querySelector(".screen.on.seen"), "the screen entrance animation to finish");
     const grid = document.querySelector(".cal");
     const cells = [...document.querySelectorAll(".day[data-d]")];
     ok(cells.length > 9, "not enough day cells");
@@ -431,11 +436,10 @@ export async function run(filter) {
     const top0 = grid.getBoundingClientRect().top;
     const t = () => new Touch({ identifier: 1, target: cell, clientX: pt[0], clientY: pt[1] });
     cell.dispatchEvent(new TouchEvent("touchstart", { bubbles: true, touches: [t()], targetTouches: [t()], changedTouches: [t()] }));
-    await wait(400);
+    await until(() => document.querySelector(".hud.on"), "the sweep HUD to arm");
     const moved = Math.round(grid.getBoundingClientRect().top - top0);
     const now = document.elementFromPoint(...pt).closest(".day").dataset.d;
     window.dispatchEvent(new TouchEvent("touchend", { bubbles: true, touches: [], targetTouches: [], changedTouches: [t()] }));
-    await wait(200);
     eq(moved, 0, "pixels the calendar moved when the HUD armed");
     eq(now, pressed, "the date under the finger changed when the HUD armed");
     return `0px, still on day ${pressed}`;
@@ -443,11 +447,11 @@ export async function run(filter) {
 
   await test("a capitalised symptom chip can be deselected", async () => {
     openIssueForm(0);
-    await wait(300);
+    await until(() => document.querySelector(".ftile"), "the fault form");
     const elec = [...document.querySelectorAll(".ftile")].find(b => /Electrical/i.test(b.textContent));
     ok(elec, "no Electrical fault tile");
     elec.click();
-    await wait(250);
+    await until(() => [...document.querySelectorAll("button")].some(b => b.textContent.trim() === "MCB tripping"), "the symptom chips");
     const chip = [...document.querySelectorAll("button")].find(b => b.textContent.trim() === "MCB tripping");
     ok(chip, "no 'MCB tripping' chip");
     const fields = [...document.querySelectorAll(".sheet input, .sheet textarea")];
