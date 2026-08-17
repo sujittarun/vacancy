@@ -47,6 +47,35 @@ export const ratio = (a, b) => {
 
 const wait = ms => new Promise(r => setTimeout(r, ms));
 
+/* The theme transition is 420ms, and measuring inside it is measuring a colour
+   that exists for a fifth of a second and belongs to neither theme. Flipping
+   `data-theme` by hand is worse still: it swaps the tokens but leaves anything
+   the app coloured through its own path stale, which invented 24 tab-bar
+   failures at 1.29:1 that were 16.39:1 the moment the theme was set properly.
+   So there is one way to change theme for a measurement, and this is it. */
+export async function setThemeAndSettle(t) {
+  if (document.documentElement.dataset.theme !== t) {
+    window.setTheme(t);
+    await wait(520);                       // longer than the transition
+  }
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+}
+
+/* A run that cannot prove which theme it measured is a run to throw away. This
+   compares a live element's ink against the theme's own token; if they disagree
+   the page is mid-transition or half-flipped, and every number after it is
+   fiction. */
+export function sanity() {
+  const cs = getComputedStyle(document.documentElement);
+  const theme = document.documentElement.dataset.theme;
+  const token = parse(cs.getPropertyValue("--txt").trim());
+  const probe = document.querySelector(".topbar h1, h1, .id");
+  const ink = probe ? parse(getComputedStyle(probe).color) : null;
+  const drift = ink ? Math.max(...[0, 1, 2].map(i => Math.abs(ink[i] - token[i]))) : 999;
+  return { theme, settled: drift <= 24, tokenInk: token.slice(0, 3).map(Math.round),
+           renderedInk: ink?.slice(0, 3).map(Math.round) };
+}
+
 /** Flatten an element's whole ancestor background stack onto the page ground. */
 export function groundUnder(el) {
   const stack = [];
@@ -74,9 +103,20 @@ export async function walk(fn) {
     ["a booking", () => openBooking(0, 0, 2)],
   ];
   for (const [name, open] of sheets) {
-    try { open(); await wait(240); await fn(name); closeSheet(); await wait(200); }
+    try { open(); await wait(240); await fn(name); }
     catch { /* a sheet that needs state this seed does not have */ }
+    finally { await dismiss(); }
   }
+  await dismiss();
+}
+
+/* Leave the app where we found it. A sheet or a gate left open does not just
+   dirty the next surface — a gate is modal, so every later open() lands behind
+   it and the sweep spends its time re-measuring the same screen. */
+async function dismiss() {
+  try { window.closeGate?.(); } catch {}
+  try { window.closeSheet?.(); } catch {}
+  await wait(200);
 }
 
 /* ── the two audits ──────────────────────────────────────────────────────── */
@@ -85,6 +125,8 @@ export async function walk(fn) {
 export async function contrast() {
   const fails = [];
   let checked = 0;
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  const check = sanity();
   await walk(where => {
     for (const el of document.querySelectorAll("*")) {
       if (!el.getClientRects().length) continue;
@@ -108,9 +150,10 @@ export async function contrast() {
     }
   });
   return {
-    theme: document.documentElement.dataset.theme,
+    ...check,                       // theme + whether it was settled enough to believe
     checked, failures: fails.length,
     worst: fails.sort((a, b) => a.r - b.r).slice(0, 20),
+    ...(check.settled ? {} : { WARNING: "mid-transition or half-flipped — rerun after setThemeAndSettle()" }),
   };
 }
 

@@ -58,6 +58,45 @@
 <style>
 /* ══════════════════════ tokens ══════════════════════ */
 :root{
+  /* ── GEOMETRY — the same in every theme, so it is declared once, here ──────
+     Five radii, going by SIZE rather than by kind: a corner is optical, so a
+     38px icon button and a 56px full-width button genuinely should not share
+     one. The rule is nesting — a thing inside a thing takes the step below it,
+     which is what keeps a card's corner and the corner of the chip inside it
+     concentric instead of accidentally equal. There were 22 distinct container
+     radii before, ten of them a pixel from another, which is not a difference
+     anyone chose or can see.
+
+     These belong in :root and nowhere else. They were briefly declared inside
+     the light block, and because ~70 of the rules that use them carry no
+     [data-theme] guard, every one of those was invalid-at-computed-value-time
+     in dark: `border-radius:var(--r-lg)` fell back to 0 and dark shipped with
+     square corners on the sheet, both bars, and every pill, chip, field and
+     card. A token in a theme block is a token that only exists in that theme.
+     check-css.mjs blocks on this now. */
+  --r-xs:9px;    /* ≤40px — room tiles, pills, the small round controls */
+  --r-sm:11px;   /* 40–56px — chips, calendar cells, most buttons       */
+  --r-md:14px;   /* 56–80px — the night strip, list rows, big fields    */
+  --r-lg:18px;   /* cards and panes                                     */
+  --r-xl:26px;   /* the sheet, and the bar that mirrors it              */
+
+  /* The surface ladder's DARK values. Light overrides all of these in its own
+     block. They are declared here rather than only there for the same reason
+     the radii are: the moment any rule using them loses its guard, an
+     undeclared token is not a fallback, it is nothing. Dark's are aliases of
+     the frosted tokens it already ships, so naming them changes no pixels. */
+  --s-flat:transparent;
+  --s-raise:var(--g1);
+  --s-cell:var(--g1);
+  --s-float:var(--g3);
+  --s-sunk:var(--g-sunk);
+  --s-ink:var(--free);
+  --s-raise-press:var(--press);
+  --s-sunk-press:rgba(255,255,255,.09);
+  --rim-raise:var(--g-edge);
+  --rim-sunk:var(--sunk-edge);
+  --rim-hair:var(--line);
+
   --bg:#08090C; --surface:#101219; --surface-2:#181B24; --surface-3:#1F2330;
   --line:rgba(255,255,255,.08); --line-2:rgba(255,255,255,.14);
   /* --txt-3 was #5C6579 and failed AA on every ground it is used on — 3.41 on
@@ -1906,18 +1945,13 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
   --rim-raise:rgba(255,255,255,.50);
   --rim-sunk:rgba(13,16,23,.10);
   --rim-hair:rgba(13,16,23,.06);
-  /* Five radii. Unlike the surface steps above, these go by SIZE, not by kind:
-     a corner radius is optical, so a 38px icon button and a 56px full-width
-     button genuinely should not share one. The rule is nesting — a thing inside
-     a thing takes the step below it, which is what keeps a card's corner and
-     the corner of the chip inside it concentric instead of accidentally equal.
-     There were 22 distinct container radii here before, ten of them one pixel
-     from another, which is not a difference anyone chose or can see. */
-  --r-xs:9px;    /* ≤40px — room tiles, pills, the small round controls */
-  --r-sm:11px;   /* 40–56px — chips, calendar cells, most buttons       */
-  --r-md:14px;   /* 56–80px — the night strip, list rows, big fields    */
-  --r-lg:18px;   /* cards and panes                                     */
-  --r-xl:26px;   /* the sheet, and the bar that mirrors it              */
+  /* The radii are NOT here. They are geometry, identical in both themes, and
+     they are consumed by ~70 rules that carry no [data-theme] guard — so
+     declaring them in this block made them undefined in dark, where
+     `border-radius:var(--r-lg)` is invalid at computed-value time and falls all
+     the way back to 0. Dark shipped with square corners on the sheet, both
+     bars, every pill, chip, field and card. They live in `:root{}` with the
+     other theme-invariant values; see the note there. */
   --lg-fill-2:var(--s-raise);   /* kept as an alias so no call site breaks */
   /* a trough is the same pane cut INTO the surface: the light comes from under
      the lip instead of over it, so the rim inverts */
@@ -2156,7 +2190,12 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
   background-color:var(--lg-sheet-fill);
   box-shadow:var(--lg-rim);
 }
-/* L3 · the things that float over everything */
+/* L3 · the things that float over everything.
+   .invHead is here rather than with the panes because it is a STICKY header:
+   the flats scroll under it, so it is over content the way a bar is, not laid
+   on the sheet the way a card is. It was solid white, which is the one fill
+   that cannot show anything passing beneath it. */
+:root[data-theme="light"] .invHead,
 :root[data-theme="light"] .toast,
 :root[data-theme="light"] .peek,
 :root[data-theme="light"] .strip-call{
@@ -2177,10 +2216,21 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
    thickness is.
    The 45 room TILES are deliberately not in this list. They are the data
    field, DESIGN.md keeps that solid and crisp, and 45 backdrop-filters is a
-   frame-rate bill with nothing bought. */
+   frame-rate bill with nothing bought.
+
+   A CHOSEN chip belongs here too, and that is the part that had drifted. The
+   selected Business tab, the selected booking source, and the two primary
+   booking buttons were all painting `var(--free)` flat — the same answer as the
+   Yes button beside them, in a different material, because each was written
+   before this block existed. State still beats material: at .84 ink over a
+   .05 ink trough there is no question which chip is chosen. */
 :root[data-theme="light"] .pill.good,
 :root[data-theme="light"] .nudgeBtn.yes,
 :root[data-theme="light"] .answer .y,
+:root[data-theme="light"] .tabseg button[aria-selected="true"],
+:root[data-theme="light"] .srcRow button[aria-pressed="true"],
+:root[data-theme="light"] .bkgo,
+:root[data-theme="light"] .bookbtn,
 :root[data-theme="light"] .bigAct{
   background-color:var(--s-ink);
   -webkit-backdrop-filter:blur(3px) saturate(170%); backdrop-filter:blur(3px) saturate(170%);
@@ -2274,7 +2324,20 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 :root[data-theme="light"] .pill:not(.good):not(.now):not(.warn):not(.live):not(.due),
 :root[data-theme="light"] .field button.slot,
 :root[data-theme="light"] .field button.mic:not(.on),
-:root[data-theme="light"] .wallmove{
+:root[data-theme="light"] .wallmove,
+/* The last opaque neutrals on the light screens, found by sweeping for any fill
+   at alpha 1 rather than by reading selectors — which is the only way they were
+   ever going to turn up, because none of them shares a class with anything in
+   the list above. The Business sub-tabs, the month's ‹ › arrows, the close
+   button on every sheet, the two booking inputs, and the inventory summary
+   strip: six kinds of control that are cut into a surface, painting flat
+   --surface-2 on a screen where nothing else does. */
+:root[data-theme="light"] .tabseg button:not([aria-selected="true"]),
+:root[data-theme="light"] .mnav button,
+:root[data-theme="light"] .sheet-h button,
+:root[data-theme="light"] .bkform input,
+:root[data-theme="light"] .paid.plat,
+:root[data-theme="light"] .blocked{
   background-color:var(--s-sunk);
   -webkit-backdrop-filter:var(--lg-tint); backdrop-filter:var(--lg-tint);
   border-color:var(--rim-sunk);

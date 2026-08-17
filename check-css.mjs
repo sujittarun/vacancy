@@ -18,6 +18,13 @@ const fails = [];
 const notes = [];
 const lineAt = i => css.slice(0, i).split("\n").length;
 
+/* Comments blanked to spaces, newlines kept, so the rule-matching passes below
+   see only real CSS while every reported line number still points at the source.
+   Without this a checker that scans for `selector { … }` happily reports a
+   paragraph of prose as the offending selector, which is how a correct finding
+   ends up looking like a bug in the checker. */
+const bare = css.replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, " "));
+
 /* 1 ── comment balance ──────────────────────────────────────────────────────
    Twice now a comment has been written whose opening `/*` was missing, because
    prose was appended after an existing block had already closed. The parser
@@ -66,7 +73,7 @@ for (const [i, raw] of css.split("\n").entries()) {
    22 distinct container radii were in this file. Ten of them differed by one
    pixel from another, which is not a decision anyone made or can see. Hairlines
    and bars (under 8px) and pills (50%) are genuinely not containers and stay. */
-for (const m of css.matchAll(/border-radius:\s*([^;}]+)/g)) {
+for (const m of bare.matchAll(/border-radius:\s*([^;}]+)/g)) {
   for (const part of m[1].trim().split(/\s+/)) {
     const px = parseFloat(part);
     if (part.endsWith("px") && px >= 8)
@@ -78,12 +85,44 @@ for (const m of css.matchAll(/border-radius:\s*([^;}]+)/g)) {
    The 1.14:1 regression: a rule was un-guarded so both themes could share it,
    and it carried light's white pane straight onto the dark ground. Anything
    outside a [data-theme] guard must speak in tokens only. */
-for (const m of css.matchAll(/^([^@{}\n][^{}]*)\{([^}]*)\}/gm)) {
+for (const m of bare.matchAll(/^([^@{}\n][^{}]*)\{([^}]*)\}/gm)) {
   const [, sel, body] = m;
   if (/data-theme/.test(sel) || /^\s*(from|to|\d+%)/.test(sel)) continue;
   const lit = body.match(/(?:^|[;\s])(?:background(?:-color)?|color)\s*:\s*(#[0-9a-f]{3,8}|rgba?\([^)]*\))/i);
   if (lit && !/transparent|rgba\([^)]*,\s*0\)/.test(lit[1]))
     notes.push(`line ${lineAt(m.index)}: unguarded literal ${lit[1]} in "${sel.trim().slice(0, 48)}" — one theme will wear the other's paint`);
+}
+
+/* 5 ── an unguarded rule may only use tokens that exist in :root ────────────
+   The one that got past everything else. The radius ladder was declared inside
+   :root[data-theme="light"] while ~70 of the rules consuming it carried no
+   theme guard. In dark those custom properties simply do not exist, and an
+   undeclared var() is not a fallback — `border-radius:var(--r-lg)` is invalid
+   at computed-value time and resolves to the property's INITIAL value, 0. Dark
+   shipped with square corners on the sheet, both bars, and every pill, chip,
+   field and card, and it looked deliberate enough that four screenshot passes
+   did not catch it. Nothing that reads a rule in isolation can catch this: the
+   rule is correct, the token is correct, and the defect is the pairing. */
+{
+  const rootBlock = bare.match(/(^|\n):root\s*\{([\s\S]*?)\n\}/);
+  const declared = new Set([...(rootBlock?.[2] ?? "").matchAll(/(--[\w-]+)\s*:/g)].map(m => m[1]));
+  /* Only tokens that exist as THEME tokens can have this defect. A var() that
+     no stylesheet block declares is set inline per element from JS — the
+     pointer position, a bar's value, an animation's start point — and is
+     supposed to be absent until the script sets it. */
+  const themed = new Set();
+  for (const m of bare.matchAll(/:root\[data-theme="\w+"\]\s*\{([\s\S]*?)\n\s*\}/g))
+    for (const [, tok] of m[1].matchAll(/(--[\w-]+)\s*:/g)) themed.add(tok);
+  const reported = new Set();
+  for (const m of bare.matchAll(/([^@{}\n][^{}]*)\{([^}]*)\}/g)) {
+    const [, sel, body] = m;
+    if (/data-theme|^\s*(from|to|\d+%)|^\s*:root\s*$/.test(sel)) continue;
+    for (const [, tok] of body.matchAll(/var\((--[\w-]+)/g)) {
+      if (declared.has(tok) || !themed.has(tok) || reported.has(tok)) continue;
+      reported.add(tok);
+      fails.push(`${tok} is used by unguarded "${sel.trim().slice(0, 40)}" (line ${lineAt(m.index)}) but is declared only inside a theme block — it resolves to the property's INITIAL value in the other theme`);
+    }
+  }
 }
 
 if (!quiet || fails.length) {
