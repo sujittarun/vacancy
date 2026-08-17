@@ -96,6 +96,27 @@ export function sanity() {
            renderedInk: ink?.slice(0, 3).map(Math.round) };
 }
 
+/* Transitions and animations DO NOT ADVANCE in a backgrounded tab, and
+   getComputedStyle then reports the value the property started from — not the
+   one it is heading to. That read as two shipped fixes having failed: the mic
+   was measured still grey 80ms into a 200ms background transition, and the
+   verdict "the recording state never applies" was written on the strength of
+   it. The state was correct; the clock was stopped.
+
+   So measure a state change through here. It kills every transition and
+   animation for the duration, reads, and puts them back.
+
+     freeze(() => { el.classList.add('hear'); return getComputedStyle(el).backgroundColor })
+
+   The alternative — front the tab and wait out every duration — is slower and
+   still races. */
+export function freeze(fn) {
+  const style = document.createElement("style");
+  style.textContent = "*,*::before,*::after{transition:none!important;animation:none!important}";
+  document.head.appendChild(style);
+  try { return fn(); } finally { style.remove(); }
+}
+
 /** Flatten an element's whole ancestor background stack onto the page ground. */
 export function groundUnder(el) {
   const stack = [];
