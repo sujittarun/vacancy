@@ -4774,8 +4774,22 @@ function cancelWithUndo(r, fi){
          by exactly that. 20 bookings in the shipped book are in that state.
          The comment above promises the row goes back exactly as it was, so
          throw away whatever addBooking guessed and replay what was saved. */
-      back.pays = [];
+      /* dropPayment, not `back.pays = []`. Clearing the array in memory left
+         addBooking's auto-payment sitting in localStorage, and nothing wrote
+         afterwards: the only later save() is inside addPayment, which never
+         runs when copy.pays is empty — which is exactly the case this fix was
+         written for. So the screen was right and the next pull-to-refresh
+         brought the invented payment back. Measured on TT-102's T. Nayar: 0
+         payments in memory, 1 in storage, and after load() the ₹8,200 due
+         became ₹0 and owedStats fell by exactly that. The bug was deferred by
+         one reload, not fixed. The sibling branch three lines up documents this
+         same trap and guards it with save(); cacheSave();.
+         dropPayment also retracts the queued `pay+` op in live mode, which a
+         bare array assignment would have let reach the server with no `pay-`
+         to cancel it. */
+      (back.pays || []).slice().forEach(p=> dropPayment(back, p));
       (copy.pays || []).forEach(p=> addPayment(back, p.amount, p.method, p.note));
+      save(); cacheSave();
       haptic(14); refreshScreen();
       toast("", `<b>${esc(who)}</b> is back in ${esc(flats[fi].id)}.`, fi);
     }});
@@ -4971,6 +4985,25 @@ function exportRows(){
     const dt = dateAt(d), key = dt.getFullYear() + "-" + String(dt.getMonth()+1).padStart(2,"0");
     const m = months[key] = months[key] || {key, label: MONF[dt.getMonth()] + " " + dt.getFullYear(),
                                              sold:0, sellable:0, billed:0, paid:0, arrivals:0};
+    /* SEED THE BUCKET, DO NOT COUNT THE NIGHTS. Two different jobs sharing one
+       loop, and running the second one over past days corrupted every occupancy
+       figure in the export. occ[] and blk[] are DAYS long and start at today,
+       so for d < 0 blk[i][d] is undefined (never skipped) and occ[i][d] is
+       undefined (never sold) — every past night counted as sellable and empty.
+       Measured on the shipped book: August printed 936 sellable and 34%, where
+       the nights the book actually holds are 666 and 47%. 270 fabricated empty
+       nights, a 13-point error, on the sheet that goes to the accountant.
+
+       It compounds with the booking-retention grace added in the same commit:
+       an unpaid departure is now kept up to 120 days back, which drags
+       firstStart with it, and one such row invented four 0%-occupancy months
+       for months the operator actually traded and halved August again.
+
+       The month still gets its row — arrivals, billed and collected are
+       accumulated below from r.start and are correct for a past month — and
+       Occupancy prints "—" there via the existing `m.sellable ? … : "—"`
+       branch, which is honest: the app has no occupancy data before today. */
+    if(d < 0) continue;
     for(let i = 0; i < NF; i++){
       if(blk[i][d]) continue;
       m.sellable++; if(occ[i][d]) m.sold++;
@@ -5005,7 +5038,14 @@ function exportRows(){
   });
   const sumRows = [H(["Arrival month","Arrivals","Nights sold","Sellable nights","Occupancy",
                       "Billed","Collected on those","Still owed on those"])];
-  Object.values(months).sort((a,b)=> a.key < b.key ? -1 : 1).forEach(m=> sumRows.push([
+  /* A month with nothing in it is not a fact, it is a gap in the seeding loop.
+     Buckets are created for every month between the earliest arrival and the
+     horizon, so one stay retained from four months ago produced three entirely
+     blank rows — 0 arrivals, 0 billed, 0 sellable — on the sheet that goes to
+     the accountant. Keep a month only if something actually happened in it. */
+  Object.values(months)
+    .filter(m => m.arrivals || m.sellable || m.billed || m.paid)
+    .sort((a,b)=> a.key < b.key ? -1 : 1).forEach(m=> sumRows.push([
     {v:m.label}, {v:m.arrivals, t:"n"}, {v:m.sold, t:"n"}, {v:m.sellable, t:"n"},
     {v: m.sellable ? Math.round(m.sold / m.sellable * 100) + "%" : "—"},
     m.billed ? {v:m.billed, t:"m"} : null, m.paid ? {v:m.paid, t:"m"} : null,

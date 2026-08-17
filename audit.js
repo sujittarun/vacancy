@@ -65,11 +65,19 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
    failures at 1.29:1 that were 16.39:1 the moment the theme was set properly.
    So there is one way to change theme for a measurement, and this is it. */
 export async function setThemeAndSettle(t) {
-  if (document.documentElement.dataset.theme !== t) {
-    window.setTheme(t);
-    await wait(520);                       // longer than the transition
+  if (document.documentElement.dataset.theme !== t) window.setTheme(t);
+  /* Poll for the condition, do not sleep for a guessed duration. A fixed 520ms
+     is only "longer than the transition" while the tab is visible — backgrounded,
+     setTimeout is clamped to >=1s and everything else slows with it, so a fixed
+     wait either overshoots (slow) or undershoots (wrong). Undershooting is how
+     40 phantom dark failures at 1.29:1 got reported. Ask the page whether it has
+     settled, up to a ceiling, then give up honestly. */
+  for (let i = 0; i < 40; i++) {
+    await frames();
+    if (sanity().settled && document.documentElement.dataset.theme === t) return true;
+    await wait(50);
   }
-  await frames();
+  return false;                            // caller sees settled:false in the result
 }
 
 /* Two frames, but never a hang: requestAnimationFrame does not fire at all in a

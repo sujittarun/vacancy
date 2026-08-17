@@ -19,6 +19,19 @@
 
 const wait = ms => new Promise(r => setTimeout(r, ms));
 
+/* Wait for a CONDITION, never for a duration. Backgrounded, this tab clamps
+   setTimeout to >=1s, so every fixed wait in here either overshoots — a run
+   went from 8s to 118s — or undershoots and fails a passing app. Two tests
+   reported red for exactly that reason and neither was a real regression. */
+async function until(cond, what, ms = 4000) {
+  const t0 = performance.now();
+  while (performance.now() - t0 < ms) {
+    if (cond()) return true;
+    await wait(40);
+  }
+  throw new Error(`timed out waiting for ${what}`);
+}
+
 /* Transitions and animations do not advance in a backgrounded tab, so a state
    change measured there reports the value it started FROM. Same defence as
    audit.js — see the note there; it cost two false "not fixed" verdicts. */
@@ -124,19 +137,32 @@ export async function run(filter) {
     return `${flats[fi].id} · ${guest} · end ${past.end} > DAYS ${DAYS}`;
   });
 
-  await test("undo does not invent a platform payment", async () => {
+  /* This test used to assert memory only, and passed while the bug was still
+     live: the invented payment sat in localStorage and came back on the next
+     reload. A money assertion has to survive a round trip through storage,
+     because storage is what the operator's next launch reads. */
+  await test("undo does not invent a platform payment — and it stays gone after a reload", async () => {
+    const KEY = "vacancy.bookings.v1";
+    const backup = localStorage.getItem(KEY);
     const plat = resv.find(r => !isBlock(r) && PLATFORMS.indexOf(r.src) >= 0
       && r.amount > 0 && (!r.pays || !r.pays.length) && r.start >= 0);
     ok(plat, "seed has no unpaid platform booking");
-    const { fi, guest, amount } = plat, owed0 = owedStats().total;
+    const { fi, guest, start, amount } = plat, id = flats[fi].id, owed0 = owedStats().total;
     cancelWithUndo(plat, fi);
     document.querySelector(".toast button").click();
     await wait(60);
-    const back = resv.find(r => r.fi === fi && r.guest === guest);
-    eq((back.pays || []).length, 0, "payments after undo");
-    eq(dueFrom(back), amount, "amount still due after undo");
-    eq(owedStats().total, owed0, "owedStats total");
-    return `${guest} · ${money(amount)} still due, no payment invented`;
+    const back = resv.find(r => r.fi === fi && r.guest === guest && r.start === start);
+    eq((back.pays || []).length, 0, "payments in memory after undo");
+    const stored = JSON.parse(localStorage.getItem(KEY)).rows
+      .find(r => r.id === id && r.guest === guest && r.start === start);
+    eq((stored && stored.pays || []).length, 0, "payments in STORAGE after undo");
+    load(); recompute();                              // what pull-to-refresh does
+    const after = resv.find(r => r.fi === fi && r.guest === guest && r.start === start);
+    ok(after, "the stay did not survive a reload");
+    eq(dueFrom(after), amount, "amount still due after a reload");
+    eq(owedStats().total, owed0, "owedStats total after a reload");
+    localStorage.setItem(KEY, backup); load(); recompute();
+    return `${guest} · ${money(amount)} still due through a full reload`;
   });
 
   await test("undo persists a stay that began before today", async () => {
@@ -319,6 +345,41 @@ export async function run(filter) {
     return `${key(-23)} bucket exists alongside ${key(0)}`;
   });
 
+  /* The other half of that fix, and the half that broke: seeding a month must
+     not also COUNT nights the app has no occupancy data for. occ[]/blk[] start
+     at today, so every pre-today index reads undefined — never blocked, never
+     sold — and each one landed in the denominator as an empty sellable night. */
+  await test("the export's occupancy counts only nights the book holds", () => {
+    const sheet = exportRows()[0];
+    const head = sheet.rows[0].map(c => c && c.v);
+    const iSell = head.findIndex(h => /sellable/i.test(h || ""));
+    const iOcc  = head.findIndex(h => /occupan/i.test(h || ""));
+    ok(iSell >= 0 && iOcc >= 0, "Summary sheet has no Sellable/Occupancy columns");
+    const perMonth = {};
+    for (let d = 0; d < DAYS; d++) {
+      const dt = dateAt(d), k = MONF[dt.getMonth()] + " " + dt.getFullYear();
+      perMonth[k] = perMonth[k] || 0;
+      for (let i = 0; i < NF; i++) if (!blk[i][d]) perMonth[k]++;
+    }
+    const checked = [];
+    for (const row of sheet.rows.slice(1)) {
+      const label = row[0] && row[0].v, sell = row[iSell] && row[iSell].v;
+      if (typeof sell !== "number" || !perMonth[label]) continue;
+      eq(sell, perMonth[label], `sellable nights for ${label}`);
+      checked.push(`${label} ${sell}`);
+    }
+    ok(checked.length, "no month rows were checkable");
+    /* and a month before today must not claim 0% — it must decline to answer */
+    for (const row of sheet.rows.slice(1)) {
+      const label = row[0] && row[0].v;
+      if (perMonth[label]) continue;                 // a month the book covers
+      const occ = row[iOcc] && row[iOcc].v;
+      ok(occ === "—" || occ == null,
+        `${label} is outside the book but reports occupancy ${JSON.stringify(occ)}`);
+    }
+    return checked.join(" · ");
+  });
+
   /* ══ touch and gesture ══════════════════════════════════════════════════ */
 
   await test("an interrupted sheet drag does not pin the sheet", async () => {
@@ -332,10 +393,14 @@ export async function run(filter) {
     await wait(60);
     eq(sheetEl.style.transform, "", "inline transform survives a cancelled drag");
     closeSheet();
-    await wait(200);
-    const b = document.querySelector(".tabbar button").getBoundingClientRect();
-    const hit = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
-    ok(hit && hit.closest(".tabbar"), "the tab bar is covered by the sheet");
+    /* wait for the sheet to actually leave, not for a number of milliseconds —
+       the close is a CSS transition and its duration is not ours to assume */
+    const tab = () => document.querySelector(".tabbar button").getBoundingClientRect();
+    await until(() => {
+      const b = tab();
+      const hit = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+      return hit && hit.closest(".tabbar");
+    }, "the tab bar to become reachable after the sheet closes");
     return "transform cleared, tab bar reachable";
   });
 
