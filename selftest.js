@@ -55,7 +55,26 @@ async function settle() {
   try { closeSheet(); } catch (e) {}
   const s = document.querySelector(".sheet");
   if (s) { s.style.transform = ""; s.style.transition = ""; }
-  await wait(160);
+  /* SNAP IT SHUT, do not wait for it to slide. closeSheet only removes a class;
+     the sheet then leaves on a 0.42s transform transition. Tests that measured
+     or hit-tested the screen while it was still on its way out failed for
+     reasons that had nothing to do with the code under test — the sheet-drag
+     check and the sweep-HUD check both did.
+     Waiting for the transition was the obvious fix and it was wrong: a
+     backgrounded tab does not advance transitions AT ALL, so the sheet never
+     arrives, and a poll for "has it left yet" spins its whole budget on every
+     single test. That is the same trap as measuring a colour mid-transition,
+     one layer up — a gate that depends on animation, in an environment where
+     animation is suspended.
+     So take the time out of it: kill the transition, force the layout, put the
+     transition back. The sheet is off-screen synchronously, whatever the tab is
+     doing. */
+  if (s) {
+    const prev = s.style.transition;
+    s.style.transition = "none";
+    void s.offsetHeight;                       // force the closed geometry now
+    s.style.transition = prev;
+  }
 }
 
 async function test(name, fn) {
@@ -394,12 +413,24 @@ export async function run(filter) {
     closeSheet();
     /* wait for the sheet to actually leave, not for a number of milliseconds —
        the close is a CSS transition and its duration is not ours to assume */
-    const tab = () => document.querySelector(".tabbar button").getBoundingClientRect();
-    await until(() => {
-      const b = tab();
-      const hit = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
-      return hit && hit.closest(".tabbar");
-    }, "the tab bar to become reachable after the sheet closes");
+    /* Assert the sheet has LEFT, then that the tab bar is reachable. Hit-testing
+       alone is hostage to the close transition, and in a backgrounded tab that
+       transition runs on a clock this test does not control — which failed a
+       working app twice. 12s of budget because a throttled tab polls once a
+       second, not every 40ms. */
+    /* snap it shut rather than waiting out a transition a hidden tab will not
+       run — the assertion is about the inline transform being cleared and the
+       tab bar being reachable, not about the animation's duration */
+    const prev = sheetEl.style.transition;
+    sheetEl.style.transition = "none";
+    void sheetEl.offsetHeight;
+    sheetEl.style.transition = prev;
+    ok(!sheetEl.classList.contains("on"), "closeSheet left the sheet open");
+    ok(sheetEl.getBoundingClientRect().top >= window.innerHeight - 1,
+       "the sheet is still on screen after closeSheet");
+    const b = document.querySelector(".tabbar button").getBoundingClientRect();
+    const hit = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+    ok(hit && hit.closest(".tabbar"), "the tab bar is still covered once the sheet has gone");
     return "transform cleared, tab bar reachable";
   });
 
@@ -432,13 +463,22 @@ export async function run(filter) {
     ok(cells.length > 9, "not enough day cells");
     const cell = cells[9], r = cell.getBoundingClientRect();
     const pt = [r.left + r.width / 2, r.top + r.height / 2];
-    const pressed = document.elementFromPoint(...pt).closest(".day").dataset.d;
+    /* the cell must be hit-testable before we start — a sheet still fading out,
+       or a scroll still settling, makes elementFromPoint return something else
+       and the test then fails on a null rather than on the app */
+    const dayAt = () => {
+      const e = document.elementFromPoint(pt[0], pt[1]);
+      const d = e && e.closest(".day[data-d]");
+      return d ? d.dataset.d : null;
+    };
+    await until(() => dayAt() === cell.dataset.d, "the pressed cell to be hit-testable", 12000);
+    const pressed = dayAt();
     const top0 = grid.getBoundingClientRect().top;
     const t = () => new Touch({ identifier: 1, target: cell, clientX: pt[0], clientY: pt[1] });
     cell.dispatchEvent(new TouchEvent("touchstart", { bubbles: true, touches: [t()], targetTouches: [t()], changedTouches: [t()] }));
     await until(() => document.querySelector(".hud.on"), "the sweep HUD to arm");
     const moved = Math.round(grid.getBoundingClientRect().top - top0);
-    const now = document.elementFromPoint(...pt).closest(".day").dataset.d;
+    const now = dayAt();
     window.dispatchEvent(new TouchEvent("touchend", { bubbles: true, touches: [], targetTouches: [], changedTouches: [t()] }));
     eq(moved, 0, "pixels the calendar moved when the HUD armed");
     eq(now, pressed, "the date under the finger changed when the HUD armed");
@@ -476,6 +516,103 @@ export async function run(filter) {
     eq(r.end, DAYS + 2, "stored end");
     eq(r.nights, 6, "stored nights");
     return `${flats[fi].id} · end ${r.end} vs DAYS ${DAYS}`;
+  });
+
+  /* ══ regressions the diff review caught ════════════════════════════════ */
+
+  /* The horizon change migrated freeRange→freeSpan at the write guards and the
+     booking form, but not at the room sheet or the room tile — so three
+     surfaces one tap apart gave three different answers about the same flat,
+     the same date and the same length. Assert they agree, because "each is
+     individually defensible" is exactly how they drifted apart. */
+  await test("sheet, form and tile agree about a stay at the edge of the book", async () => {
+    const fi = flats.findIndex((f, i) => freeSpan(i, DAYS - 2, DAYS + 1) && !occ[i][DAYS - 2]);
+    ok(fi >= 0, "no flat is free across the end of the horizon");
+    document.querySelectorAll(".tabbar button")[0].click();
+    await until(() => document.querySelector(".seg button"), "the stay dial");
+    const three = [...document.querySelectorAll(".seg button")].find(b => /3 night/i.test(b.textContent));
+    ok(three, "no 3-night option on the stay dial");
+    three.click();
+    await until(() => document.querySelector(".tile"), "the grid to repaint");
+
+    const note = roomTile(fi, DAYS - 2, 3).querySelector("s").textContent;
+    ok(/\+n$/.test(note), `tile says "${note}" — expected the "n+" edge idiom`);
+    ok(roomTile(fi, DAYS - 2, 3).classList.contains("free"), "tile is painted as unavailable");
+
+    openSheet(fi, DAYS - 2);
+    await until(() => document.querySelector(".roomAct"), "the room sheet");
+    const refusal = document.querySelector(".roomAct .actWhy");
+    ok(!refusal, `the sheet refuses it: "${refusal && refusal.textContent.trim()}"`);
+    const big = document.querySelector(".roomAct .bigAct s");
+    eq(big && big.textContent.trim(), "3 nights", "the sheet's offer");
+    closeSheet();
+
+    openBooking(fi, DAYS - 2, 3);
+    await until(() => document.querySelector(".bkgo"), "the booking form");
+    eq(document.querySelector(".bkgo").textContent.trim(), "Book 3 nights", "the form's button");
+    closeSheet();
+    return `${flats[fi].id} · all three offer 3 nights`;
+  });
+
+  /* Fixing nextWeekend without fixing its callers fixed nothing: both callers
+     hardcoded defaultNights:2 and never read the span the function returned. */
+  await test("'this weekend' asks for the span nextWeekend actually returns", () => {
+    const src = nextWeekend.toString();
+    const forDow = dow => eval("(function(){const DAYS=" + DAYS + ",DOW=" + dow + ";return "
+      + src.replace("dateAt(0).getDay()", "DOW").replace(/dateAt\(a\)\.getDay\(\)/, "((DOW+a)%7)")
+      + "})()")();
+    eq(forDow(0).b - forDow(0).a, 1, "a Sunday weekend is one night");
+    /* and the caller must read it rather than assume 2 */
+    const rd = (typeof readDate === "function" ? readDate.toString() : "");
+    ok(/defaultNights:\s*w\.b - w\.a|defaultNights:\s*\(w\.b - w\.a\)|w\.b - w\.a/.test(rd)
+       || /w\.b/.test(rd),
+       "readDate still hardcodes a weekend length instead of reading nextWeekend's span");
+    return "Sunday → 1 night, and the caller reads it";
+  });
+
+  /* armConfirm consolidated four hand-written confirms and, in doing so, wrote
+     the VISIBLE label into aria-label on disarm — replacing "Cancel X's booking
+     in Y" with a bare "✕" for the rest of that render. */
+  await test("a lapsed confirm keeps its accessible name", async () => {
+    openSheet(0, 0);
+    await until(() => [...document.querySelectorAll(".rowx")].some(e => e.textContent.trim() === "✕"),
+      "the room sheet");
+    const x = [...document.querySelectorAll(".rowx")].find(e => e.textContent.trim() === "✕");
+    const resting = x.getAttribute("aria-label");
+    ok(resting && resting.length > 3, "the button had no descriptive name to begin with");
+    x.click();
+    eq(x.getAttribute("aria-label"), "Cancel?", "the armed name");
+    await until(() => !x.classList.contains("arm"), "the arm to lapse", 6000);
+    eq(x.getAttribute("aria-label"), resting, "the name after the arm lapsed");
+    return `"${resting}" survives`;
+  });
+
+  /* Reduced transparency removes translucency, not meaning. The !important that
+     made the block apply also flattened every opaque STATE fill under it,
+     recreating the invisible-armed-confirm bug for the one user who explicitly
+     asked the OS for a more legible screen. */
+  await test("reduced transparency does not erase the armed destructive state", async () => {
+    const m = await import("/audit.js?t=" + Date.now());
+    await m.setThemeAndSettle("light");
+    const force = document.createElement("style");
+    force.textContent = [...document.styleSheets]
+      .flatMap(s => { try { return [...s.cssRules]; } catch (e) { return []; } })
+      .filter(r => r.conditionText && /reduced-transparency/.test(r.conditionText))
+      .map(r => [...r.cssRules].map(x => x.cssText).join("\n")).join("\n");
+    ok(force.textContent.length, "no prefers-reduced-transparency block found to test");
+    document.head.appendChild(force);
+    try {
+      openSheet(0, 0);
+      await until(() => [...document.querySelectorAll(".rowx")].some(e => e.textContent.trim() === "✕"),
+        "the room sheet");
+      const x = [...document.querySelectorAll(".rowx")].find(e => e.textContent.trim() === "✕");
+      x.click();
+      const armed = freeze(() => ({ bg: getComputedStyle(x).backgroundColor, ink: getComputedStyle(x).color }));
+      const bg = m.over(m.parse(armed.bg), m.groundUnder(x.parentElement));
+      const ratio = m.ratio(m.over(m.parse(armed.ink), bg), bg);
+      ok(ratio >= 4.5, `armed label is ${ratio.toFixed(2)}:1 under reduced transparency`);
+      return `armed fill kept, label ${ratio.toFixed(2)}:1`;
+    } finally { force.remove(); }
   });
 
   /* ══ the whole surface ══════════════════════════════════════════════════ */

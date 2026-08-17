@@ -2687,14 +2687,37 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
    one voice in the cascade to be outvoted by whatever gets written next — it
    has to win, including against rules added after it. That is what !important
    is for, and this is the case it was designed for. */
+/* REDUCED TRANSPARENCY REMOVES TRANSLUCENCY, NOT MEANING.
+   The !important that made this block actually apply also made it flatten
+   every STATE fill underneath it, and states are opaque already — there is no
+   transparency there to remove. Measured with the block forced on:
+     .rowx.arm      --hot red → --surface-2, label --ink-on on top:  1.22:1 light
+     .day.rngA/.rngB  --free → --surface, .fn still --free-ink:      1.09:1 light
+   That is the armed "Cancel?" going invisible and the ends of a swept range
+   rendering their free-room count on their own colour — the two bugs fixed
+   earlier this session, recreated for the one user who explicitly asked the OS
+   for a more legible screen.
+
+   So the sweeping declarations are split. backdrop-filter and background-image
+   are what transparency actually is, and they go off everywhere, unguarded.
+   background-color and border-color are opinions about a surface, so they are
+   applied only where no state is asserting one — the same :not() guards the
+   light material list carries, for the same reason. State beats material, and
+   an accessibility mode is still material. */
 @media (prefers-reduced-transparency:reduce){
-  .card,.tcard,.night,.day,.toast,.peek,.sheet,.tabbar,.topbar,.strip-call,.ops-row,.hud.on{
-    background-color:var(--surface)!important;background-image:none!important;
-    backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
-    border-color:var(--line)!important}
+  /* what transparency IS — off everywhere, no exceptions */
+  .card,.tcard,.night,.day,.toast,.peek,.sheet,.tabbar,.topbar,.strip-call,.ops-row,.hud.on,
   .seg,.field,.ghost,.chips button,.dcell,.copybtn,.rowx,.line,.step,.stepWide{
-    background-color:var(--surface-2)!important;
+    background-image:none!important;
     backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+  /* opaque grounds — only where nothing is asserting a state */
+  .card,.tcard,.toast,.peek,.sheet,.tabbar,.topbar,.strip-call,.ops-row,.hud.on,
+  .night:not(.sel):not(.today),
+  .day:not(.sel):not(.rng):not(.rngA):not(.rngB):not(.today):not(.pad){
+    background-color:var(--surface)!important;border-color:var(--line)!important}
+  .seg,.field,.ghost:not(.on),.chips button:not([aria-pressed="true"]),
+  .dcell:not(.urgent),.copybtn:not(.done),.rowx:not(.arm),.line,.step,.stepWide{
+    background-color:var(--surface-2)!important}
   body{background:var(--bg)!important}
 }
 </style>
@@ -4518,7 +4541,19 @@ function releaseBlock(r, done){
      the first one only has to be wrong once for the bill to be gone. */
   const recorded = !!(r.fixer || r.cost || r.fault);
   if(r.start > 0 && !recorded){ cancelBooking(r); return true; }
-  if(r.start > 0){ r.end = r.start; r.nights = 0; recompute(); save(); cacheSave(); return true; }
+  if(r.start > 0){
+    r.end = r.start; r.nights = 0;
+    /* and tell the server, which the branch above (cancelBooking → stay-) and
+       the fall-through (stay~) both do. Inserted as an early return between two
+       enqueueing paths, this one reproduced the local half and not the remote
+       half — so the flat would come back on this phone and stay out of service
+       on every other one, with the fixer and the bill lost. Latent while
+       CLOUD_ENABLED is false; it ships the moment that flag flips. */
+    if(MODE === "live" && r.sid)
+      enqueue({k:"stay~", id:r.sid, body:{ends_on: dayISO(r.start),
+        fixer: r.fixer || null, fixer_phone: r.fixer_phone || null, cost: r.cost || null}});
+    recompute(); save(); cacheSave(); return true;
+  }
   /* Math.min, because releasing must never push the end FORWARD. blockNudges
      offers anything ending within [-7,+2], so a block that came back three days
      ago is on the list — and a flat `r.end = 0` there re-marked the flat out of
@@ -4616,10 +4651,19 @@ const DWELL = 350;
 function armConfirm(btn, opts){
   const {rest, armed: armedLabel, run, hold = 3000, cls = "arm"} = opts;
   let armedAt = 0, tm = null;
+  /* The caller's accessible name, captured once. Disarming used to write `rest`
+     into aria-label, which is the VISIBLE label — a bare "✕" — permanently
+     replacing "Cancel T. Nayar's booking in TT-102" and "Remove this ₹3,300
+     payment" after a single lapsed arm. The four hand-written confirms this
+     helper replaced only ever touched textContent, so this was lost in the
+     consolidation: a screen-reader user was left with an unlabelled button that
+     cancels a stay. Announce the description when resting, the destructive
+     wording when armed. */
+  const restAria = btn.getAttribute("aria-label") || rest;
   const disarm = ()=>{
     clearTimeout(tm); armedAt = 0;
     btn.classList.remove(cls); btn.textContent = rest;
-    btn.setAttribute("aria-label", rest);
+    btn.setAttribute("aria-label", restAria);
   };
   btn.onclick = ()=>{
     if(!armedAt){
@@ -5244,7 +5288,12 @@ async function copyText(t){
 function roomTile(fi, day, stay){
   const fl = flats[fi];
   const nights = stay || 1;
-  const open = freeRange(fi, day, day + nights);
+  /* Same migration as the sheet and the form. With freeRange, a flat free from
+     here to the end of the book was painted as unavailable and captioned
+     "Free 2 of 3" whenever the dial reached past the horizon — the tile denying
+     a stay addBooking accepts. `run >= DAYS - day` below already knows how to
+     say "Free n+", which is this file's established idiom for "and beyond". */
+  const open = freeSpan(fi, day, day + nights);
   const blocked = blk[fi][day];
   const turn = chg[fi][day] && !open;
   const run = open ? runFrom(fi, day) : 0;
@@ -5271,8 +5320,13 @@ function roomTile(fi, day, stay){
     : "Booked";
   b.append(el("b",null,fl.id), el("s",null,note));
   if(open && run === 1) b.appendChild(el("i","flag"));   // orphan night
+  /* the spoken label says what the printed one says — "Free 2+n" announced as
+     "free for 2 nights" understates a flat that is free to the end of the book,
+     and the two disagreeing is its own small lie */
   b.setAttribute("aria-label",
-    `${fl.id}, ${fl.type}, ${open ? `free for ${run} night${run>1?"s":""} from`
+    `${fl.id}, ${fl.type}, ${open ? (run >= DAYS-day
+        ? `free for ${run} nights or more from`
+        : `free for ${run} night${run>1?"s":""} from`)
       : blocked ? "out of service on"
       : partial ? `free for ${partial} of ${nights} nights from`
       : "not available on"} ${fmtL(day)}`);
@@ -6962,12 +7016,19 @@ function readDate(tk, i, minOff){
     return {d:numOf(tk[i+1]), label:`in ${numOf(tk[i+1])} days`, next:i+3};
 
   if((t === "this" || t === "next") && tk[i+1] === "weekend"){
+    /* w.b, not a hardcoded 2. nextWeekend knows a Sunday weekend is one night,
+       and both callers threw that away — so "this weekend" asked on a Sunday
+       still requested Sunday AND Monday, and reported rooms unavailable because
+       of a Monday the caller never mentioned. Fixing the function without
+       fixing its callers fixed nothing. "next weekend" is a whole weekend by
+       definition, wherever we are standing now. */
     const w = nextWeekend();
-    return {d: w.a + (t==="next" ? 7 : 0), label:`${t} weekend`, defaultNights:2, next:i+2};
+    return {d: w.a + (t==="next" ? 7 : 0), label:`${t} weekend`,
+            defaultNights: t==="next" ? 2 : (w.b - w.a), next:i+2};
   }
   if(t === "weekend"){
     const w = nextWeekend();
-    return {d:w.a, label:"this weekend", defaultNights:2, next:i+1};
+    return {d:w.a, label:"this weekend", defaultNights: w.b - w.a, next:i+1};
   }
   if((t === "this" || t === "next") && /^weeks?$/.test(tk[i+1] || "")){
     const mon1 = nextDow(1, 1);
@@ -8126,7 +8187,15 @@ function openSheet(fi, day){
      the sheet booked another — the tile said "free from 30 Aug", the button
      said "Book 7 Sep". */
   const bDay = (day == null ? pickedNight : day), bN = stayNights;
-  const canTake = freeRange(fi, bDay, bDay + bN);
+  /* freeSpan, not freeRange — this was the one guard the horizon change did not
+     migrate, and it left the room sheet contradicting the booking form it
+     launches. At the edge of the book, freeRange goes false the moment
+     bDay + bN passes DAYS, so on a flat with nothing booked at all the sheet's
+     primary action read "Not free for those nights" and offered one night,
+     while openBooking one tap away said "Leaves 20 Oct · free to the end of
+     this book · Book 3 nights". The sheet is the screen the operator reads out
+     mid-call, so its version is the one that loses the booking. */
+  const canTake = freeSpan(fi, bDay, bDay + bN);
   const act = el("div","roomAct");
 
   if(canTake){
