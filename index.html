@@ -5528,6 +5528,42 @@ function attachSweep(grid, hud){
     const e = document.elementFromPoint(x,y);
     return e && e.closest ? e.closest(".day[data-d]") : null;
   };
+  /* THE HUD MUST NOT MOVE THE CALENDAR.
+     .hud is display:none until a sweep begins, and a display:none flex child
+     contributes no gap — so switching it on adds three things at once: the
+     HUD's own height, its 12px bottom margin, and a 30px column gap that did
+     not exist a moment ago. Measured on the phone width: the calendar drops
+     100px against a 55px cell pitch.
+
+     That is 1.8 rows, and it happens with the thumb already pressed down. The
+     sweep resolves the finger with elementFromPoint on every touchmove, so the
+     first drag after the 260ms hold reads a cell almost two rows above the
+     date the operator actually pressed. PRODUCT.md names reading the wrong row
+     as THE failure mode of this app, and this is that failure on its headline
+     gesture — the one the whole Month tab is built around.
+
+     The scroller grew by exactly H at a point above the calendar, so scrolling
+     it down by H puts every pixel below the HUD back where the thumb left it.
+     Measured rather than assumed, because the HUD's height depends on whether
+     its second line wraps. Reading the rect after the class change forces the
+     sync layout deliberately: the compensation has to land in the same frame
+     as the growth, or the calendar visibly jumps and then jumps back. */
+  /* Anything that changes the HUD's height goes through here, and the calendar
+     does not move. Whatever `fn` does, the scroller is nudged by exactly the
+     amount the grid travelled, so every pixel below the HUD stays where the
+     thumb left it. Reading the rect on both sides forces the layout
+     deliberately — the compensation has to land in the same frame as the
+     growth, or the calendar visibly jumps and then jumps back. */
+  const shift = (fn)=>{
+    const sc = hud.closest(".screen");
+    const top = grid.getBoundingClientRect().top;
+    fn();
+    if(sc) sc.scrollTop += grid.getBoundingClientRect().top - top;
+  };
+  /* on the way out too, or the calendar leaps up 100px the instant the thumb
+     lifts, which reads as the app losing your place */
+  const disarm = ()=>{ if(hud.classList.contains("on")) shift(()=>hud.classList.remove("on")); };
+
   const paint = ()=>{
     const lo = Math.min(a,b), hi = Math.max(a,b);
     grid.querySelectorAll(".day[data-d]").forEach(c=>{
@@ -5538,11 +5574,33 @@ function attachSweep(grid, hud){
     });
     const nights = Math.max(1, hi - lo);
     const free = flats.filter((f,i)=>freeRange(i, lo, lo + nights)).length;
-    hud.classList.add("on");
-    const n = hud.querySelector(".n"), t = hud.querySelector(".t");
-    n.textContent = free;
-    n.classList.toggle("none", free === 0);
-    t.innerHTML = `free for <b>all ${nights} night${nights>1?"s":""}</b><br>${fmt(lo)} → ${fmt(lo+nights)}`;
+    /* THE HUD MUST NOT MOVE THE CALENDAR.
+       .hud is display:none until a sweep begins, and a display:none flex child
+       contributes no gap — so switching it on adds three things at once: its
+       own height, its 12px bottom margin, and a 30px column gap that did not
+       exist a moment ago. Measured at phone width, the calendar drops 100px
+       against a 55px cell pitch: 1.8 rows, with the thumb already pressed down.
+       The sweep resolves the finger with elementFromPoint on every touchmove,
+       so the first drag after the 260ms hold reads a cell nearly two rows above
+       the date the operator actually pressed. PRODUCT.md names reading the
+       wrong row as THE failure mode of this app, and this was that failure on
+       the headline gesture of the Month tab.
+
+       The class AND the text are inside one shift(), which is the part that is
+       easy to get wrong: setting the class first compensates for an empty box,
+       and then the text lands and drops the grid another 33px uncompensated —
+       measured, and it is why the first attempt at this still moved. The text
+       is also re-written on every cell the thumb crosses, and "10 nights" can
+       wrap where "3 nights" did not, so the height is live for the whole drag,
+       not just at the start. paint() only runs when the day under the finger
+       actually changes, so this costs one forced layout per cell crossed. */
+    shift(()=>{
+      hud.classList.add("on");
+      const n = hud.querySelector(".n"), t = hud.querySelector(".t");
+      n.textContent = free;
+      n.classList.toggle("none", free === 0);
+      t.innerHTML = `free for <b>all ${nights} night${nights>1?"s":""}</b><br>${fmt(lo)} → ${fmt(lo+nights)}`;
+    });
   };
   const clear = ()=>{
     grid.querySelectorAll(".rng,.rngA,.rngB").forEach(c=>c.classList.remove("rng","rngA","rngB"));
@@ -5599,7 +5657,7 @@ function attachSweep(grid, hud){
     move(e.touches[0].clientX, e.touches[0].clientY);
   }, {passive:false});
   // hand this render's handlers to the window pair registered once above
-  sweepNow = {end, cancel: ()=>{ reset(); clear(); hud.classList.remove("on"); }};
+  sweepNow = {end, cancel: ()=>{ reset(); clear(); disarm(); }};
 
   // desktop: hold the mouse down and drag
   grid.addEventListener("mousedown", e=>{

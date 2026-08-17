@@ -578,6 +578,37 @@ ladder, literal container radii, and unguarded literal colours that would ship o
 theme's paint into the other. Every check in it exists because that exact defect
 reached the phone at least once.
 
+## Nothing may grow above a finger that is already down
+
+The range sweep long-presses a date and drags across the calendar. The HUD that
+shows the running count is `display:none` until the sweep begins — and a
+`display:none` flex child contributes no gap, so switching it on added three
+things at once: its own height, its 12px margin, and a 30px column gap that did
+not exist a moment before. **Measured: the calendar dropped 100px against a 55px
+cell pitch.** The sweep resolves the finger with `elementFromPoint` on every
+`touchmove`, so the first drag after the 260ms hold read a cell nearly two rows
+above the date the operator actually pressed. Pressing the 9th and reading the
+2nd — on the gesture the whole Month tab is built around.
+
+The fix is not "make it not move"; the HUD has to appear. It is: grow the
+scroller and scroll it by the same amount in the same frame, so every pixel
+below the insertion point stays where the thumb left it.
+
+Two things about it are easy to get wrong, and the first attempt got both:
+
+- **Compensate for the finished size, not the empty box.** Setting the class
+  first and the text second measures a 66px empty HUD, and then the text lands
+  and drops the grid another 33px with nothing watching. The class change and
+  the content change belong inside one measured block.
+- **The height is live for the whole drag, not just at the start.** The readout
+  is rewritten on every cell the thumb crosses, and "10 nights" can wrap where
+  "3 nights" did not. Compensating once at arming is compensating once too few.
+
+Generalised: any element that appears, grows, or wraps above the touch point
+during a gesture moves the target out from under the finger. Reserve the space,
+take it out of flow, or compensate the scroll — but never let the page reflow
+above a live touch.
+
 ## Prohibitions
 
 - No paper, ruling, stamps, or any ledger device. That world is discarded.
