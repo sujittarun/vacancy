@@ -4962,7 +4962,12 @@ function exportRows(){
      exactly as it does on screen — taking a flat out of service must never
      flatter the figure. */
   const months = {};
-  for(let d = 0; d < DAYS; d++){
+  /* Seed a bucket for every month the BOOK touches, not just the forward
+     horizon. A stay that began last month and is still running is kept by
+     load(), so it belongs in an earlier month that `d = 0 … DAYS` never
+     creates. Without it there was nowhere for a past arrival to land. */
+  const firstStart = bk.reduce((m,r)=> Math.min(m, r.start), 0);
+  for(let d = Math.min(firstStart, 0); d < DAYS; d++){
     const dt = dateAt(d), key = dt.getFullYear() + "-" + String(dt.getMonth()+1).padStart(2,"0");
     const m = months[key] = months[key] || {key, label: MONF[dt.getMonth()] + " " + dt.getFullYear(),
                                              sold:0, sellable:0, billed:0, paid:0, arrivals:0};
@@ -4972,7 +4977,15 @@ function exportRows(){
     }
   }
   bk.forEach(r=>{
-    const dt = dateAt(Math.max(r.start,0));
+    /* r.start raw, NOT Math.max(r.start,0). dateAt() handles a negative offset
+       perfectly well — the Bookings sheet in the same workbook already uses it
+       raw — and the clamp turned "arrived before today" into "arrived today".
+       Measured on a 30-night stay that checked in 25 Jul: the Bookings sheet
+       said 25 Jul and the Summary had no July row at all, folding the arrival
+       and the whole ₹90,000 into August. Two sheets in one workbook giving the
+       accountant different arrival months for the same stay, with last month's
+       revenue reported as this month's. */
+    const dt = dateAt(r.start);
     const key = dt.getFullYear() + "-" + String(dt.getMonth()+1).padStart(2,"0");
     if(!months[key]) return;
     months[key].arrivals++; months[key].billed += r.amount || 0;
@@ -6105,15 +6118,38 @@ function moneyStats(){
 /* Money already agreed and not yet in hand, split by whether you can still do
    anything about it. A guest who has left owing is a different job from one who
    arrives on Tuesday. */
+/* THE ROWS MUST BE A PARTITION OF THE HEADLINE.
+   They were not, and the card read as if they were. Headline ₹23,64,700; rows
+   "Arriving within a week" ₹3,12,800, "Already left" ₹39,900, "Sitting with a
+   platform" ₹20,13,700 — summing to within 0.07% of the headline, which is
+   exactly what makes them look like its parts. Measured, ZERO of the platform
+   figure is inside the headline: paidOn() counts Platform payments, so
+   dueFrom() zeroes them and a platform-settled booking never enters `total` at
+   all, while its full amount lands in `platform`. Meanwhile the real third
+   bucket — ₹20,12,000 across 238 bookings arriving beyond a week or still in
+   the flat — appeared on no row. The operator concludes ₹20.5L arrives by
+   itself and only ~₹3.5L needs working; all of it is owed by guests.
+
+   So: three mutually exclusive buckets that add up to `total`, and the platform
+   payout as a fourth pot on its own, because that is what it is. */
 function owedStats(){
   const bk = bookings().filter(r => r.amount && dueFrom(r) > 0);
-  const soon = bk.filter(r => r.start >= 0 && r.start <= 7);
-  const gone = bk.filter(r => r.end <= 0);
+  const gone  = bk.filter(r => r.end <= 0);
+  const soon  = bk.filter(r => r.end > 0 && r.start >= 0 && r.start <= 7);
+  const later = bk.filter(r => r.end > 0 && !(r.start >= 0 && r.start <= 7));
   const sum = a => a.reduce((s,r)=> s + dueFrom(r), 0);
-  return {total: sum(bk), count: bk.length,
+  const out = {total: sum(bk), count: bk.length,
           soon: sum(soon), soonN: soon.length,
           gone: sum(gone), goneN: gone.length,
+          later: sum(later), laterN: later.length,
           platform: bookings().reduce((s,r)=> s + withPlatform(r), 0)};
+  /* the assertion the card never made. If a fourth state is ever added to the
+     book this fires in the console rather than shipping a card that silently
+     hides a fifth of the money. */
+  if(out.soon + out.gone + out.later !== out.total)
+    console.warn("owedStats: rows do not partition the total",
+      {soon:out.soon, gone:out.gone, later:out.later, total:out.total});
+  return out;
 }
 
 /* Repeat business, which is the cheapest revenue there is — no commission, no
@@ -6451,24 +6487,43 @@ function renderTrends(){
     head.append(el("s", null, `across ${O.count} booking${O.count===1?"":"s"}`));
     b.appendChild(head);
     const rows = el("div","card");
-    [["Arriving within a week", O.soon, O.soonN, "collect at the door"],
-     ["Already left", O.gone, O.goneN, "has to be chased"],
-     ["Sitting with a platform", O.platform, null, "coming to you, do not chase"]]
-      .forEach(([k, v, n, why])=>{
+    /* These three ARE the headline, split three ways and nothing left over. */
+    [["Already left", O.gone, O.goneN, "has to be chased", "due"],
+     ["Arriving within a week", O.soon, O.soonN, "collect at the door", "clear"],
+     ["Arriving later, or still in the flat", O.later, O.laterN, "not collectable yet", "clear"]]
+      .forEach(([k, v, n, why, tone])=>{
         if(!v) return;
         const r = el("div","row bk");
         const m = el("div","meta");
         m.innerHTML = `<b>${esc(k)}</b><em>${esc(why)}${n != null ? ` · ${n} booking${n===1?"":"s"}` : ""}</em>`;
         const e = el("div","rowend");
-        e.append(el("span", "paid " + (k === "Already left" ? "due" : "clear"), money(v)));
+        e.append(el("span", "paid " + tone, money(v)));
         r.append(m, e);
         rows.appendChild(r);
       });
     if(!O.total && !O.platform) rows.appendChild(el("div","empty","Nothing outstanding — every booking is settled."));
     b.appendChild(rows);
+    /* The platform payout is a SEPARATE POT, not a slice of the one above — it
+       is money the guest has already paid, sitting with Airbnb or Booking.com.
+       Listed among the rows it read as a fifth of what the operator is owed
+       being already handled, when in fact none of it is in that number at all.
+       Its own card, with its own sentence saying so. */
+    if(O.platform){
+      const p = el("div","card");
+      const r = el("div","row bk");
+      const m = el("div","meta");
+      m.innerHTML = `<b>Sitting with a platform</b><em>already paid by the guest · `
+                  + `not part of the ${money(O.total)} above</em>`;
+      const e = el("div","rowend");
+      e.append(el("span","paid clear", money(O.platform)));
+      r.append(m, e);
+      p.appendChild(r);
+      b.appendChild(p);
+    }
     said(c, O.gone > 0
       ? `<b>${money(O.gone)}</b> is owed by guests who have already gone, which is the money that quietly never arrives. `
-        + `The rest is collectable while they are standing in front of you.`
+        + `<b>${money(O.soon)}</b> is collectable this week while they are standing in front of you; `
+        + `the remaining <b>${money(O.later)}</b> is not due yet.`
       : `Nothing has walked out unpaid. The balance is with guests still to arrive, which is the easy kind to collect.`);
   }
 
@@ -8514,6 +8569,14 @@ function openBooking(fi, from, nights){
   let day = Math.max(0, Math.min(from|0, DAYS-1));
   let n   = Math.max(1, nights|0 || 1);
   const capFrom = d => { let k = 0; while(k < 60 && d + k < DAYS && !occ[fi][d + k]) k++; return k; };
+  /* capFrom stops for two completely different reasons and used to report both
+     as the same number: it ran into a booking, or it ran out of book. The state
+     line assumed the first, so arriving 16 Oct for 3 nights read "Leaves 19 Oct
+     · the night after is taken" when TT-101 has nothing at or after day 59 and
+     day 63 is outside the horizon entirely — a refusal explained by a guest who
+     cannot exist. The rest of the file already makes this distinction: roomTile
+     prints "Free 4+n" when a run reaches the edge. */
+  const atEdge = d => d + capFrom(d) >= DAYS;
 
   const form = el("div","bkform");
 
@@ -8576,15 +8639,23 @@ function openBooking(fi, from, nights){
 
   function paint(){
     const cap = capFrom(day);
-    n = Math.max(1, Math.min(n, Math.max(1, cap)));
+    /* At the edge of the book a stay may run past it — addBooking validates only
+       the span the book can hold, and recompute() has always clamped. Refusing
+       here was refusing to RECORD a long, high-value booking that exists. */
+    const edge = atEdge(day);
+    const maxN = edge ? 60 : cap;
+    n = Math.max(1, Math.min(n, Math.max(1, maxN)));
     dLab.textContent = day === 0 ? "Tonight" : fmtL(day);
     nLab.textContent = n;                       // the caption above says NIGHTS
     dLess.disabled = day <= 0; dMore.disabled = day >= DAYS-1;
-    nLess.disabled = n <= 1;   nMore.disabled = n >= cap;
-    const ok = cap > 0 && freeRange(fi, day, day + n);
+    nLess.disabled = n <= 1;   nMore.disabled = n >= maxN;
+    const ok = cap > 0 && freeSpan(fi, day, day + n);
     state.classList.toggle("bad", !ok);
     if(ok){
-      state.textContent = `Leaves ${fmt(day + n)}` + (cap > n ? ` · free for ${cap} night${cap>1?"s":""} from here` : " · the night after is taken");
+      state.textContent = `Leaves ${fmt(day + n)}`
+        + (cap > n ? ` · free for ${cap} night${cap>1?"s":""} from here`
+           : edge  ? " · free to the end of this book"
+           :         " · the night after is taken");
     }else{
       const busy = resv.find(r => r.fi === fi && r.start <= day && r.end > day);
       state.textContent = busy
