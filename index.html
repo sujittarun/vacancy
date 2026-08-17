@@ -286,7 +286,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .topbar.tight .sub{opacity:.5}
 @media (prefers-reduced-motion:reduce){.topbar h1,.topbar .sub{transition:none}}
 .ghost{
-  display:flex;align-items:center;gap:6px;padding:7px 12px;border-radius:9px;
+  display:flex;align-items:center;gap:6px;padding:7px 12px;border-radius:var(--r-xs);
   background:var(--surface-2);font-size:12px;font-weight:550;color:var(--txt-2);
   border:1px solid var(--line);transition:transform .35s var(--spring), background .18s;
 }
@@ -358,10 +358,10 @@ button{background:none;border:0;padding:0;cursor:pointer}
   display:grid;grid-template-columns:repeat(4,1fr);gap:2px;padding:4px;
   background:var(--bar);backdrop-filter:blur(24px) saturate(180%);
   -webkit-backdrop-filter:blur(24px) saturate(180%);
-  border:1px solid var(--line-2);border-radius:17px;box-shadow:var(--shadow);
+  border:1px solid var(--line-2);border-radius:var(--r-lg);box-shadow:var(--shadow);
 }
 .tabbar button{
-  padding:9px 4px 8px;border-radius:13px;display:flex;flex-direction:column;
+  padding:9px 4px 8px;border-radius:var(--r-md);display:flex;flex-direction:column;
   align-items:center;gap:3px;color:var(--txt-3);font-size:10.5px;font-weight:600;
   letter-spacing:.01em;transition:color .2s, background .3s var(--out);
 }
@@ -370,7 +370,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .tabbar button:active{transform:scale(.95)}
 
 /* ══════════════════════ primitives ══════════════════════ */
-.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);
   box-shadow:var(--shadow-sm);overflow:hidden}
 .lbl{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.09em;color:var(--txt-3)}
 .sect{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:0 2px 11px}
@@ -381,7 +381,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
 
 /* room tile — the atom of the whole app */
 .tile{
-  position:relative;border-radius:9px;padding:9px 8px 8px;text-align:left;
+  position:relative;border-radius:var(--r-xs);padding:9px 8px 8px;text-align:left;
   background:var(--held);border:1px solid transparent;
   transition:transform .38s var(--spring), background .2s;
   min-height:56px;display:flex;flex-direction:column;justify-content:space-between;
@@ -411,9 +411,9 @@ button{background:none;border:0;padding:0;cursor:pointer}
 
 /* stay-length dial — reshapes the whole fortnight */
 .seg{position:relative;display:grid;grid-auto-flow:column;grid-auto-columns:1fr;
-  background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:3px}
+  background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-sm);padding:3px}
 .seg-ind{position:absolute;top:3px;bottom:3px;left:3px;background:var(--surface);
-  border-radius:9px;box-shadow:var(--shadow-sm);transition:transform .44s var(--spring);
+  border-radius:var(--r-xs);box-shadow:var(--shadow-sm);transition:transform .44s var(--spring);
   pointer-events:none}
 .seg button{position:relative;z-index:1;padding:9px 2px;font-size:12.5px;font-weight:600;
   letter-spacing:-.008em;color:var(--txt-3);transition:color .22s}
@@ -423,7 +423,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
 /* month key */
 .key{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center}
 .keyitem{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--txt-2);line-height:1.4}
-.keychip{flex:0 0 auto;width:34px;height:38px;border-radius:8px;background:var(--surface);
+.keychip{flex:0 0 auto;width:34px;height:38px;border-radius:var(--r-xs);background:var(--surface);
   border:1px solid var(--line);position:relative;display:grid;place-items:center}
 .keychip u{text-decoration:none;font-size:15px;font-weight:680;letter-spacing:-.03em}
 .keychip i{position:absolute;left:5px;right:5px;bottom:5px;height:3px;border-radius:2px;background:var(--surface-3)}
@@ -474,7 +474,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .ops-date b{font-size:23px;font-weight:680;letter-spacing:-.032em}
 .ops-date s{text-decoration:none;font-size:12.5px;color:var(--txt-3);font-weight:500}
 .ops-row{display:grid;grid-template-columns:repeat(3,1fr);background:var(--surface);
-  border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow-sm);overflow:hidden}
+  border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow-sm);overflow:hidden}
 .op{padding:14px 8px 13px;text-align:left;position:relative;border-right:1px solid var(--line);
   transition:background .16s}
 .op:last-child{border-right:0}
@@ -492,7 +492,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
   padding:2px 20px 2px 0;margin:0 -20px 0 0;scrollbar-width:none}
 .nights::-webkit-scrollbar{display:none}
 .night{flex:0 0 78px;scroll-snap-align:start;background:var(--surface);border:1px solid var(--line);
-  border-radius:13px;padding:10px 10px 11px;display:flex;flex-direction:column;gap:9px;
+  border-radius:var(--r-md);padding:10px 10px 11px;display:flex;flex-direction:column;gap:9px;
   transition:transform .38s var(--spring)}
 .night:active{transform:scale(.95)}
 .night .d{display:flex;align-items:baseline;justify-content:space-between;gap:4px;
@@ -539,7 +539,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
    a gesture with no preview — you cannot tell what is there or how much. On a
    phone, vertical scroll is the native, discoverable motion; nothing hides. */
 .deck{display:flex;flex-direction:column;gap:14px}
-.tcard{background:var(--surface);border:1px solid var(--line);border-radius:18px;
+.tcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);
   box-shadow:var(--shadow-sm);padding:15px 14px 14px;display:flex;flex-direction:column;
   transition:opacity .3s var(--out), transform .34s var(--out)}
 .tcard.pending{opacity:0;transform:translateY(12px)}
@@ -568,7 +568,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
 
 /* opportunity tiles — a number and a label; the detail lives one tap away */
 .opps{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.opp{background:var(--surface);border:1px solid var(--line);border-radius:14px;
+.opp{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);
   padding:13px 11px 12px;text-align:left;display:flex;flex-direction:column;gap:5px;
   box-shadow:var(--shadow-sm);transition:transform .38s var(--spring)}
 .opp:active{transform:scale(.96)}
@@ -581,7 +581,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
 /* When there is genuinely nothing to act on, one quiet line beats an empty
    card. It still confirms the check happened — silence alone is ambiguous. */
 .allclear{display:flex;align-items:flex-start;gap:10px;padding:14px 16px;
-  background:var(--surface);border:1px solid var(--line);border-radius:16px;
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);
   box-shadow:var(--shadow-sm)}
 .allclear .tick{flex:0 0 auto;width:18px;height:18px;border-radius:50%;
   background:color-mix(in srgb,var(--free) 18%,transparent);display:grid;place-items:center;
@@ -597,7 +597,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .bsec > .lbl{margin:0 2px}
 
 /* DECIDE — a question with its answers attached */
-.decide{padding:12px 13px;border-radius:13px;
+.decide{padding:12px 13px;border-radius:var(--r-md);
   background:color-mix(in srgb,var(--hot) 7%,var(--surface-2));
   border:1px solid color-mix(in srgb,var(--hot) 26%,transparent)}
 .decide > b{display:block;font-size:14px;font-weight:650;letter-spacing:-.015em;line-height:1.3}
@@ -606,7 +606,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
 
 /* PERISHING — figures side by side, not two list rows saying the same thing */
 .duo{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.dcell{padding:11px 11px 10px;border-radius:12px;background:var(--surface-2);
+.dcell{padding:11px 11px 10px;border-radius:var(--r-sm);background:var(--surface-2);
   border:1px solid var(--line);text-align:left;display:flex;flex-direction:column;gap:2px;
   transition:transform .38s var(--spring)}
 .dcell:active{transform:scale(.96)}
@@ -625,7 +625,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .dcell.urgent .k{color:var(--txt-2)}
 
 /* one-line rows for everything that is simply a count with a destination */
-.line{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:11px;
+.line{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--r-sm);
   background:var(--surface-2);border:1px solid var(--line);width:100%;text-align:left;
   transition:transform .38s var(--spring)}
 .line:active{transform:scale(.98)}
@@ -637,7 +637,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .line .chev{flex:0 0 auto;color:var(--txt-3);font-size:16px;line-height:1}
 
 /* the advert summary — what you have to sell, in words a guest understands */
-.advert{margin:16px 20px 0;padding:15px 16px 16px;border-radius:15px;
+.advert{margin:16px 20px 0;padding:15px 16px 16px;border-radius:var(--r-md);
   background:color-mix(in srgb,var(--now) 9%,var(--surface));
   border:1px solid color-mix(in srgb,var(--now) 28%,transparent)}
 .advert-head{font-size:19px;font-weight:680;letter-spacing:-.025em;color:var(--now);margin:5px 0 12px}
@@ -663,7 +663,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .nudge{display:flex;gap:7px;margin-top:9px;flex-wrap:wrap}
 
 /* days slider — drag to choose how much longer the flat stays out */
-.exts{margin-top:10px;padding:10px 12px 9px;border-radius:12px;
+.exts{margin-top:10px;padding:10px 12px 9px;border-radius:var(--r-sm);
   background:var(--surface-2);border:1px solid var(--line)}
 .exts-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
 .exts-head b{font-size:11.5px;font-weight:600;color:var(--txt-2);letter-spacing:.01em}
@@ -671,7 +671,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .exts-foot{display:flex;justify-content:flex-end;gap:8px;margin-top:10px}
 .exts-when{font-size:11.5px;color:var(--txt-3);line-height:1.4}
 .exts-when b{color:var(--txt-2);font-weight:600}
-.nudgeBtn{padding:7px 11px;border-radius:9px;background:var(--surface-2);
+.nudgeBtn{padding:7px 11px;border-radius:var(--r-xs);background:var(--surface-2);
   border:1px solid var(--line);font-size:12px;font-weight:600;color:var(--txt-2);
   transition:transform .3s var(--out)}
 .nudgeBtn:active{transform:scale(.95)}
@@ -727,7 +727,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .mnav .msum{flex:1 0 100%;order:3;font-size:12px;color:var(--txt-3);
   margin-top:-4px;letter-spacing:-.005em}
 .mnav .t{flex:1;font-size:17px;font-weight:640;letter-spacing:-.02em}
-.mnav button{width:36px;height:36px;border-radius:10px;background:var(--surface-2);
+.mnav button{width:36px;height:36px;border-radius:var(--r-xs);background:var(--surface-2);
   border:1px solid var(--line);display:grid;place-items:center;
   transition:transform .38s var(--spring)}
 .mnav button:active{transform:scale(.9)}
@@ -737,7 +737,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .dow span{text-align:center;font-size:10px;font-weight:600;letter-spacing:.08em;color:var(--txt-3)}
 .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
 .day{
-  aspect-ratio:1/1.14;border-radius:11px;background:var(--surface);border:1px solid var(--line);
+  aspect-ratio:1/1.14;border-radius:var(--r-sm);background:var(--surface);border:1px solid var(--line);
   padding:7px 6px 12px;display:flex;flex-direction:column;justify-content:space-between;
   position:relative;overflow:hidden;
   transition:transform .38s var(--spring), border-color .2s;
@@ -770,7 +770,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
 /* takes no layout until a sweep starts, or it leaves a hole in the page */
 .hud{display:none}
 .hud.on{position:sticky;top:0;z-index:6;display:flex;align-items:center;gap:10px;
-  margin:0 2px 12px;padding:11px 14px;border-radius:13px;
+  margin:0 2px 12px;padding:11px 14px;border-radius:var(--r-md);
   background:var(--bar);backdrop-filter:blur(20px) saturate(160%);
   -webkit-backdrop-filter:blur(20px) saturate(160%);
   border:1px solid var(--line-2);box-shadow:var(--shadow);pointer-events:none;
@@ -786,7 +786,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
 
 /* ══════════════════════ ASK ══════════════════════ */
 .field{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line-2);
-  border-radius:14px;padding:4px 4px 4px 15px;box-shadow:var(--shadow-sm);
+  border-radius:var(--r-md);padding:4px 4px 4px 15px;box-shadow:var(--shadow-sm);
   transition:border-color .2s}
 .field:focus-within{border-color:color-mix(in srgb,var(--now) 65%,transparent)}
 .field input{flex:1;min-width:0;border:0;background:none;outline:none;padding:13px 0;font-size:16px;
@@ -794,12 +794,12 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .field input::placeholder{color:var(--txt-3)}
 .field button:active{transform:scale(.93)}
 /* one slot: paste into an empty box, clear a full one */
-.field button.slot{width:38px;height:38px;border-radius:11px;background:var(--surface-2);
+.field button.slot{width:38px;height:38px;border-radius:var(--r-sm);background:var(--surface-2);
   border:1px solid var(--line);display:grid;place-items:center;color:var(--txt-2);flex:0 0 auto;
   transition:transform .38s var(--spring), background .2s, color .2s}
 .field button.slot:active{transform:scale(.9);transition-duration:.085s;color:var(--txt)}
 .field button.slot[hidden]{display:none}
-.field button.mic{width:38px;height:38px;border-radius:11px;background:var(--surface-2);
+.field button.mic{width:38px;height:38px;border-radius:var(--r-sm);background:var(--surface-2);
   border:1px solid var(--line);display:grid;place-items:center;color:var(--txt-2);flex:0 0 auto;
   transition:transform .38s var(--spring), background .2s, color .2s}
 .field.hear button.mic{background:var(--now);color:#12100c;border-color:transparent;
@@ -809,14 +809,14 @@ button{background:none;border:0;padding:0;cursor:pointer}
 @media (prefers-reduced-motion:reduce){.field.hear button.mic{animation:none}}
 
 .copybar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.copybtn{display:inline-flex;align-items:center;gap:6px;padding:9px 13px;border-radius:10px;
+.copybtn{display:inline-flex;align-items:center;gap:6px;padding:9px 13px;border-radius:var(--r-xs);
   background:var(--surface-2);border:1px solid var(--line);font-size:12.5px;font-weight:600;
   color:var(--txt-2);transition:transform .38s var(--spring), color .2s, background .2s}
 .copybtn:active{transform:scale(.95)}
 .copybtn.done{background:var(--free);color:var(--free-ink);border-color:transparent}
 
 .chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}
-.chips button{padding:8px 12px;border-radius:10px;background:var(--surface-2);border:1px solid var(--line);
+.chips button{padding:8px 12px;border-radius:var(--r-xs);background:var(--surface-2);border:1px solid var(--line);
   font-size:12.5px;font-weight:500;color:var(--txt-2);transition:transform .38s var(--spring), color .18s}
 .chips button:active{transform:scale(.94);color:var(--txt)}
 /* what was asked here before — quieter than the standing suggestions */
@@ -838,7 +838,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .sheet{
   position:absolute;left:0;right:0;bottom:0;z-index:51;max-height:86%;
   background:var(--surface);border:1px solid var(--line-2);border-bottom:0;
-  border-radius:22px 22px 0 0;box-shadow:var(--shadow);
+  border-radius:var(--r-xl) var(--r-xl) 0 0;box-shadow:var(--shadow);
   display:flex;flex-direction:column;
   transform:translateY(101%);transition:transform .42s var(--spring);
 }
@@ -851,7 +851,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .sheet-h .m{font-size:12.5px;color:var(--txt-2);margin-top:3px}
 /* --txt-2 on --surface-2 is 4.33:1 in dark, just under the floor — and this is
    the control that closes the sheet, so it is not a place to be marginal. */
-.sheet-h button{margin-left:auto;width:30px;height:30px;border-radius:9px;background:var(--surface-2);
+.sheet-h button{margin-left:auto;width:30px;height:30px;border-radius:var(--r-xs);background:var(--surface-2);
   display:grid;place-items:center;color:var(--txt);flex:0 0 auto}
 .sheet-b{overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
   padding-bottom:calc(20px + var(--safe-b))}
@@ -943,7 +943,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
    capped, it is small enough to sit over the night you are on. */
 .strip-call{position:absolute;left:0;bottom:0;box-sizing:border-box;
   display:flex;flex-direction:column;padding:9px 11px;
-  border-radius:12px;width:max-content;max-width:min(268px,100%);
+  border-radius:var(--r-sm);width:max-content;max-width:min(268px,100%);
   background-color:var(--g3);background-image:var(--sheen);
   -webkit-backdrop-filter:var(--blur-3); backdrop-filter:var(--blur-3);
   border:1px solid var(--g-edge-2);
@@ -994,7 +994,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .vsay-l{font-size:12.5px;line-height:1.5;color:var(--txt-2)}
 .vsay-l b{color:var(--txt);font-weight:640}
 .vsay-go{
-  margin-top:7px;padding:6px 10px;border-radius:8px;font-size:12px;font-weight:640;
+  margin-top:7px;padding:6px 10px;border-radius:var(--r-xs);font-size:12px;font-weight:640;
   color:var(--now);background:color-mix(in srgb,var(--now) 14%,transparent);
   transition:transform .3s var(--spring);
 }
@@ -1025,7 +1025,7 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
 .tabseg[hidden]{display:none}
 .tabseg::-webkit-scrollbar{display:none}
 .tabseg button{
-  position:relative;flex:0 0 auto;padding:8px 13px;border-radius:9px;
+  position:relative;flex:0 0 auto;padding:8px 13px;border-radius:var(--r-xs);
   background:var(--surface-2);border:1px solid var(--line);
   font-size:12.5px;font-weight:600;color:var(--txt-3);white-space:nowrap;
   transition:transform .38s var(--spring), background .18s, color .18s;
@@ -1077,7 +1077,7 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
   margin:18px 20px 0;display:flex;align-items:flex-start;gap:0;
 }
 .mroom,.mdest{
-  border-radius:14px;padding:9px 10px;
+  border-radius:var(--r-md);padding:9px 10px;
   display:flex;flex-direction:column;border:1px solid var(--line);
 }
 .mroom{flex:1;min-width:0;background:var(--held);
@@ -1126,7 +1126,7 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
 .mguest{position:relative;z-index:1;display:block;min-width:0;pointer-events:none}
 .mguest.away{visibility:hidden}
 .mguest-fx{
-  display:block;padding:6px 8px 6px 7px;border-radius:8px;
+  display:block;padding:6px 8px 6px 7px;border-radius:var(--r-xs);
   background:var(--raise);border:1px solid var(--line-2);box-shadow:var(--shadow-sm);
 }
 .mguest-in{display:flex;align-items:center;gap:6px;min-width:0}
@@ -1173,7 +1173,7 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
 
 .moveundo{
   display:inline-flex;align-items:center;gap:6px;margin:10px 20px 0;
-  padding:8px 12px;border-radius:10px;background:none;border:1px solid var(--line);
+  padding:8px 12px;border-radius:var(--r-xs);background:none;border:1px solid var(--line);
   font-family:var(--ui);font-size:12.5px;font-weight:600;color:var(--txt-3);
   transition:transform .3s var(--spring), color .18s;
 }
@@ -1196,7 +1196,7 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
    form that used to live here now has a screen of its own.                    */
 .roomAct{padding:16px 20px 4px;display:flex;flex-direction:column;gap:9px}
 .bigAct{
-  width:100%;padding:15px 16px;border-radius:14px;border:none;
+  width:100%;padding:15px 16px;border-radius:var(--r-md);border:none;
   background:var(--free);color:var(--free-ink);font-family:var(--ui);
   font-size:16px;font-weight:670;letter-spacing:-.02em;text-align:left;
   display:flex;flex-direction:column;gap:2px;
@@ -1205,32 +1205,30 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
 .bigAct:active{transform:scale(.985);transition-duration:.085s}
 .bigAct s{text-decoration:none;font-size:12px;font-weight:520;opacity:.62}
 .actWhy{
-  padding:13px 15px;border-radius:12px;background:var(--surface-2);
+  padding:13px 15px;border-radius:var(--r-sm);background:var(--surface-2);
   border:1px solid var(--line);font-size:13.5px;line-height:1.45;color:var(--txt-2);
 }
 .actWhy b{color:var(--txt);font-weight:640}
 /* the two things that write, given equal and deliberately modest weight */
 .roomRoutes{display:flex;gap:9px}
 .roomRoutes button{
-  flex:1;min-width:0;padding:11px 12px;border-radius:12px;
+  flex:1;min-width:0;padding:11px 12px;border-radius:var(--r-sm);
   background:var(--surface-2);border:1px solid var(--line);
   font-family:var(--ui);font-size:13px;font-weight:600;color:var(--txt);
   display:flex;flex-direction:column;gap:1px;text-align:left;
   transition:transform .38s var(--spring), background .18s;
 }
-/* ONE button pair on the liquid-glass material, light only, so it can be judged
-   in place against everything around it before anything else moves. */
-:root[data-theme="light"] .roomRoutes button{
-  background-color:var(--lg-fill);
-  background-image:var(--lg-sheen);
-  -webkit-backdrop-filter:var(--lg-tint); backdrop-filter:var(--lg-tint);
-  border-color:var(--lg-edge);
-  box-shadow:var(--lg-rim);
-}
+/* The material for this pair is not here. It was, once — this was the first
+   button put on liquid glass so it could be judged in place, and it kept its own
+   private copy of the recipe at a fill nobody else used. It is a RAISE pane like
+   every other panel, so it is declared with them in the material section and
+   this rule is gone. A component file says what a thing IS; the material
+   section says what it is MADE OF. Mixing the two is how one button ends up
+   three percent lighter than the card beside it. */
 /* pressed, the pane thins and the rim tightens — light passing through more of
    it, which is what a real slab does when you push it against its ground */
 :root[data-theme="light"] .roomRoutes button:active{
-  background-color:rgba(255,255,255,.20);
+  background-color:var(--s-raise-press);
   box-shadow:inset 0 1.5px 0 rgba(255,255,255,.95),
              inset 0 0 0 1px rgba(255,255,255,.28),
              inset 0 0 22px rgba(255,255,255,.34),
@@ -1242,7 +1240,7 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
 
 /* a stepper that has to hold a date, so it gets the room a number does not need */
 .stepWide{display:flex;align-items:center;gap:0;padding:0 4px;flex:1;min-width:0;
-  background:var(--surface-2);border:1px solid var(--line);border-radius:11px}
+  background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-sm)}
 .stepWide button{width:38px;height:44px;font-size:20px;font-weight:400;color:var(--txt-2);
   background:none;border:none;transition:transform .3s var(--spring)}
 .stepWide button:active{transform:scale(.86);transition-duration:.085s}
@@ -1259,7 +1257,7 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
    himself. Everything below it arrives pre-filled, so the common booking is
    still two touches — the number, and Book.                                  */
 .bkform{margin:14px 20px 0;display:flex;flex-direction:column;gap:8px}
-.bkform input{width:100%;padding:12px 13px;border-radius:11px;background:var(--surface-2);
+.bkform input{width:100%;padding:12px 13px;border-radius:var(--r-sm);background:var(--surface-2);
   border:1px solid var(--line);color:var(--txt);font-family:var(--ui);
   font-size:16px;   /* 16px or iOS zooms the whole page on focus */
   transition:border-color .18s, background .18s}
@@ -1282,7 +1280,7 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
 .bkamt input{padding-left:27px}
 /* a stepper, because nobody should open a keyboard to say "two people" */
 .step{display:flex;align-items:center;gap:0;padding:0 4px;background:var(--surface-2);
-  border:1px solid var(--line);border-radius:11px;flex:0 0 120px}
+  border:1px solid var(--line);border-radius:var(--r-sm);flex:0 0 120px}
 /* the same control, but it has a whole row to itself and a word in it */
 .step.nightStep{flex:1 1 auto;width:100%}
 .step.nightStep b{font-size:14px;letter-spacing:-.01em}
@@ -1293,12 +1291,12 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
 .step b{flex:1;text-align:center;font-size:15px;font-weight:620}
 .srcRow{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .srcRow::-webkit-scrollbar{display:none}
-.srcRow button{flex:0 0 auto;padding:8px 12px;border-radius:9px;background:var(--surface-2);
+.srcRow button{flex:0 0 auto;padding:8px 12px;border-radius:var(--r-xs);background:var(--surface-2);
   border:1px solid var(--line);font-size:12.5px;font-weight:560;color:var(--txt-2);
   white-space:nowrap;transition:transform .3s var(--spring), background .18s, color .18s}
 .srcRow button:active{transform:scale(.95)}
 .srcRow button[aria-pressed="true"]{background:var(--free);color:var(--free-ink);border-color:transparent}
-.bkgo{width:100%;padding:14px;border-radius:11px;border:none;background:var(--free);
+.bkgo{width:100%;padding:14px;border-radius:var(--r-sm);border:none;background:var(--free);
   color:var(--free-ink);font-family:var(--ui);font-size:15px;font-weight:650;
   transition:transform .35s var(--spring)}
 .bkgo:active{transform:scale(.98)}
@@ -1307,7 +1305,7 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
 
 /* Money on a booking row — three states, never two. Only the one that needs a
    hand is loud; a settled booking should cost the eye nothing on the way past. */
-.paid{font-size:11px;font-weight:620;padding:5px 9px;border-radius:8px;white-space:nowrap;
+.paid{font-size:11px;font-weight:620;padding:5px 9px;border-radius:var(--r-xs);white-space:nowrap;
   border:1px solid transparent;transition:transform .3s var(--spring)}
 .paid.due{background:color-mix(in srgb,var(--now) 16%,transparent);color:var(--now);
   border-color:color-mix(in srgb,var(--now) 34%,transparent)}
@@ -1318,24 +1316,24 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
 /* booking entry */
 .book{margin:16px 20px 0;display:flex;gap:8px;align-items:stretch}
 .book input{flex:1;min-width:0;background:var(--surface-2);border:1px solid var(--line);
-  border-radius:11px;padding:12px 13px;font-size:15px;outline:none;color:var(--txt);
+  border-radius:var(--r-sm);padding:12px 13px;font-size:15px;outline:none;color:var(--txt);
   transition:border-color .2s}
 .book input:focus{border-color:color-mix(in srgb,var(--now) 60%,transparent)}
 .book input::placeholder{color:var(--txt-3)}
-.bookbtn{background:var(--free);color:var(--free-ink);border-radius:11px;padding:12px 15px;
+.bookbtn{background:var(--free);color:var(--free-ink);border-radius:var(--r-sm);padding:12px 15px;
   font-size:13px;font-weight:650;letter-spacing:-.01em;white-space:nowrap;flex:0 0 auto;
   transition:transform .38s var(--spring)}
 .bookbtn:active{transform:scale(.94)}
-.blockbtn{margin:10px 20px 0;width:calc(100% - 40px);padding:11px;border-radius:11px;
+.blockbtn{margin:10px 20px 0;width:calc(100% - 40px);padding:11px;border-radius:var(--r-sm);
   background:var(--surface-2);border:1px solid var(--line);font-size:13px;font-weight:600;
   color:var(--txt-2);transition:transform .38s var(--spring)}
 .blockbtn:active{transform:scale(.97)}
-.blocked{margin:16px 20px 0;padding:13px 15px;border-radius:12px;background:var(--surface-2);
+.blocked{margin:16px 20px 0;padding:13px 15px;border-radius:var(--r-sm);background:var(--surface-2);
   border:1px solid var(--line);font-size:13px;line-height:1.5;color:var(--txt-2)}
 .blocked b{color:var(--txt)}
 
 /* two-tap destructive confirm — no modal, no accidental deletes */
-.rowx{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;color:var(--txt-3);
+.rowx{width:32px;height:32px;border-radius:var(--r-xs);display:grid;place-items:center;color:var(--txt-3);
   background:var(--surface-2);border:1px solid var(--line);flex:0 0 auto;font-size:15px;
   transition:background .2s, color .2s}
 .rowx.arm{width:auto;padding:0 11px;background:var(--hot);color:#fff;border-color:transparent;
@@ -1353,7 +1351,7 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
 .invHead{display:flex;align-items:baseline;justify-content:space-between;gap:10px;
   padding:16px 20px 8px;position:sticky;top:0;background:var(--surface);z-index:2}
 .invHead b{font-size:14px;font-weight:650;letter-spacing:-.015em}
-.invAdd{font-size:12px;font-weight:600;color:var(--now);padding:5px 9px;border-radius:8px;
+.invAdd{font-size:12px;font-weight:600;color:var(--now);padding:5px 9px;border-radius:var(--r-xs);
   background:color-mix(in srgb,var(--now) 14%,transparent);white-space:nowrap}
 .invAdd:active{transform:scale(.94)}
 .invRow{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;
@@ -1367,18 +1365,18 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
   background:var(--surface-2)}
 .invForm .r{display:flex;gap:8px}
 .invForm input{flex:1;min-width:0;background:var(--surface);border:1px solid var(--line-2);
-  border-radius:10px;padding:11px 12px;font-size:15px;color:var(--txt);outline:none}
+  border-radius:var(--r-xs);padding:11px 12px;font-size:15px;color:var(--txt);outline:none}
 .invForm input:focus{border-color:color-mix(in srgb,var(--now) 60%,transparent)}
 .invForm input::placeholder{color:var(--txt-3)}
 .tyRow{display:flex;gap:6px;flex-wrap:wrap}
-.tyRow button{padding:8px 11px;border-radius:9px;background:var(--surface);border:1px solid var(--line);
+.tyRow button{padding:8px 11px;border-radius:var(--r-xs);background:var(--surface);border:1px solid var(--line);
   font-size:12.5px;font-weight:600;color:var(--txt-2)}
 .tyRow button[aria-pressed="true"]{background:var(--free);color:var(--free-ink);border-color:transparent}
 .invActs{display:flex;gap:8px;align-items:center}
-.invSave{flex:1;background:var(--free);color:var(--free-ink);border-radius:10px;padding:11px;
+.invSave{flex:1;background:var(--free);color:var(--free-ink);border-radius:var(--r-xs);padding:11px;
   font-size:13px;font-weight:650}
 .invSave:active{transform:scale(.97)}
-.invDel{padding:11px 13px;border-radius:10px;background:var(--surface);border:1px solid var(--line);
+.invDel{padding:11px 13px;border-radius:var(--r-xs);background:var(--surface);border:1px solid var(--line);
   font-size:13px;font-weight:600;color:var(--txt-2)}
 .invDel.arm{background:var(--hot);color:#fff;border-color:transparent}
 .invWarn{font-size:12px;color:var(--hot);line-height:1.45}
@@ -1393,7 +1391,7 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
    typed has actually reached the server. An operator who thinks a booking
    saved when it did not will sell the room twice.                            */
 .pill{
-  display:flex;align-items:center;gap:5px;padding:6px 10px;border-radius:8px;
+  display:flex;align-items:center;gap:5px;padding:6px 10px;border-radius:var(--r-xs);
   background:var(--surface-2);border:1px solid var(--line);
   font-size:11px;font-weight:600;color:var(--txt-2);letter-spacing:.01em;
   transition:transform .35s var(--spring), background .18s;white-space:nowrap;
@@ -1414,7 +1412,7 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
 }
 .toast{
   width:100%;max-width:460px;pointer-events:auto;
-  background:var(--surface-2);border:1px solid var(--line-2);border-radius:14px;
+  background:var(--surface-2);border:1px solid var(--line-2);border-radius:var(--r-md);
   box-shadow:var(--shadow);padding:12px 14px;
   font-size:13px;line-height:1.45;color:var(--txt-2);
   animation:toastIn .42s var(--out) both;
@@ -1448,7 +1446,7 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 .faultRow{margin-top:2px}
 .tyRow.soft button{background:none;border-color:var(--line);color:var(--txt-3);font-weight:520}
 .faultFlag{
-  border-radius:11px;padding:11px 13px;font-size:12.5px;line-height:1.5;
+  border-radius:var(--r-sm);padding:11px 13px;font-size:12.5px;line-height:1.5;
   background:var(--surface-3);border:1px solid var(--line-2);color:var(--txt-2);
   animation:flagIn .3s var(--out) both;
 }
@@ -1458,7 +1456,7 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 .faultFlag em{font-style:normal;color:var(--now);font-weight:600}
 .faultFlag .ff-a{display:flex;gap:7px;margin-top:9px;flex-wrap:wrap}
 .faultFlag .ff-call, .faultFlag .ff-same{
-  padding:7px 11px;border-radius:9px;font-size:12px;font-weight:620;
+  padding:7px 11px;border-radius:var(--r-xs);font-size:12px;font-weight:620;
   text-decoration:none;white-space:nowrap;transition:transform .3s var(--spring);
 }
 .faultFlag .ff-call{background:var(--now);color:#12100c}
@@ -1476,7 +1474,7 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 .wallmove{
   display:grid;grid-template-columns:1fr auto;align-items:center;
   gap:2px 10px;width:100%;text-align:left;margin-top:9px;
-  padding:10px 11px;border-radius:12px;
+  padding:10px 11px;border-radius:var(--r-sm);
   background:var(--surface-2);border:1px solid var(--line);
   transition:transform .3s var(--spring), background .18s;
   animation:wallIn .3s var(--out) both;
@@ -1490,7 +1488,7 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 .wm-g{
   grid-area:1/2;align-self:start;
   font-size:12px;font-weight:700;color:var(--free-ink);
-  background:var(--free);border-radius:8px;padding:5px 8px;white-space:nowrap;
+  background:var(--free);border-radius:var(--r-xs);padding:5px 8px;white-space:nowrap;
 }
 .wm-s{grid-area:2/1/auto/-1;font-size:11.5px;color:var(--txt-2);line-height:1.45}
 .wm-s b{color:var(--txt);font-weight:640}
@@ -1515,7 +1513,7 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 .fixers[hidden]{display:none}
 .fixer{
   flex:0 0 auto;min-width:126px;text-align:left;
-  padding:9px 11px;border-radius:11px;
+  padding:9px 11px;border-radius:var(--r-sm);
   background:var(--surface-2);border:1px solid var(--line);
   display:flex;flex-direction:column;gap:2px;
   transition:transform .3s var(--spring), border-color .18s, background .18s;
@@ -1538,7 +1536,7 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
    that carries at a glance, the label under it so nothing is a guessing game,
    and a badge saying how many times THIS flat has broken THIS thing. Typing
    filters it, so the long tail never needs a second screen.                   */
-.ffind{display:flex;align-items:center;gap:7px;padding:8px 10px;border-radius:10px;
+.ffind{display:flex;align-items:center;gap:7px;padding:8px 10px;border-radius:var(--r-xs);
   background:var(--surface-2);border:1px solid var(--line)}
 .ffind:focus-within{border-color:var(--now-ink)}
 .ffind svg{width:15px;height:15px;flex:0 0 15px;stroke:var(--txt-3);fill:none;stroke-width:1.6;
@@ -1556,7 +1554,7 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 .fgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
 .ftile{
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
-  height:62px;border-radius:10px;position:relative;
+  height:62px;border-radius:var(--r-xs);position:relative;
   background:var(--surface-2);border:1px solid var(--line);color:var(--txt-2);
   transition:transform .3s var(--spring),background .18s,color .18s;
 }
@@ -1580,7 +1578,7 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 .crew{display:flex;flex-direction:column;gap:6px}
 .mate{
   display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;
-  padding:10px 12px;border-radius:11px;text-align:left;
+  padding:10px 12px;border-radius:var(--r-sm);text-align:left;
   background:var(--surface-2);border:1px solid var(--line);color:var(--txt-2);
   transition:transform .3s var(--spring),background .18s,color .18s;
 }
@@ -1610,7 +1608,7 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
    unread. */
 .bkjump{display:flex;flex-wrap:wrap;gap:6px;margin-top:-4px}
 .bkjump button{
-  padding:7px 11px;border-radius:9px;font-size:12px;font-weight:600;
+  padding:7px 11px;border-radius:var(--r-xs);font-size:12px;font-weight:600;
   color:var(--txt-2);background:var(--surface-2);border:1px dashed var(--line-2);
   transition:transform .3s var(--spring),background .18s,color .18s;
 }
@@ -1636,7 +1634,7 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 .peek{
   position:fixed;left:16px;right:16px;top:calc(env(safe-area-inset-top,0px) + 74px);
   z-index:90;pointer-events:none;
-  background:var(--surface-2);border:1px solid var(--line-2);border-radius:16px;
+  background:var(--surface-2);border:1px solid var(--line-2);border-radius:var(--r-lg);
   box-shadow:var(--shadow);padding:14px 15px 13px;
   max-width:460px;margin:0 auto;
   opacity:0;transform:translateY(-8px) scale(.97);
@@ -1668,13 +1666,13 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 .gate label{display:block;font-size:11px;font-weight:650;color:var(--txt-3);
   text-transform:uppercase;letter-spacing:.07em;margin:0 0 6px}
 .gate input{
-  width:100%;padding:13px 14px;margin:0 0 16px;border-radius:11px;
+  width:100%;padding:13px 14px;margin:0 0 16px;border-radius:var(--r-sm);
   background:var(--surface-2);border:1px solid var(--line);color:var(--txt);
   font-family:var(--ui);font-size:16px;   /* 16px or iOS zooms the page on focus */
 }
 .gate input:focus{outline:none;border-color:var(--line-2);background:var(--surface-3)}
 .gate .go{
-  width:100%;padding:14px;border-radius:11px;border:none;
+  width:100%;padding:14px;border-radius:var(--r-sm);border:none;
   background:var(--free);color:var(--free-ink);
   font-family:var(--ui);font-size:15px;font-weight:650;
   transition:transform .35s var(--spring), opacity .2s;
@@ -1682,7 +1680,7 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 .gate .go:active{transform:scale(.98)}
 .gate .go[disabled]{opacity:.5}
 .gate .err{
-  margin:0 0 16px;padding:11px 13px;border-radius:10px;font-size:13px;line-height:1.45;
+  margin:0 0 16px;padding:11px 13px;border-radius:var(--r-xs);font-size:13px;line-height:1.45;
   background:color-mix(in srgb, var(--hot) 14%, transparent);
   border:1px solid color-mix(in srgb, var(--hot) 40%, transparent);color:var(--txt);
 }
@@ -1697,7 +1695,7 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
   .screen{padding:26px max(20px,calc((100% - 640px)/2)) calc(110px + var(--safe-b))}
   .topbar{padding-left:max(20px,calc((100% - 640px)/2));padding-right:max(20px,calc((100% - 640px)/2))}
   .tabbar{left:50%;right:auto;transform:translateX(-50%);width:360px}
-  .sheet{left:50%;transform:translate(-50%,101%);width:min(560px,100%);border-radius:22px 22px 0 0}
+  .sheet{left:50%;transform:translate(-50%,101%);width:min(560px,100%);border-radius:var(--r-xl) var(--r-xl) 0 0}
   .sheet.on{transform:translate(-50%,0)}
 }
 /* ══════════════════ light: a material, not a coat of paint ══════════════════
@@ -1820,7 +1818,7 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
      brightness ~0.25 to keep white type off a near-white tile, and that is
      dark enough to stop being glass at all. Dark keeps the frosted pane it
      already has and already measures clean. */
-  --lg-fill:rgba(255,255,255,.10);
+  --lg-fill:var(--s-raise);
   /* LIFT ONLY. This carried contrast(.7) and it made every card paint DARKER
      than the page it sat on — grey blocks behind the calendar, the to-do list,
      the room lists, the money cards. The mechanism is the clamp: brightness
@@ -1843,7 +1841,7 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
      cream field: at 34px an 85px room tile is featureless mush, so there was
      nothing behind the glass buttons to be glass over. At 6px the tiles keep
      their shape and the sheet finally has a room behind it. */
-  --lg-sheet-fill:rgba(255,255,255,.54);
+  --lg-sheet-fill:var(--s-float);
   /* brightness(1.5) contrast(.75) was sized for a ground whose darkest point
      was 165. The ground is 183 now, so that much lift only clamps to white and
      then contrast drags it back — the sheet came out at 221–240, which is why
@@ -1858,17 +1856,76 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
      inside a sheet is already standing on a surface that normalised its
      backdrop, so a second full-strength tint there would be paying twice and
      would flatten what little is left showing. Cards get the light one. */
-  /* The only card that still gets a fill is one INSIDE a sheet, where there is
-     a real material behind it to separate from. On the page there is nothing
-     behind a card but a gradient, and a card there gets no fill at all. */
-  --lg-fill-2:rgba(255,255,255,.14);   /* a card over the sheet, and only there */
+  /* ══ THE LADDER — one value per KIND ══════════════════════════════════════
+     Measured before writing, because the drift was visible on screen and worth
+     naming: the app had THREE fills doing the single job of "a raised pane"
+     (.16 on the ops row, .14 on a card in a sheet, .10 on a route button),
+     buttons split across two OPPOSITE materials — .roomRoutes raised in white,
+     .copybtn and .rowx cut in with ink, for the same job — a calendar cell at
+     .40 denser than the card containing it, ten distinct corner radii and seven
+     border colours. None of that was decided. It arrived one edit at a time,
+     and it is exactly what reads as different white densities on things that
+     ought to match.
+
+     Five surface steps, each meaning something you can say out loud:
+       FLAT   content that sits ON the page, grouped by space and a hairline
+              rather than by a box.
+       RAISE  a pane laid on whatever is behind it — cards, the ops row, and
+              the big tappable panels, which are panels before they are buttons.
+       CELL   a tappable DATA cell. Denser than a pane because it has to read as
+              a target at arm's length; no longer denser than its own container.
+       FLOAT  something over everything — the sheet, both bars, a toast, the
+              scrub callout.
+       SUNK   anything cut INTO a surface — fields, troughs, chips, the small
+              controls. Ink, never a paler white: white on white has nowhere to
+              go, which is how a search field once vanished completely.
+
+     The rule for which one a thing takes is its KIND, never its size or its
+     screen. Change a step here and every instance of that kind moves together,
+     which is the whole point. */
+  --s-flat:transparent;
+  --s-raise:rgba(255,255,255,.16);
+  --s-cell:rgba(255,255,255,.30);
+  --s-float:rgba(255,255,255,.54);
+  --s-sunk:rgba(13,16,23,.05);
+  /* PRESSED is a step too, not a one-off. Under a thumb the pane thins and lets
+     more light through, which is what a real slab does when you push it against
+     its ground — so press LIFTS a raised pane and DEEPENS a sunk one. */
+  --s-raise-press:rgba(255,255,255,.20);
+  --s-sunk-press:rgba(13,16,23,.09);
+  /* INK is the sixth step and the only one that is not white or a tint of the
+     page: the dark answers — "4 nights free", the yes button, the primary act.
+     It is --free, the vacancy fill, at the material's thickness, so the answer
+     is the same colour this app always uses for vacancy and the same substance
+     as everything around it. Written as a mix rather than the literal
+     rgba(28,35,49,.84) it used to be, because that literal WAS --free and
+     nothing said so — which is how a second rule later in the file quietly
+     repainted the pill opaque while the yes button beside it stayed glass. */
+  --s-ink:color-mix(in srgb, var(--free) 84%, transparent);
+  /* one rim per step, for the same reason */
+  --rim-raise:rgba(255,255,255,.50);
+  --rim-sunk:rgba(13,16,23,.10);
+  --rim-hair:rgba(13,16,23,.06);
+  /* Five radii. Unlike the surface steps above, these go by SIZE, not by kind:
+     a corner radius is optical, so a 38px icon button and a 56px full-width
+     button genuinely should not share one. The rule is nesting — a thing inside
+     a thing takes the step below it, which is what keeps a card's corner and
+     the corner of the chip inside it concentric instead of accidentally equal.
+     There were 22 distinct container radii here before, ten of them one pixel
+     from another, which is not a difference anyone chose or can see. */
+  --r-xs:9px;    /* ≤40px — room tiles, pills, the small round controls */
+  --r-sm:11px;   /* 40–56px — chips, calendar cells, most buttons       */
+  --r-md:14px;   /* 56–80px — the night strip, list rows, big fields    */
+  --r-lg:18px;   /* cards and panes                                     */
+  --r-xl:26px;   /* the sheet, and the bar that mirrors it              */
+  --lg-fill-2:var(--s-raise);   /* kept as an alias so no call site breaks */
   /* a trough is the same pane cut INTO the surface: the light comes from under
      the lip instead of over it, so the rim inverts */
   --lg-rim-sunk:
     inset 0 1.5px 3px rgba(13,16,23,.13),
     inset 0 -1.5px 0 rgba(255,255,255,.72),
     inset 0 0 0 1px rgba(13,16,23,.05);
-  --lg-edge:rgba(255,255,255,.55);
+  --lg-edge:var(--rim-raise);
   --lg-rim:
     inset 0 1.5px 0 rgba(255,255,255,.85),      /* the top lip, catching light */
     inset 0 -1.5px 0 rgba(255,255,255,.22),     /* the under-edge, bouncing it */
@@ -1958,8 +2015,8 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
   border-color:var(--g-edge);
   box-shadow:var(--lift), var(--g-inner);
 }
-:root[data-theme="light"] .card{border-radius:18px}
-:root[data-theme="light"] .tcard{border-radius:20px}
+:root[data-theme="light"] .card{border-radius:var(--r-lg)}
+:root[data-theme="light"] .tcard{border-radius:var(--r-lg)}
 
 /* ── L2 · chrome ─────────────────────────────────────────────────────────────
    The layer you reach for. Stronger blur, clearer edge, the full sweep.     */
@@ -1972,7 +2029,7 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
   background-color:var(--g-tab);
   background-image:var(--sheen);
   border-color:var(--g-edge);
-  border-radius:22px;
+  border-radius:var(--r-xl);
   box-shadow:var(--lift-2), var(--g-inner);
 }
 /* the selected tab is a pane set INTO the bar, not a chip painted on it */
@@ -1998,7 +2055,7 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
   background-image:var(--sheen);
   -webkit-backdrop-filter:var(--blur-3); backdrop-filter:var(--blur-3);
   border-top:1px solid var(--g-edge-2);
-  border-radius:26px 26px 0 0;
+  border-radius:var(--r-xl) var(--r-xl) 0 0;
 }
 /* ══════════ LIQUID GLASS, light only — the whole screen ═══════════════════
    Everything below replaces the frosted recipe above for light. The frosted
@@ -2042,18 +2099,21 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
    MORE of the room shows through, not less, at a third of the blur. */
 :root[data-theme="light"] .card,
 :root[data-theme="light"] .tcard,
-:root[data-theme="light"] .ops-row{
-  background-color:rgba(255,255,255,.16);
+:root[data-theme="light"] .ops-row,
+:root[data-theme="light"] .roomRoutes button{
+  background-color:var(--s-raise);
   background-image:var(--lg-sheen);
   -webkit-backdrop-filter:var(--lg-tint); backdrop-filter:var(--lg-tint);
-  border-color:rgba(255,255,255,.50);
+  border-color:var(--rim-raise);
   box-shadow:var(--lg-rim);
 }
-/* Inside a sheet the material behind is the sheet, which is already lifted, so
-   the pane needs a little more of its own fill to separate from it. */
-:root[data-theme="light"] .sheet .card{
-  background-color:var(--lg-fill-2);
-}
+/* A card inside a sheet used to carry its own fill, on the argument that the
+   sheet behind it is already lifted so the pane needs more of its own to
+   separate. Measured, the separation it bought was 4 levels — invisible — and
+   the cost was a third value in the RAISE step, which is what the eye actually
+   caught: two cards, same job, different white. The step is one number now.
+   If a card in a sheet ever needs to sit forward, it sits forward by its RIM,
+   which is free and does not fork the ladder. */
 /* ── the day cells are DATA, and data stays crisp ────────────────────────────
    .day and .night were in the list above and should never have been. A rim
    built for one large button becomes embossed plastic when it is repeated
@@ -2062,16 +2122,21 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
    material for exactly this reason, and the same argument applies twice over
    here: thirty-five backdrop-filters is a frame-rate bill with nothing bought,
    and a counted number is the one thing on this screen that must stay sharp.
-   So they get the fill and nothing else: no rim, no blur, no sheen. */
+   So they get the fill and nothing else: no rim, no blur, no sheen.
+
    They are also the last white blocks on the page now that the cards have gone,
    so they come down to a whisper: enough lift to read as a tappable cell, not
-   enough to be a row of tiles on a tray. */
+   enough to be a row of tiles on a tray.
+
+   .40 was also the single worst inversion in the file: a calendar cell was
+   DENSER than the card containing it (.16), so the contents of a box out-weighed
+   the box. CELL sits at .30 — still clearly a target, now clearly inside. */
 :root[data-theme="light"] .night,
 :root[data-theme="light"] .day{
-  background-color:rgba(255,255,255,.40);
+  background-color:var(--s-cell);
   background-image:none;
   -webkit-backdrop-filter:none; backdrop-filter:none;
-  border-color:rgba(13,16,23,.06);
+  border-color:var(--rim-hair);
   box-shadow:none;
 }
 /* A pad cell is not a day. It is the empty run before the first of the month
@@ -2117,7 +2182,7 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 :root[data-theme="light"] .nudgeBtn.yes,
 :root[data-theme="light"] .answer .y,
 :root[data-theme="light"] .bigAct{
-  background-color:rgba(28,35,49,.84);
+  background-color:var(--s-ink);
   -webkit-backdrop-filter:blur(3px) saturate(170%); backdrop-filter:blur(3px) saturate(170%);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.22),
              inset 0 -1px 0 rgba(0,0,0,.34),
@@ -2156,31 +2221,34 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 :root[data-theme="light"] .mroom{
   background:color-mix(in srgb, var(--held) 78%, transparent);
   -webkit-backdrop-filter:var(--lg-tint); backdrop-filter:var(--lg-tint);
-  border-color:rgba(255,255,255,.45);
+  border-color:var(--rim-raise);
 }
 :root[data-theme="light"] .mroom.lit{
   background:color-mix(in srgb, var(--free) 86%, transparent);
   border-color:transparent;
 }
 :root[data-theme="light"] .mdest{
-  background:rgba(13,16,23,.05);
+  background:var(--s-sunk);
   -webkit-backdrop-filter:var(--lg-tint); backdrop-filter:var(--lg-tint);
-  border-color:rgba(13,16,23,.10);
+  border-color:var(--rim-sunk);
   box-shadow:var(--lg-rim-sunk);
 }
 :root[data-theme="light"] .mdest.filled{
   background:color-mix(in srgb, var(--held) 78%, transparent);
-  border-color:rgba(255,255,255,.45);
+  border-color:var(--rim-raise);
   box-shadow:var(--lg-rim);
 }
 /* the guest's name tag — the one chip in the stage still painting --pane, a 94%
    white slab. It is the thing that travels, so it should read as a pane you
    could pick up, not a sticker. .berth stays excluded: an empty place kept for
-   somebody has to stay EMPTY, which is a rule this file has broken once before. */
+   somebody has to stay EMPTY, which is a rule this file has broken once before.
+
+   It takes FLOAT, not RAISE: it is the one thing on the stage that travels over
+   the others, and the step it takes should say so. */
 :root[data-theme="light"] .mguest:not(.berth)>.mguest-fx{
-  background:rgba(255,255,255,.42);
+  background:var(--s-float);
   -webkit-backdrop-filter:var(--lg-tint); backdrop-filter:var(--lg-tint);
-  border-color:rgba(255,255,255,.60);
+  border-color:var(--rim-raise);
   box-shadow:var(--lg-rim);
 }
 
@@ -2207,9 +2275,9 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 :root[data-theme="light"] .field button.slot,
 :root[data-theme="light"] .field button.mic:not(.on),
 :root[data-theme="light"] .wallmove{
-  background-color:rgba(13,16,23,.05);
+  background-color:var(--s-sunk);
   -webkit-backdrop-filter:var(--lg-tint); backdrop-filter:var(--lg-tint);
-  border-color:rgba(13,16,23,.10);
+  border-color:var(--rim-sunk);
   box-shadow:var(--lg-rim-sunk);
 }
 .toast,
@@ -2346,9 +2414,15 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 /* ── vacancy, stated in its own material ─────────────────────────────────────
    --free is a FILL in this system and never a text colour: it sits 1.2:1 from
    --txt, so `color:var(--free)` cannot read as emphasis. */
-:root[data-theme="light"] .pill.good{background:var(--free);color:var(--free-ink);border-color:transparent}
-:root[data-theme="light"] .allclear .tick{background:var(--free);color:var(--free-ink)}
-:root[data-theme="light"] .answer .y{color:var(--free-ink);background:var(--free);border-radius:6px;
+/* These set the COLOUR of a vacancy statement and nothing else. They used to
+   set `background:var(--free)` outright, which is the same rule as the material
+   block above at the same specificity but later in the file — so it won, and
+   "4 nights free" shipped as an opaque slab while the Yes button one row down
+   was glass. Same answer, two materials, decided by line number. The material
+   block owns thickness now; this owns hue. */
+:root[data-theme="light"] .pill.good{color:var(--free-ink);border-color:transparent}
+:root[data-theme="light"] .allclear .tick{background:var(--s-ink);color:var(--free-ink)}
+:root[data-theme="light"] .answer .y{color:var(--free-ink);border-radius:6px;
   padding:0 .18em;-webkit-box-decoration-break:clone;box-decoration-break:clone}
 :root[data-theme="light"] .day.rng{background:color-mix(in srgb,var(--free) 30%,var(--surface));
   border-color:color-mix(in srgb,var(--free) 60%,transparent)}

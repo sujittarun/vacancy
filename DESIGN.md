@@ -514,6 +514,70 @@ before trusting a single number. Screenshots have the same hazard from the other
 end — a shot taken during the 420ms colour transition shows pills mid-fade that look
 like contrast bugs and are not.
 
+## A ruler that is wrong is worse than no ruler, because it is believed
+
+The contrast sweep reported **67 failures at 1.15:1** on the vacancy pills in dark.
+They were not there. `getComputedStyle` returns two colour syntaxes — `rgba(r,g,b,a)`
+and, for anything that touched `color-mix()`, `color(srgb r g b / a)` — and the
+second has *no leading number*, so an index written for the first reads green as
+red, blue as green, and alpha as blue. A pill at 14% white came back as
+`rgb(239,249,36)`, and white type on that is genuinely 1.15:1. The measurement was
+perfect; it was measuring the wrong colour.
+
+What made it expensive was that the same parser had just reported light **clean at
+1005 nodes**, and that number was equally worthless. A broken ruler does not only
+invent failures — it hides them, and it hides them silently in exactly the runs that
+look like success.
+
+So the audit lives in `audit.js` and is imported, never retyped into a console. A
+retyped ruler is a ruler with a fresh bug in it every time, and it carries no test.
+Every sweep now opens by parsing a known `color(srgb …)` value and checking it comes
+back as the colour it plainly is.
+
+## One value per kind, and the kind is what a thing IS
+
+Three different whites were doing the single job of "a raised pane" — `.16` on the
+ops row, `.14` on a card in a sheet, `.10` on a route button — because each was
+written in a different week. Buttons were split across opposite materials: the route
+pair raised in white, the copy button and the row buttons cut in with ink, for the
+same job. A calendar cell at `.40` was *denser than the card containing it*. Twenty-
+two distinct container radii, ten of them one pixel from another.
+
+None of that was decided. It is what "different white densities on different
+elements" looks like from the inside, and no amount of judging each rule on its own
+finds it, because every one of those numbers is defensible alone.
+
+The ladder — `--s-flat / raise / cell / float / sunk / ink`, plus a press step for
+raise and sunk — fixes it by making the *kind* the only input. Not the size, not the
+screen, not which sheet it happens to live in. Two rules follow from that:
+
+- A component rule says what a thing **is**; the material section says what it is
+  **made of**. The route button kept a private copy of the glass recipe at a fill
+  nobody else used, three hundred lines from the block that owned that material.
+  That is how one button ends up three percent lighter than the card beside it.
+- Same specificity means **line number decides**, and line number is not a design
+  decision. `.pill.good` had two light rules — one giving it the material, one, later,
+  giving it an opaque fill — so "4 nights free" shipped as a slab while the Yes button
+  one row down was glass. The later rule sets hue now and the material block owns
+  thickness.
+
+Radii are the exception that proves it: they scale by **size**, not kind, because a
+corner is optical. A 38px icon button and a 56px full-width button should not share
+one. The rule there is nesting — a thing inside a thing takes the step below it.
+
+## An unopened comment eats the rule after it
+
+Twice now, prose has been appended below a comment that had already closed, with no
+`/*` of its own. CSS does not complain. It swallows everything up to the *next*
+`*/` — the end of the following comment — and the entire rule between them is gone.
+The calendar silently reverted to a stale `.40` fill this way and nothing but a live
+measurement caught it; the rule was right there in the file, readable, and dead.
+
+`check-css.mjs` blocks on this now, along with literal surface fills outside the
+ladder, literal container radii, and unguarded literal colours that would ship one
+theme's paint into the other. Every check in it exists because that exact defect
+reached the phone at least once.
+
 ## Prohibitions
 
 - No paper, ruling, stamps, or any ledger device. That world is discarded.
