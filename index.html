@@ -2240,6 +2240,37 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
   border-color:var(--rim-hair);
   box-shadow:none;
 }
+/* ── the states the material rule was painting over ─────────────────────────
+   Same defect three times, and it is the one this file keeps making: the light
+   material rule above is (0,3,0), every selection rule it covers is (0,2,0),
+   and specificity does not care that the state rule was written first and means
+   more. `.day.rng` and `.day.pad` each got a light twin when they broke; the
+   rest never did, so on a light phone:
+
+   - the ENDS of a swept range (.rngA/.rngB) rendered identically to unselected
+     days while the middle was filled, so a 21→24 Aug selection read as 22–23:
+     off by one at each end of the dates being quoted to a caller. Their big
+     free-room count kept its dark-fill ink and measured 1.12:1 — white on white.
+   - the selected night in the Rooms strip had no marker at all, while TODAY
+     kept an amber ring it hands over on selection — so the only ring on screen
+     sat on the night that was NOT selected, while the 45 tiles below counted
+     the one that was.
+   - the selected day in the Month calendar had no ring either, so stepping to
+     September filtered the room list to the 1st with nothing on the grid
+     saying which date that was.
+
+   Declared here rather than by guarding the material rule, because a guard
+   would leave these cells with no fill at all and they would fall back to the
+   opaque base .day/.night — a white block, which is the thing the ladder exists
+   to prevent. */
+:root[data-theme="light"] .day.rngA,
+:root[data-theme="light"] .day.rngB{background:var(--free);border-color:transparent}
+:root[data-theme="light"] .day.sel{
+  border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink), var(--shadow-sm);
+}
+:root[data-theme="light"] .night.sel{
+  border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink);
+}
 /* A pad cell is not a day. It is the empty run before the first of the month
    and it should not be a pane at all — .day.pad has said background:transparent
    since it was written, and the rule above simply out-specified it. */
@@ -2383,8 +2414,16 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 :root[data-theme="light"] .ftile:not([aria-pressed="true"]),
 :root[data-theme="light"] .mate:not([aria-pressed="true"]),
 :root[data-theme="light"] .dcell:not(.urgent),
-:root[data-theme="light"] .rowx,
-:root[data-theme="light"] .copybtn,
+/* ARMED AND DONE ARE STATES, AND STATE BEATS MATERIAL — the rule this list's
+   own comment states, which these two selectors were breaking. Unguarded at
+   (0,3,0) they out-specified .rowx.arm and .copybtn.done at (0,2,0), so in
+   light theme the --hot red never landed: measured, the armed "Cancel?" button
+   kept the resting trough fill rgba(13,16,23,.05) and .rowx.arm{color:--ink-on}
+   then painted its label near-white on it at 1.13:1. Tapping ✕ on a booking
+   produced NO perceptible change at all, and the next tap cancelled the stay.
+   Dark theme was correct throughout, which is why it survived four passes. */
+:root[data-theme="light"] .rowx:not(.arm),
+:root[data-theme="light"] .copybtn:not(.done),
 :root[data-theme="light"] .actWhy,
 :root[data-theme="light"] .line,
 :root[data-theme="light"] .nudgeBtn:not(.yes),
@@ -2636,13 +2675,27 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 .rowx.arm,.invDel.arm{color:var(--ink-on)}
 
 /* ── when the system says no to transparency, mean it ───────────────────────*/
+/* !important, and not reluctantly. A media query contributes NO specificity, so
+   this block's (0,1,0) and (0,2,0) selectors lost outright to the light theme's
+   (0,3,0) material rules — and the whole block did nothing in light. Verified by
+   appending its declarations, minus the condition, as the last stylesheet in the
+   document: nothing changed, .tabbar stayed at 54% white with its blur intact.
+   Dark honoured it only because dark's material rules happen to be (0,1,0) too.
+
+   Someone who asks their OS to remove transparency is usually asking because
+   translucent panes are what they cannot read. An accessibility opt-out is not
+   one voice in the cascade to be outvoted by whatever gets written next — it
+   has to win, including against rules added after it. That is what !important
+   is for, and this is the case it was designed for. */
 @media (prefers-reduced-transparency:reduce){
-  .card,.tcard,.night,.day,.toast,.peek,.sheet,.tabbar,.topbar{
-    background-color:var(--surface);background-image:none;
-    backdrop-filter:none;-webkit-backdrop-filter:none;border-color:var(--line)}
-  .seg,.field,.ghost,.chips button,.dcell{
-    background-color:var(--surface-2);backdrop-filter:none;-webkit-backdrop-filter:none}
-  body{background:var(--bg)}
+  .card,.tcard,.night,.day,.toast,.peek,.sheet,.tabbar,.topbar,.strip-call,.ops-row,.hud.on{
+    background-color:var(--surface)!important;background-image:none!important;
+    backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
+    border-color:var(--line)!important}
+  .seg,.field,.ghost,.chips button,.dcell,.copybtn,.rowx,.line,.step,.stepWide{
+    background-color:var(--surface-2)!important;
+    backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+  body{background:var(--bg)!important}
 }
 </style>
 
@@ -4537,6 +4590,61 @@ const occPct    = fi => { let sold=0, avail=0;
 const blockedOn = d => { let n=0; for(let i=0;i<NF;i++) if(blk[i][d]) n++; return n; };
 
 const haptic = ms => { try{ navigator.vibrate && navigator.vibrate(ms); }catch(e){} };
+
+/* ── TWO-TAP DESTRUCTIVE CONFIRM ─────────────────────────────────────────────
+   Four of these were written by hand — cancel a booking, remove a payment,
+   delete a flat with its bookings, wipe the whole book — and all four had the
+   same hole: the first tap armed, and the very next click event ran the
+   destructive branch with no time check at all. Measured, two synthetic clicks
+   120ms apart dropped a ₹5,300 payment (balance moved ₹12,300 due → ₹17,600
+   due) and deleted a flat from the saved inventory.
+
+   A two-tap confirm defends against an accidental SINGLE tap. It does nothing
+   against an accidental REPEAT, which is the characteristic error of a thumb on
+   a phone — a bounced tap, a double-tap reflex, a jolt on a bus. The guard that
+   was missing is dwell: a minimum time the armed state must be visible before
+   it will accept the second tap, long enough for the eye to register that the
+   button changed and the hand to be able to stop.
+
+   350ms is deliberate. Below ~250ms a repeat is still plausibly one intent;
+   much above 400ms and a deliberate confirm starts to feel broken. A tap inside
+   the window is not queued or swallowed silently — it re-arms the timer, so the
+   window the operator sees is always the full one.
+
+   One place, so a fifth destructive control cannot be written without it. */
+const DWELL = 350;
+function armConfirm(btn, opts){
+  const {rest, armed: armedLabel, run, hold = 3000, cls = "arm"} = opts;
+  let armedAt = 0, tm = null;
+  const disarm = ()=>{
+    clearTimeout(tm); armedAt = 0;
+    btn.classList.remove(cls); btn.textContent = rest;
+    btn.setAttribute("aria-label", rest);
+  };
+  btn.onclick = ()=>{
+    if(!armedAt){
+      armedAt = performance.now();
+      btn.classList.add(cls); btn.textContent = armedLabel;
+      /* the label changes, so the accessible name has to change with it —
+         otherwise a screen reader announces the resting action while the
+         button is armed to do the destructive one */
+      btn.setAttribute("aria-label", armedLabel);
+      haptic(10);
+      tm = setTimeout(disarm, hold);
+      return;
+    }
+    if(performance.now() - armedAt < DWELL){
+      // too fast to be a decision — treat it as the bounce it probably is and
+      // give the operator the full window again
+      clearTimeout(tm); armedAt = performance.now(); tm = setTimeout(disarm, hold);
+      return;
+    }
+    clearTimeout(tm);
+    haptic(24);
+    run();
+  };
+  return disarm;
+}
 const el = (t,c,x)=>{const n=document.createElement(t); if(c)n.className=c; if(x!=null)n.textContent=x; return n;};
 const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const ordinalSuffix = n => (n % 100 >= 11 && n % 100 <= 13) ? "th"
@@ -7331,13 +7439,20 @@ function attachStripScrub(wrap, strip, head, say, call, mini, readD, readW, fi){
 
    Three states, and "unpaid" is never said about a platform booking: the guest
    paid, Airbnb owes you, and those two need opposite actions. */
-function moneyPill(r, fi){
+/* `day` threads through so the sheet can be re-opened where it was. Without
+   it, openSheet's `day == null` fallback substituted the global pickedNight —
+   the Rooms cursor — so recording a payment on a room reached from Month, Ask
+   or Business silently re-anchored the sheet to a different date, and the
+   primary action changed from "Book from 13 Sep" to "Book from 23 Aug" in
+   place, with the wrong date then printed on openBooking's Arriving stepper.
+   Every other back-link in this stack already carries the day. */
+function moneyPill(r, fi, day){
   const due = dueFrom(r);
   if(due > 0){
     const b = el("button","paid due", money(due) + " due");
     b.setAttribute("aria-label",
       `${money(due)} still due from ${r.guest} of ${money(r.amount)} — record a payment`);
-    b.onclick = ev=>{ ev.stopPropagation(); haptic(9); openPayment(r, fi); };
+    b.onclick = ev=>{ ev.stopPropagation(); haptic(9); openPayment(r, fi, day); };
     return b;
   }
   if(withPlatform(r) > 0){
@@ -7350,13 +7465,13 @@ function moneyPill(r, fi){
 
 /* Recording money is two touches: the amount is already the balance, and the
    method defaults to how this booking's source is actually settled. */
-function openPayment(r, fi){
+function openPayment(r, fi, day){
   sheetWipe();
   const t = el("div");
   t.innerHTML = `<div class="n">${money(dueFrom(r))} due</div>`
               + `<div class="m">${esc(r.guest)} · ${flats[r.fi].id} · ${fmt(Math.max(r.start,0))} → ${fmt(r.end)}</div>`;
   const x = el("button", null, "✕"); x.setAttribute("aria-label","Back");
-  x.onclick = ()=> openSheet(fi);
+  x.onclick = ()=> openSheet(fi, day);
   sheetH.append(t, x);
 
   const form = el("div","bkform");
@@ -7385,7 +7500,7 @@ function openPayment(r, fi){
     /* toAmount already parses "₹1,500.50" correctly. Pre-stripping to digits
        first turned 1500.50 into "150050" — a ₹1,501 payment recorded as
        ₹1,50,050, which then clamps dueFrom to 0 and flips the row to settled. */
-    if(addPayment(r, amt.value, method)){ haptic(18); openSheet(fi); }
+    if(addPayment(r, amt.value, method)){ haptic(18); openSheet(fi, day); }
   };
   form.append(go);
   sheetB.append(form);
@@ -7403,13 +7518,8 @@ function openPayment(r, fi){
       const end = el("div","rowend");
       const del = el("button","rowx","✕");
       del.setAttribute("aria-label", `Remove this ${money(p.amount)} payment`);
-      let armed = false, tm = null;
-      del.onclick = ()=>{
-        if(!armed){ armed = true; del.classList.add("arm"); del.textContent = "Remove?"; haptic(10);
-          tm = setTimeout(()=>{ armed = false; del.classList.remove("arm"); del.textContent = "✕"; }, 3000);
-          return; }
-        clearTimeout(tm); haptic(20); dropPayment(r, p); openPayment(r, fi);
-      };
+      armConfirm(del, {rest:"✕", armed:"Remove?",
+        run:()=>{ dropPayment(r, p); openPayment(r, fi, day); }});
       end.append(del);
       row.append(m, end);
       card.appendChild(row);
@@ -7872,17 +7982,11 @@ function openSheet(fi, day){
     m.innerHTML = `<b>${esc(r.guest)}</b>`
                 + `<em>${when} → ${fmt(Math.min(r.end,DAYS-1))} · ${r.nights}n · ${esc(r.src)}</em>`;
     const end = el("div","rowend");
-    end.appendChild(!isBlock(r) && r.amount ? moneyPill(r, fi) : el("span","pill", `${r.nights}n`));
+    end.appendChild(!isBlock(r) && r.amount ? moneyPill(r, fi, day) : el("span","pill", `${r.nights}n`));
     const x2 = el("button","rowx","✕");
     x2.setAttribute("aria-label", `Cancel ${r.guest}'s booking in ${fl.id}`);
-    let armed = false, t2 = null;
-    x2.onclick = ()=>{
-      if(!armed){ armed = true; x2.classList.add("arm"); x2.textContent = "Cancel?"; haptic(10);
-        t2 = setTimeout(()=>{ armed=false; x2.classList.remove("arm"); x2.textContent="✕"; }, 3000);
-        return; }
-      clearTimeout(t2); haptic(20);
-      cancelWithUndo(r, fi); closeSheet(); refreshScreen();
-    };
+    armConfirm(x2, {rest:"✕", armed:"Cancel?",
+      run:()=>{ cancelWithUndo(r, fi); closeSheet(); refreshScreen(); }});
     /* Small on purpose. Moving a guest is a real thing to want and a rare thing
        to do, so it sits on the guest's own row at the size of a glyph — not a
        pill, not a card, not a third route competing with Book. */
@@ -9051,22 +9155,17 @@ function openInventory(editing){
   wipe.style.cssText = "padding:0 20px";
   const label = `Delete all ${counts.b} test bookings`;
   const bClear = el("button","copybtn", label);
-  let armed = false;
-  bClear.onclick = ()=>{
-    if(!armed){ armed = true; bClear.classList.add("done");
-      bClear.textContent = "Erase everything except the flats?"; haptic(10);
-      setTimeout(()=>{ armed=false; bClear.classList.remove("done");
-        bClear.textContent = label; }, 3500);
-      return; }
-    haptic(24);
-    clearAll();
-    issues.slice().forEach(dropIssue);
-    save(); cacheSave();
-    openInventory();
-    toast("", `<b>Cleared.</b> ${NF} flats kept · ${counts.b} bookings, ${counts.k} blocks, `
-            + `${counts.p} payments and ${counts.i} logged faults removed. `
-            + `The book is empty and ready for real ones.`, null);
-  };
+  armConfirm(bClear, {rest:label, cls:"done", hold:3500,
+    armed:"Erase everything except the flats?",
+    run:()=>{
+      clearAll();
+      issues.slice().forEach(dropIssue);
+      save(); cacheSave();
+      openInventory();
+      toast("", `<b>Cleared.</b> ${NF} flats kept · ${counts.b} bookings, ${counts.k} blocks, `
+              + `${counts.p} payments and ${counts.i} logged faults removed. `
+              + `The book is empty and ready for real ones.`, null);
+    }});
   wipe.appendChild(bClear);
   sheetB.appendChild(wipe);
   const wipeNote = el("p");
@@ -9130,21 +9229,14 @@ function invForm(flat, b){
   };
 
   const del = el("button","invDel","Remove");
-  let armed = false;
   if(!isNew){
     const count = resv.filter(r=>flats[r.fi] && flats[r.fi].id===flat.id).length;
-    del.onclick = ()=>{
-      if(!armed){
-        armed = true; del.classList.add("arm");
-        del.textContent = count ? `Remove + ${count} bkg?` : "Remove?";
-        haptic(10);
-        setTimeout(()=>{ armed=false; del.classList.remove("arm"); del.textContent="Remove"; }, 3000);
-        return;
-      }
-      haptic(24);
-      applyInventory(flats.filter(f=>f.id!==flat.id).map(f=>({...f})));
-      openInventory();
-    };
+    armConfirm(del, {rest:"Remove",
+      armed: count ? `Remove + ${count} bkg?` : "Remove?",
+      run:()=>{
+        applyInventory(flats.filter(f=>f.id!==flat.id).map(f=>({...f})));
+        openInventory();
+      }});
     acts.append(saveBtn, del);
   } else {
     const cancel = el("button","invDel","Cancel");
