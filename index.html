@@ -5263,7 +5263,7 @@ function renderRooms(){
            that prompted the question waiting on the other side of it. */
         const doIt = el("button","bkgo");
         doIt.style.marginTop = "12px";
-        doIt.textContent = k === 1 ? `Move ${B.guest}` : `Move all ${k}`;
+        doIt.textContent = k === 1 ? `Move ${B.guest}` : `Move ${k} guests`;
         doIt.onclick = ()=>{ haptic(12); openMove(mv, d, fi => openBooking(fi, d, n)); };
         box.appendChild(doIt);
       }
