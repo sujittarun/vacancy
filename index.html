@@ -3295,7 +3295,7 @@ function todayBoard(){
   const todo = [];
   for(let d=0; d<=NOW; d++){
     const turns = dayOps(d).turnovers.map(t=>({fi:t.fi, d,
-      meta:`<b>${t.out.guest}</b> out, <b>${t.in.guest}</b> in<em>${fmtL(d)}</em>`, pill:"clean"}));
+      meta:`<b>${esc(t.out.guest)}</b> out, <b>${esc(t.in.guest)}</b> in<em>${fmtL(d)}</em>`, pill:"clean"}));
     if(turns.length) todo.push({
       label:`Clean ${turns.length} flat${turns.length>1?"s":""} ${d===0?"today":"tomorrow"}`,
       note:"check-out and check-in the same day",
@@ -3355,7 +3355,7 @@ function todayBoard(){
     if(!free.length) continue;
     const depth = d===0 ? 25 : 20;
     const rows = free.map(i=>({fi:i, d,
-      meta:`<b>${flats[i].type}</b> · ${flats[i].bshort}<em>free ${runFrom(i,d)} night${runFrom(i,d)>1?"s":""} from ${fmt(d)}</em>`,
+      meta:`<b>${esc(flats[i].type)}</b> · ${esc(flats[i].bshort)}<em>free ${runFrom(i,d)} night${runFrom(i,d)>1?"s":""} from ${fmt(d)}</em>`,
       pill:`−${depth}%`}));
     days.push({d, n:free.length, depth,
       soft: free.length - norm[dateAt(d).getDay()] >= 2,
@@ -3366,10 +3366,10 @@ function todayBoard(){
   }
 
   const orph = orphanNights().filter(o=>o.d <= NOW).map(o=>({fi:o.fi, d:o.d,
-    meta:`<b>${flats[o.fi].type}</b> · ${flats[o.fi].bshort}<em>${fmtL(o.d)} · booked either side</em>`,
+    meta:`<b>${esc(flats[o.fi].type)}</b> · ${esc(flats[o.fi].bshort)}<em>${fmtL(o.d)} · booked either side</em>`,
     pill:"−25%"}));
   const ext = extensionOffers().filter(x=>x.from <= NOW + 1).map(x=>({fi:x.fi, d:x.from,
-    meta:`Offer <b>${x.r.guest}</b> a discounted extra night<em>leaves ${fmt(x.from)} · ${x.nights} night${x.nights>1?"s":""} empty after</em>`,
+    meta:`Offer <b>${esc(x.r.guest)}</b> a discounted extra night<em>leaves ${fmt(x.from)} · ${x.nights} night${x.nights>1?"s":""} empty after</em>`,
     pill: x.orphan ? "closes a gap" : `+${x.nights}n`}));
 
   const extras = [];
@@ -5196,16 +5196,38 @@ function roomTile(fi, day, stay){
   const turn = chg[fi][day] && !open;
   const run = open ? runFrom(fi, day) : 0;
   const b = el("button","tile" + (open ? " free" : blocked ? " oos" : (turn ? " turn" : "")));
+  /* `open` is a verdict on the WHOLE stay the dial is asking about, but the
+     wording under it was scoped to a single date — so with the dial on 3
+     nights, a flat that is genuinely vacant tonight and booked from tomorrow
+     read "Booked", and its aria-label said "not available on Mon 17 Aug" about
+     a night it is free. 9 of 45 flats were in that state on the shipped book.
+     Mid-call a caller drops from three nights to one, the operator glances at a
+     grid still on the 3-night dial, and says no to nine rooms.
+
+     Only `blocked` and `turn` are genuinely per-night facts. So when the dial
+     is above one night, say what is actually known — and say what IS there,
+     because "free 1 of 3" is the answer to the question the caller is about to
+     ask next. "Booked" is kept only where the night really is occupied. */
+  const takenTonight = !!occ[fi][day];
+  const partial = !open && !blocked && !turn && !takenTonight ? runFrom(fi, day) : 0;
   const note = open
     ? (run >= DAYS-day ? `Free ${run}+n` : `Free ${run}n`)
     : blocked ? (resv.find(r=>isBlock(r) && r.fi===fi && day>=r.start && day<r.end)?.reason || "Blocked")
-    : (turn ? "Turnaround" : "Booked");
+    : turn ? "Turnaround"
+    : partial ? `Free ${partial} of ${nights}`
+    : "Booked";
   b.append(el("b",null,fl.id), el("s",null,note));
   if(open && run === 1) b.appendChild(el("i","flag"));   // orphan night
   b.setAttribute("aria-label",
     `${fl.id}, ${fl.type}, ${open ? `free for ${run} night${run>1?"s":""} from`
-      : blocked ? "out of service on" : "not available on"} ${fmtL(day)}`);
-  b.onclick = ()=>{ if(b._peeked){ b._peeked = false; return; } haptic(9); openSheet(fi, day); };
+      : blocked ? "out of service on"
+      : partial ? `free for ${partial} of ${nights} nights from`
+      : "not available on"} ${fmtL(day)}`);
+  b.onclick = ()=>{
+    /* honoured only while it could plausibly belong to the gesture that set
+       it; a stale latch must never cost a real tap */
+    if(b._peeked && performance.now() - b._peeked < 400){ b._peeked = 0; return; }
+    b._peeked = 0; haptic(9); openSheet(fi, day); };
   attachPeek(b, fi, day);
   return b;
 }
@@ -5220,8 +5242,22 @@ function roomTile(fi, day, stay){
 let peekEl = null;
 function attachPeek(btn, fi, day){
   let timer = null, x0 = 0, y0 = 0, fired = false;
-  const cancel = ()=>{ clearTimeout(timer); timer = null;
-    if(fired){ hidePeek(); btn._peeked = true; fired = false; } };
+  /* `_peeked` is a latch that swallows the click a completed peek would
+     otherwise turn into. It was being set on EVERY gesture end — pointerup,
+     pointercancel and pointerleave all routed here — but only a `click` ever
+     cleared it, and pointercancel is precisely the case where no click follows.
+     So peeking a room and then letting the thumb drift onto a neighbour, or
+     dragging to scroll (Chrome takes the touch and fires pointercancel), left
+     the tile armed to eat the next real tap. Once the 330ms timer has fired,
+     `timer` is null and the 10px movement guard above is dead, so the gesture
+     could not be abandoned cleanly either. Nothing re-renders Rooms afterwards,
+     so the flag could sit armed for the length of a call.
+     Only a pointerup produces a click, so only a pointerup arms the latch — and
+     it is time-bounded as well, because a latch that outlives its own gesture
+     is the bug, not the mechanism. */
+  const stop = ()=>{ clearTimeout(timer); timer = null; if(fired){ hidePeek(); fired = false; } };
+  const cancel = ()=>{ stop(); };
+  const finish = ()=>{ if(fired){ btn._peeked = performance.now(); } stop(); };
   btn.addEventListener("pointerdown", e=>{
     if(e.pointerType === "mouse" && e.button !== 0) return;
     x0 = e.clientX; y0 = e.clientY; fired = false;
@@ -5231,7 +5267,8 @@ function attachPeek(btn, fi, day){
     // a scroll is not a hold; let go of the gesture rather than fighting it
     if(timer !== null && Math.hypot(e.clientX - x0, e.clientY - y0) > 10) cancel();
   });
-  ["pointerup","pointercancel","pointerleave"].forEach(ev => btn.addEventListener(ev, cancel));
+  btn.addEventListener("pointerup", finish);
+  ["pointercancel","pointerleave"].forEach(ev => btn.addEventListener(ev, cancel));
 }
 function showPeek(fi, day){
   hidePeek();
@@ -5270,7 +5307,7 @@ function roomRow(fi, day, tail){
   const r = el("button","row");
   r.append(el("div","id",fl.id));
   const m = el("div","meta");
-  m.innerHTML = `<b>${fl.type}</b> · ${fl.bshort}<em>Floor ${fl.floor}${tail ? " · " + tail : ""}</em>`;
+  m.innerHTML = `<b>${esc(fl.type)}</b> · ${esc(fl.bshort)}<em>Floor ${esc(fl.floor)}${tail ? " · " + esc(tail) : ""}</em>`;
   r.appendChild(m);
   const run = runFrom(fi, day);
   r.appendChild(el("span","pill good", run>=DAYS-day ? `${run}+ nights` : `${run} night${run>1?"s":""} free`));
@@ -5445,8 +5482,11 @@ function openGuestMove(b, backTo){
         haptic(10);
         const mv = {frees: b.fi, moves: [{booking: b, ...o}],
                     sameBuilding: o.sameBuilding, sameType: o.sameType, score: o.score};
+        /* deliberate: the move IS the purpose here. Reached from the ⇄ on a
+           guest's own row, not from "free up this flat", so there is no
+           booking that was supposed to follow it. */
         openMove(mv, Math.max(b.start, 0), ()=> backTo(),
-          {title: `Move ${b.guest}`, cta: `Done — back to ${from.id}`});
+          {title: `Move ${b.guest}`, cta: `Done — back to ${from.id}`, deliberate:true});
       };
       card.appendChild(r);
     });
@@ -6755,7 +6795,22 @@ const NIGHT_UNIT = /^(n|nt|nts|night|nights)$/;
 const WEEK_UNIT  = /^(w|wk|wks|week|weeks)$/;
 
 const ord = d => (d%10===1&&d%100!==11)?"st":(d%10===2&&d%100!==12)?"nd":(d%10===3&&d%100!==13)?"rd":"th";
-const nextWeekend = ()=>{ let a=0; while(a<DAYS && dateAt(a).getDay()!==5) a++; return {a, b:Math.min(a+2,DAYS)}; };
+/* "This weekend" means THIS one, and on the two days of the week when weekend
+   enquiries actually arrive the forward scan answered about a different one.
+   Standing on a Saturday the nearest future Friday is six days out; on a Sunday,
+   five. So the app took "anything this weekend?" on a Saturday afternoon and
+   answered about the weekend after — under the label the caller had used, with
+   tonight and tomorrow, the nights they meant, never counted. It is one of the
+   five default chips, so it is a one-tap route to a wrong answer.
+   Saturday: tonight and tomorrow night. Sunday: tonight. Otherwise scan
+   forward to Friday as before. */
+const nextWeekend = ()=>{
+  const dow = dateAt(0).getDay();
+  if(dow === 6) return {a:0, b:Math.min(2, DAYS)};   // Saturday — Sat + Sun nights
+  if(dow === 0) return {a:0, b:Math.min(1, DAYS)};   // Sunday   — tonight
+  let a=0; while(a<DAYS && dateAt(a).getDay()!==5) a++;
+  return {a, b:Math.min(a+2,DAYS)};
+};
 const numOf = t => /^\d{1,2}$/.test(t) ? +t : (NUMWORDS[t] ?? null);
 
 /* Offset of the next calendar date matching dom (and month, if given) that is
@@ -6885,7 +6940,16 @@ function parseQuery(q){
     if(m !== null){ type = `${m} BHK`; tk.splice(i, two ? 2 : 1); }
     else if(t === "studio"){ type = "Studio"; tk.splice(i,1); }
   }
-  BUILDINGS.forEach(b=>{
+  /* buildingsOf(), not BUILDINGS. BUILDINGS is the boot-time SEED — nothing
+     rebuilds it when the operator adds a building in the inventory editor, so
+     "anything in kondapur tonight" matched nothing, the word was dropped on the
+     floor, and the answer silently covered the whole portfolio. The heard row
+     showed no building chip either, so the one affordance that could have
+     revealed the lost filter showed nothing rather than showing it was missing.
+     It ran the other way too: a seeded building whose flats had all been
+     deleted still matched, and filtered the pool to nothing. The flat-number
+     index two dozen lines above already derives from live `flats`. */
+  buildingsOf().forEach(b=>{
     const words = b.name.toLowerCase().split(" ");
     for(let i = 0; i < tk.length; i++){
       if(tk[i] === words[0] || tk[i] === b.code.toLowerCase()){
@@ -6941,8 +7005,20 @@ function parseQuery(q){
                : first.label;
 
   start = Math.max(0, Math.min(DAYS - 1, start));
+  /* WHAT THE CALLER ACTUALLY ASKED FOR, kept separate from what we can answer.
+     `beyond` only ever tested the START. A request that begins inside the book
+     and ends outside it was clamped here and then rendered as an ordinary
+     answer with no flag at all — so "anything from 10 Oct to 25 Oct" (15
+     nights) came back "Yes — 5 rooms free for all 9 nights", and the two
+     "heard" pills contradicted each other on screen: the range said 25 Oct, the
+     night count said 9. The operator says yes down the phone for a stay the app
+     never looked at, and Copy for WhatsApp sends the caller a shortened range
+     as the answer to their question. The refusal branch already exists for a
+     start past the horizon; only the tail was silent. */
+  const asked = n;
   n = Math.max(1, Math.min(n, DAYS - start));
-  return {start, n, how:label, type, bldg, flat, beyond};
+  const clipped = !beyond && n < asked;
+  return {start, n, asked, clipped, how:label, type, bldg, flat, beyond};
 }
 
 function renderAsk(focus){
@@ -7105,16 +7181,27 @@ function renderAsk(focus){
           ? `<b class="y">${esc(flats[p.flat].id)}</b> is free for ${nightsTxt}, ${when}.`
           : (()=>{ const b2 = resv.find(r => r.fi===p.flat && r.start < a+p.n && r.end > a);
               return `<b class="n">${esc(flats[p.flat].id)}</b> is not free ${when}`
-                + (b2 ? ` — ${esc(isBlock(b2) ? (b2.reason || "out of service") : b2.guest)} until ${fmt(Math.min(b2.end,DAYS-1))}.` : "."); })())
+                + (b2 ? ` — ${esc(isBlock(b2) ? (b2.reason || "out of service") : b2.guest)} until ${fmt(b2.end)}.` : "."); })())
       : free.length
       ? `Yes — <b class="y">${free.length} room${free.length>1?"s":""}</b> free for ${nightsTxt}, ${when}.`
       : `<b class="n">Nothing</b> covers ${nightsTxt}, ${when}.`;
+    /* Say it BEFORE the answer, not after. A caller who asked for 15 nights is
+       being answered about 9, and the operator has to know that before reading
+       the "Yes" out loud. */
+    if(p.clipped)
+      ans.innerHTML = `<b class="n">${fmtL(a)} → ${fmtL(a + p.asked)}</b> runs past `
+        + `<b class="hi-now">${fmtL(DAYS-1)}</b>, the furthest this book goes. `
+        + `Of the first ${p.n} night${p.n>1?"s":""}: ` + ans.innerHTML;
     const heard = el("div","heard");
     if(p.flat != null) heard.append(el("span","pill now", flats[p.flat].id));
     heard.append(el("span","pill" + (p.flat != null ? "" : " now"), p.how));
-    heard.append(el("span","pill", `${p.n} night${p.n>1?"s":""}`));
+    /* and the pill echoes what was HEARD, not what survived the clamp — two
+       pills that disagree about the same request is worse than either alone */
+    heard.append(el("span", "pill" + (p.clipped ? " warn" : ""),
+      p.clipped ? `${p.n} of ${p.asked} nights` : `${p.n} night${p.n>1?"s":""}`));
     if(p.type) heard.append(el("span","pill", p.type));
-    if(p.bldg) heard.append(el("span","pill", BUILDINGS.find(z=>z.code===p.bldg).name));
+    if(p.bldg){ const bz = buildingsOf().find(z=>z.code===p.bldg);
+      heard.append(el("span","pill", bz ? bz.name : p.bldg)); }
     ansWrap.append(ans, heard);
 
     if(free.length){
@@ -7218,7 +7305,7 @@ function renderAsk(focus){
           const row = el("button","row");
           row.append(el("div","id", fl.id));
           const m = el("div","meta");
-          m.innerHTML = `<b>${fl.type}</b> · ${fl.bshort}`
+          m.innerHTML = `<b>${esc(fl.type)}</b> · ${esc(fl.bshort)}`
             + `<em>${fmt(a)} → ${fmt(a + r.n)} · ${r.n} of the ${p.n} nights</em>`;
           row.append(m, el("span","pill good", `${r.n} nt`));
           row.onclick = ()=>{ haptic(9); openSheet(r.fi, a); };
@@ -7695,13 +7782,24 @@ function openIssueForm(fi, day){
     const list = SYMPTOMS[fault] || [];
     sRow.hidden = !list.length;
     nCapR.textContent = list.length ? "tap one, or type" : "";
+    /* Both sides lowercased. Only one entry in the SYMPTOMS table carries
+       capitals — "MCB tripping" — and it was being compared against a
+       lowercased note, so `on` was permanently false for it: the toggle-off
+       branch was unreachable and the chip never came back pressed on a repaint.
+       Tapped by mistake, the only way out was selecting the note field and
+       clearing the text by hand, which is exactly the fiddly one-handed typing
+       this tap-based form exists to avoid. On the repaint path it lied the
+       other way — nothing looked selected while the note still held the text,
+       so a second symptom appended to the first rather than replacing it.
+       Any symptom with a capital or a punctuation mark would have done it. */
+    const same = (a,b) => a.trim().toLowerCase() === b.trim().toLowerCase();
     list.forEach(s=>{
       const b = el("button",null,s);
-      b.setAttribute("aria-pressed", note.value.trim().toLowerCase() === s);
+      b.setAttribute("aria-pressed", same(note.value, s));
       b.onclick = ()=>{
-        const on = note.value.trim().toLowerCase() === s;
+        const on = same(note.value, s);
         note.value = on ? "" : s; haptic(8);
-        [...sRow.children].forEach(c=>c.setAttribute("aria-pressed", !on && c.textContent === s));
+        [...sRow.children].forEach(c=>c.setAttribute("aria-pressed", !on && same(c.textContent, s)));
       };
       sRow.appendChild(b);
     });
@@ -7908,6 +8006,14 @@ function nextFree(fi, from){
   return null;
 }
 
+/* DAYS-1 is the last sellable NIGHT. A check-out is the morning AFTER a night,
+   so a legal check-out index runs to DAYS and past it, and clamping one to
+   DAYS-1 prints a date the guest is still occupying. Measured: LP-101's
+   C. Varghese ends on day 68 and the room sheet said "in until 18 Oct" against
+   a real check-out of 24 Oct — six days early, on the app's own wrong-row
+   failure mode dressed as a date. It also made two screens contradict each
+   other about a booking just taken: the form said "Leaves 19 Oct", the sheet
+   said "in until 18 Oct". fmt() handles any index; the clamp bought nothing. */
 function openSheet(fi, day){
   const fl = flats[fi];
   roomHead(fi);
@@ -7939,8 +8045,8 @@ function openSheet(fi, day){
     const why = el("div","actWhy");
     why.innerHTML = busy
       ? (isBlock(busy)
-          ? `<b>${esc(busy.reason || "Out of service")}</b> until ${esc(fmt(Math.min(busy.end, DAYS-1)))}`
-          : `<b>${esc(busy.guest)}</b> is in until ${esc(fmt(Math.min(busy.end, DAYS-1)))}`)
+          ? `<b>${esc(busy.reason || "Out of service")}</b> until ${esc(fmt(busy.end))}`
+          : `<b>${esc(busy.guest)}</b> is in until ${esc(fmt(busy.end))}`)
       : `Not free for those nights`;
     act.append(why);
     if(nxt){
@@ -7980,7 +8086,7 @@ function openSheet(fi, day){
     const when = Math.max(r.start,0) === 0 ? "Now" : fmt(Math.max(r.start,0));
     const m = el("div","meta");
     m.innerHTML = `<b>${esc(r.guest)}</b>`
-                + `<em>${when} → ${fmt(Math.min(r.end,DAYS-1))} · ${r.nights}n · ${esc(r.src)}</em>`;
+                + `<em>${when} → ${fmt(r.end)} · ${r.nights}n · ${esc(r.src)}</em>`;
     const end = el("div","rowend");
     end.appendChild(!isBlock(r) && r.amount ? moneyPill(r, fi, day) : el("span","pill", `${r.nights}n`));
     const x2 = el("button","rowx","✕");
@@ -8128,6 +8234,24 @@ function openMove(mv, askDay, onFreed, opts){
 
   const abandoned = ()=>{
     if(booked || !done.length) return;
+    /* A move started from a guest's own row is its own reason. `booked` is set
+       only inside the go button's handler, so it was the sole evidence the
+       moves had a purpose — and openGuestMove reuses this same stage for a move
+       whose purpose IS the move. Dismissing that sheet by any of its four
+       ordinary routes (swipe, scrim, tab switch, the sheet's own ✕, which calls
+       closeSheet directly) produced a warning saying "A. Fernandes was moved
+       but TT-101 was never booked — so nobody was moved for a reason", which is
+       false, with a button that reverts a correct move. PRODUCT.md says outright
+       that a guest may be moved for no reason but the operator's and that this
+       glyph exists for exactly that. Confirm it instead. */
+    if(opts.deliberate){
+      const k = done.length;
+      toast("", k === 1
+        ? `<b>${esc(done[0].c.m.booking.guest)}</b> is now in `
+          + `${esc(flats[done[0].booking.fi].id)}.`
+        : `<b>${k} guests moved.</b>`, null);
+      return;
+    }
     const k = done.length, names = done.map(d => d.c.m.booking.guest);
     toast("warn", `<b>${k === 1 ? esc(names[0]) + " was moved" : k + " guests were moved"}</b> `
       + `but ${esc(from.id)} was never booked — so nobody was moved for a reason.`,
@@ -9069,14 +9193,14 @@ function openOps(kind, d){
     row.append(el("div","id", fl.id));
     const m = el("div","meta");
     if(kind === "arrivals"){
-      m.innerHTML = `<b>${item.guest}</b> · ${item.nights} night${item.nights>1?"s":""}<em>${fl.type} · ${fl.bshort} · out ${fmt(Math.min(item.end,DAYS-1))}</em>`;
+      m.innerHTML = `<b>${esc(item.guest)}</b> · ${item.nights} night${item.nights>1?"s":""}<em>${esc(fl.type)} · ${esc(fl.bshort)} · out ${fmt(item.end)}</em>`;
       row.append(m, el("span","pill", item.src));
     } else if(kind === "departures"){
-      m.innerHTML = `<b>${item.guest}</b> · stayed ${item.nights} night${item.nights>1?"s":""}<em>${fl.type} · ${fl.bshort}</em>`;
+      m.innerHTML = `<b>${esc(item.guest)}</b> · stayed ${item.nights} night${item.nights>1?"s":""}<em>${esc(fl.type)} · ${esc(fl.bshort)}</em>`;
       const next = runFrom(fi, d);
       row.append(m, el("span", next ? "pill good" : "pill", next ? `${next} nt open` : "re-let same day"));
     } else {
-      m.innerHTML = `<b>${item.out.guest}</b> out → <b>${item.in.guest}</b> in<em>${fl.type} · ${fl.bshort} · ${item.in.nights} night${item.in.nights>1?"s":""}</em>`;
+      m.innerHTML = `<b>${esc(item.out.guest)}</b> out → <b>${esc(item.in.guest)}</b> in<em>${esc(fl.type)} · ${esc(fl.bshort)} · ${item.in.nights} night${item.in.nights>1?"s":""}</em>`;
       row.append(m, el("span","pill warn","clean today"));
     }
     row.onclick = ()=>{ haptic(9); openSheet(fi, d); };
@@ -9380,6 +9504,10 @@ function sheetWipe(){
 }
 function sheetOwn(teardown){ sheetTeardown = teardown || null; }
 function closeSheet(){
+  /* Belt and braces against the drag above: an inline transform beats the class
+     that hides the sheet, so closing has to clear it or the sheet stays on
+     screen with .on removed — visible, on top, and eating the tab bar's taps. */
+  sheet.style.transition = ""; sheet.style.transform = "";
   sheet.classList.remove("on"); scrim.classList.remove("on");
   const t = sheetTeardown; sheetTeardown = null; if(t) t();
 }
@@ -9395,13 +9523,28 @@ document.addEventListener("keydown", e=>{ if(e.key==="Escape") closeSheet(); });
     dy = Math.max(0,(e.touches?e.touches[0]:e).clientY - y0);
     sheet.style.transform = `translateY(${dy}px)`;
     if(window.innerWidth>=720) sheet.style.transform = `translate(-50%,${dy}px)`; };
-  const end   = ()=>{ if(y0===null) return;
+  /* Clear the inline styles BEFORE the y0 guard, not after it. This drag is the
+     only gesture in the file with no cancel path — attachStripScrub,
+     pull-to-refresh and the Business deck swipe all bind touchcancel and clear
+     their transforms there. An interrupted drag (incoming call, notification
+     shade, app switch, a second finger) left translateY(70px) and
+     transition:none written onto the sheet, and those inline styles override
+     the class that shows and hides it. Measured at 375×812: after closeSheet()
+     the sheet had lost its .on class but still sat at y=248 with z-index 51,
+     and hit-testing the centre of a tab bar button returned sheet content. The
+     tab bar was unreachable, and the sheet's own ✕ was a no-op because
+     closeSheet had already run.
+     Clearing unconditionally means even a stray cancel with no drag in progress
+     leaves the sheet in a known state. */
+  const end   = ()=>{
     sheet.style.transition=""; sheet.style.transform="";
+    if(y0===null) return;
     if(dy>90){ haptic(9); closeSheet(); }
-    y0=null; };
+    y0=null; dy=0; };
   grab.addEventListener("touchstart",start,{passive:true});
   grab.addEventListener("touchmove",move,{passive:true});
   grab.addEventListener("touchend",end,{passive:true});
+  grab.addEventListener("touchcancel",end,{passive:true});
   grab.addEventListener("mousedown",e=>{ start(e);
     const mm=ev=>move(ev), mu=()=>{ end(); removeEventListener("mousemove",mm); removeEventListener("mouseup",mu); };
     addEventListener("mousemove",mm); addEventListener("mouseup",mu); });
