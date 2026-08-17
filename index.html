@@ -5255,6 +5255,17 @@ function renderRooms(){
             + `<b style="color:var(--txt)">${k} guests</b> out of ${from.id}, starting with `
             + `${esc(B.guest)} to ${to.id}${mv.sameType ? ", same size" : ""}.`;
         box.appendChild(p);
+        /* And a way to actually do it. This card named the exact move and then
+           left you to go and find it — Rooms, the flat, the guest's row, the ⇄,
+           the destination: five steps to perform the one thing the sentence had
+           already worked out. The Ask tab has offered the move as a tap since it
+           was written; the same stage, opened the same way, with the booking
+           that prompted the question waiting on the other side of it. */
+        const doIt = el("button","bkgo");
+        doIt.style.marginTop = "12px";
+        doIt.textContent = k === 1 ? `Move ${B.guest}` : `Move all ${k}`;
+        doIt.onclick = ()=>{ haptic(12); openMove(mv, d, fi => openBooking(fi, d, n)); };
+        box.appendChild(doIt);
       }
       if(soon >= 0){
         const sc = countFreeFor(soon, n);
