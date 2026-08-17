@@ -97,6 +97,30 @@
   --rim-sunk:var(--sunk-edge);
   --rim-hair:var(--line);
 
+  /* ── MATERIAL OPTICS — the one place glass is switched on or off ──────────
+     Three depths, and every surface in the app reads its filter from one of
+     them. Change a line here and every instance of that depth changes; there
+     are no per-component blur literals left to hunt.
+
+       --tint-0  data. The 45 room tiles, the calendar cells, the night strip.
+                 NEVER glass in either theme: a counted number has to stay
+                 sharp, and 45 backdrop-filters is a frame-rate bill for
+                 nothing. Always `none`.
+       --tint-1  panes and controls — cards, chips, fields, troughs.
+       --tint-2  floating chrome — the sheet, both bars, a toast, the callout.
+
+     DARK IS FLAT ON PURPOSE. --tint-1 is `none` here, so a card in dark is a
+     dark fill on a dark ground and nothing else: that is the near-black the
+     app is supposed to look like, and blurring a near-black ground buys
+     nothing you can see anyway — it only costs a compositor pass per pane.
+     --tint-2 keeps its blur because the sheet and the bars are the only
+     surfaces with genuinely busy, moving content sliding underneath them, and
+     that is what separation is for. To make dark fully flat, set --tint-2 to
+     none as well; to bring the panes back, give --tint-1 var(--blur-1). */
+  --tint-0:none;
+  --tint-1:none;
+  --tint-2:var(--blur-2);
+
   --bg:#08090C; --surface:#101219; --surface-2:#181B24; --surface-3:#1F2330;
   --line:rgba(255,255,255,.08); --line-2:rgba(255,255,255,.14);
   /* --txt-3 was #5C6579 and failed AA on every ground it is used on — 3.41 on
@@ -310,8 +334,8 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .topbar{
   position:relative;z-index:30;flex:0 0 auto;
   padding:calc(env(safe-area-inset-top,0px) + 14px) 20px 12px;
-  background:var(--bar);backdrop-filter:blur(20px) saturate(160%);
-  -webkit-backdrop-filter:blur(20px) saturate(160%);
+  background:var(--bar);backdrop-filter:var(--tint-2);
+  -webkit-backdrop-filter:var(--tint-2);
   border-bottom:1px solid var(--line);
   display:flex;flex-direction:column;align-items:stretch;gap:0;
 }
@@ -387,22 +411,31 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .screen.on > *:nth-child(3){animation-delay:.06s}
 .screen.on > *:nth-child(4){animation-delay:.09s}
 .screen.on > *:nth-child(5){animation-delay:.12s}
+/* Matched to the rule it is replacing, :not(.seen) and all. A media query adds
+   no specificity of its own, so `.screen.on > *` (0,2,0) never beat
+   `.screen.on:not(.seen) > *` (0,3,0): someone who asked their phone for no
+   motion got the full staggered rise anyway, and then fade fired as a SECOND
+   unwanted animation when .seen landed at 480ms. */
 @media (prefers-reduced-motion:reduce){
-  .screen.on > *{animation:fade .2s backwards}
+  .screen.on:not(.seen) > *{animation:fade .2s backwards}
   @keyframes fade{from{opacity:0}}
 }
 
 .tabbar{
   position:absolute;left:14px;right:14px;bottom:calc(12px + var(--safe-b));z-index:40;
   display:grid;grid-template-columns:repeat(4,1fr);gap:2px;padding:4px;
-  background:var(--bar);backdrop-filter:blur(24px) saturate(180%);
-  -webkit-backdrop-filter:blur(24px) saturate(180%);
+  background:var(--bar);backdrop-filter:var(--tint-2);
+  -webkit-backdrop-filter:var(--tint-2);
   border:1px solid var(--line-2);border-radius:var(--r-lg);box-shadow:var(--shadow);
 }
 .tabbar button{
   padding:9px 4px 8px;border-radius:var(--r-md);display:flex;flex-direction:column;
   align-items:center;gap:3px;color:var(--txt-3);font-size:10.5px;font-weight:600;
-  letter-spacing:.01em;transition:color .2s, background .3s var(--out);
+  /* transform is in the list because :active scales this to .95 and it was the
+     only property not being transitioned — so the most-tapped control in a
+     four-tab app was the one control that snapped instead of springing. */
+  letter-spacing:.01em;
+  transition:color .2s, background .3s var(--out), transform .35s var(--spring);
 }
 .tabbar button .ic{width:19px;height:19px;display:block}
 .tabbar button[aria-selected="true"]{color:var(--txt);background:var(--surface-2)}
@@ -446,7 +479,12 @@ button{background:none;border:0;padding:0;cursor:pointer}
   background:var(--now);clip-path:polygon(100% 0,0 0,100% 100%);border-top-right-radius:9px}
 /* an orphan night — free, but wedged between two bookings, so hard to sell */
 .tile .flag{position:absolute;top:7px;right:7px;width:6px;height:6px;border-radius:50%;
-  background:var(--now);box-shadow:0 0 0 2px var(--free)}
+  /* The ring was 2px of var(--free) — the same fill as the tile underneath it,
+     so the dot had nothing to separate FROM and measured 1.74:1 in dark. This
+     is the whole signal that a free night is wedged between two bookings and
+     will not sell at rate, on a 6px dot. A hairline of the tile's own INK
+     first, then the fill, is the same trick the boundary states already use. */
+  background:var(--now);box-shadow:0 0 0 1px var(--free-ink), 0 0 0 3px var(--free)}
 
 /* stay-length dial — reshapes the whole fortnight */
 .seg{position:relative;display:grid;grid-auto-flow:column;grid-auto-columns:1fr;
@@ -695,7 +733,12 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .act.good .mark{background:var(--now)}
 .act .txt{flex:1;min-width:0}
 .act > .pill{flex:0 0 auto;margin-top:2px}
-.act .txt b{display:block;font-size:13.5px;font-weight:620;letter-spacing:-.012em;line-height:1.35;\n  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* The `\n` that used to sit before white-space was a literal backslash-n in the
+   stylesheet, not a newline. CSS reads it as an escape, the declaration it
+   started is discarded, and the single-line ellipsis this rule exists for could
+   never fire. */
+.act .txt b{display:block;font-size:13.5px;font-weight:620;letter-spacing:-.012em;line-height:1.35;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .act .txt s{text-decoration:none;font-size:11.5px;color:var(--txt-3);
   line-height:1.4;margin-top:3px;display:-webkit-box;-webkit-line-clamp:2;
   -webkit-box-orient:vertical;overflow:hidden}
@@ -810,8 +853,8 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .hud{display:none}
 .hud.on{position:sticky;top:0;z-index:6;display:flex;align-items:center;gap:10px;
   margin:0 2px 12px;padding:11px 14px;border-radius:var(--r-md);
-  background:var(--bar);backdrop-filter:blur(20px) saturate(160%);
-  -webkit-backdrop-filter:blur(20px) saturate(160%);
+  background:var(--bar);backdrop-filter:var(--tint-2);
+  -webkit-backdrop-filter:var(--tint-2);
   border:1px solid var(--line-2);box-shadow:var(--shadow);pointer-events:none;
   animation:hudIn .3s var(--out)}
 @keyframes hudIn{from{opacity:0;transform:translateY(-8px)}}
@@ -841,7 +884,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .field button.mic{width:38px;height:38px;border-radius:var(--r-sm);background:var(--surface-2);
   border:1px solid var(--line);display:grid;place-items:center;color:var(--txt-2);flex:0 0 auto;
   transition:transform .38s var(--spring), background .2s, color .2s}
-.field.hear button.mic{background:var(--now);color:#12100c;border-color:transparent;
+.field.hear button.mic{background:var(--now);color:var(--ink-on);border-color:transparent;
   animation:pulse 1.5s ease-in-out infinite}
 @keyframes pulse{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--now) 55%,transparent)}
   60%{box-shadow:0 0 0 9px transparent}}
@@ -984,7 +1027,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
   display:flex;flex-direction:column;padding:9px 11px;
   border-radius:var(--r-sm);width:max-content;max-width:min(268px,100%);
   background-color:var(--g3);background-image:var(--sheen);
-  -webkit-backdrop-filter:var(--blur-3); backdrop-filter:var(--blur-3);
+  -webkit-backdrop-filter:var(--tint-2); backdrop-filter:var(--tint-2);
   border:1px solid var(--g-edge-2);
   box-shadow:var(--lift-2), var(--g-inner);
   opacity:0;pointer-events:none;
@@ -1042,7 +1085,10 @@ button{background:none;border:0;padding:0;cursor:pointer}
    on a data cell already means something here */
 .vbar{transition:transform .28s var(--spring), opacity .2s}
 button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
-.vwrap.telling .vbar{opacity:.45}
+/* :not(.on), because without it this rule (0,3,0) out-specifies .vbar.on (0,2,0)
+   and touching a chart dimmed THE BAR YOU TOUCHED — only the 3px lift survived.
+   The gesture said "tell me about this one" and the app faded it. Six charts. */
+.vwrap.telling .vbar:not(.on){opacity:.45}
 .vbar.on{opacity:1;transform:translateY(-3px)}
 @media (prefers-reduced-motion:reduce){ .vbar,.vsay{transition:none} }
 
@@ -1869,6 +1915,11 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
      tile that contrast() was there to rescue. So it goes, and brightness
      alone does the lifting: it cannot darken, because it cannot go below 1. */
   --lg-tint:blur(3px) saturate(170%) brightness(1.08);
+  /* Light's half of the optics switch. Same three depths as :root; light is the
+     theme that is actually made of glass, so tint-1 and tint-2 carry the liquid
+     recipes rather than none. */
+  --tint-1:var(--lg-tint);
+  --tint-2:var(--lg-sheet-tint);
   /* The SHEET's own version. It needs a stronger tint and a heavier fill than a
      button does, because a button sits on the already-normalised sheet while
      the sheet sits on raw page — a near-black FREE tile one moment and white
@@ -1888,7 +1939,18 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
      with no contrast term leaves it at 202–222: deeper, the ground's colour
      still in it, and --txt-3 still at 6.87 over the worst spot. Same lesson as
      the cards two commits ago — on a light theme the tint must only lift. */
-  --lg-sheet-tint:blur(6px) saturate(180%) brightness(1.06);
+  /* saturate() was 180% and it is what made the drawer read as a DIFFERENT
+     COLOUR from the page it opens over. The room grid behind it is near-black
+     tiles and amber dots on a cool ground; at 6px of blur those are still
+     distinct shapes, and boosting their saturation by 80% pulled their warmth
+     straight through — so the sheet came out a muddy warm grey while the page
+     stayed cool blue. The page's own material does not amplify anything, and a
+     drawer that opens over a surface should belong to it.
+     12px so the tiles read as a soft field rather than as blotches with edges,
+     and 105% so the colour that comes through is the colour that is there. The
+     sheet is still transparent — you can see the room move behind it — it just
+     no longer repaints it in a different hue on the way. */
+  --lg-sheet-tint:blur(12px) saturate(105%) brightness(1.06);
   /* Two depths, two strengths, and the difference is what each one sits ON.
      The sheet and the bars sit on RAW page — a near-black FREE tile one moment
      and white ground the next — so they carry the strong tint. Everything
@@ -2045,7 +2107,7 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 .ops-row{
   background-color:var(--g1);
   background-image:var(--sheen-soft);
-  -webkit-backdrop-filter:var(--blur-1); backdrop-filter:var(--blur-1);
+  -webkit-backdrop-filter:var(--tint-1); backdrop-filter:var(--tint-1);
   border-color:var(--g-edge);
   box-shadow:var(--lift), var(--g-inner);
 }
@@ -2054,10 +2116,15 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 
 /* ── L2 · chrome ─────────────────────────────────────────────────────────────
    The layer you reach for. Stronger blur, clearer edge, the full sweep.     */
+/* .tabseg is deliberately NOT in this list. It has no background of its own and
+   it lives INSIDE .topbar, which is already filtering — so its own filter
+   re-blurred the bar's already-composited backdrop at 26px and painted a
+   visibly different band across one tab of four, with a seam at the top and
+   the bottom. A backdrop-filter on a transparent element nested inside another
+   filtered element is always this: a second pass over a finished image. */
 .topbar,
-.tabbar,
-.tabseg{
-  -webkit-backdrop-filter:var(--blur-2); backdrop-filter:var(--blur-2);
+.tabbar{
+  -webkit-backdrop-filter:var(--tint-2); backdrop-filter:var(--tint-2);
 }
 .tabbar{
   background-color:var(--g-tab);
@@ -2087,7 +2154,7 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 .sheet{
   background-color:var(--g3);
   background-image:var(--sheen);
-  -webkit-backdrop-filter:var(--blur-3); backdrop-filter:var(--blur-3);
+  -webkit-backdrop-filter:var(--tint-2); backdrop-filter:var(--tint-2);
   border-top:1px solid var(--g-edge-2);
   border-radius:var(--r-xl) var(--r-xl) 0 0;
 }
@@ -2233,7 +2300,7 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 :root[data-theme="light"] .bookbtn,
 :root[data-theme="light"] .bigAct{
   background-color:var(--s-ink);
-  -webkit-backdrop-filter:blur(3px) saturate(170%); backdrop-filter:blur(3px) saturate(170%);
+  -webkit-backdrop-filter:var(--tint-1); backdrop-filter:var(--tint-1);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.22),
              inset 0 -1px 0 rgba(0,0,0,.34),
              0 3px 9px -3px rgba(13,16,23,.32);
@@ -2323,7 +2390,7 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 :root[data-theme="light"] .nudgeBtn:not(.yes),
 :root[data-theme="light"] .pill:not(.good):not(.now):not(.warn):not(.live):not(.due),
 :root[data-theme="light"] .field button.slot,
-:root[data-theme="light"] .field button.mic:not(.on),
+:root[data-theme="light"] .field:not(.hear) button.mic,
 :root[data-theme="light"] .wallmove,
 /* The last opaque neutrals on the light screens, found by sweeping for any fill
    at alpha 1 rather than by reading selectors — which is the only way they were
@@ -2347,7 +2414,7 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 .peek{
   background-color:var(--g3);
   background-image:var(--sheen);
-  -webkit-backdrop-filter:var(--blur-3); backdrop-filter:var(--blur-3);
+  -webkit-backdrop-filter:var(--tint-2); backdrop-filter:var(--tint-2);
   border-color:var(--g-edge);
   box-shadow:var(--lift-2), var(--g-inner);
 }
@@ -2390,10 +2457,10 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 .nudgeBtn:not(.yes),
 .pill:not(.good):not(.now):not(.warn):not(.live):not(.due),
 .field button.slot,
-.field button.mic:not(.on),
+.field:not(.hear) button.mic,
 .wallmove{
   background-color:var(--g-sunk);
-  -webkit-backdrop-filter:var(--blur-1); backdrop-filter:var(--blur-1);
+  -webkit-backdrop-filter:var(--tint-1); backdrop-filter:var(--tint-1);
   border-color:var(--sunk-edge);
   /* the cut edge: a shadow along the TOP inside, which is what tells the eye a
      thing is set into a surface rather than laid on it. Without it a trough is
@@ -2438,7 +2505,7 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 .advert,
 .dcell.urgent{
   background-image:var(--sheen-soft);
-  -webkit-backdrop-filter:var(--blur-1); backdrop-filter:var(--blur-1);
+  -webkit-backdrop-filter:var(--tint-1); backdrop-filter:var(--tint-1);
   box-shadow:var(--lift), var(--g-inner);
 }
 

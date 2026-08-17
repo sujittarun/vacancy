@@ -16,6 +16,17 @@
 /** Parse any computed colour into [r,g,b,a] with r,g,b in 0–255. */
 export function parse(css) {
   if (!css || css === "transparent") return [0, 0, 0, 0];
+  css = css.trim();
+  /* Hex, because token VALUES are hex even though computed colours never are —
+     and sanity() reads a token. Without this the digit regex below picked "0"
+     and "1017" out of #0D1017, compared them to a real colour, and reported the
+     theme settled on the strength of it. */
+  const hex = css.match(/^#([0-9a-f]{3,8})$/i)?.[1];
+  if (hex) {
+    const w = hex.length <= 4 ? 1 : 2;                 // #rgb / #rgba vs #rrggbb / #rrggbbaa
+    const at = i => parseInt(hex.slice(i * w, i * w + w).repeat(3 - w), 16);
+    return [at(0), at(1), at(2), hex.length === 4 || hex.length === 8 ? at(3) / 255 : 1];
+  }
   const n = css.match(/[\d.]+(?:e[-+]?\d+)?/gi)?.map(Number);
   if (!n) return null;
   // color(srgb r g b [/ a]) — components are 0–1 and there is no leading number
@@ -58,8 +69,17 @@ export async function setThemeAndSettle(t) {
     window.setTheme(t);
     await wait(520);                       // longer than the transition
   }
-  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  await frames();
 }
+
+/* Two frames, but never a hang: requestAnimationFrame does not fire at all in a
+   backgrounded tab, so an audit that awaits it simply never returns — which
+   looks exactly like a stuck page and wasted three round-trips proving it was
+   not. Whichever lands first wins. */
+const frames = () => Promise.race([
+  new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))),
+  wait(120),
+]);
 
 /* A run that cannot prove which theme it measured is a run to throw away. This
    compares a live element's ink against the theme's own token; if they disagree
@@ -89,13 +109,14 @@ export function groundUnder(el) {
 }
 
 /** Visit every screen and a few sheets, calling fn(surfaceName) on each. */
-export async function walk(fn) {
+export async function walk(fn, { sheets: withSheets = true } = {}) {
   const tabs = [...document.querySelectorAll(".tabbar button")];
   for (let i = 0; i < tabs.length; i++) {
     tabs[i].click(); await wait(220);
     await fn(tabs[i].textContent.trim());
   }
   tabs[0].click(); await wait(150);
+  if (!withSheets) return;
   const sheets = [
     ["inventory", () => openInventory()],
     ["account",   () => openAccount()],
@@ -122,10 +143,10 @@ async function dismiss() {
 /* ── the two audits ──────────────────────────────────────────────────────── */
 
 /** Every rendered text node, measured against what is actually behind it. */
-export async function contrast() {
+export async function contrast(opts = {}) {
   const fails = [];
   let checked = 0;
-  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  await frames();
   const check = sanity();
   await walk(where => {
     for (const el of document.querySelectorAll("*")) {
@@ -148,7 +169,7 @@ export async function contrast() {
         el: (el.className || el.tagName).toString().slice(0, 30),
       });
     }
-  });
+  }, opts);
   return {
     ...check,                       // theme + whether it was settled enough to believe
     checked, failures: fails.length,
@@ -175,7 +196,7 @@ const KIND = el => {
 };
 
 /** One painted fill per kind, or the audit tells you which kinds drifted. */
-export async function density() {
+export async function density(opts = {}) {
   const seen = {};
   await walk(() => {
     for (const el of document.querySelectorAll("*")) {
@@ -187,7 +208,7 @@ export async function density() {
       ((seen[kind] ||= {})[sig] ||= 0);
       seen[kind][sig]++;
     }
-  });
+  }, opts);
   const out = {};
   for (const [kind, sigs] of Object.entries(seen)) {
     const rows = Object.entries(sigs).sort((a, b) => b[1] - a[1]);
