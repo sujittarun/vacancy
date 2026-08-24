@@ -851,18 +851,28 @@ button{background:none;border:0;padding:0;cursor:pointer}
   transition:height .34s var(--out);
 }
 .calscroll.lean{height:112px}
-/* Both edges fade. A bounded trough always slices whatever row straddles its
-   boundary, and a half-cut row of numerals reads as breakage rather than as
-   "there is more here" — especially leaned, where a sliced row sits at the top
-   AND the bottom. The fade says the same thing the slice was trying to and
-   looks like it was meant. 16px: enough to soften a 49px cell, not enough to
-   hide a date you might be reading. */
-.calscroll{
-  -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 16px,
-                     #000 calc(100% - 16px),transparent 100%);
-  mask-image:linear-gradient(to bottom,transparent 0,#000 16px,
-             #000 calc(100% - 16px),transparent 100%);
+/* ── A FADE MEANS "THERE IS MORE THIS WAY", so it may only appear where there
+   IS more. Faded unconditionally, the top edge dimmed the very first row of
+   dates while sitting at scrollTop 0 with nothing above it — the fade was not
+   softening a slice, it was inventing one, on the row most likely to be read.
+   Same on the chip row's right edge when every chip already fits.
+   So the classes are driven by scroll position and each edge earns itself. */
+.calscroll, .chipstrip{
+  --fade-t:#000 0, #000 0;
+  --fade-b:#000 100%, #000 100%;
 }
+.calscroll{
+  -webkit-mask-image:linear-gradient(to bottom, var(--fade-t), var(--fade-b));
+  mask-image:linear-gradient(to bottom, var(--fade-t), var(--fade-b));
+}
+.calscroll.moreAbove{ --fade-t:transparent 0, #000 16px }
+.calscroll.moreBelow{ --fade-b:#000 calc(100% - 16px), transparent 100% }
+.chipstrip{
+  -webkit-mask-image:linear-gradient(to right, var(--fade-t), var(--fade-b));
+  mask-image:linear-gradient(to right, var(--fade-t), var(--fade-b));
+}
+.chipstrip.moreAbove{ --fade-t:transparent 0, #000 20px }
+.chipstrip.moreBelow{ --fade-b:#000 calc(100% - 24px), transparent 100% }
 @media (prefers-reduced-motion:reduce){ .calscroll{transition:none} }
 .calscroll::-webkit-scrollbar{display:none}
 /* the month divider pins to the top of the trough, so which month you are
@@ -1033,28 +1043,35 @@ button{background:none;border:0;padding:0;cursor:pointer}
    the common case stops being two taps on a grid and becomes one. Clear is
    plain text, deliberately quieter than the four — it undoes, it does not
    offer. */
-.picks{display:flex;gap:7px;align-items:center;margin-top:12px;
-  overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
-.picks::-webkit-scrollbar{display:none}
+/* The nights control is PINNED and only the chips scroll. It shared one
+   scrolling row with them, which meant the primary control on this row could be
+   scrolled off the screen — caught with the row at its end, showing a lone "+"
+   where the stepper had been. A control you can lose is not a control. */
+.picks{display:flex;gap:8px;align-items:center;margin-top:12px;min-width:0}
+.chipstrip{
+  flex:1 1 auto;min-width:0;display:flex;gap:7px;align-items:center;
+  overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;
+}
+.chipstrip::-webkit-scrollbar{display:none}
 /* 35px tall, which is under the 44px minimum, on the row that exists to make
    the common request one tap. Nobody caught it because the chips LOOK
    comfortable — the ink is the right size, the target was not. Same trick the
    nights stepper uses: the tappable area is bigger than the pill, so the row
    keeps its height and the thumb gets its 44px. */
-.picks button{
+.chipstrip button{
   position:relative;
   flex:0 0 auto;padding:7px 12px;border-radius:999px;
   font-size:12.5px;font-weight:600;letter-spacing:-.005em;
   background:var(--surface-2);border:1px solid var(--line);color:var(--txt-2);
   transition:transform .35s var(--spring), background .18s;
 }
-.picks button::after{
+.chipstrip button::after{
   content:"";position:absolute;left:0;right:0;top:50%;
   height:44px;transform:translateY(-50%);
 }
-.picks button:active{transform:scale(.94);transition-duration:.085s}
-.picks button.on{background:var(--ink);color:var(--ink-on);border-color:transparent}
-.picks .pclear{margin-left:auto;background:none;border:0;color:var(--txt-3);padding:7px 4px}
+.chipstrip button:active{transform:scale(.94);transition-duration:.085s}
+.chipstrip button.on{background:var(--ink);color:var(--ink-on);border-color:transparent}
+.chipstrip .pclear{margin-left:auto;background:none;border:0;color:var(--txt-3);padding:7px 4px}
 
 /* press-and-hold, then sweep across dates to pick a stay */
 .cal{touch-action:pan-y}
@@ -6472,6 +6489,24 @@ function renderMonth(){
   const trough = el("div","calscroll" + (calLean ? " lean" : ""));
   trough.appendChild(grid);
 
+  /* An edge only fades when there is something past it. Applied to whichever
+     axis the box scrolls on, so the same two class names serve the vertical
+     calendar and the horizontal chip row. */
+  const edges = (box, axis)=>{
+    const mark = ()=>{
+      const pos  = axis === "x" ? box.scrollLeft : box.scrollTop;
+      const size = axis === "x" ? box.clientWidth : box.clientHeight;
+      const full = axis === "x" ? box.scrollWidth : box.scrollHeight;
+      box.classList.toggle("moreAbove", pos > 1);
+      box.classList.toggle("moreBelow", pos + size < full - 1);
+    };
+    box.addEventListener("scroll", mark, {passive:true});
+    /* now, not next frame — rAF does not fire in a backgrounded tab and this
+       decides whether the first row of dates is dimmed */
+    mark();
+    return mark;
+  };
+
   /* Which month is under the top of the trough, said once, above it. Recomputed
      on scroll from the first day cell still visible — cheap, and it cannot
      disagree with the grid because it is read FROM the grid. */
@@ -6499,6 +6534,7 @@ function renderMonth(){
   sayMonth();
 
   cal.append(now, dow, trough);
+  const markCal = edges(trough, "y");
 
   /* ── the spans a caller actually names ────────────────────────────────────
      Not a generic set of presets. These are the four things said on the phone —
@@ -6514,11 +6550,18 @@ function renderMonth(){
      been sharing 335px with a 124px stepper. It also stops the tab saying
      "4 nights" twice, once here and once in the count line below. */
   if(pn) bar.appendChild(pn);
+  const strip = el("div","chipstrip");   // only this scrolls
+  bar.appendChild(strip);
   const wk = nextWeekend();
+  /* "3 nights" is gone. The stepper beside it does 3 nights, and 4, and 9 —
+     a chip that is one of the stepper's own values, sitting next to the
+     stepper, is a row wider for nothing. Tonight and Weekend stay because they
+     set a DATE, which the stepper cannot: they are the two spans a caller names
+     without naming a date at all. "1 week" stays as the one length worth a
+     single tap over seven presses. */
   const spans = [
     {label:"Tonight",  a:0,      n:1},
     {label:"Weekend",  a:wk.a,   n:Math.max(1, wk.b - wk.a)},
-    {label:"3 nights", a:sel.a,  n:3},
     {label:"1 week",   a:sel.a,  n:7},
   ];
   spans.forEach(sp=>{
@@ -6528,12 +6571,13 @@ function renderMonth(){
     b.onclick = ()=>{ haptic(9); pendingStart = null;
                       sel = {a: sp.a, n: Math.min(sp.n, DAYS - sp.a)};
                       revealPanel = true; calLean = true; renderMonth(); };
-    bar.appendChild(b);
+    strip.appendChild(b);
   });
   const clr = el("button","pclear","Clear");
   clr.onclick = ()=>{ haptic(6); pendingStart = null; sel = {a: sel.a, n: 1}; renderMonth(); };
-  bar.appendChild(clr);
+  strip.appendChild(clr);
   cal.appendChild(bar);
+  const markBar = edges(strip, "x");
 
   attachSweep(grid, hud);
 
@@ -6546,6 +6590,9 @@ function renderMonth(){
      aria-label. A date running soft is a PLANNING fact — Business is the tab
      for planning, and this is the tab someone is on with a caller waiting. */
   s.append(cal, hud);
+  /* Now that both are in the document and laid out, their scroll extents are
+     real — the marks taken at construction were against an unattached box. */
+  markCal(); markBar();
 
   /* THE ANSWER, in a trough of its own so its size cannot move the frame.
      8 free or 45 free, the layout above it is identical — which is the whole
@@ -6606,6 +6653,7 @@ function renderMonth(){
         const want = trough.scrollTop + (cr.top - tr.top) - (tr.height - cr.height) / 2;
         trough.scrollTop = Math.max(0, Math.min(want, trough.scrollHeight - tr.height));
       }
+      markCal();
     }
   }
 }
