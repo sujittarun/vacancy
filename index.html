@@ -804,6 +804,54 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .hi-now{color:var(--now)}
 
 /* ══════════════════════ MONTH ══════════════════════ */
+/* ══ THE MONTH TAB IS A FRAME, NOT A PAGE ═══════════════════════════════════
+   Measured before changing anything: 1705px on an 812px screen with 8 free
+   flats listed, and 3730px — four and a half screens — on the emptiest night in
+   the book, when 41 are free. The answer began at y=1065 every time. So the
+   INPUT owned 1.1 screens and the ANSWER was never on screen at the same time
+   as the dates that produced it. Mid-call that is exactly the wrong way round:
+   the calendar is the question, the list is the thing being read down the phone.
+
+   The tab stops scrolling. Two bounded troughs move instead — the calendar and
+   the flat list — and everything else is fixed chrome between them. The answer
+   is then invariant in its own size: 8 free or 45 free, not one pixel of the
+   frame moves, because the list scrolls inside its own box.
+
+   Two things this breaks if they are not fixed in the same commit, both found
+   by building it and driving it rather than by reasoning about it:
+     - pull-to-refresh reads `screen.scrollTop > 0` to decide it is at the top.
+       A screen that cannot scroll reports 0 forever, so the gesture armed from
+       anywhere, including a downward drag inside a trough already scrolled
+       200px. Measured: the screen took a 32.7px transform and the app reloaded
+       mid-call. The gate now asks the TROUGH under the finger.
+     - the sweep HUD compensated for its own appearance by nudging
+       screen.scrollTop. On a screen that cannot scroll that is a silent no-op,
+       and the grid dropped 70px under a live finger with the pressed cell
+       leaving it entirely — DESIGN.md's headline bug, resurrected. The HUD is
+       now fixed chrome below the grid and cannot move it at all, so the
+       compensation is deleted rather than repaired. */
+#scr-month{
+  overflow:hidden;
+  display:flex;flex-direction:column;
+  padding:10px 20px calc(97px + var(--safe-b));
+  gap:0;
+}
+/* the calendar scrolls inside its own box, four weeks at a time */
+.calscroll{
+  flex:0 0 auto;height:224px;overflow-y:auto;overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;scrollbar-width:none;
+}
+.calscroll::-webkit-scrollbar{display:none}
+/* the month divider pins to the top of the trough, so which month you are
+   looking at is answered without the paging that used to answer it */
+/* nothing sticky inside the trough — see the .mlab note; the month name lives
+   in the chrome above it instead */
+/* the answer takes whatever is left and scrolls inside it */
+.listtrough{
+  flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+}
+
 /* ── ONE CALENDAR, NOT THREE PAGES ─────────────────────────────────────────
    The book is 63 days — three months, eleven week-rows, about 700px. It was
    being paged into three screens behind two 36px arrows, and that paging was
@@ -834,15 +882,29 @@ button{background:none;border:0;padding:0;cursor:pointer}
 
    What separates the months now is a hairline and a change of month name, which
    is all a separator has to be. */
+/* The month divider is a hairline and nothing else. Its name moved OUT of the
+   grid to the fixed chrome above, for two reasons that both came from building
+   it: sticking a text label to the top of a scrolling trough needs an opaque
+   background, and in light theme the page ground is a gradient — measured, the
+   label painted rgb(229,233,240) over rgb(216,223,236), a lighter strip with a
+   visible edge that no flat colour can fix. And three text labels cost 129px of
+   the very trough that is short of room.
+   Above the grid it is a single line that always says which month you are
+   looking at, updated as the trough scrolls. Subtler, always right, and it
+   gives back the one thing paging used to provide for free. */
 .mlab{
-  grid-column:1 / -1;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;
-  padding:17px 2px 9px;margin-top:5px;border-top:1px solid var(--line);
+  grid-column:1 / -1;height:1px;padding:0;margin:9px 0 8px;
+  background:var(--line);
 }
-.mlab:first-child{padding-top:0;margin-top:0;border-top:0}
-.mlab b{font-size:10px;font-weight:650;letter-spacing:.09em;
+.mlab:first-child{display:none}
+/* the month you are looking at, in the fixed chrome above the trough */
+/* min-height is the FILLED height, not a guess under it: reserve what the text
+   will need so the line cannot grow when the text arrives. */
+.monthnow{
+  display:flex;align-items:baseline;gap:8px;margin:0 2px 7px;min-height:15px;
+}
+.monthnow b{font-size:10px;font-weight:650;letter-spacing:.09em;
   text-transform:uppercase;color:var(--txt-2)}
-.mlab s{text-decoration:none;font-size:10.5px;font-weight:500;
-  letter-spacing:.005em;color:var(--txt-3)}
 
 .dow{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:6px}
 .dow span{text-align:center;font-size:10px;font-weight:600;letter-spacing:.08em;color:var(--txt-3)}
@@ -885,25 +947,25 @@ button{background:none;border:0;padding:0;cursor:pointer}
 
    Both fields are buttons: tapping one arms that end directly, so correcting a
    departure no longer means re-picking the arrival first. */
+/* One line. Two rows cost 108px on a screen whose whole problem is that the
+   answer does not fit, and 56 of those pixels is a whole flat in the list
+   below. The nights control moves back beside the dates, which only worked once
+   the dates got shorter. */
 .pick{
-  display:flex;flex-direction:column;gap:10px;margin:0 0 14px;
-  border-bottom:1px solid var(--line);padding-bottom:12px;
+  display:flex;align-items:center;gap:10px;margin:0 0 12px;
+  border-bottom:1px solid var(--line);padding-bottom:10px;
 }
-/* The two dates get the full width and the nights control sits on its own row,
-   which is where the reference puts its count too. Inline beside them it was
-   136px wide and pushed "Sat 29 Aug" onto two lines — a date that wraps is a
-   date you read twice. */
-.pick .pfs{display:flex;align-items:stretch}
+.pick .pfs{display:flex;align-items:stretch;flex:1 1 auto;min-width:0}
 .pick .pf{
-  flex:1;min-width:0;text-align:left;padding:2px 0 8px;background:none;border:0;
-  display:flex;flex-direction:column;gap:5px;position:relative;
+  flex:1;min-width:0;text-align:left;padding:1px 0 7px;background:none;border:0;
+  display:flex;flex-direction:column;gap:4px;position:relative;
 }
-.pick .pf + .pf{padding-left:14px;margin-left:14px;border-left:1px solid var(--line)}
+.pick .pf + .pf{padding-left:11px;margin-left:11px;border-left:1px solid var(--line)}
 .pick .pf s{
-  text-decoration:none;font-size:10px;font-weight:650;letter-spacing:.09em;
+  text-decoration:none;font-size:9px;font-weight:650;letter-spacing:.08em;
   color:var(--txt-3);text-transform:uppercase;
 }
-.pick .pf b{font-size:19px;font-weight:670;letter-spacing:-.025em;color:var(--txt);
+.pick .pf b{font-size:16.5px;font-weight:670;letter-spacing:-.025em;color:var(--txt);
   line-height:1;white-space:nowrap}
 .pick .pf.empty b{color:var(--txt-3);font-weight:600}
 /* the underline rides under the field whose end the next tap sets */
@@ -912,7 +974,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
   border-radius:2px;background:var(--ink);
   transition:width .3s var(--out);
 }
-.pick .pf + .pf::after{left:14px}
+.pick .pf + .pf::after{left:11px}
 .pick .pf.on::after{width:26px}
 .pick .pf.on s{color:var(--txt)}
 @media (prefers-reduced-motion:reduce){ .pick .pf::after{transition:none} }
@@ -928,11 +990,11 @@ button{background:none;border:0;padding:0;cursor:pointer}
   border:1px solid color-mix(in srgb,var(--free) 26%,transparent);
 }
 .pick .pn b{
-  min-width:62px;text-align:center;
+  min-width:54px;text-align:center;
   font-size:11.5px;font-weight:640;letter-spacing:-.005em;color:var(--txt);
 }
 .pick .pn button{
-  width:34px;height:34px;flex:0 0 auto;border:0;background:none;border-radius:999px;
+  width:32px;height:32px;flex:0 0 auto;border:0;background:none;border-radius:999px;
   font-size:16px;font-weight:600;color:var(--txt-2);line-height:1;
   display:grid;place-items:center;
   transition:transform .35s var(--spring), color .18s;
@@ -952,11 +1014,21 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .picks{display:flex;gap:7px;align-items:center;margin-top:12px;
   overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
 .picks::-webkit-scrollbar{display:none}
+/* 35px tall, which is under the 44px minimum, on the row that exists to make
+   the common request one tap. Nobody caught it because the chips LOOK
+   comfortable — the ink is the right size, the target was not. Same trick the
+   nights stepper uses: the tappable area is bigger than the pill, so the row
+   keeps its height and the thumb gets its 44px. */
 .picks button{
+  position:relative;
   flex:0 0 auto;padding:7px 12px;border-radius:999px;
   font-size:12.5px;font-weight:600;letter-spacing:-.005em;
   background:var(--surface-2);border:1px solid var(--line);color:var(--txt-2);
   transition:transform .35s var(--spring), background .18s;
+}
+.picks button::after{
+  content:"";position:absolute;left:0;right:0;top:50%;
+  height:44px;transform:translateY(-50%);
 }
 .picks button:active{transform:scale(.94);transition-duration:.085s}
 .picks button.on{background:var(--ink);color:var(--ink-on);border-color:transparent}
@@ -1013,19 +1085,28 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .day.rng .fn, .day.rngA .fn, .day.rngB .fn{transition:none}
 
 /* takes no layout until a sweep starts, or it leaves a hole in the page */
-.hud{display:none}
-.hud.on{position:sticky;top:0;z-index:6;display:flex;align-items:center;gap:10px;
-  margin:0 2px 12px;padding:11px 14px;border-radius:var(--r-md);
-  background:var(--bar);backdrop-filter:var(--tint-2);
-  -webkit-backdrop-filter:var(--tint-2);
-  border:1px solid var(--line-2);box-shadow:var(--shadow);pointer-events:none;
-  animation:hudIn .3s var(--out)}
-@keyframes hudIn{from{opacity:0;transform:translateY(-8px)}}
-@media (prefers-reduced-motion:reduce){.hud.on{animation:none}}
-.hud .n{font-size:24px;font-weight:690;letter-spacing:-.035em;line-height:1}
+/* The count line. It used to appear only during a sweep, above the grid, and
+   pay for its own appearance by nudging the screen's scrollTop — which is how
+   it came to drag the calendar out from under a thumb. It is permanent chrome
+   now, below the grid, at a fixed height: it cannot move the grid because it
+   never changes size, and the compensation it needed is deleted rather than
+   repaired.
+   It also earns its 44px the rest of the time. Resting, it answers the tab's
+   whole question — how many flats are free for the dates chosen. Sweeping, the
+   same line counts live under the thumb. One line, two jobs, no layout shift
+   between them. */
+.hud{
+  flex:0 0 auto;height:44px;overflow:hidden;
+  display:flex;align-items:center;gap:9px;margin:10px 2px 0;
+  pointer-events:none;
+}
+.hud .n{font-size:21px;font-weight:690;letter-spacing:-.035em;line-height:1;
+  flex:0 0 auto;font-variant-numeric:tabular-nums}
 .hud .n.none{color:var(--hot)}
-.hud .t{font-size:12px;color:var(--txt-2);line-height:1.4}
+.hud .t{font-size:12px;color:var(--txt-2);line-height:1.35;min-width:0}
 .hud .t b{color:var(--txt);font-weight:600}
+/* sweeping: the same line, told apart by weight rather than by moving */
+.hud.on .t b{color:var(--now)}
 .sweephint{font-size:11.5px;color:var(--txt-3);margin:8px 2px 0;line-height:1.5}
 .sweephint b{color:var(--txt-2);font-weight:600}
 
@@ -5576,7 +5657,13 @@ function roomRow(fi, day, tail){
   const r = el("button","row");
   r.append(el("div","id",fl.id));
   const m = el("div","meta");
-  m.innerHTML = `<b>${esc(fl.type)}</b> · ${esc(fl.bshort)}<em>Floor ${esc(fl.floor)}${tail ? " · " + esc(tail) : ""}</em>`;
+  /* The floor was a second line on every row and it is not why the operator is
+     reading this list — he is reading the flat, its size and its building, then
+     saying one of them down the phone. Eleven pixels a row, and at 41 free rows
+     that is 450px of a screen that has none to spare. It stays on the room
+     sheet, which is where somebody who cares about the floor is going. */
+  m.innerHTML = `<b>${esc(fl.type)}</b> · ${esc(fl.bshort)}`
+              + (tail ? `<em>${esc(tail)}</em>` : "");
   r.appendChild(m);
   const run = runFrom(fi, day);
   r.appendChild(el("span","pill good", run>=DAYS-day ? `${run}+ nights` : `${run} night${run>1?"s":""} free`));
@@ -6067,22 +6154,12 @@ function attachSweep(grid, hud){
      its second line wraps. Reading the rect after the class change forces the
      sync layout deliberately: the compensation has to land in the same frame
      as the growth, or the calendar visibly jumps and then jumps back. */
-  /* Anything that changes the HUD's height goes through here, and the calendar
-     does not move. Whatever `fn` does, the scroller is nudged by exactly the
-     amount the grid travelled, so every pixel below the HUD stays where the
-     thumb left it. Reading the rect on both sides forces the layout
-     deliberately — the compensation has to land in the same frame as the
-     growth, or the calendar visibly jumps and then jumps back. */
-  const shift = (fn)=>{
-    const sc = hud.closest(".screen");
-    const top = grid.getBoundingClientRect().top;
-    fn();
-    if(sc) sc.scrollTop += grid.getBoundingClientRect().top - top;
-  };
-  /* on the way out too, or the calendar leaps up 100px the instant the thumb
-     lifts, which reads as the app losing your place */
-  const disarm = ()=>{ if(hud.classList.contains("on")) shift(()=>hud.classList.remove("on")); };
-
+  /* shift() is gone. It existed because the HUD appeared above the grid and
+     paid for its own height by nudging the screen's scrollTop — which is how it
+     came to drag the calendar out from under a thumb, and which would have gone
+     silently wrong the moment the screen stopped scrolling. The HUD is fixed
+     chrome below the grid now and cannot move it, so there is nothing to
+     compensate for. Deleted, not repaired. */
   const paint = ()=>{
     const lo = Math.min(a,b), hi = Math.max(a,b);
     grid.querySelectorAll(".day[data-d]").forEach(c=>{
@@ -6093,33 +6170,24 @@ function attachSweep(grid, hud){
     });
     const nights = Math.max(1, hi - lo);
     const free = flats.filter((f,i)=>freeRange(i, lo, lo + nights)).length;
-    /* THE HUD MUST NOT MOVE THE CALENDAR.
-       .hud is display:none until a sweep begins, and a display:none flex child
-       contributes no gap — so switching it on adds three things at once: its
-       own height, its 12px bottom margin, and a 30px column gap that did not
-       exist a moment ago. Measured at phone width, the calendar drops 100px
-       against a 55px cell pitch: 1.8 rows, with the thumb already pressed down.
-       The sweep resolves the finger with elementFromPoint on every touchmove,
-       so the first drag after the 260ms hold reads a cell nearly two rows above
-       the date the operator actually pressed. PRODUCT.md names reading the
-       wrong row as THE failure mode of this app, and this was that failure on
-       the headline gesture of the Month tab.
-
-       The class AND the text are inside one shift(), which is the part that is
-       easy to get wrong: setting the class first compensates for an empty box,
-       and then the text lands and drops the grid another 33px uncompensated —
-       measured, and it is why the first attempt at this still moved. The text
-       is also re-written on every cell the thumb crosses, and "10 nights" can
-       wrap where "3 nights" did not, so the height is live for the whole drag,
-       not just at the start. paint() only runs when the day under the finger
-       actually changes, so this costs one forced layout per cell crossed. */
-    shift(()=>{
-      hud.classList.add("on");
-      const n = hud.querySelector(".n"), t = hud.querySelector(".t");
-      n.textContent = free;
-      n.classList.toggle("none", free === 0);
-      t.innerHTML = `free for <b>all ${nights} night${nights>1?"s":""}</b><br>${fmt(lo)} → ${fmt(lo+nights)}`;
-    });
+    /* THE HUD CANNOT MOVE THE CALENDAR ANY MORE, and that is now structural
+       rather than compensated. It used to be display:none until a sweep began,
+       sitting ABOVE the grid — so arming it added its height, its margin and a
+       column gap that did not exist a moment before, and the calendar dropped
+       100px against a 55px cell pitch with a thumb already pressed down. The
+       sweep resolves the finger with elementFromPoint on every touchmove, so
+       the first drag after the hold read a cell nearly two rows above the date
+       pressed. PRODUCT.md names the wrong-row read as THE failure mode here.
+       That was fixed by measuring the growth and nudging scrollTop to match,
+       which worked and would have failed silently the moment the screen stopped
+       scrolling — as it now has. So the fix was replaced rather than kept: the
+       HUD is permanent, fixed-height chrome BELOW the grid. Nothing to
+       compensate, nothing to get wrong later. */
+    hud.classList.add("on");
+    const n = hud.querySelector(".n"), t = hud.querySelector(".t");
+    n.textContent = free;
+    n.classList.toggle("none", free === 0);
+    t.innerHTML = `free for <b>all ${nights} night${nights>1?"s":""}</b> · ${fmt(lo)} → ${fmt(lo+nights)}`;
   };
   const clear = ()=>{
     grid.querySelectorAll(".rng,.rngA,.rngB").forEach(c=>c.classList.remove("rng","rngA","rngB"));
@@ -6176,7 +6244,7 @@ function attachSweep(grid, hud){
     move(e.touches[0].clientX, e.touches[0].clientY);
   }, {passive:false});
   // hand this render's handlers to the window pair registered once above
-  sweepNow = {end, cancel: ()=>{ reset(); clear(); disarm(); }};
+  sweepNow = {end, cancel: ()=>{ reset(); clear(); hud.classList.remove("on"); }};
 
   // desktop: hold the mouse down and drag
   grid.addEventListener("mousedown", e=>{
@@ -6250,11 +6318,11 @@ function renderMonth(){
   const inD  = armed ? pendingStart : sel.a;
   const outD = armed ? null : sel.a + sel.n;
   const fIn  = el("button","pf" + (armed ? "" : " on"));
-  fIn.append(el("s",null,"CHECK-IN"), el("b",null,fmtL(inD)));
+  fIn.append(el("s",null,"CHECK-IN"), el("b",null,fmt(inD)));
   fIn.setAttribute("aria-label", `Check-in ${fmtL(inD)}. Tap to choose a new arrival.`);
   const fOut = el("button","pf" + (armed ? " on empty" : ""));
   fOut.append(el("s",null,"CHECK-OUT"),
-              el("b",null, outD == null ? "Pick a date" : fmtL(outD)));
+              el("b",null, outD == null ? "Pick a date" : fmt(outD)));
   fOut.setAttribute("aria-label", outD == null
     ? "Check-out not chosen. Tap a date to set it."
     : `Check-out ${fmtL(outD)}. Tap to choose a new departure.`);
@@ -6354,18 +6422,48 @@ function renderMonth(){
      year is four characters of noise on every divider. */
   const crossesYear = ms.some(x => x.y !== ms[0].y);
   ms.forEach(m=>{
-    const st = monthStats(m.days);
+    /* A separator separates; it does not also report. The fullness went to
+       Business, which owns occupancy analysis, and the name went to the chrome
+       above the trough — see the .mlab note in the stylesheet. */
     const lab = el("div","mlab");
-    lab.append(el("b", null, MONF[m.m] + (crossesYear ? ` ${m.y}` : "")),
-               el("s", null, `${Math.round(st.pct*100)}% booked · `
-                           + `${st.open.toLocaleString("en-IN")} room-nights open`));
     grid.appendChild(lab);
     const lead = (dateAt(m.days[0]).getDay()+6)%7;
     for(let i=0;i<lead;i++) grid.appendChild(el("div","day pad"));
     m.days.forEach(d=> makeDay(d, m));
   });
   cal.style.padding = "0";
-  cal.append(dow, grid);
+  /* the grid scrolls inside a bounded trough; the weekday bar stays above it as
+     fixed chrome, because a header that scrolls away is a header you look for */
+  const trough = el("div","calscroll");
+  trough.appendChild(grid);
+
+  /* Which month is under the top of the trough, said once, above it. Recomputed
+     on scroll from the first day cell still visible — cheap, and it cannot
+     disagree with the grid because it is read FROM the grid. */
+  const now = el("div","monthnow");
+  const nowLab = el("b", null, "");
+  now.appendChild(nowLab);
+  const sayMonth = ()=>{
+    const top = trough.scrollTop;
+    let first = null;
+    for(const c of grid.querySelectorAll(".day[data-d]")){
+      if(c.offsetTop + c.offsetHeight > top + 2){ first = c; break; }
+    }
+    /* Before the first layout every offsetTop is 0, so nothing satisfies the
+       test above and the label stayed empty until the next frame — at which
+       point it grew from its min-height and pushed the grid down 2px. Small,
+       and exactly the class of thing that moves a target out from under a
+       thumb. Fall back to the first cell so the label is right from the start. */
+    if(!first) first = grid.querySelector(".day[data-d]");
+    if(!first) return;
+    const dt = dateAt(+first.dataset.d);
+    nowLab.textContent = MONF[dt.getMonth()] + (crossesYear ? ` ${dt.getFullYear()}` : "");
+  };
+  trough.addEventListener("scroll", sayMonth, {passive:true});
+  requestAnimationFrame(sayMonth);
+  sayMonth();
+
+  cal.append(now, dow, trough);
 
   /* ── the spans a caller actually names ────────────────────────────────────
      Not a generic set of presets. These are the four things said on the phone —
@@ -6398,38 +6496,39 @@ function renderMonth(){
 
   attachSweep(grid, hud);
 
-  /* Two paragraphs used to sit under the calendar explaining what the numbers
-     mean and how to drag. Both were teaching, and teaching that is read once
-     costs a section forever. What survives is the one line that is NEWS — a
-     date running emptier than its weekday usually does — and only while a
-     selection is in progress, the line that says what the next tap does. */
-  const worst = soft[0];
-  const key = el("p","insight");
-  key.style.padding = "0 2px";
-  /* The "now tap the departure" line is gone: the moving underline in the
-     picker head says it continuously, in the place the eye is already on, and
-     a sentence that repeats a live indicator is read once and then never. */
-  if(worst){
-    key.innerHTML = `<span class="hi">${fmtL(worst.d)} is running empty for a ${DOWF[dateAt(worst.d).getDay()]}</span>`
-      + ` — ${worst.free} free against about ${Math.round(worst.norm)} on a normal one. The amber dots mark the rest.`;
-  }else{
-    key.remove();
-  }
+  /* The soft-date sentence is gone too, by its own argument. The comment that
+     used to sit here said "teaching that is read once costs a section forever",
+     and then kept one more sentence doing exactly that: 58px explaining the
+     amber dots that are already on the grid, on the tab whose measured problem
+     is that the answer never fits on the screen.
+     The dots stay and each carries "emptier than a typical Thursday" in its
+     aria-label. A date running soft is a PLANNING fact — Business is the tab
+     for planning, and this is the tab someone is on with a caller waiting. */
+  s.append(cal, hud);
 
-  s.append(hud, cal);
-  if(key.parentNode !== null || key.innerHTML) s.append(key);
-
-  /* one panel for whatever is selected — a single night is just n = 1 */
+  /* THE ANSWER, in a trough of its own so its size cannot move the frame.
+     8 free or 45 free, the layout above it is identical — which is the whole
+     point of the frame. It used to append every free flat straight onto the
+     page: 41 rows, 2665px, four and a half screens on the emptiest night. */
   {
     const {a, n} = sel;
     const free = flats.map((f,i)=>i).filter(i=>freeRange(i, a, a+n));
-    const panel = el("div","stack gap-s");
-    const h = el("div","sect");
-    /* The dates and the night count live in the picker head now. Saying them
-       again here was the same sentence twice on one screen, and the second one
-       is not the one being read out. This header labels the LIST. */
-    h.append(el("span","lbl", "What is free"),
-             el("span","lbl", `${free.length} of ${NF}`));
+
+    /* The count line answers the tab's question at rest. Sweeping, paint()
+       overwrites it live; it is the same 44px either way. The building count is
+       there because the list is ordered by flat id, so the first rows are
+       always the lowest-numbered building — on a night with 23 free across five
+       buildings, the three rows in view can all be TreeTops while Banjara Hills
+       sits below the fold. Saying how many buildings is one line and stops the
+       window reading as the whole answer. */
+    const hn = hud.querySelector(".n"), ht = hud.querySelector(".t");
+    hn.textContent = free.length;
+    hn.classList.toggle("none", free.length === 0);
+    const bldgs = new Set(free.map(i=>flats[i].code)).size;
+    ht.innerHTML = `free of ${NF} · <b>${n} night${n>1?"s":""}</b>`
+                 + (free.length ? ` · across ${bldgs} building${bldgs>1?"s":""}` : "");
+
+    const panel = el("div","listtrough");
     const list = el("div","card");
     if(!free.length){
       list.appendChild(el("div","empty", n === 1
@@ -6437,11 +6536,18 @@ function renderMonth(){
         : `No flat is free for all ${n} nights. Ask can suggest moving one guest to open one up.`));
     }
     free.forEach(fi=> list.appendChild(roomRow(fi, a, null)));
-    panel.append(h, list);
+    panel.append(list);
     s.appendChild(panel);
     if(revealPanel){
       revealPanel = false;
-      requestAnimationFrame(()=> panel.scrollIntoView({behavior: calm?"auto":"smooth", block:"nearest"}));
+      /* the answer trough goes back to the top, and the calendar trough centres
+         the selection — the frame does not scroll, so "reveal" means putting
+         each trough where the operator expects it rather than moving the page */
+      panel.scrollTop = 0;
+      requestAnimationFrame(()=>{
+        const a0 = grid.querySelector(".day.rngA") || grid.querySelector(".day.sel");
+        if(a0) a0.scrollIntoView({behavior: calm?"auto":"smooth", block:"center"});
+      });
     }
   }
 }
@@ -10105,7 +10211,7 @@ let pulling = false;
 (function(){
   const host = document.querySelector(".screens"), ptr = document.getElementById("ptr");
   const REACH = 96, TRIP = 68;                 // travel, and where it commits
-  let y0 = null, x0 = null, scr = null, pull = 0, armed = false, live = false;
+  let y0 = null, x0 = null, scr = null, pullFrom = null, pull = 0, armed = false, live = false;
 
   const paint = (d)=>{
     pull = d;
@@ -10130,7 +10236,7 @@ let pulling = false;
     ptr.style.setProperty("--ptr-o", "0");
     const s = scr;
     setTimeout(()=>{ s.classList.remove("letgo"); }, 460);
-    y0 = null; scr = null;
+    y0 = null; scr = null; pullFrom = null;
   };
 
   host.addEventListener("touchstart", e=>{
@@ -10140,7 +10246,18 @@ let pulling = false;
        and reloaded the app — taking anything typed into the form with it. */
     if(sheet.classList.contains("on") || e.touches.length > 1){ y0 = null; scr = null; return; }
     scr = document.getElementById("scr-" + SCREENS[curScreen].id);
-    if(!scr || scr.scrollTop > 0){ scr = null; return; }
+    /* AT THE TOP OF WHAT, exactly. This asked the SCREEN, which was right while
+       every screen was itself the scroller. The Month tab is a fixed frame now
+       whose scrolling happens in two troughs inside it, so its own scrollTop is
+       0 forever and this gate could never decline: a downward drag inside a
+       trough already scrolled 200px armed the pull, took the screen 32.7px down
+       and reloaded the app mid-call, with the trough unable to scroll back.
+       Measured on the live prototype before it shipped.
+       So ask whatever is actually scrolling under this finger. `top` is the
+       trough when there is one, the screen when there is not. */
+    const top = (e.target.closest && e.target.closest(".calscroll,.listtrough")) || scr;
+    if(!scr || !top || top.scrollTop > 0){ scr = null; return; }
+    pullFrom = top;
     y0 = e.touches[0].clientY; x0 = e.touches[0].clientX;
     armed = false; live = false; pull = 0;
   }, {passive:true});
@@ -10155,7 +10272,7 @@ let pulling = false;
       live = true; pulling = true;
       scr.classList.add("pulling"); scr.classList.remove("letgo");
     }
-    if(scr.scrollTop > 0){ release(); return; }
+    if((pullFrom || scr).scrollTop > 0){ release(); return; }
     e.preventDefault();
     // resistance: the first pixels are free, the last ones are not
     const d = REACH * (1 - Math.exp(-Math.max(0, dy) / REACH));

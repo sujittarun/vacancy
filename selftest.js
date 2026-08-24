@@ -700,8 +700,8 @@ export async function run(filter) {
     renderMonth();
     await until(() => document.querySelector(".pick .pn"), "the nights badge");
     const [fIn, fOut] = [...document.querySelectorAll(".pick .pf")];
-    eq(fIn.querySelector("b").textContent, fmtL(2), "check-in");
-    eq(fOut.querySelector("b").textContent, fmtL(6), "check-out");
+    eq(fIn.querySelector("b").textContent, fmt(2), "check-in");
+    eq(fOut.querySelector("b").textContent, fmt(6), "check-out");
     eq(document.querySelector(".pick .pn b").textContent, "4 nights", "the nights readout");
     ok(fIn.classList.contains("on"), "no end is armed, so check-in should carry the underline");
     ok(!fOut.classList.contains("on"), "check-out is underlined when nothing is pending");
@@ -712,7 +712,7 @@ export async function run(filter) {
     const out2 = document.querySelectorAll(".pick .pf")[1];
     eq(out2.querySelector("b").textContent, "Pick a date", "check-out while armed");
     ok(pendingStart !== null, "tapping check-out did not arm a departure");
-    return `${fmtL(2)} → ${fmtL(6)}, underline follows the armed end`;
+    return `${fmt(2)} → ${fmt(6)}, underline follows the armed end`;
   });
 
   await test("a preset sets the span in one tap", async () => {
@@ -770,8 +770,8 @@ export async function run(filter) {
     ok(cellFor(sel.a).classList.contains("rngA"), "no opening endpoint");
     ok(cellFor(sel.a + sel.n).classList.contains("rngB"), "no closing endpoint");
     const inOut = [...document.querySelectorAll(".pick .pf b")].map(b => b.textContent);
-    eq(inOut[0], fmtL(sel.a), "check-in");
-    eq(inOut[1], fmtL(sel.a + sel.n), "check-out");
+    eq(inOut[0], fmt(sel.a), "check-in");
+    eq(inOut[1], fmt(sel.a + sel.n), "check-out");
     return `${inOut[0]} → ${inOut[1]}, both endpoints in one grid`;
   });
 
@@ -803,6 +803,93 @@ export async function run(filter) {
     await until(() => sel.n === 1, "nights to reach one");
     ok(minus().disabled, "the minus is still live at one night");
     return "nights move, arrival holds, floor at 1";
+  });
+
+  /* ══ the frame ═════════════════════════════════════════════════════════ */
+
+  /* The tab was 1705px at 8 free flats and 3730px — four and a half screens —
+     on the emptiest night in the book, with the answer starting at y=1065 every
+     time. It is a fixed frame now: two bounded troughs move, nothing else, and
+     the answer's size cannot change the layout above it. */
+  await test("the Month tab does not scroll, at any number of free flats", async () => {
+    const scr = document.getElementById("scr-month");
+    document.querySelectorAll(".tabbar button")[1].click();
+    await until(() => document.querySelector(".calscroll .day[data-d]"), "the calendar trough");
+    const check = where => {
+      const slack = scr.scrollHeight - scr.clientHeight;
+      ok(slack <= 1, `${where}: the page scrolls by ${slack}px`);
+    };
+    pendingStart = null; sel = { a: 5, n: 4 }; renderMonth();
+    await until(() => document.querySelector(".listtrough .row"), "the answer");
+    check("a typical selection");
+    const rows1 = scr.querySelectorAll(".row").length;
+
+    /* the emptiest night in the book — the worst case for the list */
+    let best = { d: 0, f: -1 };
+    for (let d = 0; d < DAYS; d++) { const f = freeCount(d); if (f > best.f) best = { d, f }; }
+    pendingStart = null; sel = { a: best.d, n: 1 }; renderMonth();
+    await until(() => scr.querySelectorAll(".row").length > rows1, "the long answer");
+    check(`${best.f} free`);
+    const trough = scr.querySelector(".listtrough");
+    ok(trough.scrollHeight > trough.clientHeight + 100,
+       "the long answer is not actually overflowing its trough — test proves nothing");
+    return `${best.f} free · ${Math.round(trough.scrollHeight)}px of list inside a `
+         + `${Math.round(trough.clientHeight)}px trough, frame unmoved`;
+  });
+
+  /* Pull-to-refresh decided it was "at the top" by reading the SCREEN's
+     scrollTop. A screen that cannot scroll reports 0 forever, so a downward
+     drag inside a trough already scrolled 200px armed the pull, took the screen
+     32.7px down and reloaded the app mid-call — with the trough unable to
+     scroll back. It asks the trough under the finger now. */
+  await test("a downward drag inside a scrolled trough does not arm pull-to-refresh", async () => {
+    const scr = document.getElementById("scr-month");
+    document.querySelectorAll(".tabbar button")[1].click();
+    await until(() => document.querySelector(".calscroll .day[data-d]"), "the calendar");
+    const trough = document.querySelector(".calscroll");
+    trough.scrollTop = 120;
+    await until(() => trough.scrollTop > 100, "the trough to scroll");
+    /* Dispatch ON THE CELL and let it bubble, the way a real touch arrives. The
+       first version fired at .screens, which made e.target the host itself —
+       so the gate's closest(".calscroll") found nothing, fell back to the
+       screen, and the test failed a fix that works. A synthetic event that does
+       not carry a realistic target tests the dispatch, not the code. */
+    const target = document.querySelector(".calscroll .day[data-d]");
+    const t = y => new Touch({ identifier: 1, target, clientX: 180, clientY: y });
+    target.dispatchEvent(new TouchEvent("touchstart", { bubbles: true,
+      touches: [t(300)], targetTouches: [t(300)], changedTouches: [t(300)] }));
+    target.dispatchEvent(new TouchEvent("touchmove", { bubbles: true, cancelable: true,
+      touches: [t(360)], targetTouches: [t(360)], changedTouches: [t(360)] }));
+    const armed = scr.classList.contains("pulling");
+    const moved = scr.style.transform;
+    target.dispatchEvent(new TouchEvent("touchend", { bubbles: true,
+      touches: [], targetTouches: [], changedTouches: [t(360)] }));
+    trough.scrollTop = 0;
+    eq(armed, false, "the pull armed inside a scrolled trough");
+    eq(moved, "", "the screen was dragged down inside a scrolled trough");
+    return "gate reads the trough, not the screen";
+  });
+
+  /* And it must still work where it should — at the top of the trough. */
+  await test("pull-to-refresh still arms at the top", async () => {
+    const scr = document.getElementById("scr-month");
+    document.querySelectorAll(".tabbar button")[1].click();
+    await until(() => document.querySelector(".calscroll .day[data-d]"), "the calendar");
+    const trough = document.querySelector(".calscroll");
+    trough.scrollTop = 0;
+    const target = document.querySelector(".calscroll .day[data-d]");
+    const t = y => new Touch({ identifier: 1, target, clientX: 180, clientY: y });
+    target.dispatchEvent(new TouchEvent("touchstart", { bubbles: true,
+      touches: [t(300)], targetTouches: [t(300)], changedTouches: [t(300)] }));
+    target.dispatchEvent(new TouchEvent("touchmove", { bubbles: true, cancelable: true,
+      touches: [t(360)], targetTouches: [t(360)], changedTouches: [t(360)] }));
+    const armed = scr.classList.contains("pulling");
+    target.dispatchEvent(new TouchEvent("touchend", { bubbles: true,
+      touches: [], targetTouches: [], changedTouches: [t(360)] }));
+    await until(() => !scr.classList.contains("pulling"), "the pull to release", 6000);
+    scr.style.transform = "";
+    ok(armed, "pull-to-refresh no longer arms at the top of the trough");
+    return "still arms where it should";
   });
 
   /* ══ the whole surface ══════════════════════════════════════════════════ */
