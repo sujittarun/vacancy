@@ -1,7 +1,14 @@
 /* Regression suite — every bug that has been fixed, encoded as the repro that
  * found it.
  *
- *   await import('/selftest.js').then(m => m.run())
+ *   await import('/selftest.js').then(m => m.run())          (local dev server)
+ *   await import('/vacancy/selftest.js').then(m => m.run())  (GitHub Pages)
+ *
+ * It imports audit.js RELATIVELY, so it works from whatever path it is served
+ * at. It used to say "/audit.js", which resolves to the domain root — fine on a
+ * dev server rooted at the app, and three failures on Pages, where the app
+ * lives under /vacancy/. A test that only passes at one URL is a test that will
+ * be believed at the wrong one.
  *
  * WHY THIS EXISTS. Each of these was found by a multi-agent audit that took an
  * hour, fifteen agents and two million tokens, and each was then verified by
@@ -248,7 +255,7 @@ export async function run(filter) {
   });
 
   await test("the armed destructive state is visible in light theme", async () => {
-    const m = await import("/audit.js?t=" + Date.now());
+    const m = await import("./audit.js?t=" + Date.now());
     await m.setThemeAndSettle("light");
     openSheet(0, 0);
     await until(() => [...document.querySelectorAll(".rowx")].some(e => e.textContent.trim() === "✕"), "the room sheet to render");
@@ -611,7 +618,7 @@ export async function run(filter) {
      recreating the invisible-armed-confirm bug for the one user who explicitly
      asked the OS for a more legible screen. */
   await test("reduced transparency does not erase the armed destructive state", async () => {
-    const m = await import("/audit.js?t=" + Date.now());
+    const m = await import("./audit.js?t=" + Date.now());
     await m.setThemeAndSettle("light");
     const force = document.createElement("style");
     force.textContent = [...document.styleSheets]
@@ -698,11 +705,11 @@ export async function run(filter) {
     await until(() => document.querySelector(".pick"), "the picker head");
     monthOffset = 0; pendingStart = null; sel = { a: 2, n: 4 };
     renderMonth();
-    await until(() => document.querySelector(".pick .pn"), "the nights badge");
+    await until(() => document.querySelector(".picks .pn"), "the nights badge");
     const [fIn, fOut] = [...document.querySelectorAll(".pick .pf")];
-    eq(fIn.querySelector("b").textContent, fmt(2), "check-in");
-    eq(fOut.querySelector("b").textContent, fmt(6), "check-out");
-    eq(document.querySelector(".pick .pn b").textContent, "4 nights", "the nights readout");
+    eq(fIn.querySelector("b").textContent, fmtL(2), "check-in");
+    eq(fOut.querySelector("b").textContent, fmtL(6), "check-out");
+    eq(document.querySelector(".picks .pn b").textContent, "4 nights", "the nights readout");
     ok(fIn.classList.contains("on"), "no end is armed, so check-in should carry the underline");
     ok(!fOut.classList.contains("on"), "check-out is underlined when nothing is pending");
     /* arming the departure moves the underline and blanks the date it will set */
@@ -712,7 +719,7 @@ export async function run(filter) {
     const out2 = document.querySelectorAll(".pick .pf")[1];
     eq(out2.querySelector("b").textContent, "Pick a date", "check-out while armed");
     ok(pendingStart !== null, "tapping check-out did not arm a departure");
-    return `${fmt(2)} → ${fmt(6)}, underline follows the armed end`;
+    return `${fmtL(2)} → ${fmtL(6)}, underline follows the armed end`;
   });
 
   await test("a preset sets the span in one tap", async () => {
@@ -770,8 +777,8 @@ export async function run(filter) {
     ok(cellFor(sel.a).classList.contains("rngA"), "no opening endpoint");
     ok(cellFor(sel.a + sel.n).classList.contains("rngB"), "no closing endpoint");
     const inOut = [...document.querySelectorAll(".pick .pf b")].map(b => b.textContent);
-    eq(inOut[0], fmt(sel.a), "check-in");
-    eq(inOut[1], fmt(sel.a + sel.n), "check-out");
+    eq(inOut[0], fmtL(sel.a), "check-in");
+    eq(inOut[1], fmtL(sel.a + sel.n), "check-out");
     return `${inOut[0]} → ${inOut[1]}, both endpoints in one grid`;
   });
 
@@ -781,12 +788,12 @@ export async function run(filter) {
      to go. */
   await test("the nights stepper moves the departure and holds the arrival", async () => {
     document.querySelectorAll(".tabbar button")[1].click();
-    await until(() => document.querySelector(".pick .pn"), "the nights control");
+    await until(() => document.querySelector(".picks .pn"), "the nights control");
     pendingStart = null; sel = { a: 3, n: 2 };
     renderMonth();
-    await until(() => document.querySelector(".pick .pn button"), "the stepper");
-    const plus = () => [...document.querySelectorAll(".pick .pn button")][1];
-    const minus = () => [...document.querySelectorAll(".pick .pn button")][0];
+    await until(() => document.querySelector(".picks .pn button"), "the stepper");
+    const plus = () => [...document.querySelectorAll(".picks .pn button")][1];
+    const minus = () => [...document.querySelectorAll(".picks .pn button")][0];
     /* a 44px target on a control a thumb uses mid-call — the arrows it replaced
        were 36px, under the minimum */
     const t = getComputedStyle(plus(), "::after");
@@ -895,7 +902,7 @@ export async function run(filter) {
   /* ══ the whole surface ══════════════════════════════════════════════════ */
 
   await test("no text falls below AA in either theme", async () => {
-    const m = await import("/audit.js?t=" + Date.now());
+    const m = await import("./audit.js?t=" + Date.now());
     const out = [];
     for (const t of ["light", "dark"]) {
       await m.setThemeAndSettle(t);

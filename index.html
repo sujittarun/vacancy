@@ -982,18 +982,17 @@ button{background:none;border:0;padding:0;cursor:pointer}
 /* the nights readout is also the nights CONTROL — see the note at its call
    site. 44px targets on both buttons: this is a thing a thumb uses mid-call,
    and the month arrows it replaces were 36px, under the minimum. */
-.pick .pn{
-  align-self:flex-end;flex:0 0 auto;
-  display:flex;align-items:center;gap:2px;
+.picks .pn{
+  flex:0 0 auto;display:flex;align-items:center;gap:2px;
   border-radius:999px;white-space:nowrap;
   background:color-mix(in srgb,var(--free) 13%,transparent);
   border:1px solid color-mix(in srgb,var(--free) 26%,transparent);
 }
-.pick .pn b{
+.picks .pn b{
   min-width:54px;text-align:center;
   font-size:11.5px;font-weight:640;letter-spacing:-.005em;color:var(--txt);
 }
-.pick .pn button{
+.picks .pn button{
   width:32px;height:32px;flex:0 0 auto;border:0;background:none;border-radius:999px;
   font-size:16px;font-weight:600;color:var(--txt-2);line-height:1;
   display:grid;place-items:center;
@@ -1001,10 +1000,10 @@ button{background:none;border:0;padding:0;cursor:pointer}
 }
 /* the tappable area is bigger than the ink, which is how a 34px control can
    still be a 44px target without a 44px hole in the layout */
-.pick .pn button::after{content:"";position:absolute;width:44px;height:44px}
-.pick .pn button{position:relative}
-.pick .pn button:active{transform:scale(.88);transition-duration:.085s}
-.pick .pn button[disabled]{opacity:.3;pointer-events:none}
+.picks .pn button::after{content:"";position:absolute;width:44px;height:44px}
+.picks .pn button{position:relative}
+.picks .pn button:active{transform:scale(.88);transition-duration:.085s}
+.picks .pn button[disabled]{opacity:.3;pointer-events:none}
 
 /* ── the shortcuts an operator is actually asked for ────────────────────────
    Not a generic set. These are the four spans a caller names on the phone, so
@@ -6318,11 +6317,11 @@ function renderMonth(){
   const inD  = armed ? pendingStart : sel.a;
   const outD = armed ? null : sel.a + sel.n;
   const fIn  = el("button","pf" + (armed ? "" : " on"));
-  fIn.append(el("s",null,"CHECK-IN"), el("b",null,fmt(inD)));
+  fIn.append(el("s",null,"CHECK-IN"), el("b",null,fmtL(inD)));
   fIn.setAttribute("aria-label", `Check-in ${fmtL(inD)}. Tap to choose a new arrival.`);
   const fOut = el("button","pf" + (armed ? " on empty" : ""));
   fOut.append(el("s",null,"CHECK-OUT"),
-              el("b",null, outD == null ? "Pick a date" : fmt(outD)));
+              el("b",null, outD == null ? "Pick a date" : fmtL(outD)));
   fOut.setAttribute("aria-label", outD == null
     ? "Check-out not chosen. Tap a date to set it."
     : `Check-out ${fmtL(outD)}. Tap to choose a new departure.`);
@@ -6342,8 +6341,8 @@ function renderMonth(){
      spinning to five nights never needs September to be on screen.
      Same model underneath — it moves the departure and leaves the arrival
      alone, which is what the caller just did. */
-  if(!armed && sel.n >= 1){
-    const pn = el("div","pn");
+  const pn = (!armed && sel.n >= 1) ? el("div","pn") : null;
+  if(pn){
     const less = el("button",null,"−"), more = el("button",null,"+");
     less.setAttribute("aria-label","One night fewer");
     more.setAttribute("aria-label","One night more");
@@ -6355,7 +6354,6 @@ function renderMonth(){
     less.onclick = ()=> setN(sel.n - 1);
     more.onclick = ()=> setN(sel.n + 1);
     pn.append(less, nn, more);
-    head.append(pn);
   }
   cal.appendChild(head);
 
@@ -6473,6 +6471,12 @@ function renderMonth(){
      length and so sets both ends.
      Clear is plain text, quieter on purpose: it undoes, it does not offer. */
   const bar = el("div","picks");
+  /* The nights control sits with the presets, not with the dates. Both are
+     answers to "how long", and putting them together leaves the picker line as
+     just the two dates — which is the thing being read down the phone and had
+     been sharing 335px with a 124px stepper. It also stops the tab saying
+     "4 nights" twice, once here and once in the count line below. */
+  if(pn) bar.appendChild(pn);
   const wk = nextWeekend();
   const spans = [
     {label:"Tonight",  a:0,      n:1},
@@ -6525,7 +6529,8 @@ function renderMonth(){
     hn.textContent = free.length;
     hn.classList.toggle("none", free.length === 0);
     const bldgs = new Set(free.map(i=>flats[i].code)).size;
-    ht.innerHTML = `free of ${NF} · <b>${n} night${n>1?"s":""}</b>`
+    /* no night count here: the control that sets it is one row up and says it */
+    ht.innerHTML = `free of ${NF}`
                  + (free.length ? ` · across ${bldgs} building${bldgs>1?"s":""}` : "");
 
     const panel = el("div","listtrough");
