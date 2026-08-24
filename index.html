@@ -836,11 +836,34 @@ button{background:none;border:0;padding:0;cursor:pointer}
   padding:10px 20px calc(97px + var(--safe-b));
   gap:0;
 }
-/* the calendar scrolls inside its own box, four weeks at a time */
+/* The calendar scrolls inside its own box — four weeks while you are choosing,
+   two once you have chosen. See the calLean note in the script: the answer is
+   what the tab is for, and it was getting 198px of an 812px screen because the
+   grid held its full height long after its job was done.
+   The change only ever happens on release, never under a finger, which is the
+   one thing this screen must not do. The transition below is kept for the day
+   the class is toggled in place, but note renderMonth rebuilds this element on
+   every change, so today it does not actually play — a fresh element has no
+   previous height to animate from. */
 .calscroll{
   flex:0 0 auto;height:224px;overflow-y:auto;overscroll-behavior:contain;
   -webkit-overflow-scrolling:touch;scrollbar-width:none;
+  transition:height .34s var(--out);
 }
+.calscroll.lean{height:112px}
+/* Both edges fade. A bounded trough always slices whatever row straddles its
+   boundary, and a half-cut row of numerals reads as breakage rather than as
+   "there is more here" — especially leaned, where a sliced row sits at the top
+   AND the bottom. The fade says the same thing the slice was trying to and
+   looks like it was meant. 16px: enough to soften a 49px cell, not enough to
+   hide a date you might be reading. */
+.calscroll{
+  -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 16px,
+                     #000 calc(100% - 16px),transparent 100%);
+  mask-image:linear-gradient(to bottom,transparent 0,#000 16px,
+             #000 calc(100% - 16px),transparent 100%);
+}
+@media (prefers-reduced-motion:reduce){ .calscroll{transition:none} }
 .calscroll::-webkit-scrollbar{display:none}
 /* the month divider pins to the top of the trough, so which month you are
    looking at is answered without the paging that used to answer it */
@@ -6109,6 +6132,18 @@ let monthOffset = 0, revealPanel = false;
 /* One selection, always: `sel.a` is the arrival, `sel.n` the nights. A single
    night is just n = 1. `pendingStart` is set after the first of two taps. */
 let sel = {a:0, n:1}, pendingStart = null;
+/* THE CALENDAR EARNS ITS HEIGHT ONLY WHILE YOU ARE CHOOSING.
+   The frame fixed the scrolling but split the screen the wrong way: the
+   calendar held 224px and the answer — the thing the tab exists to produce —
+   got 198px, three and a bit rows, for a list that is routinely forty flats.
+   Once two dates are set the grid has done its job; it does not need four weeks
+   on screen while the operator reads names down the phone.
+   So it leans. A completed selection collapses it to two rows and hands the
+   difference to the list; touching a date, or a check-in / check-out field,
+   stands it back up because those are the acts of choosing again. No new
+   gesture, no dismissal, and nothing moves during a sweep — the flag is only
+   ever set on release. */
+let calLean = false;
 let sweptJustNow = false, sweepLive = false;
 
 /* Press-and-hold on a date, then drag: the calendar becomes a range picker and
@@ -6213,7 +6248,7 @@ function attachSweep(grid, hud){
     reset();
     if(!was) return;
     sel = {a: lo, n: Math.max(1, hi - lo)};
-    pendingStart = null; sweptJustNow = true; revealPanel = true;
+    pendingStart = null; sweptJustNow = true; revealPanel = true; calLean = true;
     haptic(16);
     setTimeout(()=>{ sweptJustNow = false; }, 350);
     renderMonth();
@@ -6328,9 +6363,9 @@ function renderMonth(){
   /* Tapping CHECK-IN clears the pending departure and starts again from this
      arrival; tapping CHECK-OUT arms the departure against the arrival already
      chosen. Both are the same two-tap model, entered from either end. */
-  fIn.onclick  = ()=>{ haptic(8); pendingStart = null; sel = {a: inD, n: Math.max(1, sel.n)};
-                       renderMonth(); };
-  fOut.onclick = ()=>{ haptic(8); pendingStart = sel.a; renderMonth(); };
+  fIn.onclick  = ()=>{ haptic(8); pendingStart = null; calLean = false;
+                       sel = {a: inD, n: Math.max(1, sel.n)}; renderMonth(); };
+  fOut.onclick = ()=>{ haptic(8); pendingStart = sel.a; calLean = false; renderMonth(); };
   const fields = el("div","pfs");
   fields.append(fIn, fOut);
   head.appendChild(fields);
@@ -6407,9 +6442,11 @@ function renderMonth(){
       if(pendingStart !== null && d > pendingStart){
         sel = {a: pendingStart, n: d - pendingStart};
         pendingStart = null;
+        calLean = true;                 // chosen — give the room to the answer
       } else {
         sel = {a: d, n: 1};
         pendingStart = d;
+        calLean = false;                // choosing — the grid needs its height
       }
       revealPanel = true; haptic(9); renderMonth();
     };
@@ -6432,7 +6469,7 @@ function renderMonth(){
   cal.style.padding = "0";
   /* the grid scrolls inside a bounded trough; the weekday bar stays above it as
      fixed chrome, because a header that scrolls away is a header you look for */
-  const trough = el("div","calscroll");
+  const trough = el("div","calscroll" + (calLean ? " lean" : ""));
   trough.appendChild(grid);
 
   /* Which month is under the top of the trough, said once, above it. Recomputed
@@ -6490,7 +6527,7 @@ function renderMonth(){
     b.setAttribute("aria-pressed", on ? "true" : "false");
     b.onclick = ()=>{ haptic(9); pendingStart = null;
                       sel = {a: sp.a, n: Math.min(sp.n, DAYS - sp.a)};
-                      revealPanel = true; renderMonth(); };
+                      revealPanel = true; calLean = true; renderMonth(); };
     bar.appendChild(b);
   });
   const clr = el("button","pclear","Clear");
@@ -6549,10 +6586,26 @@ function renderMonth(){
          the selection — the frame does not scroll, so "reveal" means putting
          each trough where the operator expects it rather than moving the page */
       panel.scrollTop = 0;
-      requestAnimationFrame(()=>{
-        const a0 = grid.querySelector(".day.rngA") || grid.querySelector(".day.sel");
-        if(a0) a0.scrollIntoView({behavior: calm?"auto":"smooth", block:"center"});
-      });
+      /* Centre the selection in the calendar trough by ARITHMETIC, synchronously.
+         This was a requestAnimationFrame + scrollIntoView, and rAF does not fire
+         in a backgrounded tab — measured, the trough sat at scrollTop 0 with the
+         chosen dates 306px above the fold, so the operator picked a range and
+         the grid showed him a different fortnight. The same trap has cost this
+         session three false readings; the rule by now is that anything the
+         layout depends on happens now, not next frame.
+         The element is already in the document, so its offsets are real. */
+      const a0 = grid.querySelector(".day.rngA") || grid.querySelector(".day.sel");
+      if(a0){
+        /* Rect deltas, not offsetTop. offsetTop is measured from the nearest
+           POSITIONED ancestor, and .calscroll is static — so the offsets were
+           relative to .screen and carried the picker line and the weekday bar
+           with them. The cell landed 31px inside a 112px trough by that
+           arithmetic and was still off-screen. A delta between two live rects
+           cannot be wrong about which box it is in. */
+        const cr = a0.getBoundingClientRect(), tr = trough.getBoundingClientRect();
+        const want = trough.scrollTop + (cr.top - tr.top) - (tr.height - cr.height) / 2;
+        trough.scrollTop = Math.max(0, Math.min(want, trough.scrollHeight - tr.height));
+      }
     }
   }
 }
