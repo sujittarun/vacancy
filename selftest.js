@@ -282,15 +282,22 @@ export async function run(filter) {
     return "payload renders as text";
   });
 
+  /* Built from the horizon, not from a date typed into the test. The first
+     version asked about "10 oct to 25 oct", which was past the end of the book
+     the week it was written and comfortably inside it seven days later — so the
+     test failed on a working app because the calendar moved. A regression suite
+     that goes red as the days pass teaches people to ignore it. Everything
+     date-shaped in here is now derived from `today` or from DAYS. */
   await test("Ask flags a range it could only partly answer", () => {
-    const p = parseQuery("do you have anything from 10 oct to 25 oct");
+    const near = fmt(DAYS - 4);                       // inside the book
+    const p = parseQuery(`anything for 20 nights from ${near}`);
     eq(p.beyond, false, "beyond");
-    eq(p.clipped, true, "clipped");
-    eq(p.asked, 15, "nights asked for");
+    eq(p.clipped, true, `clipped, for a 20-night stay from ${near} against a ${DAYS}-day book`);
+    eq(p.asked, 20, "nights asked for");
     ok(p.n < p.asked, "the answer covers the whole request, so nothing was clipped");
-    const q = parseQuery("anything for 3 nights from 20 aug");
+    const q = parseQuery(`anything for 2 nights from ${fmt(2)}`);
     eq(q.clipped, false, "a request that fits must not be flagged");
-    return `asked ${p.asked}, answered ${p.n}, flagged`;
+    return `asked ${p.asked} from ${near}, answered ${p.n}, flagged`;
   });
 
   await test("a check-out date is never printed a day early", () => {
@@ -349,19 +356,27 @@ export async function run(filter) {
   });
 
   await test("the export's Summary keeps a past arrival in its own month", () => {
-    const fi = flats.findIndex((f, i) => { for (let d = 0; d < 8; d++) if (occ[i][d]) return false; return true; });
-    resv.push({ fi, start: -23, end: 7, nights: 30, guest: "Corporate Co", src: "Direct",
-                manual: true, bookedOn: -30, amount: 90000, pays: [] });
+    /* any flat: this row sits entirely in the past, so it cannot collide with
+       anything in the book. The original searched for a flat free for the first
+       eight days and got -1 the week the book filled up, which then wrote
+       occ[-1] and failed on a null rather than on the code under test. */
+    /* far enough back to be in a PREVIOUS month whatever day of the month it is
+       today. -23 was fine when the month was young and landed on the 1st of the
+       current month a week later, at which point the test's own guard below
+       correctly reported that it was no longer exercising the bug. */
+    const back = -(dateAt(0).getDate() + 5);
+    resv.push({ fi: 0, start: back, end: 7, nights: 7 - back, guest: "Corporate Co",
+                src: "Direct", manual: true, bookedOn: back - 7, amount: 90000, pays: [] });
     recompute();
     const bk = bookings();
     const first = bk.reduce((m, r) => Math.min(m, r.start), 0);
     ok(first < 0, "no booking arrives before today");
     const key = d => { const t = dateAt(d); return t.getFullYear() + "-" + String(t.getMonth() + 1).padStart(2, "0"); };
-    ok(key(-23) !== key(0), "the past arrival is in the current month anyway — test is not exercising the bug");
+    ok(key(back) !== key(0), "the past arrival is in the current month anyway — test is not exercising the bug");
     const seeded = [];
     for (let d = Math.min(first, 0); d < DAYS; d++) if (!seeded.includes(key(d))) seeded.push(key(d));
-    ok(seeded.includes(key(-23)), "no bucket exists for the month the stay arrived in");
-    return `${key(-23)} bucket exists alongside ${key(0)}`;
+    ok(seeded.includes(key(back)), "no bucket exists for the month the stay arrived in");
+    return `${key(back)} bucket exists alongside ${key(0)}`;
   });
 
   /* The other half of that fix, and the half that broke: seeding a month must
@@ -449,7 +464,16 @@ export async function run(filter) {
 
   await test("the sweep HUD does not move the calendar under a finger", async () => {
     document.querySelectorAll(".tabbar button")[1].click();
-    await until(() => document.querySelector(".cal") && document.querySelectorAll(".day[data-d]").length > 9, "the month grid");
+    await until(() => document.querySelector(".cal"), "the month tab");
+    /* Late in a month there are only a few days left to render, and this test
+       needs a cell with rows above and below it. Step forward until the grid is
+       big enough rather than assuming today is early in the month — which is
+       what it did assume, and which stopped being true a week later. */
+    for (let i = 0; i < 3 && document.querySelectorAll(".day[data-d]").length <= 12; i++) {
+      monthOffset++; renderMonth();
+      await until(() => document.querySelector(".cal .day[data-d]"), "the next month");
+    }
+    ok(document.querySelectorAll(".day[data-d]").length > 12, "no month with enough days to test");
     /* And wait for the ENTRANCE ANIMATION to finish before measuring geometry.
        `rise` is translateY(10px) and plays on a screen's first visit only
        (.screen.on:not(.seen)), so the very first run of this test measured the
@@ -613,6 +637,105 @@ export async function run(filter) {
       ok(ratio >= 4.5, `armed label is ${ratio.toFixed(2)}:1 under reduced transparency`);
       return `armed fill kept, label ${ratio.toFixed(2)}:1`;
     } finally { force.remove(); }
+  });
+
+  /* ══ the date-range picker ═════════════════════════════════════════════ */
+
+  await test("a range reads as one band, capped at its ends and at each week", async () => {
+    document.querySelectorAll(".tabbar button")[1].click();
+    await until(() => document.querySelector(".cal .day[data-d]"), "the month grid");
+    monthOffset = 0; pendingStart = null;
+    /* a span long enough to cross a Sunday, so both kinds of cap are exercised */
+    sel = { a: 1, n: 9 };
+    renderMonth();
+    await until(() => document.querySelector(".day.rngA"), "the band to paint");
+    const band = [...document.querySelectorAll(".day.rng,.day.rngA,.day.rngB")];
+    ok(band.length >= 3, `only ${band.length} cells in the band`);
+    for (const c of band) {
+      const col = (dateAt(+c.dataset.d).getDay() + 6) % 7;
+      const isEnd = c.classList.contains("rngA") || c.classList.contains("rngB");
+      if (col === 0) ok(c.classList.contains("capL"), `day ${c.dataset.d} starts a week but is not capped left`);
+      if (col === 6) ok(c.classList.contains("capR"), `day ${c.dataset.d} ends a week but is not capped right`);
+      /* a cell mid-week and mid-range must bleed both ways, or the band shows a
+         seam at every cell and the point of it is lost */
+      if (col > 0 && col < 6 && !isEnd) {
+        const b = getComputedStyle(c, "::before");
+        eq(b.left, "-3.5px", `day ${c.dataset.d} does not bleed left`);
+        eq(b.right, "-3.5px", `day ${c.dataset.d} does not bleed right`);
+      }
+    }
+    const first = document.querySelector(".day.rngA");
+    ok(first.classList.contains("capL"), "the arrival is not capped");
+    return `${band.length} cells, caps at the ends and every week edge`;
+  });
+
+  /* The band is painted behind the content. The first attempt raised the
+     content instead, which un-pinned .gg — an absolutely positioned bar — into
+     the flex flow, so every free-room count in the range wore its own progress
+     bar as a strikethrough. It looked like a font problem in a screenshot. */
+  await test("the band does not disturb the cell's own layout", async () => {
+    document.querySelectorAll(".tabbar button")[1].click();
+    await until(() => document.querySelector(".cal .day[data-d]"), "the month grid");
+    monthOffset = 0; pendingStart = null; sel = { a: 1, n: 5 };
+    renderMonth();
+    await until(() => document.querySelector(".day.rng"), "the band");
+    const plain = document.querySelector(".day[data-d]:not(.rng):not(.rngA):not(.rngB)");
+    const offOf = c => {
+      const g = c.querySelector(".gg");
+      return { pos: getComputedStyle(g).position,
+               up: Math.round(c.getBoundingClientRect().bottom - g.getBoundingClientRect().bottom) };
+    };
+    const ref = plain ? offOf(plain) : null;
+    for (const c of document.querySelectorAll(".day.rng,.day.rngA,.day.rngB")) {
+      const g = offOf(c);
+      eq(g.pos, "absolute", `day ${c.dataset.d}: the meter is no longer pinned`);
+      if (ref) eq(g.up, ref.up, `day ${c.dataset.d}: the meter sits at a different height than an unselected cell`);
+    }
+    return "meter stays pinned in every band cell";
+  });
+
+  await test("the picker head states the range and says which end the next tap sets", async () => {
+    document.querySelectorAll(".tabbar button")[1].click();
+    await until(() => document.querySelector(".pick"), "the picker head");
+    monthOffset = 0; pendingStart = null; sel = { a: 2, n: 4 };
+    renderMonth();
+    await until(() => document.querySelector(".pick .pn"), "the nights badge");
+    const [fIn, fOut] = [...document.querySelectorAll(".pick .pf")];
+    eq(fIn.querySelector("b").textContent, fmtL(2), "check-in");
+    eq(fOut.querySelector("b").textContent, fmtL(6), "check-out");
+    eq(document.querySelector(".pick .pn").textContent, "4 nights", "the nights badge");
+    ok(fIn.classList.contains("on"), "no end is armed, so check-in should carry the underline");
+    ok(!fOut.classList.contains("on"), "check-out is underlined when nothing is pending");
+    /* arming the departure moves the underline and blanks the date it will set */
+    fOut.click();
+    await until(() => document.querySelectorAll(".pick .pf")[1].classList.contains("on"),
+      "the underline to move to check-out");
+    const out2 = document.querySelectorAll(".pick .pf")[1];
+    eq(out2.querySelector("b").textContent, "Pick a date", "check-out while armed");
+    ok(pendingStart !== null, "tapping check-out did not arm a departure");
+    return `${fmtL(2)} → ${fmtL(6)}, underline follows the armed end`;
+  });
+
+  await test("a preset sets the span in one tap", async () => {
+    document.querySelectorAll(".tabbar button")[1].click();
+    await until(() => document.querySelector(".picks button"), "the preset chips");
+    monthOffset = 0; pendingStart = null; sel = { a: 0, n: 1 };
+    renderMonth();
+    await until(() => document.querySelector(".picks button"), "the chips to repaint");
+    const week = [...document.querySelectorAll(".picks button")].find(b => b.textContent === "1 week");
+    ok(week, "no '1 week' preset");
+    week.click();
+    await until(() => sel.n === 7, "the range to become a week");
+    eq(sel.n, 7, "nights after tapping '1 week'");
+    eq(pendingStart, null, "a preset must not leave a half-made selection");
+    const on = [...document.querySelectorAll(".picks button")].find(b => b.classList.contains("on"));
+    eq(on && on.textContent, "1 week", "the active preset is not marked");
+    /* Clear returns to a single night without moving the arrival */
+    const a0 = sel.a;
+    document.querySelector(".picks .pclear").click();
+    await until(() => sel.n === 1, "clear to reduce the span");
+    eq(sel.a, a0, "clear moved the arrival");
+    return "1 week → 7 nights, Clear → 1 night, arrival held";
   });
 
   /* ══ the whole surface ══════════════════════════════════════════════════ */

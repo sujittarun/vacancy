@@ -72,10 +72,13 @@ for (const [i, raw] of css.split("\n").entries()) {
 /* 3 ── radii come off the scale ─────────────────────────────────────────────
    22 distinct container radii were in this file. Ten of them differed by one
    pixel from another, which is not a decision anyone made or can see. Hairlines
-   and bars (under 8px) and pills (50%) are genuinely not containers and stay. */
+   and bars (under 8px) and pills (50% or the 999px idiom) are not containers. */
 for (const m of bare.matchAll(/border-radius:\s*([^;}]+)/g)) {
   for (const part of m[1].trim().split(/\s+/)) {
     const px = parseFloat(part);
+    /* 999px is the pill idiom — "fully round", the same statement as 50%, and
+       no more a container step than 50% is. */
+    if (px >= 500) continue;
     if (part.endsWith("px") && px >= 8)
       notes.push(`line ${lineAt(m.index)}: literal radius ${part} — should be --r-xs|sm|md|lg|xl`);
   }

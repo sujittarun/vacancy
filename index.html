@@ -837,12 +837,115 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .day.none .gg i{background:var(--hot)}
 .day.sel{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink), var(--shadow-sm)}
 
+/* ── THE PICKER HEAD ────────────────────────────────────────────────────────
+   The two dates the operator is about to read down the phone, stated once, at
+   the top, in the order they get said: arrival, then departure, then how many
+   nights that is. The month grid underneath is where you change them; this is
+   where you check them.
+
+   The underline is not decoration — it says which end the NEXT tap sets. The
+   calendar has always worked in two taps and the only thing that ever said so
+   was a sentence below the grid, read once and then invisible. A moving
+   underline says it continuously, in the place you are already looking.
+
+   Both fields are buttons: tapping one arms that end directly, so correcting a
+   departure no longer means re-picking the arrival first. */
+.pick{
+  display:flex;align-items:stretch;gap:0;margin:0 0 14px;
+  border-bottom:1px solid var(--line);padding-bottom:12px;
+}
+.pick .pf{
+  flex:1;min-width:0;text-align:left;padding:2px 0 8px;background:none;border:0;
+  display:flex;flex-direction:column;gap:5px;position:relative;
+}
+.pick .pf + .pf{padding-left:14px;margin-left:14px;border-left:1px solid var(--line)}
+.pick .pf s{
+  text-decoration:none;font-size:10px;font-weight:650;letter-spacing:.09em;
+  color:var(--txt-3);text-transform:uppercase;
+}
+.pick .pf b{font-size:19px;font-weight:670;letter-spacing:-.025em;color:var(--txt);line-height:1}
+.pick .pf.empty b{color:var(--txt-3);font-weight:600}
+/* the underline rides under the field whose end the next tap sets */
+.pick .pf::after{
+  content:"";position:absolute;left:0;bottom:0;height:2px;width:0;
+  border-radius:2px;background:var(--ink);
+  transition:width .3s var(--out);
+}
+.pick .pf + .pf::after{left:14px}
+.pick .pf.on::after{width:26px}
+.pick .pf.on s{color:var(--txt)}
+@media (prefers-reduced-motion:reduce){ .pick .pf::after{transition:none} }
+/* how many nights that is — the number the caller actually asked for */
+.pick .pn{
+  align-self:flex-start;flex:0 0 auto;margin-left:12px;
+  padding:5px 10px;border-radius:999px;white-space:nowrap;
+  font-size:11.5px;font-weight:640;letter-spacing:-.005em;
+  background:color-mix(in srgb,var(--free) 13%,transparent);
+  color:var(--txt);border:1px solid color-mix(in srgb,var(--free) 26%,transparent);
+}
+
+/* ── the shortcuts an operator is actually asked for ────────────────────────
+   Not a generic set. These are the four spans a caller names on the phone, so
+   the common case stops being two taps on a grid and becomes one. Clear is
+   plain text, deliberately quieter than the four — it undoes, it does not
+   offer. */
+.picks{display:flex;gap:7px;align-items:center;margin-top:12px;
+  overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.picks::-webkit-scrollbar{display:none}
+.picks button{
+  flex:0 0 auto;padding:7px 12px;border-radius:999px;
+  font-size:12.5px;font-weight:600;letter-spacing:-.005em;
+  background:var(--surface-2);border:1px solid var(--line);color:var(--txt-2);
+  transition:transform .35s var(--spring), background .18s;
+}
+.picks button:active{transform:scale(.94);transition-duration:.085s}
+.picks button.on{background:var(--ink);color:var(--ink-on);border-color:transparent}
+.picks .pclear{margin-left:auto;background:none;border:0;color:var(--txt-3);padding:7px 4px}
+
 /* press-and-hold, then sweep across dates to pick a stay */
 .cal{touch-action:pan-y}
 .cal.sweeping{touch-action:none}
-.day.rng{background:color-mix(in srgb,var(--free) 17%,var(--surface));
-  border-color:color-mix(in srgb,var(--free) 42%,transparent)}
-.day.rngA, .day.rngB{background:var(--free);border-color:transparent}
+/* ── A RANGE IS ONE SPAN, NOT TWENTY-TWO HIGHLIGHTED BOXES ──────────────────
+   Each selected cell used to carry its own fill and its own border, so a
+   three-week stay read as a field of separate tiles the eye had to count. The
+   band is drawn instead as a layer that BLEEDS half the grid gap either side,
+   so neighbouring cells meet with no seam and the selection reads as a single
+   object: "the 22nd to the 25th", which is what the operator says out loud.
+
+   Caps are placed deliberately rather than per cell: the two ends of the range,
+   and the two ends of every week, because a band that runs off the right edge
+   and resumes at the left is how a multi-week stay is drawn on paper. The
+   caller's arrival and departure keep a solid fill on top — they are the two
+   dates being read down the phone, and everything between them is context.
+
+   The cell's own background goes off while it is in a range. Left on, the band
+   would sit behind a second opaque rectangle and every seam would come back. */
+.day.rng, .day.rngA, .day.rngB{
+  background:transparent;border-color:transparent;overflow:visible;
+  /* the band is painted BEHIND the content at z-index -1, and isolate keeps
+     that -1 inside this cell rather than letting it fall behind the card. The
+     first attempt raised the content instead, with `> *{position:relative}` —
+     which silently un-pinned .gg, an absolutely-positioned bar, into the flex
+     flow, so every free-room count in the range wore its own progress bar as a
+     strikethrough. Lower the paint, never re-position the content. */
+  isolation:isolate;
+}
+.day.rng::before, .day.rngA::before, .day.rngB::before{
+  content:"";position:absolute;inset:0 -3.5px;z-index:-1;
+  background:color-mix(in srgb,var(--free) 17%,var(--surface));
+}
+/* the caps — set from the render loop, which knows the column and the ends */
+.day.capL::before{left:0;border-top-left-radius:var(--r-sm);border-bottom-left-radius:var(--r-sm)}
+.day.capR::before{right:0;border-top-right-radius:var(--r-sm);border-bottom-right-radius:var(--r-sm)}
+/* the two dates that get said out loud */
+.day.rngA::after, .day.rngB::after{
+  content:"";position:absolute;inset:0;z-index:-1;
+  background:var(--free);border-radius:var(--r-sm);
+}
+/* the date on the band, lifted off --txt-3. Measured on the dark band it came
+   out at 3.63:1 against a 4.5 floor — a 10px label on a fill that is lighter
+   than the cell it replaced. --txt-2 is the token that clears it in both. */
+.day.rng .dd{color:var(--txt-2)}
 .day.rngA .dd, .day.rngB .dd{color:color-mix(in srgb,var(--free-ink) 62%,transparent)}
 .day.rngA .fn, .day.rngB .fn{color:var(--free-ink)}
 .day.rngA .gg, .day.rngB .gg{background:color-mix(in srgb,var(--free-ink) 18%,transparent)}
@@ -6087,6 +6190,37 @@ function renderMonth(){
      made this look like a tray. The class turns the whole material off. */
   const cal = el("div","card bare");
   cal.style.padding = "14px";
+
+  /* ── the picker head ──────────────────────────────────────────────────────
+     The two dates about to be read down the phone, and how many nights that
+     is. Which field is underlined says what the NEXT tap sets — the calendar
+     has always worked in two taps and the only thing that ever said so was a
+     sentence under the grid. Tapping a field arms that end, so fixing a
+     departure no longer means re-picking the arrival. */
+  const head = el("div","pick");
+  const armed = pendingStart !== null;          // waiting for a departure
+  const inD  = armed ? pendingStart : sel.a;
+  const outD = armed ? null : sel.a + sel.n;
+  const fIn  = el("button","pf" + (armed ? "" : " on"));
+  fIn.append(el("s",null,"CHECK-IN"), el("b",null,fmtL(inD)));
+  fIn.setAttribute("aria-label", `Check-in ${fmtL(inD)}. Tap to choose a new arrival.`);
+  const fOut = el("button","pf" + (armed ? " on empty" : ""));
+  fOut.append(el("s",null,"CHECK-OUT"),
+              el("b",null, outD == null ? "Pick a date" : fmtL(outD)));
+  fOut.setAttribute("aria-label", outD == null
+    ? "Check-out not chosen. Tap a date to set it."
+    : `Check-out ${fmtL(outD)}. Tap to choose a new departure.`);
+  /* Tapping CHECK-IN clears the pending departure and starts again from this
+     arrival; tapping CHECK-OUT arms the departure against the arrival already
+     chosen. Both are the same two-tap model, entered from either end. */
+  fIn.onclick  = ()=>{ haptic(8); pendingStart = null; sel = {a: inD, n: Math.max(1, sel.n)};
+                       renderMonth(); };
+  fOut.onclick = ()=>{ haptic(8); pendingStart = sel.a; renderMonth(); };
+  head.append(fIn, fOut);
+  if(!armed && sel.n >= 1)
+    head.append(el("span","pn", `${sel.n} night${sel.n>1?"s":""}`));
+  cal.appendChild(head);
+
   const dow = el("div","dow");
   ["M","T","W","T","F","S","S"].forEach(d=>dow.appendChild(el("span",null,d)));
   const grid = el("div","cal");
@@ -6098,11 +6232,25 @@ function renderMonth(){
     if(d===0) c.classList.add("today");
     if(f===0) c.classList.add("none");
     const lo = sel.a, hi = sel.a + sel.n;
-    if(pendingStart === d)      c.classList.add("rngA");     // first of two taps
+    /* Where the band is capped, decided here because this is the only place
+       that knows the column. A cap closes the band: at the two ends of the
+       range, and at both ends of every week — a stay that crosses a Sunday is
+       drawn as two bars, the way it is on paper, not as one wrapping ribbon. */
+    const col = (dt.getDay()+6)%7;
+    const capL = ()=> c.classList.add("capL"), capR = ()=> c.classList.add("capR");
+    if(pendingStart === d){
+      // one date armed and waiting for its partner — a closed pill, no bleed
+      c.classList.add("rngA"); capL(); capR();
+    }
     else if(sel.n > 1){
-      if(d === lo)              c.classList.add("rngA");
-      else if(d === hi)         c.classList.add("rngB");
-      else if(d > lo && d < hi) c.classList.add("rng");
+      if(d === lo)              { c.classList.add("rngA"); capL(); if(col===6) capR(); }
+      else if(d === hi)         { c.classList.add("rngB"); capR(); if(col===0) capL(); }
+      else if(d > lo && d < hi) { c.classList.add("rng");
+                                  if(col===0) capL(); if(col===6) capR(); }
+      /* the month ends before the stay does — close the band rather than let it
+         run off an edge that is not a week edge */
+      if(d === mo.days[mo.days.length-1] && d < hi) capR();
+      if(d === mo.days[0] && d > lo) capL();
     }
     else if(d === lo)           c.classList.add("sel");
     if(softSet.has(d)) c.classList.add("soft");
@@ -6130,6 +6278,36 @@ function renderMonth(){
   });
   cal.style.padding = "0";
   cal.append(dow, grid);
+
+  /* ── the spans a caller actually names ────────────────────────────────────
+     Not a generic set of presets. These are the four things said on the phone —
+     "just tonight", "the weekend", "three nights", "a week" — so the common
+     case stops being two taps on a grid and becomes one. They anchor on the
+     arrival already chosen, except the weekend, which is a date rather than a
+     length and so sets both ends.
+     Clear is plain text, quieter on purpose: it undoes, it does not offer. */
+  const bar = el("div","picks");
+  const wk = nextWeekend();
+  const spans = [
+    {label:"Tonight",  a:0,      n:1},
+    {label:"Weekend",  a:wk.a,   n:Math.max(1, wk.b - wk.a)},
+    {label:"3 nights", a:sel.a,  n:3},
+    {label:"1 week",   a:sel.a,  n:7},
+  ];
+  spans.forEach(sp=>{
+    const on = !pendingStart && sel.a === sp.a && sel.n === sp.n;
+    const b = el("button", on ? "on" : null, sp.label);
+    b.setAttribute("aria-pressed", on ? "true" : "false");
+    b.onclick = ()=>{ haptic(9); pendingStart = null;
+                      sel = {a: sp.a, n: Math.min(sp.n, DAYS - sp.a)};
+                      revealPanel = true; renderMonth(); };
+    bar.appendChild(b);
+  });
+  const clr = el("button","pclear","Clear");
+  clr.onclick = ()=>{ haptic(6); pendingStart = null; sel = {a: sel.a, n: 1}; renderMonth(); };
+  bar.appendChild(clr);
+  cal.appendChild(bar);
+
   attachSweep(grid, hud);
 
   /* Two paragraphs used to sit under the calendar explaining what the numbers
@@ -6140,9 +6318,10 @@ function renderMonth(){
   const worst = soft[0];
   const key = el("p","insight");
   key.style.padding = "0 2px";
-  if(pendingStart !== null){
-    key.innerHTML = `Arriving <b>${fmtL(pendingStart)}</b> — now tap the departure date.`;
-  }else if(worst){
+  /* The "now tap the departure" line is gone: the moving underline in the
+     picker head says it continuously, in the place the eye is already on, and
+     a sentence that repeats a live indicator is read once and then never. */
+  if(worst){
     key.innerHTML = `<span class="hi">${fmtL(worst.d)} is running empty for a ${DOWF[dateAt(worst.d).getDay()]}</span>`
       + ` — ${worst.free} free against about ${Math.round(worst.norm)} on a normal one. The amber dots mark the rest.`;
   }else{
@@ -6158,9 +6337,11 @@ function renderMonth(){
     const free = flats.map((f,i)=>i).filter(i=>freeRange(i, a, a+n));
     const panel = el("div","stack gap-s");
     const h = el("div","sect");
-    h.append(el("span","lbl", n === 1 ? fmtL(a) : `${fmt(a)} → ${fmt(a+n)}`),
-             el("span","lbl", n === 1 ? `${free.length} of ${NF} free`
-                                      : `${n} nights · ${free.length} free`));
+    /* The dates and the night count live in the picker head now. Saying them
+       again here was the same sentence twice on one screen, and the second one
+       is not the one being read out. This header labels the LIST. */
+    h.append(el("span","lbl", "What is free"),
+             el("span","lbl", `${free.length} of ${NF}`));
     const list = el("div","card");
     if(!free.length){
       list.appendChild(el("div","empty", n === 1
