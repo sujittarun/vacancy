@@ -465,15 +465,10 @@ export async function run(filter) {
   await test("the sweep HUD does not move the calendar under a finger", async () => {
     document.querySelectorAll(".tabbar button")[1].click();
     await until(() => document.querySelector(".cal"), "the month tab");
-    /* Late in a month there are only a few days left to render, and this test
-       needs a cell with rows above and below it. Step forward until the grid is
-       big enough rather than assuming today is early in the month — which is
-       what it did assume, and which stopped being true a week later. */
-    for (let i = 0; i < 3 && document.querySelectorAll(".day[data-d]").length <= 12; i++) {
-      monthOffset++; renderMonth();
-      await until(() => document.querySelector(".cal .day[data-d]"), "the next month");
-    }
-    ok(document.querySelectorAll(".day[data-d]").length > 12, "no month with enough days to test");
+    /* The whole book renders in one grid now, so there is always a cell with
+       rows above and below it. This used to page forward until it found a month
+       with enough days — an assumption that broke a week after it was written. */
+    await until(() => document.querySelectorAll(".day[data-d]").length === DAYS, "every day");
     /* And wait for the ENTRANCE ANIMATION to finish before measuring geometry.
        `rise` is translateY(10px) and plays on a screen's first visit only
        (.screen.on:not(.seen)), so the very first run of this test measured the
@@ -656,9 +651,13 @@ export async function run(filter) {
       const isEnd = c.classList.contains("rngA") || c.classList.contains("rngB");
       if (col === 0) ok(c.classList.contains("capL"), `day ${c.dataset.d} starts a week but is not capped left`);
       if (col === 6) ok(c.classList.contains("capR"), `day ${c.dataset.d} ends a week but is not capped right`);
-      /* a cell mid-week and mid-range must bleed both ways, or the band shows a
-         seam at every cell and the point of it is lost */
-      if (col > 0 && col < 6 && !isEnd) {
+      /* A cell mid-week and mid-range must bleed both ways, or the band shows a
+         seam at every cell and the point of it is lost. Cells that carry a cap
+         are excluded: besides the two ends of the range and the two ends of a
+         week, a month's first and last day are capped too, because each month
+         block starts a fresh row under its own label. */
+      const capped = c.classList.contains("capL") || c.classList.contains("capR");
+      if (col > 0 && col < 6 && !isEnd && !capped) {
         const b = getComputedStyle(c, "::before");
         eq(b.left, "-3.5px", `day ${c.dataset.d} does not bleed left`);
         eq(b.right, "-3.5px", `day ${c.dataset.d} does not bleed right`);
@@ -703,7 +702,7 @@ export async function run(filter) {
     const [fIn, fOut] = [...document.querySelectorAll(".pick .pf")];
     eq(fIn.querySelector("b").textContent, fmtL(2), "check-in");
     eq(fOut.querySelector("b").textContent, fmtL(6), "check-out");
-    eq(document.querySelector(".pick .pn").textContent, "4 nights", "the nights badge");
+    eq(document.querySelector(".pick .pn b").textContent, "4 nights", "the nights readout");
     ok(fIn.classList.contains("on"), "no end is armed, so check-in should carry the underline");
     ok(!fOut.classList.contains("on"), "check-out is underlined when nothing is pending");
     /* arming the departure moves the underline and blanks the date it will set */
@@ -738,48 +737,72 @@ export async function run(filter) {
     return "1 week → 7 nights, Clear → 1 night, arrival held";
   });
 
-  /* The most ordinary request in this business — "the 28th to the 3rd" — was
-     impossible to enter: both month arrows cleared pendingStart AND reset sel,
-     so tapping an arrival and stepping to the next month lost the arrival. The
-     first fix preserved the half-made selection and still wiped a FINISHED one,
-     so stepping back to check the arrival month erased the stay just quoted. */
-  await test("a stay can cross a month boundary, and survives stepping either way", async () => {
+  /* The most ordinary request in this business — "the 28th to the 3rd" — used
+     to be impossible: the calendar was paged a month at a time and both arrows
+     reset the selection, so an arrival tapped on the 31st was gone the moment
+     you went looking for the departure. The months run on now, so this is two
+     taps in one grid and there is no navigation to survive. */
+  await test("a stay can cross a month boundary in one grid", async () => {
     document.querySelectorAll(".tabbar button")[1].click();
-    await until(() => document.querySelector(".cal .day[data-d]"), "the month grid");
-    monthOffset = 0; pendingStart = null; sel = { a: 0, n: 1 };
+    await until(() => document.querySelector(".cal .day[data-d]"), "the calendar");
+    pendingStart = null; sel = { a: 0, n: 1 };
     renderMonth();
     await until(() => document.querySelector(".cal .day[data-d]"), "the grid to repaint");
 
-    let cells = [...document.querySelectorAll(".day[data-d]")];
-    const arrive = +cells[cells.length - 1].dataset.d;      // last day rendered
-    cells[cells.length - 1].click();
-    await until(() => pendingStart === arrive, "the arrival to arm");
+    /* every day of the book is rendered, so a boundary is just two adjacent
+       cells — find one and pick across it */
+    ok(document.querySelectorAll(".mlab").length >= 2, "only one month is rendered");
+    eq(document.querySelectorAll(".day[data-d]").length, DAYS, "not every day is rendered");
+    let cross = -1;
+    for (let d = 1; d < DAYS - 3; d++)
+      if (dateAt(d).getMonth() !== dateAt(d + 1).getMonth()) { cross = d; break; }
+    ok(cross > 0, "no month boundary inside the horizon");
 
-    document.querySelectorAll(".mnav button")[1].click();   // ›
-    await until(() => document.querySelector(".cal .day[data-d]"), "the next month");
-    eq(pendingStart, arrive, "the arrival did not survive stepping a month");
-
-    cells = [...document.querySelectorAll(".day[data-d]")];
-    const leave = +cells[3].dataset.d;
-    cells[3].click();
+    const cellFor = d => document.querySelector(`.day[data-d="${d}"]`);
+    cellFor(cross - 1).click();
+    await until(() => pendingStart === cross - 1, "the arrival to arm");
+    cellFor(cross + 2).click();
     await until(() => pendingStart === null, "the range to complete");
-    eq(sel.a, arrive, "arrival after completing across the boundary");
-    eq(sel.n, leave - arrive, "nights across the boundary");
-    ok(document.querySelector(".day.rngB"), "the departure month shows no closing endpoint");
+    eq(sel.a, cross - 1, "arrival");
+    eq(sel.n, 3, "nights across the boundary");
 
-    document.querySelectorAll(".mnav button")[0].click();   // ‹ back
-    await until(() => document.querySelector(".cal .day[data-d]"), "the arrival month");
-    eq(sel.a, arrive, "stepping back erased the finished range");
-    eq(sel.n, leave - arrive, "stepping back changed the nights");
-    ok(document.querySelector(".day.rngA"), "the arrival month shows no opening endpoint");
+    /* and both ends are on screen at once, which is the point */
+    ok(cellFor(sel.a).classList.contains("rngA"), "no opening endpoint");
+    ok(cellFor(sel.a + sel.n).classList.contains("rngB"), "no closing endpoint");
+    const inOut = [...document.querySelectorAll(".pick .pf b")].map(b => b.textContent);
+    eq(inOut[0], fmtL(sel.a), "check-in");
+    eq(inOut[1], fmtL(sel.a + sel.n), "check-out");
+    return `${inOut[0]} → ${inOut[1]}, both endpoints in one grid`;
+  });
 
-    /* but an idle single-night cursor should still follow the view */
-    pendingStart = null; sel = { a: 0, n: 1 }; renderMonth();
-    await until(() => document.querySelector(".cal .day[data-d]"), "the grid");
-    document.querySelectorAll(".mnav button")[1].click();
-    await until(() => sel.a !== 0, "the idle cursor to follow the month");
-    eq(sel.n, 1, "the idle cursor grew a range");
-    return `${fmtL(arrive)} → ${fmtL(leave)} holds in both months`;
+  /* Half the requests arrive as a LENGTH, not two dates. The stepper moves the
+     departure and leaves the arrival where the caller put it — and it never
+     needs the next month on screen, which is the other half of why paging had
+     to go. */
+  await test("the nights stepper moves the departure and holds the arrival", async () => {
+    document.querySelectorAll(".tabbar button")[1].click();
+    await until(() => document.querySelector(".pick .pn"), "the nights control");
+    pendingStart = null; sel = { a: 3, n: 2 };
+    renderMonth();
+    await until(() => document.querySelector(".pick .pn button"), "the stepper");
+    const plus = () => [...document.querySelectorAll(".pick .pn button")][1];
+    const minus = () => [...document.querySelectorAll(".pick .pn button")][0];
+    /* a 44px target on a control a thumb uses mid-call — the arrows it replaced
+       were 36px, under the minimum */
+    const t = getComputedStyle(plus(), "::after");
+    eq(t.width, "44px", "plus target width");
+    eq(t.height, "44px", "plus target height");
+    plus().click();
+    await until(() => sel.n === 3, "nights to go up");
+    eq(sel.a, 3, "the arrival moved when nights changed");
+    minus().click(); 
+    await until(() => sel.n === 2, "nights to come down");
+    eq(sel.a, 3, "the arrival moved on the way down");
+    /* and it cannot go below one night */
+    minus().click();
+    await until(() => sel.n === 1, "nights to reach one");
+    ok(minus().disabled, "the minus is still live at one night");
+    return "nights move, arrival holds, floor at 1";
   });
 
   /* ══ the whole surface ══════════════════════════════════════════════════ */

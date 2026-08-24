@@ -311,7 +311,7 @@
    press is therefore a fast ease and only the release springs back. Same two
    rules, opposite directions, which is how a physical button behaves.        */
 .ghost:active, .tabbar button:active, .tile:active, .night:active, .opp:active,
-.dcell:active, .line:active, .nudgeBtn:active, .mnav button:active, .day:active,
+.dcell:active, .line:active, .nudgeBtn:active, .day:active,
 .field button:active, .copybtn:active, .chips button:active, .step button:active,
 .srcRow button:active, .bkgo:active, .paid.due:active, .bookbtn:active,
 .blockbtn:active, .invAdd:active, .invSave:active, .pill:active, .gate .go:active,
@@ -804,16 +804,31 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .hi-now{color:var(--now)}
 
 /* ══════════════════════ MONTH ══════════════════════ */
-.mnav{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
-/* the month's fullness, riding in the title row instead of owning a section */
-.mnav .msum{flex:1 0 100%;order:3;font-size:12px;color:var(--txt-3);
-  margin-top:-4px;letter-spacing:-.005em}
-.mnav .t{flex:1;font-size:17px;font-weight:640;letter-spacing:-.02em}
-.mnav button{width:36px;height:36px;border-radius:var(--r-xs);background:var(--surface-2);
-  border:1px solid var(--line);display:grid;place-items:center;
-  transition:transform .38s var(--spring)}
-.mnav button:active{transform:scale(.9)}
-.mnav button[disabled]{opacity:.32;pointer-events:none}
+/* ── ONE CALENDAR, NOT THREE PAGES ─────────────────────────────────────────
+   The book is 63 days — three months, eleven week-rows, about 700px. It was
+   being paged into three screens behind two 36px arrows, and that paging was
+   the whole reason a stay could not cross a month: both arrows had to reset the
+   selection to give the new month something to show, so the arrival you had
+   just tapped went with them. It also put the app's headline gesture out of
+   reach of the most ordinary request in the business, because a sweep drags
+   across one grid and the grid was one month.
+
+   So the months run on. The label between them is the separator, and a range
+   that crosses a boundary is now one continuous band you can see whole rather
+   than two halves in two views you can never see at once. The arrows are gone,
+   which also returns the top-right corner to the title.
+
+   Each label carries its own month's fullness, so the number that used to sit
+   in the title row is still there and is now attached to the month it
+   describes rather than to whichever page you happened to be on. */
+.mlab{
+  grid-column:1 / -1;display:flex;flex-direction:column;gap:2px;
+  padding:15px 2px 7px;
+}
+.mlab:first-child{padding-top:0}
+.mlab b{font-size:15px;font-weight:660;letter-spacing:-.02em;color:var(--txt);line-height:1.15}
+.mlab s{text-decoration:none;font-size:11.5px;color:var(--txt-3);
+  letter-spacing:-.005em;line-height:1.25}
 
 .dow{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:6px}
 .dow span{text-align:center;font-size:10px;font-weight:600;letter-spacing:.08em;color:var(--txt-3)}
@@ -851,9 +866,14 @@ button{background:none;border:0;padding:0;cursor:pointer}
    Both fields are buttons: tapping one arms that end directly, so correcting a
    departure no longer means re-picking the arrival first. */
 .pick{
-  display:flex;align-items:stretch;gap:0;margin:0 0 14px;
+  display:flex;flex-direction:column;gap:10px;margin:0 0 14px;
   border-bottom:1px solid var(--line);padding-bottom:12px;
 }
+/* The two dates get the full width and the nights control sits on its own row,
+   which is where the reference puts its count too. Inline beside them it was
+   136px wide and pushed "Sat 29 Aug" onto two lines — a date that wraps is a
+   date you read twice. */
+.pick .pfs{display:flex;align-items:stretch}
 .pick .pf{
   flex:1;min-width:0;text-align:left;padding:2px 0 8px;background:none;border:0;
   display:flex;flex-direction:column;gap:5px;position:relative;
@@ -863,7 +883,8 @@ button{background:none;border:0;padding:0;cursor:pointer}
   text-decoration:none;font-size:10px;font-weight:650;letter-spacing:.09em;
   color:var(--txt-3);text-transform:uppercase;
 }
-.pick .pf b{font-size:19px;font-weight:670;letter-spacing:-.025em;color:var(--txt);line-height:1}
+.pick .pf b{font-size:19px;font-weight:670;letter-spacing:-.025em;color:var(--txt);
+  line-height:1;white-space:nowrap}
 .pick .pf.empty b{color:var(--txt-3);font-weight:600}
 /* the underline rides under the field whose end the next tap sets */
 .pick .pf::after{
@@ -876,13 +897,32 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .pick .pf.on s{color:var(--txt)}
 @media (prefers-reduced-motion:reduce){ .pick .pf::after{transition:none} }
 /* how many nights that is — the number the caller actually asked for */
+/* the nights readout is also the nights CONTROL — see the note at its call
+   site. 44px targets on both buttons: this is a thing a thumb uses mid-call,
+   and the month arrows it replaces were 36px, under the minimum. */
 .pick .pn{
-  align-self:flex-start;flex:0 0 auto;margin-left:12px;
-  padding:5px 10px;border-radius:999px;white-space:nowrap;
-  font-size:11.5px;font-weight:640;letter-spacing:-.005em;
+  align-self:flex-end;flex:0 0 auto;
+  display:flex;align-items:center;gap:2px;
+  border-radius:999px;white-space:nowrap;
   background:color-mix(in srgb,var(--free) 13%,transparent);
-  color:var(--txt);border:1px solid color-mix(in srgb,var(--free) 26%,transparent);
+  border:1px solid color-mix(in srgb,var(--free) 26%,transparent);
 }
+.pick .pn b{
+  min-width:62px;text-align:center;
+  font-size:11.5px;font-weight:640;letter-spacing:-.005em;color:var(--txt);
+}
+.pick .pn button{
+  width:34px;height:34px;flex:0 0 auto;border:0;background:none;border-radius:999px;
+  font-size:16px;font-weight:600;color:var(--txt-2);line-height:1;
+  display:grid;place-items:center;
+  transition:transform .35s var(--spring), color .18s;
+}
+/* the tappable area is bigger than the ink, which is how a 34px control can
+   still be a 44px target without a 44px hole in the layout */
+.pick .pn button::after{content:"";position:absolute;width:44px;height:44px}
+.pick .pn button{position:relative}
+.pick .pn button:active{transform:scale(.88);transition-duration:.085s}
+.pick .pn button[disabled]{opacity:.3;pointer-events:none}
 
 /* ── the shortcuts an operator is actually asked for ────────────────────────
    Not a generic set. These are the four spans a caller names on the phone, so
@@ -2537,12 +2577,11 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 /* The last opaque neutrals on the light screens, found by sweeping for any fill
    at alpha 1 rather than by reading selectors — which is the only way they were
    ever going to turn up, because none of them shares a class with anything in
-   the list above. The Business sub-tabs, the month's ‹ › arrows, the close
-   button on every sheet, the two booking inputs, and the inventory summary
-   strip: six kinds of control that are cut into a surface, painting flat
+   the list above. The Business sub-tabs, the close button on every sheet, the
+   two booking inputs and the inventory summary strip: kinds of control that are
+   cut into a surface, painting flat
    --surface-2 on a screen where nothing else does. */
 :root[data-theme="light"] .tabseg button:not([aria-selected="true"]),
-:root[data-theme="light"] .mnav button,
 :root[data-theme="light"] .sheet-h button,
 :root[data-theme="light"] .bkform input,
 :root[data-theme="light"] .paid.plat,
@@ -6146,55 +6185,23 @@ function goMonth(day){
   if(i>=0) monthOffset = i;
   sel = {a:day, n:1}; pendingStart = null;
   switchTo(1);
+  /* The months all render now, so "go to September" is a scroll rather than a
+     page turn. Bring the day itself into view — the label alone would leave the
+     date the caller asked about somewhere below the fold. */
+  requestAnimationFrame(()=>{
+    const cell = document.querySelector(`.day[data-d="${day}"]`);
+    if(cell) cell.scrollIntoView({behavior: calm ? "auto" : "smooth", block:"center"});
+  });
 }
 function renderMonth(){
   const s = document.getElementById("scr-month");
   s.textContent = "";
   const ms = monthList();
-  const mo = ms[Math.max(0,Math.min(ms.length-1,monthOffset))];
 
-  const nav = el("div","mnav");
-  const prev = el("button",null,"‹"), next = el("button",null,"›");
-  prev.setAttribute("aria-label","Previous month"); next.setAttribute("aria-label","Next month");
-  if(monthOffset<=0) prev.setAttribute("disabled","");
-  if(monthOffset>=ms.length-1) next.setAttribute("disabled","");
-  /* Stepping a month is LOOKING, not choosing. Both arrows used to clear the
-     pending arrival and reset the selection, which made the single most ordinary
-     request in this business impossible to enter: a stay that starts at the end
-     of one month and finishes in the next. Tap the 27th, press ›, and the 27th
-     was gone. A caller asking for "the 28th to the 3rd" had to be told to hold
-     on while the operator worked out the arithmetic another way.
-     So a half-made selection survives the trip; only an idle cursor follows the
-     view. The band already draws correctly on both sides — every cell tests the
-     absolute day index against the range, and the month edges are capped — so
-     the departure month shows the tail of the band and its closing endpoint. */
-  const stepMonth = dir => {
-    monthOffset += dir;
-    /* Only an IDLE cursor follows the view — a single night nobody chose. A
-       half-made selection and a finished range are both decisions, and stepping
-       a month is not how anyone undoes a decision. The first version of this
-       preserved the half-made one and still wiped the finished one, so picking
-       31 Aug → 4 Sep and then stepping back to look at August erased the stay
-       the operator had just quoted. */
-    if(pendingStart === null && sel.n === 1) sel = {a: ms[monthOffset].days[0], n: 1};
-    haptic(8); renderMonth();
-  };
-  prev.onclick = ()=> stepMonth(-1);
-  next.onclick = ()=> stepMonth(1);
-  nav.append(el("div","t", `${MONF[mo.m]} ${mo.y}`), prev, next);
-
-  /* ── the shape of the month ───────────────────────────────────────────── */
-  const st = monthStats(mo.days);
-  const partial = mo.days[0] === 0 && dateAt(0).getDate() !== 1;
-  const scope = partial ? `Rest of ${MONF[mo.m]}` : MONF[mo.m];
-
-  /* The month's fullness rides in the title row rather than taking a section of
-     its own. It was a progress bar plus a caption plus an explanatory paragraph
-     — three blocks to say one number, on the tab whose entire job is the
-     calendar underneath them. Pulse owns occupancy analysis now; this is a
-     caption, not a chart. */
-  nav.appendChild(el("div","msum",
-    `${Math.round(st.pct*100)}% booked · ${st.open.toLocaleString("en-IN")} room-nights open`));
+  /* The month nav is gone. See the .mlab note in the stylesheet: the book is
+     three months and eleven rows, and paging it was the sole reason a stay
+     could not cross a boundary. monthOffset survives only as "which month did
+     someone ask to look at", used by goMonth to scroll there. */
 
   /* live readout while sweeping a range across the calendar */
   const hud = el("div","hud");
@@ -6237,17 +6244,42 @@ function renderMonth(){
   fIn.onclick  = ()=>{ haptic(8); pendingStart = null; sel = {a: inD, n: Math.max(1, sel.n)};
                        renderMonth(); };
   fOut.onclick = ()=>{ haptic(8); pendingStart = sel.a; renderMonth(); };
-  head.append(fIn, fOut);
-  if(!armed && sel.n >= 1)
-    head.append(el("span","pn", `${sel.n} night${sel.n>1?"s":""}`));
+  const fields = el("div","pfs");
+  fields.append(fIn, fOut);
+  head.appendChild(fields);
+  /* Nights, as a control rather than a readout. Half the time the request
+     arrives as a LENGTH — "from the 28th for five nights" — not as two dates,
+     and answering that by hunting for the departure on a calendar is doing
+     arithmetic the app can do. It also sidesteps the month boundary entirely:
+     spinning to five nights never needs September to be on screen.
+     Same model underneath — it moves the departure and leaves the arrival
+     alone, which is what the caller just did. */
+  if(!armed && sel.n >= 1){
+    const pn = el("div","pn");
+    const less = el("button",null,"−"), more = el("button",null,"+");
+    less.setAttribute("aria-label","One night fewer");
+    more.setAttribute("aria-label","One night more");
+    const nn = el("b", null, `${sel.n} night${sel.n>1?"s":""}`);
+    less.disabled = sel.n <= 1;
+    more.disabled = sel.a + sel.n >= DAYS;
+    const setN = n => { haptic(6); sel = {a: sel.a, n: Math.max(1, Math.min(n, DAYS - sel.a))};
+                        renderMonth(); };
+    less.onclick = ()=> setN(sel.n - 1);
+    more.onclick = ()=> setN(sel.n + 1);
+    pn.append(less, nn, more);
+    head.append(pn);
+  }
   cal.appendChild(head);
 
   const dow = el("div","dow");
   ["M","T","W","T","F","S","S"].forEach(d=>dow.appendChild(el("span",null,d)));
   const grid = el("div","cal");
-  const lead = (dateAt(mo.days[0]).getDay()+6)%7;
-  for(let i=0;i<lead;i++) grid.appendChild(el("div","day pad"));
-  mo.days.forEach(d=>{
+  /* every month, in one grid. A full-width label starts each one, which also
+     forces the grid to a new row, so a month that ends mid-week does not leave
+     the next month's 1st hanging off it. Each month still gets its own lead
+     pads, because a new month starts on whatever weekday it starts on. */
+
+  const makeDay = (d, mo)=>{
     const dt = dateAt(d), f = freeCount(d);
     const c = el("button","day");
     if(d===0) c.classList.add("today");
@@ -6296,6 +6328,19 @@ function renderMonth(){
       revealPanel = true; haptic(9); renderMonth();
     };
     grid.appendChild(c);
+  };
+
+  ms.forEach(m=>{
+    const st = monthStats(m.days);
+    const partial = m.days[0] === 0 && dateAt(0).getDate() !== 1;
+    const lab = el("div","mlab");
+    lab.append(el("b", null, `${partial ? "Rest of " : ""}${MONF[m.m]} ${m.y}`),
+               el("s", null, `${Math.round(st.pct*100)}% booked · `
+                           + `${st.open.toLocaleString("en-IN")} room-nights open`));
+    grid.appendChild(lab);
+    const lead = (dateAt(m.days[0]).getDay()+6)%7;
+    for(let i=0;i<lead;i++) grid.appendChild(el("div","day pad"));
+    m.days.forEach(d=> makeDay(d, m));
   });
   cal.style.padding = "0";
   cal.append(dow, grid);
@@ -6349,7 +6394,7 @@ function renderMonth(){
     key.remove();
   }
 
-  s.append(nav, hud, cal);
+  s.append(hud, cal);
   if(key.parentNode !== null || key.innerHTML) s.append(key);
 
   /* one panel for whatever is selected — a single night is just n = 1 */
