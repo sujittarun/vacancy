@@ -821,14 +821,28 @@ button{background:none;border:0;padding:0;cursor:pointer}
    Each label carries its own month's fullness, so the number that used to sit
    in the title row is still there and is now attached to the month it
    describes rather than to whichever page you happened to be on. */
+/* The month divider speaks in the voice the grid already has. Directly above
+   it sits M T W T F S S — 10px, uppercase, letter-spaced, --txt-3 — and that is
+   what a label for this grid looks like here. The month was arriving in a
+   different one: 15px semibold ink over a second line of caption, two heavy
+   blocks in a calendar whose actual content is the numbers.
+
+   It also said "Rest of August 2026" against "September 2026", which read as
+   two different kinds of thing rather than the same thing twice. The grid
+   visibly starts mid-month; saying so was pedantry. And the year only appears
+   when the horizon actually crosses one, which it does about once a year.
+
+   What separates the months now is a hairline and a change of month name, which
+   is all a separator has to be. */
 .mlab{
-  grid-column:1 / -1;display:flex;flex-direction:column;gap:2px;
-  padding:15px 2px 7px;
+  grid-column:1 / -1;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;
+  padding:17px 2px 9px;margin-top:5px;border-top:1px solid var(--line);
 }
-.mlab:first-child{padding-top:0}
-.mlab b{font-size:15px;font-weight:660;letter-spacing:-.02em;color:var(--txt);line-height:1.15}
-.mlab s{text-decoration:none;font-size:11.5px;color:var(--txt-3);
-  letter-spacing:-.005em;line-height:1.25}
+.mlab:first-child{padding-top:0;margin-top:0;border-top:0}
+.mlab b{font-size:10px;font-weight:650;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--txt-2)}
+.mlab s{text-decoration:none;font-size:10.5px;font-weight:500;
+  letter-spacing:.005em;color:var(--txt-3)}
 
 .dow{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:6px}
 .dow span{text-align:center;font-size:10px;font-weight:600;letter-spacing:.08em;color:var(--txt-3)}
@@ -840,7 +854,13 @@ button{background:none;border:0;padding:0;cursor:pointer}
   transition:transform .38s var(--spring), border-color .2s;
 }
 .day:active{transform:scale(.92)}
-.day.pad{background:transparent;border-color:transparent;pointer-events:none}
+/* A pad is the empty run before a month's 1st. It cleared the fill and the
+   border but not the SHADOW the shared .day material rule casts, so an
+   invisible cell still dropped a shadow — four faint rounded ghosts sitting in
+   the grid once the months ran on and the pads moved out of the top corner.
+   The light theme's own pad rule happened to clear it; dark never did, which is
+   why it only showed up in one theme. Cleared here, so one rule covers both. */
+.day.pad{background:transparent;border-color:transparent;box-shadow:none;pointer-events:none}
 .day .dd{font-size:10px;font-weight:600;color:var(--txt-3);line-height:1}
 .day .fn{font-size:clamp(16px,4.8vw,21px);font-weight:680;letter-spacing:-.035em;line-height:1}
 .day .gg{position:absolute;left:6px;right:6px;bottom:6px;height:3px;border-radius:2px;
@@ -6330,11 +6350,13 @@ function renderMonth(){
     grid.appendChild(c);
   };
 
+  /* 63 days crosses a new year about once a year; the rest of the time the
+     year is four characters of noise on every divider. */
+  const crossesYear = ms.some(x => x.y !== ms[0].y);
   ms.forEach(m=>{
     const st = monthStats(m.days);
-    const partial = m.days[0] === 0 && dateAt(0).getDate() !== 1;
     const lab = el("div","mlab");
-    lab.append(el("b", null, `${partial ? "Rest of " : ""}${MONF[m.m]} ${m.y}`),
+    lab.append(el("b", null, MONF[m.m] + (crossesYear ? ` ${m.y}` : "")),
                el("s", null, `${Math.round(st.pct*100)}% booked · `
                            + `${st.open.toLocaleString("en-IN")} room-nights open`));
     grid.appendChild(lab);
