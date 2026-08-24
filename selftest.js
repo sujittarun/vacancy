@@ -738,6 +738,50 @@ export async function run(filter) {
     return "1 week → 7 nights, Clear → 1 night, arrival held";
   });
 
+  /* The most ordinary request in this business — "the 28th to the 3rd" — was
+     impossible to enter: both month arrows cleared pendingStart AND reset sel,
+     so tapping an arrival and stepping to the next month lost the arrival. The
+     first fix preserved the half-made selection and still wiped a FINISHED one,
+     so stepping back to check the arrival month erased the stay just quoted. */
+  await test("a stay can cross a month boundary, and survives stepping either way", async () => {
+    document.querySelectorAll(".tabbar button")[1].click();
+    await until(() => document.querySelector(".cal .day[data-d]"), "the month grid");
+    monthOffset = 0; pendingStart = null; sel = { a: 0, n: 1 };
+    renderMonth();
+    await until(() => document.querySelector(".cal .day[data-d]"), "the grid to repaint");
+
+    let cells = [...document.querySelectorAll(".day[data-d]")];
+    const arrive = +cells[cells.length - 1].dataset.d;      // last day rendered
+    cells[cells.length - 1].click();
+    await until(() => pendingStart === arrive, "the arrival to arm");
+
+    document.querySelectorAll(".mnav button")[1].click();   // ›
+    await until(() => document.querySelector(".cal .day[data-d]"), "the next month");
+    eq(pendingStart, arrive, "the arrival did not survive stepping a month");
+
+    cells = [...document.querySelectorAll(".day[data-d]")];
+    const leave = +cells[3].dataset.d;
+    cells[3].click();
+    await until(() => pendingStart === null, "the range to complete");
+    eq(sel.a, arrive, "arrival after completing across the boundary");
+    eq(sel.n, leave - arrive, "nights across the boundary");
+    ok(document.querySelector(".day.rngB"), "the departure month shows no closing endpoint");
+
+    document.querySelectorAll(".mnav button")[0].click();   // ‹ back
+    await until(() => document.querySelector(".cal .day[data-d]"), "the arrival month");
+    eq(sel.a, arrive, "stepping back erased the finished range");
+    eq(sel.n, leave - arrive, "stepping back changed the nights");
+    ok(document.querySelector(".day.rngA"), "the arrival month shows no opening endpoint");
+
+    /* but an idle single-night cursor should still follow the view */
+    pendingStart = null; sel = { a: 0, n: 1 }; renderMonth();
+    await until(() => document.querySelector(".cal .day[data-d]"), "the grid");
+    document.querySelectorAll(".mnav button")[1].click();
+    await until(() => sel.a !== 0, "the idle cursor to follow the month");
+    eq(sel.n, 1, "the idle cursor grew a range");
+    return `${fmtL(arrive)} → ${fmtL(leave)} holds in both months`;
+  });
+
   /* ══ the whole surface ══════════════════════════════════════════════════ */
 
   await test("no text falls below AA in either theme", async () => {

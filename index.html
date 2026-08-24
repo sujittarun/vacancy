@@ -6158,8 +6158,29 @@ function renderMonth(){
   prev.setAttribute("aria-label","Previous month"); next.setAttribute("aria-label","Next month");
   if(monthOffset<=0) prev.setAttribute("disabled","");
   if(monthOffset>=ms.length-1) next.setAttribute("disabled","");
-  prev.onclick = ()=>{ monthOffset--; sel={a:ms[monthOffset].days[0],n:1}; pendingStart=null; haptic(8); renderMonth(); };
-  next.onclick = ()=>{ monthOffset++; sel={a:ms[monthOffset].days[0],n:1}; pendingStart=null; haptic(8); renderMonth(); };
+  /* Stepping a month is LOOKING, not choosing. Both arrows used to clear the
+     pending arrival and reset the selection, which made the single most ordinary
+     request in this business impossible to enter: a stay that starts at the end
+     of one month and finishes in the next. Tap the 27th, press ›, and the 27th
+     was gone. A caller asking for "the 28th to the 3rd" had to be told to hold
+     on while the operator worked out the arithmetic another way.
+     So a half-made selection survives the trip; only an idle cursor follows the
+     view. The band already draws correctly on both sides — every cell tests the
+     absolute day index against the range, and the month edges are capped — so
+     the departure month shows the tail of the band and its closing endpoint. */
+  const stepMonth = dir => {
+    monthOffset += dir;
+    /* Only an IDLE cursor follows the view — a single night nobody chose. A
+       half-made selection and a finished range are both decisions, and stepping
+       a month is not how anyone undoes a decision. The first version of this
+       preserved the half-made one and still wiped the finished one, so picking
+       31 Aug → 4 Sep and then stepping back to look at August erased the stay
+       the operator had just quoted. */
+    if(pendingStart === null && sel.n === 1) sel = {a: ms[monthOffset].days[0], n: 1};
+    haptic(8); renderMonth();
+  };
+  prev.onclick = ()=> stepMonth(-1);
+  next.onclick = ()=> stepMonth(1);
   nav.append(el("div","t", `${MONF[mo.m]} ${mo.y}`), prev, next);
 
   /* ── the shape of the month ───────────────────────────────────────────── */
