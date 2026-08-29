@@ -20,7 +20,7 @@
   app with a blurred bottom tab bar and a shared spring-up room sheet.
 -->
 <meta charset="utf-8">
-<title>Vacancy — 45 apartments, four ways to read them</title>
+<title>Vacancy — 46 apartments, four ways to read them</title>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
 <meta name="theme-color" content="#08090C">
 
@@ -3073,14 +3073,112 @@ const rng = mulberry32(20260806);
 /* The real portfolio. `plan` lists unit types smallest-first so studios and smaller
    flats sit on the lower floors; `per` is units per floor. Flat numbers follow
    <floor><unit>, e.g. TT-101, LP-403. */
+/* ══ CRESCENT STAYS — THE REAL BOOK ═════════════════════════════════════════
+   Read out of the operator's own workbook rather than invented: the flat list
+   is the header of the Availability tab, and the types come from "Copy of
+   Availability", whose row 3 names them for Banjara Hills and Lotus Pond, plus
+   the per-bucket rows in the monthly sheets (Jul26 A40:A50) for the rest.
+
+   The rates are real too, and they are the reason to trust the reading: each
+   monthly bucket carries booked nights and a price total, and the quotient
+   comes out at ₹3,000 / ₹3,200 / ₹4,000 / ₹5,000 / ₹5,200 / ₹6,000. Numbers
+   that round like that are a rate card, not an artefact of arithmetic.
+
+   WHAT IS IN. 46 flats over five buildings, every one of which has entries in
+   the last sixty days of the Availability tab.
+
+   WHAT IS OUT, deliberately. Vasavi (308, 408, 607) and Mumbai 2004 are still
+   columns in the sheet but have no entry in the last sixty days and earned ₹0
+   in Jul26. They are history, not inventory; adding a building back is two taps
+   in the inventory editor if that is wrong.
+
+   IDS. The operator says "MG", "M1", "TG1", "1A", "B401" and those are unique
+   across the book, so they are the ids. Only the two numbered blocks collide —
+   TreeTops and Lotus Pond both have a 101 — and those carry their building
+   code. PRODUCT.md names reading the wrong row as THE failure mode here, so a
+   number that means two different flats never appears on its own.           */
 const BUILDINGS = [
-  {code:"TT", name:"TreeTops",      short:"TreeTops",   per:4, plan:[["Studio",1],["2 BHK",1],["3 BHK",12]]},
-  {code:"TN", name:"Telecom Nagar", short:"Telecom N",  per:1, plan:[["3 BHK",3]]},
-  {code:"MP", name:"Madhapur",      short:"Madhapur",   per:2, plan:[["Studio",1],["3 BHK",3]]},
-  {code:"BH", name:"Banjara Hills", short:"Banjara H",  per:3, plan:[["Studio",2],["2 BHK",10]]},
-  {code:"LP", name:"Lotus Pond",    short:"Lotus Pond", per:3, plan:[["2 BHK",2],["3 BHK",10]]},
+  {code:"TT", name:"TreeTops",      short:"TreeTops"},
+  {code:"MP", name:"Madhapur",      short:"Madhapur"},
+  {code:"TN", name:"Telecom Nagar", short:"Telecom N"},
+  {code:"BH", name:"Banjara Hills", short:"Banjara H"},
+  {code:"LP", name:"Lotus Pond",    short:"Lotus Pond"},
 ];
-const RATE = {"Studio":[1600,2600], "2 BHK":[3000,4400], "3 BHK":[4200,6200]};
+
+/* [id, building code, floor, type, ₹/night]. Floor 0 is the ground floor. */
+/* Ground floor is said, not numbered. The invented inventory started at 1 and
+   never met a G01 or an MG; the real one has six ground-floor units. */
+const floorName = f => f === 0 ? "ground floor" : `floor ${f}`;
+const INVENTORY = [
+  /* ── TreeTops ── the two ground-floor units are the "Ttops 1bhk" bucket:
+     58 nights booked at 94% over July is two flats, and G01/G02 are the only
+     two that are not numbered by floor. Everything above them is a 3 BHK. */
+  ["G01",    "TT", 0, "1 BHK",     3000],
+  ["G02",    "TT", 0, "1 BHK",     3000],
+  ["TT-101", "TT", 1, "3 BHK",     5200],
+  ["TT-102", "TT", 1, "3 BHK",     5200],
+  ["TT-201", "TT", 2, "3 BHK",     5200],
+  ["TT-202", "TT", 2, "3 BHK",     5200],
+  ["TT-301", "TT", 3, "3 BHK",     5200],
+  ["TT-302", "TT", 3, "3 BHK",     5200],
+  ["TT-401", "TT", 4, "3 BHK",     5200],
+  ["TT-402", "TT", 4, "3 BHK",     5200],
+
+  /* ── Madhapur ── exactly as you said, and the sheet agrees twice over: the
+     "Mpur 1bhk" bucket is one flat and "Madhapur" is four, and the September
+     report reads 3bhk 93/120 with 1bhk 23/30 — four and one over thirty days. */
+  ["MG",     "MP", 0, "1 BHK",     3200],
+  ["M1",     "MP", 1, "3 BHK",     6000],
+  ["M2",     "MP", 2, "3 BHK",     6000],
+  ["M3",     "MP", 3, "3 BHK",     6000],
+  ["M4",     "MP", 4, "3 BHK",     6000],
+
+  /* ── Telecom Nagar ── three buckets in the monthly sheets — Studio, 3bhk,
+     2bhk — against eight flats, and the column names in Jul26 (TG1, TG2,
+     T 3BHK, T 2A, T 2B, T 3A, T 3B, T PH) say which is which. */
+  ["TG1",    "TN", 0, "Studio",    2000],
+  ["TG2",    "TN", 0, "Studio",    2000],
+  ["1A",     "TN", 1, "3 BHK",     5000],
+  ["2A",     "TN", 2, "2 BHK",     4000],
+  ["2B",     "TN", 2, "2 BHK",     4000],
+  ["3A",     "TN", 3, "2 BHK",     4000],
+  ["3B",     "TN", 3, "2 BHK",     4000],
+  ["4A",     "TN", 4, "Penthouse", 4000],
+
+  /* ── Banjara Hills ── the one place the workbook states types outright:
+     "3BHK - Standard" over 101/201/301, "3BHK - Premium" over 102/202/302,
+     "1BHK" over 401. The Standard/Premium split is not modelled yet; both
+     price at ₹6,000 in the July book. */
+  ["B101",   "BH", 1, "3 BHK",     6000],
+  ["B102",   "BH", 1, "3 BHK",     6000],
+  ["B201",   "BH", 2, "3 BHK",     6000],
+  ["B202",   "BH", 2, "3 BHK",     6000],
+  ["B301",   "BH", 3, "3 BHK",     6000],
+  ["B302",   "BH", 3, "3 BHK",     6000],
+  ["B401",   "BH", 4, "1 BHK",     3000],
+
+  /* ── Lotus Pond ── stated outright too: each floor is a 4 BHK let as three
+     rooms plus a studio. It is live in the Availability tab but has not reached
+     the monthly revenue sheets yet, so these are the only rates here that are
+     NOT read from the book — priced off comparable stock, and worth correcting
+     in the inventory editor once a month of its own exists. */
+  ["LP-101", "LP", 1, "3 BHK",     6000],
+  ["LP-102", "LP", 1, "3 BHK",     6000],
+  ["LP-103", "LP", 1, "3 BHK",     6000],
+  ["LP-104", "LP", 1, "Studio",    2500],
+  ["LP-201", "LP", 2, "3 BHK",     6000],
+  ["LP-202", "LP", 2, "3 BHK",     6000],
+  ["LP-203", "LP", 2, "3 BHK",     6000],
+  ["LP-204", "LP", 2, "Studio",    2500],
+  ["LP-301", "LP", 3, "3 BHK",     6000],
+  ["LP-302", "LP", 3, "3 BHK",     6000],
+  ["LP-303", "LP", 3, "3 BHK",     6000],
+  ["LP-304", "LP", 3, "Studio",    2500],
+  ["LP-401", "LP", 4, "3 BHK",     6000],
+  ["LP-402", "LP", 4, "3 BHK",     6000],
+  ["LP-403", "LP", 4, "3 BHK",     6000],
+  ["LP-404", "LP", 4, "Studio",    2500],
+];
 const NAMES = ["R. Menon","S. Kulkarni","A. Fernandes","D. Iyer","K. Bhatt","M. Sequeira","P. Rao",
   "T. Nayar","J. Dcosta","V. Shetty","N. Pillai","H. Chandra","L. Mathew","G. Saldanha","B. Kaur",
   "F. Noronha","Y. Deshpande","C. Varghese","E. Pinto","U. Reddy"];
@@ -3142,23 +3240,22 @@ let issues = [];
    The flats are editable and persist on the device. Bookings are held against
    flat IDs, so renaming or removing a flat remaps them rather than corrupting
    them.                                                                        */
-const INV_STORE = "vacancy.inventory.v1";
-const UNIT_TYPES = ["Studio","1 BHK","2 BHK","3 BHK","4 BHK"];
+/* v2, and the bump is the point. v1 holds the invented demo building — 45 flats
+   that never existed — and loadInventory() prefers whatever is saved, so the
+   real book would never have appeared on any phone that had opened the app
+   before. A new key retires the old list without touching the operator's own
+   edits under v1, which stay recoverable if this reading of the workbook turns
+   out to be wrong. */
+const INV_STORE = "vacancy.inventory.v2";
+const UNIT_TYPES = ["Studio","1 BHK","2 BHK","3 BHK","4 BHK","Penthouse"];
 
 function defaultInventory(){
-  const out = [];
-  BUILDINGS.forEach(b=>{
-    const types = [];
-    b.plan.forEach(([t,count])=>{ for(let k=0;k<count;k++) types.push(t); });
-    types.forEach((type,idx)=>{
-      const floor = Math.floor(idx / b.per) + 1;
-      const unit  = (idx % b.per) + 1;
-      const [lo,hi] = RATE[type];
-      out.push({ id:`${b.code}-${floor}0${unit}`, code:b.code, bname:b.name, bshort:b.short,
-                 floor, type, rate: lo + Math.round(rng()*(hi-lo)/100)*100 });
-    });
+  /* No longer generated. INVENTORY is the real book — see the note above it. */
+  const by = Object.fromEntries(BUILDINGS.map(b=>[b.code, b]));
+  return INVENTORY.map(([id, code, floor, type, rate])=>{
+    const b = by[code];
+    return { id, code, bname: b.name, bshort: b.short, floor, type, rate };
   });
-  return out;
 }
 function loadInventory(){
   try{
@@ -5664,7 +5761,7 @@ function showPeek(fi, day){
   const fl = flats[fi];
   const p = el("div","peek");
   const h = el("div","peek-h");
-  h.append(el("b", null, fl.id), el("s", null, `${fl.type} · ${fl.bshort} · floor ${fl.floor}`));
+  h.append(el("b", null, fl.id), el("s", null, `${fl.type} · ${fl.bshort} · ${floorName(fl.floor)}`));
   const strip = el("div","strip");
   for(let d=0; d<DAYS; d++){
     const i = el("i");
@@ -8535,7 +8632,7 @@ function roomHead(fi, backTo){
   sheetWipe();                       // it hands off to a form that fills the body
   const t = el("div");
   t.innerHTML = `<div class="n">${esc(fl.id)}</div>`
-              + `<div class="m">${esc(fl.type)} · ${esc(fl.bname)} · floor ${fl.floor}</div>`;
+              + `<div class="m">${esc(fl.type)} · ${esc(fl.bname)} · ${esc(floorName(fl.floor))}</div>`;
   const x = el("button", null, backTo ? "‹" : "✕");
   x.setAttribute("aria-label", backTo ? "Back to the room" : "Close");
   x.onclick = backTo || closeSheet;
