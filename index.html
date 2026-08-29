@@ -632,15 +632,17 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .tcard .said b{color:var(--txt)}
 .tcard .said .hi{color:var(--now);font-weight:600}
 /* bars grow from nothing as their section arrives — transform only, no layout */
-.vbar .col i, .patrow .t i{transition:transform .42s var(--out)}
+.vbar .col i, .patrow .t i, .wrow .t i, .wrow .hr{transition:transform .42s var(--out)}
 .vbar .col i{width:100%;transform-origin:bottom;transform:scaleY(var(--v,1))}
 .patrow .t i{width:100%;transform-origin:left center;transform:scaleX(var(--v,1))}
 .tcard.pending .vbar .col i{transform:scaleY(0)}
-.tcard.pending .patrow .t i{transform:scaleX(0)}
+.tcard.pending .patrow .t i,
+.tcard.pending .wrow .t i, .tcard.pending .wrow .hr{transform:scaleX(0)}
 @media (prefers-reduced-motion:reduce){
   .tcard.pending .vbar .col i{transform:scaleY(var(--v,1))}
-  .tcard.pending .patrow .t i{transform:scaleX(var(--v,1))}
-  .vbar .col i, .patrow .t i{transition:none}
+  .tcard.pending .patrow .t i,
+  .tcard.pending .wrow .t i, .tcard.pending .wrow .hr{transform:scaleX(var(--v,1))}
+  .vbar .col i, .patrow .t i, .wrow .t i, .wrow .hr{transition:none}
 }
 
 /* opportunity tiles — a number and a label; the detail lives one tap away */
@@ -1362,6 +1364,102 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .vwrap.telling .vsay > .vsay-in{padding-top:11px}
 .vsay-l{font-size:12.5px;line-height:1.5;color:var(--txt-2)}
 .vsay-l b{color:var(--txt);font-weight:640}
+
+/* ══ PROFIT — expenses drawn in the currency of occupancy ═══════════════════
+   A building's monthly cost divided by its own room rate is the number of
+   nights it must sell before it has paid for itself. Over its capacity that is
+   a break-even OCCUPANCY, which lands on the very axis the occupancy bar
+   already uses. So rent stops being a number beside a number and becomes a MARK
+   ON THE BAR, and profit stops being a third number and becomes the distance
+   past that mark. `.hr` is the only element in this app whose length is profit.
+
+   The threshold is never drawn across the bar. A mark sitting on the fill where
+   the bar clears it and on the trough where it does not has two grounds to
+   contrast against and loses in one theme or the other, every time. It also
+   isn't the same KIND of quantity as the measurement, so it gets its own rail
+   underneath, on the card surface, where it has one ground. */
+.finmo{display:flex;align-items:center;justify-content:space-between;height:32px;margin-bottom:2px}
+.finmo button{width:32px;height:32px;border-radius:var(--r-xs);color:var(--txt-3);
+  display:grid;place-items:center;font-size:17px;line-height:1}
+.finmo button[disabled]{opacity:.3}
+.finmo .lab{text-align:center;line-height:1.25}
+.finmo .lab b{display:block;font-size:13px;font-weight:650;letter-spacing:-.02em;color:var(--txt)}
+.finmo .lab s{display:block;font-size:10px;color:var(--txt-3);text-decoration:none}
+
+/* Ruled in FLATS, never in rupees — it is the legend for every bar below it. */
+.covstrip{display:flex;height:6px;border-radius:2px;overflow:hidden;margin:2px 0 7px}
+.covstrip span{display:block;height:100%}
+.covstrip .c-complete{background:var(--free)}
+.covstrip .c-absent{box-shadow:inset 0 0 0 1px var(--oos);border-radius:2px}
+.covnote{display:block;width:100%;text-align:left;font-size:11px;color:var(--txt-3);
+  padding:0 0 10px;line-height:1.4}
+
+.wrow{display:block;width:100%;text-align:left;padding:6px 0;
+  transition:transform .16s var(--out), opacity .16s var(--out)}
+.wrow + .wrow{margin-top:4px}
+.wrow .n{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:5px}
+.wrow .n b{font-size:13px;font-weight:620;letter-spacing:-.012em;color:var(--txt)}
+.wrow .n em{font-style:normal;font-size:13px;font-weight:650;color:var(--txt);white-space:nowrap}
+.wrow.short .n em{color:var(--hot)}
+.wrow .t{position:relative;height:13px;border-radius:6px;background:var(--surface-2);overflow:hidden}
+/* THE FILL IS SPLIT AT BREAK-EVEN, and that split is the whole panel.
+   Left of it are the nights that go on paying the rent; right of it are the
+   nights the operator keeps. Both segments sit on the same trough, so neither
+   has the two-grounds problem a mark drawn ACROSS the bar would have, and the
+   quantity that matters is 13px tall instead of 3px. Profit stops being a
+   figure beside a bar and becomes a length in the bar. */
+.wrow .t i{position:absolute;top:0;height:100%;display:block;
+  transform-origin:left center;transform:scaleX(var(--v,1))}
+/* NOT --held. That token is built to read as a booked tile on the PAGE ground;
+   inside a --surface-2 trough it measures 1.05:1 against it (#1B1F2A on
+   #181B24) and the segment that carries the rent simply is not there. Mixed
+   from the two tokens that actually bound this element instead, so it is a
+   muted version of the fill beside it in either theme rather than a third
+   colour that happens to work in one. */
+.wrow .t i.cover{left:0;border-radius:6px 0 0 6px;
+  background:color-mix(in srgb, var(--free) 30%, var(--surface-2))}
+.wrow .t i.kept{background:var(--free);border-radius:0 6px 6px 0}
+.wrow .t i.only{left:0;background:var(--free);border-radius:6px}
+.wrow.short .t i.cover{background:var(--hot);opacity:.55}
+/* ONE RULE GOVERNS EVERY TRACK: solid is nights the sheet bills, hatch is
+   nights the book counted that the sheet does not. That single sentence draws
+   all five rows without naming one of them. The hatch is made OF the sold
+   colour, at 135° like .tile.oos, so it can never read as vacancy. */
+.wrow .t u{position:absolute;top:0;height:100%;
+  background:repeating-linear-gradient(135deg,
+    color-mix(in srgb,var(--free) 62%,transparent) 0 5px, transparent 5px 10px)}
+.wrow .rail{position:relative;height:6px;margin-top:3px}
+.wrow .rail.nocost{border-top:1px dashed var(--line-2)}
+.wrow .tick{position:absolute;top:0;width:2px;height:6px;background:var(--txt-2);
+  border-radius:1px;transform:translateX(-1px)}
+.wrow .tick.over{width:auto;height:auto;background:none;color:var(--hot);
+  font-size:11px;line-height:6px;transform:translateX(-6px)}
+.wrow .hr{position:absolute;top:1.5px;height:3px;border-radius:2px;background:var(--free);
+  transform-origin:left;transform:scaleX(var(--v,1))}
+.wrow.short .hr{background:var(--hot)}
+.wrow .cap2{font-size:10.5px;color:var(--txt-3);margin-top:5px;line-height:1.35}
+.wgroup{border-top:1px solid var(--line);margin:12px 0 0;padding-top:10px}
+.wrows.picked .wrow{opacity:.45}
+.wrows.picked .wrow.on{opacity:1;transform:translateY(-2px)}
+
+/* card 2 — sixteen slots at a fixed monthly pitch. The dark base is the cost
+   model and is the SAME HEIGHT in every column, because FIN_COST does not move
+   with the month. Once you have seen that, you cannot mistake a margin swing
+   for a cost change, and no disclaimer under the picture is needed. */
+.finrail{display:flex;align-items:flex-end;gap:5px;height:120px}
+.finrail .s{flex:1 1 0;min-width:0;height:100%;display:flex;flex-direction:column;
+  justify-content:flex-end;opacity:.45;transition:opacity .2s var(--out), transform .2s var(--out)}
+.finrail .s.on{opacity:1;transform:translateY(-3px)}
+.finrail .s .col{position:relative;width:100%;border-radius:3px 3px 0 0;
+  background:var(--surface-2);overflow:hidden}
+.finrail .s .col em{position:absolute;left:0;right:0;bottom:0;display:block;background:var(--held);
+  border-top:1px solid var(--rim-hair)}
+.finrail .s .col i{position:absolute;left:0;right:0;top:0;display:block;background:var(--free)}
+.finrail .s.gap{align-self:stretch;border-left:1px dashed var(--line-2);opacity:.5}
+.finmon{display:flex;gap:5px;margin-top:6px}
+.finmon span{flex:1 1 0;min-width:0;text-align:center;font-size:9.5px;color:var(--txt-3)}
+.finmon span.yr{border-left:1px solid var(--line)}
+
 .vsay-go{
   margin-top:7px;padding:6px 10px;border-radius:var(--r-xs);font-size:12px;font-weight:640;
   color:var(--now);background:color-mix(in srgb,var(--now) 14%,transparent);
@@ -3420,12 +3518,22 @@ function groupOcc(days, keyOf){
                           .sort((x,y)=> x.pct - y.pct);
 }
 
+/* CLAMPED TO THE HORIZON, like occupancyValue() beside it and unlike the
+   version that shipped. The card is captioned "in the next nine weeks", so the
+   nights it averages have to be nights in the next nine weeks — but it summed
+   r.nights raw, which for a tenancy running past the book counts every night of
+   it, including the ones before today. Measured on the real book: 27.0 nights
+   average against a true 12.6, with eight rows over 63 nights doing all of it,
+   four of those being import artefacts. Two cards at the same altitude then
+   disagreed about the same 57 bookings, and the narration offered advice built
+   on the wrong one. */
 function stayMix(){
   const rs = inHorizon();
+  const held = r => Math.min(r.end, DAYS) - Math.max(r.start, 0);
   const buckets = [{k:"1 night",lo:1,hi:1},{k:"2",lo:2,hi:2},{k:"3",lo:3,hi:3},
                    {k:"4–6",lo:4,hi:6},{k:"7+",lo:7,hi:999}];
-  const out = buckets.map(b=>({...b, n: rs.filter(r=> r.nights>=b.lo && r.nights<=b.hi).length}));
-  const alos = rs.length ? rs.reduce((s,r)=>s+r.nights,0) / rs.length : 0;
+  const out = buckets.map(b=>({...b, n: rs.filter(r=>{ const n = held(r); return n>=b.lo && n<=b.hi; }).length}));
+  const alos = rs.length ? rs.reduce((s,r)=> s + held(r), 0) / rs.length : 0;
   return {out, alos, total: rs.length};
 }
 
@@ -3686,7 +3794,9 @@ function attachDaysSlider(host, block, onCancel){
     const nextUp = capped ? blockWall(block) : null;
     when.innerHTML = `Back on sale <b>${esc(fmtL(back))}</b>`
       + (nextUp ? ` · that is as far as it goes, ${esc(nextUp.guest)} `
-                  + (nextUp.start < 0 ? `is in until ${esc(fmt(nextUp.end))}` : `arrives ${esc(fmt(nextUp.start))}`)
+                  + (nextUp.start < 0
+                      ? (nextUp.openEnd ? `is in · no end date recorded` : `is in until ${esc(fmt(nextUp.end))}`)
+                      : `arrives ${esc(fmt(nextUp.start))}`)
                 : capped ? ` · as far as the free nights allow` : "");
     go.textContent = `Keep it out ${days} more day${days>1?"s":""}`;
     // the way past the wall only appears once you have actually hit it
@@ -3968,7 +4078,7 @@ function recompute(){
    up figure in a money column is worse than a blank, because a blank asks the
    question and a number answers it wrongly.                                   */
 const BOOK = [
-["1A",-95,1,"Mintu",0,0],
+["1A",-95,1,"Mintu",0,0,1],
 ["1A",-94,1,"Akhil",1,0],
 ["1A",-93,1,"Partha",0,0],
 ["1A",-92,3,"Pratap",0,0],
@@ -3987,11 +4097,11 @@ const BOOK = [
 ["1A",-33,2,"Roshan",1,0],
 ["1A",-31,4,"Shruti",1,0],
 ["1A",-24,3,"Ayush",0,0],
-["1A",-21,2,"Jeeanusha",0,4000],
+["1A",-21,2,"Jeeanusha",0,8000],
 ["1A",-15,3,"Sudarshana",0,0],
 ["1A",-9,1,"Rajendra",0,0],
 ["1A",-7,14,"Muskan",0,0],
-["2A",-95,30,"Caleb",0,0],
+["2A",-95,30,"Caleb",0,0,1],
 ["2A",-65,1,"Hemanth",1,0],
 ["2A",-64,1,"Poorna",0,0],
 ["2A",-63,2,"Stayezy Mahender",0,8750],
@@ -4013,7 +4123,7 @@ const BOOK = [
 ["2A",-11,1,"Nagaraju",0,0],
 ["2A",-9,8,"Baidik",1,0],
 ["2A",-1,4,"Sahil",1,0],
-["2B",-95,30,"Caleb",0,0],
+["2B",-95,30,"Caleb",0,0,1],
 ["2B",-64,2,"Vishal",1,0],
 ["2B",-62,1,"Sai ram",0,0],
 ["2B",-60,1,"Anurag",0,0],
@@ -4029,7 +4139,7 @@ const BOOK = [
 ["2B",-10,2,"Harini",1,0],
 ["2B",-8,1,"Shaik",1,0],
 ["2B",-6,38,"Suresh",0,0],
-["3A",-95,2,"Partha",0,0],
+["3A",-95,2,"Partha",0,0,1],
 ["3A",-93,3,"Devyansh",1,0],
 ["3A",-90,1,"Mintu Mohan",0,3000],
 ["3A",-89,2,"Ashok",0,8000],
@@ -4047,7 +4157,7 @@ const BOOK = [
 ["3A",-4,3,"Ayush",1,0],
 ["3A",-1,1,"Ayush/Anup",0,0],
 ["3A",0,2,"Raju",0,0],
-["3B",-95,1,"Sandhya",1,0],
+["3B",-95,1,"Sandhya",1,0,1],
 ["3B",-94,6,"Mintu",0,21000],
 ["3B",-88,3,"Janakiram",0,0],
 ["3B",-85,2,"Vikas",1,0],
@@ -4060,7 +4170,7 @@ const BOOK = [
 ["3B",-51,5,"Vijay",6,0],
 ["3B",-44,1,"Sudhakar",0,4000],
 ["3B",-43,3,"Manoj",1,0],
-["3B",-40,2,"Durga Prasad",0,2000],
+["3B",-40,2,"Durga Prasad",0,4000],
 ["3B",-38,6,"Debarshi",1,0],
 ["3B",-31,2,"Roshan",1,0],
 ["3B",-28,3,"Siddamurthi",1,0],
@@ -4072,7 +4182,7 @@ const BOOK = [
 ["3B",0,1,"Sairam",0,0],
 ["3B",1,1,"Charu",0,0],
 ["3B",5,3,"Ashok",1,0],
-["4A",-95,30,"Caleb",0,0],
+["4A",-95,30,"Caleb",0,0,1],
 ["4A",-64,1,"Rajesh",0,4200],
 ["4A",-63,2,"Abhishek",1,0],
 ["4A",-57,1,"Yashwanth",0,0],
@@ -4082,7 +4192,7 @@ const BOOK = [
 ["4A",-7,1,"Sampath",1,0],
 ["4A",-2,3,"Surya",0,0],
 ["4A",13,3,"Dheeraj",1,0],
-["B101",-95,1,"Joydeep",1,0],
+["B101",-95,1,"Joydeep",1,0,1],
 ["B101",-93,3,"Het",1,0],
 ["B101",-90,2,"Harshwardhan",1,0],
 ["B101",-88,4,"Anagha",1,0],
@@ -4137,7 +4247,7 @@ const BOOK = [
 ["B102",-8,1,"Dr Edwin Anthony",1,0],
 ["B102",-7,4,"Shinoj",1,0],
 ["B102",-2,5,"Basit",0,0],
-["B201",-95,28,"Caleb",0,0],
+["B201",-95,28,"Caleb",0,0,1],
 ["B201",-67,9,"Sekhar",1,0],
 ["B201",-58,7,"Syed",1,0],
 ["B201",-50,2,"Janakiram",0,13750],
@@ -4152,7 +4262,7 @@ const BOOK = [
 ["B201",5,3,"Deepa",1,0],
 ["B201",8,3,"Deepa",0,0],
 ["B201",12,3,"Anup",1,0],
-["B202",-95,28,"Caleb",0,0],
+["B202",-95,28,"Caleb",0,0,1],
 ["B202",-67,7,"Sheetal",1,0],
 ["B202",-60,1,"Sheetal",0,6693],
 ["B202",-59,5,"Azaruddin",1,0],
@@ -4167,7 +4277,7 @@ const BOOK = [
 ["B202",-31,3,"Ranga",1,0],
 ["B202",-28,4,"Santipada",1,0],
 ["B202",-22,23,"Syed",0,40700],
-["B301",-95,2,"Srujana",1,0],
+["B301",-95,2,"Srujana",1,0,1],
 ["B301",-93,2,"Srujana",0,13750],
 ["B301",-91,2,"Rajath",1,0],
 ["B301",-89,1,"Nuvuluri",1,0],
@@ -4180,7 +4290,7 @@ const BOOK = [
 ["B301",-76,1,"Lalitha",1,0],
 ["B301",-71,7,"Akhila",1,0],
 ["B301",-64,6,"Deepika",0,28350],
-["B301",-58,10,"Sushma",0,37050],
+["B301",-58,10,"Sushma",0,52650],
 ["B301",-47,7,"Naira",1,0],
 ["B301",-40,6,"Jeevan",1,0],
 ["B301",-34,1,"Jeevan",0,24532],
@@ -4199,7 +4309,7 @@ const BOOK = [
 ["B301",-6,2,"Ullas",1,0],
 ["B301",-4,4,"Deepak",1,0],
 ["B301",0,1,"Komali",0,5000],
-["B302",-95,2,"Analdip",0,0],
+["B302",-95,2,"Analdip",0,0,1],
 ["B302",-93,1,"Aditya",1,0],
 ["B302",-92,2,"Tadipatri",1,0],
 ["B302",-90,1,"Dasari",1,0],
@@ -4227,7 +4337,7 @@ const BOOK = [
 ["B302",-10,3,"Gitesh",1,0],
 ["B302",-7,4,"Mala",1,0],
 ["B302",0,7,"Prabhakar",1,0],
-["B401",-95,28,"Caleb",0,0],
+["B401",-95,28,"Caleb",0,0,1],
 ["B401",-66,4,"Nitish",1,0],
 ["B401",-62,3,"Sravan",1,0],
 ["B401",-59,2,"Pranav",1,0],
@@ -4242,7 +4352,7 @@ const BOOK = [
 ["B401",-35,4,"Afsar Ahamed",1,0],
 ["B401",-31,2,"Lalitha",0,6000],
 ["B401",-29,59,"Rakesh",0,154875],
-["G01",-95,6,"Abhinav",1,0],
+["G01",-95,6,"Abhinav",1,0,1],
 ["G01",-89,2,"Gopi",1,0],
 ["G01",-87,1,"Vinod",1,0],
 ["G01",-86,1,"Khaleel Anjum",1,0],
@@ -4267,7 +4377,7 @@ const BOOK = [
 ["G01",-19,5,"Aravind",1,0],
 ["G01",-14,2,"Satyam",1,0],
 ["G01",-12,45,"Rajkumar",1,0],
-["G02",-95,43,"Aniket",0,0],
+["G02",-95,43,"Aniket",0,0,1],
 ["G02",-52,1,"Mohammad",1,0],
 ["G02",-51,1,"Sai Krishna",5,0],
 ["G02",-50,9,"Mita",0,20082],
@@ -4451,7 +4561,7 @@ const BOOK = [
 ["LP-301",-47,1,"Dr Nayana",0,28350],
 ["LP-301",-45,1,"Bharat/Sonu",0,0],
 ["LP-301",-44,4,"Mallikarjuna",1,0],
-["LP-301",-37,4,"Mustafa",0,22500],
+["LP-301",-37,4,"Mustafa",0,45000],
 ["LP-301",-29,1,"Venkatarao",0,0],
 ["LP-301",-28,1,"Abhishek",1,0],
 ["LP-301",-27,1,"Prashanth",1,0],
@@ -4525,7 +4635,7 @@ const BOOK = [
 ["LP-303",-10,1,"Nikhil",1,0],
 ["LP-303",-9,3,"Raghavendra",0,0],
 ["LP-303",0,1,"Nabeel",0,0],
-["LP-304",-95,1,"Mastan",1,0],
+["LP-304",-95,1,"Mastan",1,0,1],
 ["LP-304",-91,3,"Swathi",0,1575],
 ["LP-304",-84,1,"Ashish",1,0],
 ["LP-304",-83,1,"Aman",3,0],
@@ -4544,7 +4654,7 @@ const BOOK = [
 ["LP-304",-20,10,"Anupam",0,0],
 ["LP-304",-10,1,"Nikhil",1,0],
 ["LP-304",-9,3,"Raghavendra",0,0],
-["LP-401",-95,6,"Venkatarao",0,0],
+["LP-401",-95,6,"Venkatarao",0,0,1],
 ["LP-401",-88,1,"Leela Mahesh",1,0],
 ["LP-401",-86,3,"Saista",1,0],
 ["LP-401",-83,1,"Kanyaragi",1,0],
@@ -4601,7 +4711,7 @@ const BOOK = [
 ["LP-404",-34,1,"Srikanth",1,0],
 ["LP-404",-33,15,"Nader",0,0],
 ["LP-404",-18,8,"Anupam",0,0],
-["M1",-95,1,"AMITbnb",0,0],
+["M1",-95,1,"Amit",1,0,1],
 ["M1",-93,1,"Akhileshwar",1,0],
 ["M1",-91,1,"Vamshi Krishna",3,0],
 ["M1",-90,1,"Raju",1,0],
@@ -4617,8 +4727,8 @@ const BOOK = [
 ["M1",-74,1,"Shiv",1,0],
 ["M1",-73,1,"Thilak",0,6000],
 ["M1",-71,1,"Nava",1,0],
-["M1",-70,2,"Satish",0,7351],
-["M1",-68,14,"Uday",0,110000],
+["M1",-70,2,"Satish",0,14701],
+["M1",-68,14,"Uday",0,162594],
 ["M1",-54,5,"Sastry",0,43732],
 ["M1",-49,1,"Naresh",1,0],
 ["M1",-47,2,"Rajkumar",0,10000],
@@ -4640,9 +4750,9 @@ const BOOK = [
 ["M2",-80,1,"Nameer",0,5500],
 ["M2",-79,2,"Karan",1,0],
 ["M2",-77,3,"Poorna",1,0],
-["M2",-73,14,"Durga Prasad",0,44100],
+["M2",-73,14,"Durga Prasad",0,110200],
 ["M2",-59,1,"Pavan/Bharath",0,5000],
-["M2",-58,23,"Sravani",0,69300],
+["M2",-58,23,"Sravani",0,122458],
 ["M2",-35,3,"Ajay",1,0],
 ["M2",-31,2,"Srinath",0,14175],
 ["M2",-26,1,"Priya",0,6300],
@@ -4658,7 +4768,7 @@ const BOOK = [
 ["M2",-5,2,"Sunny",1,0],
 ["M2",-3,3,"Ishita",1,0],
 ["M2",0,1,"Dharahas",0,0],
-["M3",-95,17,"Praveen",0,12000],
+["M3",-95,17,"Praveen",0,39003,1],
 ["M3",-78,1,"Poorna",1,0],
 ["M3",-77,1,"Ankam",1,0],
 ["M3",-73,2,"Dr PC Rayulu",0,13750],
@@ -4673,7 +4783,7 @@ const BOOK = [
 ["M3",-46,11,"Ganesh",0,0],
 ["M3",-34,4,"Raghu",0,22750],
 ["M3",-29,2,"Abhishek",1,5000],
-["M3",-27,4,"Abhishek",0,12000],
+["M3",-27,4,"Abhishek",0,22000],
 ["M3",-23,1,"Mahesh",0,7000],
 ["M3",-22,3,"Lakshmi",1,0],
 ["M3",-19,2,"Sastry",0,12000],
@@ -4688,11 +4798,11 @@ const BOOK = [
 ["M4",-89,1,"Rajesh",1,0],
 ["M4",-87,3,"Yamini",1,0],
 ["M4",-84,8,"Guru",0,0],
-["M4",-73,9,"Sastry",0,43732],
+["M4",-73,9,"Sastry",0,56226],
 ["M4",-64,1,"ARUN slc",0,8000],
-["M4",-63,2,"Praveen",0,6300],
+["M4",-63,2,"Praveen",0,12600],
 ["M4",-61,5,"Guru",0,0],
-["M4",-56,28,"Ganesh",0,140000],
+["M4",-56,28,"Ganesh",0,150000],
 ["M4",-28,1,"Sastry",0,6000],
 ["M4",-26,5,"Sastry",0,30000],
 ["M4",-21,1,"Amrita",1,0],
@@ -4731,7 +4841,7 @@ const BOOK = [
 ["MG",-38,2,"Ashok",1,0],
 ["MG",-36,6,"Veeny",0,0],
 ["MG",-28,1,"Rohit",1,0],
-["MG",-26,3,"Kavita",0,3150],
+["MG",-26,3,"Kavita",0,9450],
 ["MG",-22,1,"Raviteja",1,0],
 ["MG",-21,1,"Rajendar",0,3150],
 ["MG",-18,1,"Satish",0,2625],
@@ -4777,8 +4887,8 @@ const BOOK = [
 ["TG2",-7,2,"Shivam",1,0],
 ["TG2",-1,2,"Ayush",0,0],
 ["TG2",1,6,"Harikrishna",1,0],
-["TT-101",-95,176,"Long stay",0,0],
-["TT-102",-95,10,"Kunal",0,0],
+["TT-101",-95,176,"Long stay",0,0,3],
+["TT-102",-95,10,"Kunal",0,0,1],
 ["TT-102",-85,3,"Akberuddin",0,0],
 ["TT-102",-80,2,"Aswini",1,0],
 ["TT-102",-77,1,"Praveen",0,0],
@@ -4790,15 +4900,15 @@ const BOOK = [
 ["TT-102",-35,3,"Venkat Sai",0,12600],
 ["TT-102",-31,2,"Venu White Fern",6,0],
 ["TT-102",-29,1,"Guest",0,2100],
-["TT-102",-26,3,"Naveen",0,36300],
+["TT-102",-26,3,"Naveen",0,39450],
 ["TT-102",-22,1,"Charan",0,3500],
 ["TT-102",-21,1,"Likith",0,0],
 ["TT-102",-19,3,"Dheeraj",0,0],
 ["TT-102",-15,2,"Rabbani",0,0],
 ["TT-102",-12,14,"Mahesh",0,0],
 ["TT-102",2,5,"Sunil",0,0],
-["TT-201",-95,176,"Long stay",0,0],
-["TT-202",-95,3,"Rabbani",0,0],
+["TT-201",-95,176,"Long stay",0,0,3],
+["TT-202",-95,3,"Rabbani",0,0,1],
 ["TT-202",-92,1,"early",0,0],
 ["TT-202",-91,41,"Callie",0,0],
 ["TT-202",-50,2,"Praveen",0,0],
@@ -4812,7 +4922,7 @@ const BOOK = [
 ["TT-202",-15,3,"RAJU sir Vasavi",0,0],
 ["TT-202",-8,2,"Chandrababu",1,0],
 ["TT-202",-2,3,"Sakshi",1,0],
-["TT-301",-95,176,"Long stay",0,0],
+["TT-301",-95,176,"Long stay",0,0,3],
 ["TT-302",-93,1,"Pratap",0,0],
 ["TT-302",-92,1,"early",0,0],
 ["TT-302",-91,41,"Callie",0,0],
@@ -4832,7 +4942,7 @@ const BOOK = [
 ["TT-302",0,1,"Amogh",3,0],
 ["TT-302",3,1,"Karan",0,0],
 ["TT-302",38,4,"Suhrit",0,0],
-["TT-401",-95,176,"Long stay",0,0],
+["TT-401",-95,176,"Long stay",0,0,3],
 ["TT-402",-93,2,"Praveen",0,0],
 ["TT-402",-91,41,"Callie",0,0],
 ["TT-402",-50,15,"Adif",1,0],
@@ -4868,12 +4978,25 @@ const BOOK_BLOCKS = [
    consulted again. */
 function seedRealBook(){
   resv = []; issues = [];
-  BOOK.forEach(([id, start, nights, guest, si, amount])=>{
+  BOOK.forEach(([id, start, nights, guest, si, amount, cut])=>{
     const fi = flatIndex[id];
     if(fi === undefined) return;          // a flat that has since left the book
     const src = SRC[si] || SRC[0];
     const row = {fi, start, end: start + nights, nights, guest, src,
                  amount: amount || undefined, pays: []};
+    /* WHAT THE WINDOW CUT OFF. The book holds 176 nights; the operator's sheet
+       runs to November 2027. A tenancy still going when the window closes has
+       NO RECORDED CHECK-OUT, and `end` for it is an artefact of the import —
+       176 is BACK + FWD + 1, not a fact about anybody's stay.
+
+       This shipped, and it is the worst thing this file can do: the room sheet
+       read "Long stay is in until 18 Nov" and the export wrote 18 Nov 2026 in
+       a typed date cell, for four TreeTops tenancies the sheet runs to the end
+       of 2027 without ever ending. A date nobody wrote down, set in the same
+       type as one they did. openEnd is how every surface knows to say what is
+       true instead. */
+    if(cut & 1) row.openStart = true;
+    if(cut & 2) row.openEnd = true;
     /* Who has already paid, and nobody else. A platform stay was settled by the
        guest before arrival and the money is sitting with the platform, so that
        payment is real. A direct guest who has already checked out has paid —
@@ -4897,6 +5020,74 @@ function seedRealBook(){
                note: why, guest:"Out of service", src:"Block"});
   });
 }
+
+/* ── the workbook's own money ────────────────────────────────────────────────
+   [month, TT, MP, TN, BH, LP] — each building cell is
+       [nightsBilled, revenue, nightsInBook]   or   null.
+
+   nightsBilled and revenue come from that month's sheet in the operator's
+   workbook. They are null where the sheet has no line for that building at
+   all — Lotus Pond, every month, sixteen of the forty-six flats.
+
+   nightsInBook is ALWAYS the count of occupied cells for that building in that
+   month on the Availability tab, and it is the whole reason a cell carries
+   three numbers instead of two. It is what lets the reconciliation run over
+   fifteen months rather than only the 176 nights BOOK reaches, and it is what
+   turns "TreeTops is collapsing" into "TreeTops bills 147 of the 270 nights it
+   sold". A revenue figure you cannot check is a rumour.
+
+   Written by import-finance.py, which refuses to write a month whose sheet
+   claims more nights than the book sold, and refuses one it cannot check at
+   all. Do not hand-edit — re-run the importer.                                */
+const FIN = [
+["2025-04",[120,547000,120],[93,474000,93],[162,560000,162],[172,966000,172],null],
+["2025-05",[187,915200,187],[122,681600,122],[126,414000,126],[206,1158000,206],null],
+["2025-06",[210,1023800,210],[89,511600,89],[156,589000,156],[184,1026000,184],null],
+["2025-07",[218,1074200,218],[102,567200,102],[192,682000,192],[204,1131000,204],[null,null,3]],
+["2025-08",[212,1003400,212],[119,660800,119],[194,702000,194],[199,1104000,199],null],
+["2025-09",[223,1067200,223],[81,404800,81],[172,577000,172],[155,861000,155],null],
+["2025-10",[216,1037400,216],[94,527600,94],[201,706000,201],[188,1035000,188],null],
+["2025-12",[266,1277600,266],[130,698800,130],[221,816000,221],[192,1059000,192],null],
+["2026-01",[252,1191600,252],[126,680400,126],[201,718000,201],[184,1011000,184],null],
+["2026-02",[239,1135000,236],[133,722400,133],[208,747000,208],[186,1032000,186],null],
+["2026-03",[255,1233600,255],[125,671600,125],[225,807000,225],[189,1041000,189],null],
+["2026-04",[243,1142600,245],[123,654000,123],[191,683000,221],[196,1086000,196],[null,null,80]],
+["2026-05",[155,669600,275],[127,680800,127],[222,788000,222],[188,1035000,188],[null,null,235]],
+["2026-06",[175,778000,295],[134,720000,135],[208,764000,208],[188,1041000,188],[null,null,390]],
+["2026-07",[147,636800,271],[142,776400,142],[189,700000,189],[200,1119000,200],[null,null,387]]
+];
+
+/* The months the gate threw out, and why. A stepper that skips a month teaches
+   the operator their book has fourteen months in it. One that lands on it and
+   says what was found teaches them a formula is broken — which is true, and
+   fixable, and theirs.                                                        */
+const FIN_DROP = [
+["2024-08","no availability rows to check it against"],
+["2024-09","no availability rows to check it against"],
+["2024-10","no availability rows to check it against"],
+["2024-11","no availability rows to check it against"],
+["2024-12","no availability rows to check it against"],
+["2025-01","no availability rows to check it against"],
+["2025-02","no availability rows to check it against"],
+["2025-03","no availability rows to check it against"],
+["2025-11","MP bills 481933 nights against 138 in the book"]
+];
+
+/* The standing monthly cost model, from their Costing sheet. NOT a dated
+   actuals series: the same figures every month, which is what that sheet says
+   it is and what this app says it is. Line names are theirs, spelling
+   included — "Apartment maintance" is how it reads, and correcting it here
+   would make the app and the workbook disagree about a row name.
+
+   No interest, no tax, no depreciation: what this computes is operating profit
+   after rent, which for a leased model is close to EBITDA and is not what an
+   accountant will call net profit. The footer says so on screen.              */
+const FIN_COST = {
+  TT: {"Rent": 281000, "Salaries": 65000, "Electricity": 75000, "Water": 25000, "Refills": 12000, "Maintenance": 15000, "AMC (Lift, Gen)": 7000, "Contingency": 5000, "Laundry": 15000, "Bonus / gifts": 3000, "Replacements": 5000},
+  MP: {"Rent": 189000, "Salaries": 25000, "Electricity": 40000, "Water": 20000, "Refills": 7000, "Maintenance": 5000, "AMC (Lift, Gen)": 1500, "Contingency": 5000, "Laundry": 10000, "Bonus / gifts": 3000, "Replacements": 5000},
+  TN: {"Rent": 260000, "Salaries": 25000, "Electricity": 50000, "Water": 21000, "Refills": 12000, "Maintenance": 10000, "AMC (Lift, Gen)": 2000, "Contingency": 5000, "Laundry": 10000, "Bonus / gifts": 5000, "Replacements": 5000},
+  BH: {"Rent": 315000, "Salaries": 52000, "Electricity": 50000, "Refills": 15000, "Maintenance": 5000, "AMC (Lift, Gen)": 5000, "Contingency": 5000, "Laundry": 5000, "Bonus / gifts": 5000, "Replacements": 5000}
+};
 
 /* ── persistence ─────────────────────────────────────────────────────────────
    Stored against flat IDs, not array indexes, so the file can gain or lose flats
@@ -6166,8 +6357,14 @@ function exportRows(){
     const f = flats[r.fi], due = dueFrom(r), plat = withPlatform(r);
     bookingRows.push([
       {v:f.id}, {v:f.bname}, {v:f.type}, {v:r.guest}, {v:r.phone || "", t:"p"}, {v:r.src},
-      {v:fmtDay(r.start), t:"d"}, {v:fmtDay(r.end), t:"d"},
-      {v:r.nights, t:"n"}, r.pax ? {v:r.pax, t:"n"} : null,
+      {v:fmtDay(r.start), t:"d"},
+      /* A tenancy still running when the import window closed has no recorded
+         check-out, and a typed date cell is the most believable place in the
+         app to put one that does not exist — it lands in the accountant's
+         spreadsheet as a date, sorts as a date, and is 18 Nov 2026 purely
+         because that is where the window stopped. Text, and it says so. */
+      r.openEnd ? {v:"no end recorded"} : {v:fmtDay(r.end), t:"d"},
+      r.openEnd ? {v:"open"} : {v:r.nights, t:"n"}, r.pax ? {v:r.pax, t:"n"} : null,
       r.amount ? {v:r.amount, t:"m"} : null,
       inHand(r) ? {v:inHand(r), t:"m"} : null,
       plat ? {v:plat, t:"m"} : null,
@@ -6211,7 +6408,8 @@ function exportRows(){
   for(let d = Math.min(firstStart, 0); d < DAYS; d++){
     const dt = dateAt(d), key = dt.getFullYear() + "-" + String(dt.getMonth()+1).padStart(2,"0");
     const m = months[key] = months[key] || {key, label: MONF[dt.getMonth()] + " " + dt.getFullYear(),
-                                             sold:0, sellable:0, billed:0, paid:0, arrivals:0};
+                                             sold:0, sellable:0, billed:0, paid:0, arrivals:0,
+                                             days:0, cal: new Date(dt.getFullYear(), dt.getMonth()+1, 0).getDate()};
     /* SEED THE BUCKET, DO NOT COUNT THE NIGHTS. Two different jobs sharing one
        loop, and running the second one over past days corrupted every occupancy
        figure in the export. occ[] and blk[] are DAYS long and start at today,
@@ -6231,6 +6429,7 @@ function exportRows(){
        Occupancy prints "—" there via the existing `m.sellable ? … : "—"`
        branch, which is honest: the app has no occupancy data before today. */
     if(d < 0) continue;
+    m.days++;
     for(let i = 0; i < NF; i++){
       if(blk[i][d]) continue;
       m.sellable++; if(occ[i][d]) m.sold++;
@@ -6274,7 +6473,17 @@ function exportRows(){
     .filter(m => m.arrivals || m.sellable || m.billed || m.paid)
     .sort((a,b)=> a.key < b.key ? -1 : 1).forEach(m=> sumRows.push([
     {v:m.label}, {v:m.arrivals, t:"n"}, {v:m.sold, t:"n"}, {v:m.sellable, t:"n"},
-    {v: m.sellable ? Math.round(m.sold / m.sellable * 100) + "%" : "—"},
+    /* PART MONTHS SAY SO. occ[] starts today, so the month the export is taken
+       in is counted over the days from today to its end while Arrivals, Billed
+       and Collected on the same row cover the whole month. August printed 138
+       sellable nights — three days by 46 flats — beside a 260-arrival count for
+       the month, and called the quotient the month's occupancy. Two different
+       periods in one row, on the sheet that goes to the accountant. The row
+       still carries the figure, because it is true of the days it covers, and
+       now it names them. */
+    {v: !m.sellable ? "—"
+      : Math.round(m.sold / m.sellable * 100) + "%"
+        + (m.days < m.cal ? ` (${m.days} of ${m.cal} days)` : "")},
     m.billed ? {v:m.billed, t:"m"} : null, m.paid ? {v:m.paid, t:"m"} : null,
     (m.billed - m.paid) > 0 ? {v:m.billed - m.paid, t:"m"} : null]));
 
@@ -7612,23 +7821,195 @@ function moneyStats(){
 
    So: three mutually exclusive buckets that add up to `total`, and the platform
    payout as a fourth pot on its own, because that is what it is. */
+/* ══ THE WORKBOOK'S MONEY ═════════════════════════════════════════════════════
+   One derived model behind the Profit segment. Everything the panel draws comes
+   from here, so there is one place where a figure is either trustworthy or is
+   not, rather than four surfaces each deciding for themselves.
+
+   EXPENSES ARE MEASURED IN OCCUPANCY, not in rupees, and that is the whole
+   idea of the panel. A building's monthly cost divided by its own room rate is
+   the number of nights it must sell before it has paid for itself; over its
+   capacity that is a break-even OCCUPANCY, which lands on exactly the same
+   0–100 axis the occupancy bar already uses. Rent stops being a number beside a
+   number and becomes a mark on the bar, and profit stops being a third number
+   and becomes the distance past that mark. `head` — the headroom — is the only
+   quantity in this app whose length on screen is profit.
+
+   The identity that makes it cheap AND makes it honest:
+
+       head = occ - be = occ x (1 - cost/revenue) = occ x margin
+
+   Check it on any row: BH 92.17 x 58.71% = 54.11 points. Because headroom rises
+   with both nights and revenue, a row whose nights and revenue can only rise
+   has a headroom that can only rise — which is why an understated building
+   prints "at least" figures instead of being dropped. A floor is information; a
+   blank where a number belongs reads as a loss.
+
+   THE THREE STATES, and nothing in the render path knows a building's name:
+     complete  the sheet bills the nights the book counted
+     floor     the book counted more than the sheet bills — income billed
+               elsewhere, so every figure is a floor and none is a verdict
+     absent    no revenue line and no cost line exist at all
+   Today "floor" is TreeTops' four long tenancies and "absent" is Lotus Pond,
+   but the day Madhapur signs a corporate let outside the sheet this catches it
+   instead of shipping a confidently wrong ranking.                            */
+/* The cost model the app actually reads: the workbook's, with anything the
+   operator has typed in the cost sheet laid over the top. Declared HERE, above
+   finRows, rather than beside openCosts a few thousand lines down — the primitive
+   goes above its first caller, which is the rule this file learned the hard way
+   four times over.
+
+   Merged rather than replaced, so re-running import-finance.py refreshes their
+   sheet's figures without touching a building they costed themselves, and a
+   building the sheet has never heard of is theirs alone. */
+const COST_STORE = "vacancy.costs.v1";
+let costUser = jget(COST_STORE) || {};
+/* Revenue the operator typed for a building their workbook does not price, one
+   month at a time. Lotus Pond needs BOTH sides filling in, not just costs: the
+   nights are already counted from the Availability tab, but nothing anywhere
+   says what those nights earned. Keyed by month so nothing is carried across
+   into a month it was not true of.                                           */
+const FINU_STORE = "vacancy.revenue.v1";
+let finUser = jget(FINU_STORE) || {};
+const costLines = ()=>{
+  const seen = [];
+  Object.values(FIN_COST).forEach(m => Object.keys(m).forEach(k => { if(seen.indexOf(k) < 0) seen.push(k); }));
+  return seen;
+};
+const costFor = code => Object.assign({}, FIN_COST[code] || {}, costUser[code] || {});
+const costTotal = code => { const m = costFor(code);
+  return Object.keys(m).length ? Object.values(m).reduce((a,c)=> a + (+c || 0), 0) : null; };
+
+const FIN_TOL = 0.02;                  // a 2% drift is a rounding, not a hole
+/* Card 2 draws all fifteen months, so finRows runs fifteen times per paint and
+   the segment repaints on every month step, theme flip and audit walk. Cached
+   on the two things that can change the answer — the inventory it counts flats
+   from, and whatever the operator has typed into the cost sheet. */
+let finCache = {}, finCacheKey = "";
+const finBust = ()=>{ finCache = {}; finCacheKey = ""; };
+/* And said ONCE. The warning is a standing property of the workbook, not an
+   event: unthrottled it wrote four lines per paint and buried every other
+   console message under a thousand copies of itself during a test run. */
+const finWarned = {};
+function finRows(monthKey){
+  const stamp = NF + "|" + JSON.stringify(costUser) + "|" + JSON.stringify(finUser);
+  if(stamp !== finCacheKey){ finCache = {}; finCacheKey = stamp; }
+  if(finCache[monthKey]) return finCache[monthKey];
+  return (finCache[monthKey] = finRowsCalc(monthKey));
+}
+function finRowsCalc(monthKey){
+  const row = FIN.find(r => r[0] === monthKey);
+  const [y, mo] = monthKey.split("-").map(Number);
+  const days = new Date(y, mo, 0).getDate();
+  const drop = (FIN_DROP.find(d => d[0] === monthKey) || [])[1];
+  const B = buildingsOf();
+  const out = {month: monthKey, days, drop, rows: [],
+               coverage: {complete: 0, floor: 0, absent: 0}};
+  if(!row) return Object.assign(out, {totals: null});
+
+  ["TT","MP","TN","BH","LP"].forEach((code, i)=>{
+    const cell = row[i + 1];
+    if(!cell) return;
+    let [billed, revenue, book] = cell;
+    /* Supplied by the operator for a building the workbook does not price. The
+       nights are the book's own count, so what they are asked for is the one
+       thing nobody has written down: what those nights earned. */
+    const mine = (finUser[monthKey] || {})[code];
+    if(billed == null && mine > 0){ revenue = mine; billed = book; }
+    /* flats from the LIVE inventory, never a constant. The operator can add or
+       retire a flat in the inventory editor, and a capacity that did not follow
+       would quietly move every occupancy and every break-even on this screen. */
+    const flatN = flats.filter(f => f.code === code).length;
+    if(!flatN) return;
+    const b = B.find(x => x.code === code);
+    const cap = flatN * days;
+    const cost = costTotal(code);
+    const ratio = billed ? book / billed : null;
+    const state = billed == null || cost == null ? "absent"
+                : (ratio > 1 + FIN_TOL || ratio < 1 - FIN_TOL) ? "floor"
+                : "complete";
+    out.coverage[state] += flatN;
+    const r = {code, name: b ? b.name : code, short: b ? b.short : code,
+               flats: flatN, cap, book, bookOcc: cap ? book / cap : 0,
+               billed, revenue, cost, state, ratio};
+    if(state !== "absent"){
+      r.occ    = cap ? billed / cap : 0;
+      r.adr    = billed ? revenue / billed : 0;
+      r.revpar = cap ? revenue / cap : 0;
+      r.net    = revenue - cost;
+      r.margin = revenue ? r.net / revenue : 0;
+      r.beNights = r.adr ? cost / r.adr : Infinity;
+      r.be     = cap ? r.beNights / cap : Infinity;
+      r.head   = r.occ - r.be;
+      /* A building that cannot break even however full it gets is a different
+         sentence from one that is merely empty, and it must not be drawn as
+         one whose costs are unknown — that picture is spoken for. */
+      r.unreachable = r.be > 1;
+    }
+    out.rows.push(r);
+  });
+
+  const priced = out.rows.filter(r => r.state !== "absent");
+  out.totals = priced.length ? {
+    revenue: priced.reduce((s,r)=> s + r.revenue, 0),
+    cost:    priced.reduce((s,r)=> s + r.cost, 0),
+    nights:  priced.reduce((s,r)=> s + r.billed, 0),
+    cap:     priced.reduce((s,r)=> s + r.cap, 0),
+    flats:   priced.reduce((s,r)=> s + r.flats, 0),
+    floor:   priced.some(r => r.state === "floor"),
+  } : null;
+  if(out.totals){
+    const t = out.totals;
+    t.net = t.revenue - t.cost;
+    t.margin = t.revenue ? t.net / t.revenue : 0;
+    t.occ = t.cap ? t.nights / t.cap : 0;
+    t.adr = t.nights ? t.revenue / t.nights : 0;
+    t.revpar = t.cap ? t.revenue / t.cap : 0;
+  }
+  /* Said out loud in the console, the same discipline as owedStats' partition
+     check: a revenue line that stops covering its own nights is a bookkeeping
+     change, and the app noticing before the operator does is the point. */
+  out.rows.filter(r => r.state === "floor").forEach(r =>{
+    const k = monthKey + r.code;
+    if(finWarned[k]) return;
+    finWarned[k] = 1;
+    console.warn("finRows: revenue line short of the book",
+      {month: monthKey, code: r.code, billed: r.billed, book: r.book, ratio: +r.ratio.toFixed(2)});
+  });
+  return out;
+}
+
 function owedStats(){
   const bk = bookings().filter(r => r.amount && dueFrom(r) > 0);
   const gone  = bk.filter(r => r.end <= 0);
-  const soon  = bk.filter(r => r.end > 0 && r.start >= 0 && r.start <= 7);
-  const later = bk.filter(r => r.end > 0 && !(r.start >= 0 && r.start <= 7));
+  /* IN THE FLAT NOW — its own state, and the one the card was missing.
+     Everybody who had arrived but not left fell into "later · not collectable
+     yet", and on the real book that was 98.5% of the money: four guests
+     standing in four flats, two of them checking out inside 48 hours with
+     ₹72,200 between them, filed under the heading that means "no hurry". The
+     summary then said the balance was "with guests still to arrive", which was
+     true of ₹5,000 of ₹3,22,950.
+
+     A guest in the room is the EASIEST money in the book to collect and the
+     window closes when they hand the keys back. It is not "later". */
+  const here  = bk.filter(r => r.end > 0 && r.start <= 0);
+  const soon  = bk.filter(r => r.end > 0 && r.start > 0 && r.start <= 7);
+  const later = bk.filter(r => r.end > 0 && r.start > 7);
   const sum = a => a.reduce((s,r)=> s + dueFrom(r), 0);
   const out = {total: sum(bk), count: bk.length,
+          here: sum(here), hereN: here.length,
+          /* of those, the ones whose door closes within two days */
+          going: sum(here.filter(r => r.end <= 2)), goingN: here.filter(r => r.end <= 2).length,
           soon: sum(soon), soonN: soon.length,
           gone: sum(gone), goneN: gone.length,
           later: sum(later), laterN: later.length,
           platform: bookings().reduce((s,r)=> s + withPlatform(r), 0)};
-  /* the assertion the card never made. If a fourth state is ever added to the
+  /* the assertion the card never made. If a fifth state is ever added to the
      book this fires in the console rather than shipping a card that silently
      hides a fifth of the money. */
-  if(out.soon + out.gone + out.later !== out.total)
+  if(out.soon + out.gone + out.later + out.here !== out.total)
     console.warn("owedStats: rows do not partition the total",
-      {soon:out.soon, gone:out.gone, later:out.later, total:out.total});
+      {soon:out.soon, gone:out.gone, later:out.later, here:out.here, total:out.total});
   return out;
 }
 
@@ -7685,7 +8066,8 @@ function upkeepStats(){
 }
 
 let pulseSeg = "now", pulseDir = 0;
-const PULSE_SEGS = ["now","money","rooms","guests","upkeep"];
+let finMonth = "";     // which month the Profit segment is showing
+const PULSE_SEGS = ["now","money","profit","rooms","guests","upkeep"];
 
 /* Move between Pulse segments. Direction is remembered so the deck arrives from
    the side you travelled, which is the whole difference between a screen that
@@ -7728,7 +8110,7 @@ function renderTrends(){
      year is going, and each new measure pushed the actionable ones further down.
      They answer different questions on different clocks — act now, earn, fill,
      return, spend — so they get a bar rather than a queue. */
-  const SEGS = [["now","Now"],["money","Money"],["rooms","Rooms"],
+  const SEGS = [["now","Now"],["money","Money"],["profit","Profit"],["rooms","Rooms"],
                 ["guests","Guests"],["upkeep","Upkeep"]];
   const seg = SEGS.some(s=>s[0] === pulseSeg) ? pulseSeg : "now";
   // the chips live in the header, not in this scroll — see .tabseg
@@ -7935,6 +8317,337 @@ function renderTrends(){
     deck.appendChild(line);
   }
 
+
+  /* ── PROFIT ────────────────────────────────────────────────────────────────
+     Expenses drawn in the currency of occupancy. See finRows() and the CSS
+     note on .wrow for why the threshold is a mark under the bar rather than a
+     line across it, and why one rule — solid is billed, hatch is counted but
+     not billed — draws all five rows without naming any of them.             */
+  if(seg === "profit"){
+    if(!FIN.length){
+      deck.appendChild(el("div","empty","No months have been read from your workbook yet."));
+    } else {
+    const keys = FIN.map(r=>r[0]);
+    if(keys.indexOf(finMonth) < 0) finMonth = keys[keys.length-1];
+    const F = finRows(finMonth);
+    const pct = v => Math.max(0, Math.min(1, v));
+    const monName = k => { const [y,m] = k.split("-").map(Number);
+      return MON[m-1] + " " + y; };
+
+    /* THE MONTH ROW — on the page ground, not in a card, because two cards
+       read it; and not in the header, because a month is a lie above Now,
+       Rooms, Guests and Upkeep. */
+    const mo = el("div","finmo");
+    const prev = el("button",null,"‹"), next = el("button",null,"›");
+    prev.setAttribute("aria-label","The month before"); next.setAttribute("aria-label","The month after");
+    const at = keys.indexOf(finMonth);
+    prev.disabled = at <= 0; next.disabled = at >= keys.length-1;
+    const lab = el("div","lab");
+    lab.append(el("b",null,monName(finMonth)),
+               el("s",null,`${keys.length} months read · ${FIN_DROP.length} refused`));
+    const step = d => { const k = keys[at+d]; if(!k) return; finMonth = k; haptic(9); renderTrends(); };
+    prev.onclick = ()=>step(-1); next.onclick = ()=>step(1);
+    mo.append(prev, lab, next);
+    deck.appendChild(mo);
+
+    /* ── CARD 1 — the waterline ───────────────────────────────────────── */
+    {
+      const {c,b} = card("Which buildings pay for themselves",
+        `${monName(finMonth)} · sold against what each has to sell to cover itself`);
+      const totalFlats = F.coverage.complete + F.coverage.floor + F.coverage.absent;
+      const strip = el("div","covstrip");
+      [["complete",F.coverage.complete],["floor",F.coverage.floor],["absent",F.coverage.absent]]
+        .forEach(([k,n])=>{ if(!n) return;
+          const sp = el("span","c-"+k); sp.style.width = (n/totalFlats*100).toFixed(2)+"%";
+          if(k==="floor") sp.style.background =
+            "repeating-linear-gradient(135deg,color-mix(in srgb,var(--free) 62%,transparent) 0 5px,transparent 5px 10px)";
+          strip.appendChild(sp); });
+      strip.setAttribute("role","img");
+      strip.setAttribute("aria-label",
+        `${F.coverage.complete} flats priced completely, ${F.coverage.floor} priced short of the book, ${F.coverage.absent} in no sheet`);
+      b.appendChild(strip);
+      const absent = F.rows.filter(r=>r.state==="absent");
+      if(absent.length){
+        const note = el("button","covnote",
+          `${F.coverage.absent} flats at ${absent.map(r=>r.name).join(" and ")} are in no revenue or cost sheet →`);
+        note.onclick = ()=>{ haptic(10); openCosts(absent[0]); };
+        b.appendChild(note);
+      }
+      const head = el("div","headline");
+      const t = F.totals;
+      head.append(el("b",null, t ? money(t.net) : "—"));
+      const s2 = el("s"); s2.innerHTML = t
+        ? `kept · <span class="hi">${t.flats} of ${totalFlats} flats</span>`
+        : "nothing priced this month";
+      head.append(s2);
+      b.appendChild(head);
+
+      const wrap = el("div","vwrap");
+      const rowsBox = el("div","wrows");
+      const out = el("div","vsay");
+      let picked = -1; const made = [];
+      const complete = F.rows.filter(r=>r.state==="complete").sort((a,b2)=> a.head - b2.head);
+      const floors   = F.rows.filter(r=>r.state==="floor").sort((a,b2)=> a.head - b2.head);
+
+      const drawRow = (r)=>{
+        const row = el("button","wrow" + (r.state==="complete" && r.net < 0 ? " short" : ""));
+        const n = el("div","n");
+        const nm = el("b", null, r.name);
+        n.appendChild(nm);
+        if(r.state === "floor"){ const p2 = el("span","pill now","understated"); n.appendChild(p2); }
+        const right = el("em");
+        if(r.state === "absent"){ const p2 = el("span","pill now","Add costs →"); n.appendChild(p2); }
+        else right.textContent = (r.state==="floor" ? "at least " : "") +
+                                 (r.net >= 0 ? "+" : "−") + money(Math.abs(r.net));
+        n.appendChild(right);
+        row.appendChild(n);
+
+        /* ONE RULE: solid is nights the sheet bills, hatch is nights the book
+           counted that it does not. And the solid part is split at break-even
+           — dim while it is still paying the rent, lit once it is not. */
+        const track = el("div","t");
+        const billedOcc = r.state==="absent" ? 0 : pct(r.occ);
+        const be = r.state==="absent" ? null : pct(r.be);
+        const put = (cls, from, to)=>{
+          if(to <= from + 0.0005) return;
+          const i2 = el("i", cls);
+          i2.style.left = (from*100).toFixed(2)+"%";
+          i2.style.width = ((to-from)*100).toFixed(2)+"%";
+          i2.style.setProperty("--v","1");
+          track.appendChild(i2);
+        };
+        if(be === null) { /* nothing billed at all — the hatch below says it */ }
+        else if(billedOcc <= be){ put("cover only", 0, billedOcc); }   // still paying for itself
+        else { put("cover", 0, be); put("kept", be, billedOcc); }
+        const bookOcc = pct(r.bookOcc);
+        if(bookOcc > billedOcc + 0.001){
+          const h = el("u");
+          h.style.left = (billedOcc*100).toFixed(2)+"%";
+          h.style.width = ((bookOcc-billedOcc)*100).toFixed(2)+"%";
+          track.appendChild(h);
+        }
+        row.appendChild(track);
+
+        /* The threshold also gets a hard mark on its own rail below, on the one
+           ground the card surface offers, so the exact point is readable even
+           where the two fill segments meet at low contrast. */
+        const rail = el("div","rail" + (r.state==="absent" ? " nocost" : ""));
+        if(r.state !== "absent"){
+          const tick = el("span","tick" + (r.unreachable ? " over" : ""), r.unreachable ? "›" : "");
+          tick.style.left = (Math.min(be,1)*100).toFixed(2)+"%";
+          rail.appendChild(tick);
+          if(r.head < 0 || r.unreachable){
+            const hr = el("span","hr");
+            hr.style.left = (billedOcc*100).toFixed(2)+"%";
+            hr.style.width = Math.max(Math.min(be,1)-billedOcc, 0.02)*100 + "%";
+            hr.style.background = "var(--hot)";
+            rail.appendChild(hr);
+          }
+        }
+        row.appendChild(rail);
+
+        const cap2 = el("div","cap2");
+        cap2.textContent = r.state === "absent"
+          ? `${r.flats} flats · ${r.book} nights sold in ${MON[+finMonth.split("-")[1]-1]} · no revenue line and no cost line`
+          : `${money(r.revenue)} in · ${money(r.cost)} out · ` + (r.unreachable
+              ? `cannot break even at ${money(r.adr)} a night`
+              : `breaks even at ${Math.ceil(r.beNights)} of its ${r.cap} nights`)
+            + (r.state==="floor" ? ` · covers ${r.billed} of the ${r.book} nights the book counted` : "");
+        row.appendChild(cap2);
+
+        row.onclick = ()=>{
+          if(r.state === "absent"){ haptic(10); openCosts(r); return; }
+          const i = made.indexOf(row);
+          picked = picked === i ? -1 : i;
+          rowsBox.classList.toggle("picked", picked >= 0);
+          made.forEach((z,j)=> z.classList.toggle("on", j === picked));
+          out.textContent = "";
+          if(picked < 0){ wrap.classList.remove("telling"); return; }
+          wrap.classList.add("telling");
+          const inner = el("div","vsay-in"), line = el("div","vsay-l");
+          line.innerHTML = r.state === "floor"
+            ? `<b>${esc(r.name)}</b> sold ${r.book} of its ${r.cap} nights — ${Math.round(r.bookOcc*100)}%. `
+              + `Your monthly sheet accounts for ${r.billed} of them, ${Math.round(r.occ*100)}%. The rest is billed `
+              + `outside this sheet, so <b>${money(r.net)} is a floor, not a figure</b>. Its cost line covers all `
+              + `${r.flats} flats and its revenue covers fewer, and headroom rises with both nights and revenue — `
+              + `so this row can only go up.`
+            : `<b>${esc(r.name)}</b> · ${monName(finMonth)} · ${r.flats} flats<br>`
+              + `${money(r.revenue)} in, ${money(r.cost)} out → <b>${(r.net>=0?"+":"−")+money(Math.abs(r.net))}</b> kept, `
+              + `${Math.round(r.margin*100)}% margin, ${money(r.adr)} a night.<br>`
+              + `Sold ${Math.round(r.occ*100)}%. ` + (r.unreachable
+                  ? `<b>It cannot cover ${money(r.cost)} at ${money(r.adr)} a night however full it gets. The rate is the problem, not the fill.</b>`
+                  : `Breaks even at ${Math.ceil(r.beNights)} of its ${r.cap} nights — ${Math.round(r.be*100)}%. `
+                    + `<b>${r.head >= 0
+                        ? "You could lose " + Math.round(r.head*100) + " points of occupancy before it stops paying for itself."
+                        : "It is " + Math.round(-r.head*100) + " points of occupancy short of paying for itself."}</b>`);
+          inner.appendChild(line);
+          out.appendChild(inner); haptic(7);
+        };
+        made.push(row);
+        return row;
+      };
+
+      complete.forEach(r=> rowsBox.appendChild(drawRow(r)));
+      if(floors.length){
+        const g = el("div","wgroup"); g.appendChild(el("div","lbl","BILLED OUTSIDE THIS SHEET"));
+        rowsBox.appendChild(g);
+        floors.forEach(r=> rowsBox.appendChild(drawRow(r)));
+      }
+      if(absent.length){
+        const g = el("div","wgroup"); g.appendChild(el("div","lbl","NOT IN THE P&L"));
+        rowsBox.appendChild(g);
+        absent.forEach(r=> rowsBox.appendChild(drawRow(r)));
+      }
+      wrap.append(rowsBox, out);
+      b.appendChild(wrap);
+
+      const best = complete[complete.length-1], worst = complete[0];
+      said(c, complete.length >= 2
+        ? `Ranking by rupees only ranks your buildings by size. Ranked by <b>headroom</b> — how far past its own `
+          + `break-even each one is running — <span class="hi">${esc(best.name)}</span> is ${Math.round(best.head*100)} points clear `
+          + `and <span class="hi">${esc(worst.name)}</span> is ${Math.round(worst.head*100)}. That gap is the one worth acting on, `
+          + `and it is invisible in a column of profits.`
+        : `The mark under each bar is what that building has to sell to cover itself. Everything to the right of it is profit.`);
+    }
+
+    /* ── CARD 2 — the fifteen months, cost drawn as a constant base ────── */
+    {
+      const {c,b} = card("Is it getting better",
+        `revenue against what it costs · ${monName(FIN[0][0])} → ${monName(FIN[FIN.length-1][0])}`);
+      const all = FIN.map(r=> finRows(r[0]));
+      const maxRev = Math.max(...all.map(f=> f.totals ? f.totals.revenue : 0), 1);
+      const rail = el("div","finrail");
+      rail.setAttribute("role","img");
+      rail.setAttribute("aria-label",
+        `Revenue by month, ${FIN.length} months, each column split at the cost line`);
+      /* the months the gate refused get a slot with no column, not a closed-up
+         gap: a rail that shuts the hole teaches the operator their book has
+         fourteen months in it */
+      const slots = [];
+      FIN.forEach((r,i)=>{
+        if(i){
+          const [py,pm] = FIN[i-1][0].split("-").map(Number);
+          let ny = py, nm = pm + 1; if(nm > 12){ nm = 1; ny++; }
+          const gapKey = `${ny}-${String(nm).padStart(2,"0")}`;
+          if(gapKey !== r[0]) slots.push({gap:true, key:gapKey});
+        }
+        slots.push({gap:false, key:r[0], f:all[i]});
+      });
+      slots.forEach(sl=>{
+        if(sl.gap){ const g = el("div","s gap"); g.title = "not drawn"; rail.appendChild(g); return; }
+        const cell = el("div","s" + (sl.key === finMonth ? " on" : ""));
+        const col = el("div","col");
+        const t = sl.f.totals;
+        const h = t ? Math.max(6, Math.round(t.revenue / maxRev * 120)) : 6;
+        col.style.height = h + "px";
+        if(t){
+          const base = el("em");
+          base.style.height = Math.round(t.cost / t.revenue * h) + "px";
+          const cap2 = el("i");
+          cap2.style.height = (h - Math.round(t.cost / t.revenue * h)) + "px";
+          col.append(cap2, base);
+        }
+        cell.appendChild(col);
+        rail.appendChild(cell);
+      });
+      b.appendChild(rail);
+      const labs = el("div","finmon");
+      slots.forEach((sl,i)=>{
+        const [yy,mm] = sl.key.split("-").map(Number);
+        const sp = el("span", i && slots[i-1].key.slice(0,4) !== sl.key.slice(0,4) ? "yr" : null,
+                      MON[mm-1][0]);
+        labs.appendChild(sp);
+      });
+      b.appendChild(labs);
+      said(c, `The dark base is the same height in every column, because your Costing sheet is a standing `
+        + `monthly model and not dated invoices. So every change in the lit cap above it is a change in `
+        + `<b>revenue</b> — nothing here can tell you a cost went up.`);
+    }
+
+    /* ── CARD 3 — the three rates, and what changed ────────────────────── */
+    {
+      const {c,b} = card("The three rates, and what changed",
+        `${monName(finMonth)} · the buildings your sheet prices`);
+      const T = F.totals;
+      const at = keys.indexOf(finMonth);
+      const back = (k, n)=>{ const [y,m] = k.split("-").map(Number);
+        let mm = m - n, yy = y; while(mm < 1){ mm += 12; yy--; }
+        return `${yy}-${String(mm).padStart(2,"0")}`; };
+      const tot = k => { const kk = keys.indexOf(k); return kk < 0 ? null : finRows(k).totals; };
+      /* A quarter is only comparable when all three of its months were read.
+         Substituting a two-month quarter for a three-month one is how a panel
+         reports a 68% collapse that is really a missing sheet. */
+      const qOf = k => { const [y,m] = k.split("-").map(Number);
+        const q0 = Math.floor((m-1)/3)*3 + 1;
+        return Array.from({length:3}, (_,i)=>{ let mm=q0+i, yy=y; return `${yy}-${String(mm).padStart(2,"0")}`; }); };
+      const qSum = ks => { const parts = ks.map(tot);
+        if(parts.some(p=>!p)) return null;
+        return {revenue: parts.reduce((s,p)=>s+p.revenue,0), nights: parts.reduce((s,p)=>s+p.nights,0),
+                cap: parts.reduce((s,p)=>s+p.cap,0), cost: parts.reduce((s,p)=>s+p.cost,0)}; };
+      const qName = ks => MON[+ks[0].split("-")[1]-1] + "–" + MON[+ks[2].split("-")[1]-1]
+                        + " " + ks[2].slice(2,4);
+      const opps = el("div","opps");
+      const tile = (v, lab)=>{ const d = el("div","opp");
+        d.append(el("b",null,v), el("s",null,lab)); opps.appendChild(d); };
+      if(T){
+        tile(Math.round(T.occ*100) + "%", `${T.nights} of ${T.cap} nights`);
+        tile(money(T.adr), "average room rate");
+        tile(money(T.revpar), "per available night");
+      }
+      b.appendChild(opps);
+
+      const rows = el("div","card");
+      const pcx = (a, b2)=> b2 ? (a/b2 - 1) : null;
+      const line = (label, what, pctv, detail)=>{
+        const r2 = el("div","row bk");
+        const L = el("div","meta"); L.innerHTML = `<b>${label}</b><em>${what}</em>`;
+        const pill = el("span","paid clear",
+          pctv == null ? detail
+          : (pctv >= 0 ? "▲ " : "▼ ") + Math.abs(pctv*100).toFixed(1) + "%");
+        r2.append(L, pill); rows.appendChild(r2);
+      };
+      const prevM = tot(back(finMonth,1));
+      line("Month on month",
+           prevM ? `${monName(back(finMonth,1))} → ${monName(finMonth)}` : "the month before was not read",
+           prevM && T ? pcx(T.revenue, prevM.revenue) : null, "no comparison");
+      /* Walk back to the most recent quarter all three of whose months were
+         read. July sits in an open quarter, and comparing a one-month quarter
+         with a three-month one is how a panel reports a 68% collapse that is
+         really a calendar. The row NAMES BOTH ENDS, so showing the last
+         complete pair is a statement rather than a substitution. */
+      let anchorQ = qOf(finMonth), guard = 0;
+      while(!qSum(anchorQ) && guard++ < 8) anchorQ = qOf(back(anchorQ[0], 1));
+      const thisQ = qSum(anchorQ);
+      const prevKs = qOf(back(anchorQ[0], 1)), prevQ = qSum(prevKs);
+      line("Quarter on quarter",
+           thisQ && prevQ ? `${qName(anchorQ)} vs ${qName(prevKs)}` : "needs two complete quarters",
+           thisQ && prevQ ? pcx(thisQ.revenue, prevQ.revenue) : null, "not complete");
+      const yrKs = anchorQ.map(k=> back(k,12)), yrQ = qSum(yrKs);
+      line("Same quarter last year",
+           thisQ && yrQ ? `${qName(anchorQ)} vs ${qName(yrKs)}` : "first year on record",
+           thisQ && yrQ ? pcx(thisQ.revenue, yrQ.revenue) : null, "no comparison");
+      const yrM = tot(back(finMonth,12));
+      line("Same month last year",
+           yrM ? `${monName(back(finMonth,12))} → ${monName(finMonth)}` : "first year on record",
+           yrM && T ? pcx(T.revenue, yrM.revenue) : null, "no comparison");
+      /* Refused, always, with the date it becomes possible: every 12-month
+         window inside this range contains the month the gate threw out. */
+      const firstFull = (()=>{ const bad = FIN_DROP.map(d=>d[0]).filter(k=> k >= FIN[0][0]);
+        if(!bad.length) return null;
+        const [y,m] = bad[bad.length-1].split("-").map(Number);
+        let yy = y+1, mm = m; return `${yy}-${String(mm).padStart(2,"0")}`; })();
+      line("Rolling twelve months", "every twelve-month window has a hole in it",
+           null, firstFull ? "not until " + monName(firstFull) : "not yet");
+      b.appendChild(rows);
+      said(c, `Every percentage above is revenue — something your workbook measured. There is deliberately `
+        + `<b>no percentage on profit</b>: your cost model is the same every month, so profit moves by exactly `
+        + `the rupees revenue moved, and a percentage on the smaller number would dress that up as an `
+        + `efficiency gain that did not happen.`);
+    }
+
+    }
+  }
+
   /* 1 — the booking curve */
 
   /* ── MONEY ─────────────────────────────────────────────────────────────── */
@@ -7969,8 +8682,11 @@ function renderTrends(){
     const rows = el("div","card");
     /* These three ARE the headline, split three ways and nothing left over. */
     [["Already left", O.gone, O.goneN, "has to be chased", "due"],
+     ["In the flat now", O.here, O.hereN,
+      O.going ? `${O.goingN} check${O.goingN===1?"s":""} out within two days` : "collect before they go",
+      O.going ? "due" : "clear"],
      ["Arriving within a week", O.soon, O.soonN, "collect at the door", "clear"],
-     ["Arriving later, or still in the flat", O.later, O.laterN, "not collectable yet", "clear"]]
+     ["Arriving later", O.later, O.laterN, "not collectable yet", "clear"]]
       .forEach(([k, v, n, why, tone])=>{
         if(!v) return;
         const r = el("div","row bk");
@@ -8002,8 +8718,14 @@ function renderTrends(){
     }
     said(c, O.gone > 0
       ? `<b>${money(O.gone)}</b> is owed by guests who have already gone, which is the money that quietly never arrives. `
-        + `<b>${money(O.soon)}</b> is collectable this week while they are standing in front of you; `
-        + `the remaining <b>${money(O.later)}</b> is not due yet.`
+        + (O.here ? `<b>${money(O.here)}</b> is with guests in the flats tonight — the easiest in the book to collect, `
+                  + `and only until they hand the keys back. ` : "")
+        + `<b>${money(O.soon)}</b> arrives this week.`
+      : O.here
+      ? `Nothing has walked out unpaid yet. But <b>${money(O.here)}</b> of the balance is with guests `
+        + `<b>standing in the flats tonight</b>`
+        + (O.going ? `, and <b>${money(O.going)}</b> of it walks out within two days` : "")
+        + ` — collect it at the door, because after that it becomes the kind that quietly never arrives.`
       : `Nothing has walked out unpaid. The balance is with guests still to arrive, which is the easy kind to collect.`);
   }
 
@@ -8276,8 +8998,29 @@ function renderTrends(){
     setTimeout(()=>cards.forEach(c=>c.classList.remove("pending")), 2500);
   }
 
-  const lead = leadTimes();
+  /* This footer is a statement about the FORWARD book — "today through 30 Oct"
+     — and Profit reads fifteen closed months out of the operator's workbook
+     instead. Left unscoped it told the Profit tab there was no history on a
+     screen made entirely of history. It carries its own footer. */
+  const lead = seg === "profit" ? null : leadTimes();
   const foot = el("p");
+  if(seg === "profit"){
+    const kept = FIN.length, ref = FIN_DROP.length;
+    foot.style.cssText = "margin:20px 2px 0;font-size:12px;line-height:1.6;color:var(--txt-3)";
+    foot.innerHTML = `Revenue and nights come from the monthly sheets in your workbook, `
+      + `${FIN.length ? MON[+FIN[0][0].split("-")[1]-1] + " " + FIN[0][0].slice(0,4) : ""} to `
+      + `${FIN.length ? MON[+FIN[kept-1][0].split("-")[1]-1] + " " + FIN[kept-1][0].slice(0,4) : ""}. `
+      + `<b style="color:var(--txt-2)">${ref} month${ref===1?" is":"s are"} not drawn</b> — `
+      + `${FIN_DROP.slice(0,1).map(d=> d[0] + ", where " + esc(d[1])).join("")}, and the rest for the same reason. `
+      + `Costs come from your Costing sheet: a standing monthly model rather than dated invoices, so it is the same `
+      + `figure every month. Change it there, or on any building here, and every number follows. Occupancy is counted `
+      + `from the Availability tab. Vasavi and Mumbai are excluded as sold.<br><br>`
+      + `Your Costing sheet carries no interest, tax or depreciation, so what this calls `
+      + `<b style="color:var(--txt-2)">kept</b> is operating profit after rent — close to EBITDA for a leased model, `
+      + `and not what your accountant will call net profit.`;
+    s.appendChild(foot);
+    return;
+  }
   foot.style.cssText = "margin:20px 2px 0;font-size:12px;line-height:1.6;color:var(--txt-3)";
   foot.innerHTML = lead
     ? `Every booking you enter records the day you took it, so lead time is now measurable: across ${lead.n} of your own bookings the typical one arrives <b style="color:var(--txt-2)">${lead.median} days</b> before check-in.`
@@ -9596,7 +10339,9 @@ function openSheet(fi, day){
     why.innerHTML = busy
       ? (isBlock(busy)
           ? `<b>${esc(busy.reason || "Out of service")}</b> until ${esc(fmt(busy.end))}`
-          : `<b>${esc(busy.guest)}</b> is in until ${esc(fmt(busy.end))}`)
+          : busy.openEnd
+            ? `<b>${esc(busy.guest)}</b> is in · no end date recorded`
+            : `<b>${esc(busy.guest)}</b> is in until ${esc(fmt(busy.end))}`)
       : `Not free for those nights`;
     act.append(why);
     if(nxt){
@@ -9635,10 +10380,14 @@ function openSheet(fi, day){
     row._resv = r;
     const when = Math.max(r.start,0) === 0 ? "Now" : fmt(Math.max(r.start,0));
     const m = el("div","meta");
+    /* Neither the end date nor the night count is knowable for a tenancy the
+       import window cut. 176n is the width of the window, and 18 Nov is where
+       it stopped — printed here they read as the operator's own figures. */
     m.innerHTML = `<b>${esc(r.guest)}</b>`
-                + `<em>${when} → ${fmt(r.end)} · ${r.nights}n · ${esc(r.src)}</em>`;
+                + `<em>${when} → ${r.openEnd ? "no end recorded" : esc(fmt(r.end)) + " · " + r.nights + "n"} · ${esc(r.src)}</em>`;
     const end = el("div","rowend");
-    end.appendChild(!isBlock(r) && r.amount ? moneyPill(r, fi, day) : el("span","pill", `${r.nights}n`));
+    end.appendChild(!isBlock(r) && r.amount ? moneyPill(r, fi, day)
+      : el("span","pill", r.openEnd ? "open" : `${r.nights}n`));
     const x2 = el("button","rowx","✕");
     x2.setAttribute("aria-label", `Cancel ${r.guest}'s booking in ${fl.id}`);
     armConfirm(x2, {rest:"✕", armed:"Cancel?",
@@ -10057,6 +10806,134 @@ function openMove(mv, askDay, onFreed, opts){
    It sets its own dates. The old form inherited them from the Rooms tab and
    apologised for it in help text — "change the dates on the Rooms tab" — which
    is what a broken flow sounds like when nobody fixes it.                     */
+/* ══ THE COST SHEET ═══════════════════════════════════════════════════════════
+   The one place this app asks the operator for a number instead of reading one.
+
+   Lotus Pond is sixteen of forty-six flats and appears in no revenue sheet and
+   no cost sheet in the entire workbook. Every instinct says fill it in — take
+   Banjara Hills' rent per flat, scale it, show a portfolio profit that looks
+   complete. That number would be wrong by whatever Lotus Pond's actual rent is,
+   it would be indistinguishable on screen from the four that are real, and it
+   would make the one useful thing the app noticed disappear.
+
+   So the app refuses, and offers the fix instead. Nothing here is pre-filled
+   with a guess. The line names come from Object.keys across FIN_COST — their
+   own rows, their own spelling — so a building costed here is costed the same
+   way as the four their sheet already covers, and the break-even readout fills
+   in live as they type, using the "Break even per flat" row their Costing sheet
+   already has.
+
+   Saved under the operator's own key, merged over the workbook's model on read,
+   so re-running import-finance.py never overwrites what they typed.          */
+function openCosts(r){
+  const monName = k => MON[+k.split("-")[1]-1] + " " + k.split("-")[0];
+  sheetWipe();
+  const t = el("div");
+  t.innerHTML = `<div class="n">${esc(r.name)}</div>`
+              + `<div class="m">${r.flats} flats · what it costs to run for a month</div>`;
+  const x = el("button", null, "✕");
+  x.setAttribute("aria-label","Close");
+  x.onclick = closeSheet;
+  sheetH.append(t, x);
+
+  const why = el("p");
+  why.style.cssText = "margin:14px 20px 2px;font-size:12.5px;line-height:1.55;color:var(--txt-2)";
+  why.innerHTML = r.state === "absent"
+    ? `Your workbook prices four buildings. <b>${esc(r.name)}</b> is not one of them, so the app cannot say `
+      + `what it keeps — and will not guess. It sold <b>${r.book} nights</b> in ${MON[+finMonth.split("-")[1]-1]}. `
+      + `Fill in what it costs and it joins the ranking.`
+    : `These are the figures from your Costing sheet. Change one and every number on the Profit tab follows.`;
+  sheetB.appendChild(why);
+
+  const form = el("div","bkform");
+  const inputs = {};
+  const live = el("div");
+  live.style.cssText = "margin:4px 0 2px;font-size:12px;line-height:1.5;color:var(--txt-3)";
+  const cur = costFor(r.code);
+
+  /* A building the workbook does not price needs BOTH sides, not just costs.
+     Its nights are already counted off the Availability tab; what nobody has
+     written down anywhere is what those nights earned. Asking for the one
+     unknown — and only for the month on screen — is what lets the row join the
+     ranking instead of sitting under a rule forever. */
+  let revIn = null;
+  if(r.state === "absent"){
+    const box = el("label");
+    box.style.cssText = "display:flex;align-items:center;gap:10px;padding-bottom:4px;"
+      + "margin-bottom:6px;border-bottom:1px solid var(--line)";
+    const nm = el("span", null, `Took in over ${monName(finMonth)}`);
+    nm.style.cssText = "flex:1 1 auto;font-size:12.5px;color:var(--txt)";
+    revIn = el("input");
+    revIn.type = "tel"; revIn.inputMode = "numeric"; revIn.placeholder = "₹";
+    revIn.setAttribute("aria-label", `What ${r.name} took in over ${monName(finMonth)}`);
+    revIn.style.cssText = "flex:0 0 118px;text-align:right;padding:9px 11px";
+    const had = (finUser[finMonth] || {})[r.code];
+    if(had) revIn.value = had;
+    box.append(nm, revIn);
+    form.appendChild(box);
+  }
+
+  const paint = ()=>{
+    const tot = Object.values(inputs).reduce((a,i)=> a + (+i.value || 0), 0);
+    const rev = revIn ? (+revIn.value || 0) : (r.revenue || 0);
+    if(!tot && !rev){ live.textContent = "Nothing entered yet."; return; }
+    const bits = [];
+    if(tot) bits.push(`<b>${money(tot)}</b> a month · ${money(tot / r.flats)} per flat`);
+    /* Break-even in the currency the operator can act on. With no rate to work
+       from, the useful number is the rate itself: what a night has to average
+       across the nights already sold before the building covers itself. */
+    if(tot && r.book) bits.push(`needs <b>${money(tot / r.book)}</b> a night across its ${r.book} nights to cover itself`);
+    if(tot && rev) bits.push(`<b>${rev - tot >= 0 ? "+" : "−"}${money(Math.abs(rev - tot))}</b> kept, `
+      + `${Math.round((rev - tot) / rev * 100)}% margin`);
+    live.innerHTML = bits.join("<br>");
+  };
+  if(revIn) revIn.addEventListener("input", paint);
+  costLines().forEach(k=>{
+    const row = el("label");
+    row.style.cssText = "display:flex;align-items:center;gap:10px";
+    const nm = el("span", null, k);
+    nm.style.cssText = "flex:1 1 auto;font-size:12.5px;color:var(--txt-2)";
+    const inp = el("input");
+    inp.type = "tel"; inp.inputMode = "numeric"; inp.placeholder = "₹";
+    inp.setAttribute("aria-label", k + " for " + r.name);
+    inp.style.cssText = "flex:0 0 118px;text-align:right;padding:9px 11px";
+    if(cur[k] != null) inp.value = cur[k];
+    inp.addEventListener("input", paint);
+    inputs[k] = inp;
+    row.append(nm, inp);
+    form.appendChild(row);
+  });
+  form.appendChild(live);
+  const go = el("button","bkgo","Save");
+  go.onclick = ()=>{
+    const next = {};
+    Object.keys(inputs).forEach(k=>{ const v = +inputs[k].value; if(v > 0) next[k] = Math.round(v); });
+    if(!Object.keys(next).length) delete costUser[r.code]; else costUser[r.code] = next;
+    jset(COST_STORE, costUser);
+    finBust();
+    if(revIn){
+      const v = Math.round(+revIn.value || 0);
+      const m = finUser[finMonth] = finUser[finMonth] || {};
+      if(v > 0) m[r.code] = v; else delete m[r.code];
+      if(!Object.keys(m).length) delete finUser[finMonth];
+      jset(FINU_STORE, finUser);
+      finBust();
+    }
+    haptic(18); closeSheet(); refreshScreen();
+    const done = costTotal(r.code) && (!revIn || +revIn.value > 0);
+    toast("", done
+      ? `<b>${esc(r.name)} is in the ranking.</b> ${money(costTotal(r.code))} a month against `
+        + `what it took in over ${esc(monName(finMonth))}.`
+      : `<b>${esc(r.name)} saved.</b> ` + (revIn && !(+revIn.value > 0)
+          ? `It still needs what it took in over ${esc(monName(finMonth))} before it can be ranked.`
+          : `It still needs a cost line before it can be ranked.`), null);
+  };
+  form.appendChild(go);
+  sheetB.appendChild(form);
+  paint();
+  sheet.classList.add("on"); scrim.classList.add("on");
+}
+
 function openBooking(fi, from, nights){
   const fl = flats[fi];
   roomHead(fi, ()=> openSheet(fi, from));

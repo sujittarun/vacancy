@@ -669,6 +669,62 @@ there was no unpaid one to cancel — and it reported a missing fixture in the
 same red as a regression. Which shapes a seed happens to contain is not the
 test's business. If the state is reachable in the app, the test builds it.
 
+## A window is not a fact about anybody's stay
+
+The book holds 176 nights. Crescent Stays' sheet runs to November 2027. Four
+TreeTops tenancies are still running at both ends of that window — TT-101's is
+810 nights long and has no recorded end anywhere — and the importer stored them
+as **176-night stays checking out on 18 November 2026**, which is not a date
+their sheet contains. 176 is `BACK + FWD + 1`. 18 November is where the import
+stopped.
+
+It then said so everywhere, in the same type as a fact: *"Long stay is in until
+18 Nov"* on the room sheet, `Now → 18 Nov · 176n` on the guest row, and a
+**typed date cell** in the export — where it lands in the accountant's
+spreadsheet, sorts as a date, and looks exactly like one the operator wrote.
+
+This is the failure the whole file is built against, committed by the code that
+reads the book. The fix is not to widen the window; it is for the importer to
+know the difference between *ends here* and *is still going when I stop
+looking*, and for every surface to say `no end recorded` rather than a number
+it can compute. **The app may clamp a stay to what it can hold. It may never
+report the clamp as the operator's own figure.**
+
+The same rot spread through arithmetic nobody would have questioned. The
+average-stay card summed `r.nights` unclamped and reported **27.0 nights**
+against a true 12.6, because eight rows ran past the horizon and four of those
+were window artefacts — then wrote advice on top of it. `occupancyValue()` a few
+lines away had always clamped. Two cards, one altitude, same 57 bookings,
+different answers.
+
+## "Later" is not a state, it is three states with the risky one hidden
+
+The owed card split money three ways — already left, arriving this week,
+*"arriving later, or still in the flat · not collectable yet"* — and the third
+bucket had a comma in it doing enormous work. On generated data the comma was
+harmless. On the real book **98.5% of the debt was on the wrong side of it**:
+₹3,22,950 owed by four guests standing in four flats that night, filed under
+the heading that means no hurry, while the summary sentence said the balance was
+"with guests still to arrive". ₹77,200 of it walked out within two days.
+
+A guest in the room is the *easiest* money in the book to collect and the only
+one with a closing window. It had been grouped with the money that is not due
+yet, because both are "not yet gone" — a true statement that answers the wrong
+question. **Any bucket whose label needs a comma is two buckets**, and the one
+you cannot see is the one that costs.
+
+## The month the export is taken in is not a whole month
+
+`occ[]` starts today. The export seeded a bucket per calendar month and counted
+occupancy from `d = 0`, so August's row carried **260 arrivals and 518,834
+billed for the whole month beside 138 sellable nights** — three days by
+forty-six flats — and called the quotient the month's occupancy. Two different
+periods in one row, on the sheet that goes to the accountant.
+
+The earlier fix in this same loop stopped past months being fabricated. It did
+not notice that the *current* month is also partial, at the other end. A period
+that does not cover its row has to say which days it does: `73% (3 of 31 days)`.
+
 ## Prohibitions
 
 - No paper, ruling, stamps, or any ledger device. That world is discarded.

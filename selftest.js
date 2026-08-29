@@ -86,6 +86,11 @@ async function settle() {
 
 async function test(name, fn) {
   if (only && !name.includes(only)) return;
+  /* Where the run is, published as it goes. A suite that stops answering tells
+     you nothing about WHICH test stopped it, and the pane this is driven from
+     hides itself between calls — which clamps every setTimeout to a second and
+     turns an 8-second run into a long one that looks identical to a hang. */
+  try { window.__now = name; window.__done = (window.__done || 0) + 0; } catch (e) {}
   const snapR = JSON.stringify(resv);
   const snapF = JSON.stringify(flats);
   const attempt = async () => { await settle(); return fn(); };
@@ -102,8 +107,10 @@ async function test(name, fn) {
       detail = (await attempt()) + "  [flaky: failed once — " + String(first && first.message || first) + "]";
     }
     results.push({ name, pass: true, detail });
+    try { window.__done = (window.__done || 0) + 1; } catch (e) {}
   } catch (e) {
     results.push({ name, pass: false, detail: String(e && e.message || e) });
+    try { window.__done = (window.__done || 0) + 1; } catch (e) {}
   } finally {
     // every test runs against the real book; put it back exactly
     try {
@@ -400,11 +407,20 @@ export async function run(filter) {
 
   await test("the owed rows are a partition of the headline", () => {
     const O = owedStats();
-    eq(O.gone + O.soon + O.later, O.total, "rows do not sum to the headline");
+    /* FOUR states, not three. "still in the flat" used to be folded into
+       "later", which on the real book put 98.5% of the debt under a heading
+       meaning no hurry — see DESIGN.md, "Later is not a state". The partition
+       assertion is what makes splitting a bucket safe to do: add a state and
+       forget to show it and this goes red instead of the money going quiet. */
+    eq(O.gone + O.here + O.soon + O.later, O.total, "rows do not sum to the headline");
+    /* and every state the card can show has a row to show it in */
+    const shown = O.gone + O.here + O.soon + O.later;
+    eq(shown, O.total, "a state carries money the card has no row for");
+    ok(O.going <= O.here, "money walking out in two days is not a subset of money in the flat");
     const platformInside = bookings().filter(r => r.amount && dueFrom(r) > 0)
       .reduce((s, r) => s + withPlatform(r), 0);
     eq(platformInside, 0, "platform money is inside the headline, so it must not be shown beside it");
-    return `${money(O.total)} = ${money(O.gone)} + ${money(O.soon)} + ${money(O.later)}`;
+    return `${money(O.total)} = ${money(O.gone)} + ${money(O.here)} + ${money(O.soon)} + ${money(O.later)}`;
   });
 
   await test("the export's Summary keeps a past arrival in its own month", () => {

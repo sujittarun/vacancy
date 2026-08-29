@@ -26,12 +26,16 @@ SOLD_OUT = ("vasavi", "mumba")            # sold; not part of the book any more
 BLOCKY = re.compile(r'^\s*(block|pest|kitchen|clean|maint|repair)', re.I)
 
 # channel markers, written inline with the name
-MARKERS = [(re.compile(r'\bexpedia\b', re.I), "Expedia"),
-           (re.compile(r'\.com\b|\bbooking\b', re.I), "Booking.com"),
-           (re.compile(r'\bagoda\b', re.I), "Agoda"),
+# A marker glued to a name is still a marker. \b does not hold between "T" and
+# "b", so "AMITbnb" read as a DIRECT booking by a guest called AMITbnb, while
+# "ADITYA bnb" read correctly — the exact lesson MONEY below already carries
+# for "Swaroop2650", applied to the channel it was never applied to.
+MARKERS = [(re.compile(r'expedia', re.I), "Expedia"),
+           (re.compile(r'\.com\b|booking', re.I), "Booking.com"),
+           (re.compile(r'agoda', re.I), "Agoda"),
            (re.compile(r'\bmmt\b', re.I), "MakeMyTrip"),
-           (re.compile(r'\bvijay\b', re.I), "Agent"),
-           (re.compile(r'\bbnb\b', re.I), "Airbnb")]
+           (re.compile(r'vijay', re.I), "Agent"),
+           (re.compile(r'bnb', re.I), "Airbnb")]
 
 # A "10/48" is not money and not a name. The second number increments night by
 # night on the same guest (NARENDRA runs 10/42 → 10/49), so it is a running
@@ -155,6 +159,27 @@ for k, h, f in ids:
 assert all(FIX.values()), [k for k in FIX if not FIX[k]]
 
 offs = sorted(by_off)
+FIRST, LAST = offs[0], offs[-1]
+# Rows outside the window still decide whether a run has an END. The sheet
+# reaches 2027, and TreeTops' four tenancies run to the last row of it — 810
+# nights in TT-101's case. Reading only the window made every one of them look
+# like a 176-night stay checking out on the window's final day, and 176 is not
+# a fact about anybody's tenancy: it is BACK + FWD + 1. See the note on `cut`.
+edge = {}
+for k, h, _ in ids:
+    fid = FIX[k]
+    before = after = None
+    for r in rows[2:]:
+        d = r[0]
+        if isinstance(d, datetime.datetime): d = d.date()
+        if not isinstance(d, datetime.date): continue
+        off = (d - TODAY).days
+        v = r[k]
+        v = None if v is None or not str(v).strip() else read(v)
+        if off == FIRST - 1: before = v
+        if off == LAST + 1:  after = v
+    edge[fid] = (before, after)
+
 runs, gaps = [], collections.Counter()
 for k, h, _ in ids:
     fid = FIX[k]
@@ -170,7 +195,14 @@ for k, h, _ in ids:
         if cur and cur["key"] == key and cur["start"] + cur["nights"] == off:
             cur["nights"] += 1
             if src != "block" and amt:
-                cur["amount"] = amt if amt < 0 else max(cur["amount"], amt)
+                # SUMMED, not max. The operator writes money per NIGHT, and the
+                # proof is their own price columns in the monthly sheets: MG in
+                # May 2026 carries "Sriram Chess Assoc" on thirteen nights at
+                # 2,500 each and totals 32,500. max() reported 2,500 for a
+                # 32,500 stay. Across the book it dropped 2,20,998 rupees of
+                # money the operator had actually written down, and the
+                # occupancy gate could never see it: that gate counts nights.
+                cur["amount"] = amt if amt < 0 else cur["amount"] + amt
             continue
         if cur: runs.append(cur)
         cur = {"flat": fid, "start": off, "nights": 1, "key": key,
@@ -178,7 +210,20 @@ for k, h, _ in ids:
                "note": amt if src == "block" else None}
     if cur: runs.append(cur)
 
+# ── what the window cut off ──────────────────────────────────────────────────
+# 1 = the stay was already running when the window opens
+# 2 = it is still running when the window closes — NO CHECK-OUT IS RECORDED
+# The app must not print a date for a 2. A check-out the operator never wrote
+# down, rendered in the same type as one they did, is the single worst thing
+# this file can do, and it shipped: "Long stay is in until 18 Nov" on the room
+# sheet and a typed date cell in the export, for a tenancy the sheet runs to
+# November 2027 without ending.
 for r in runs:
+    b, a = edge.get(r["flat"], (None, None))
+    cut = 0
+    if r["start"] == FIRST and b and b[:2] == (r["guest"], r["src"]): cut |= 1
+    if r["start"] + r["nights"] - 1 == LAST and a and a[:2] == (r["guest"], r["src"]): cut |= 2
+    r["cut"] = cut
     if r["amount"] < 0: r["amount"] = -r["amount"] * r["nights"]; r["derived"] = True
 
 books  = [r for r in runs if r["src"] != "block"]
@@ -210,14 +255,41 @@ print(f"  occupied flat-nights   sheet {sum(theirs.values())}   stays {sum(mine.
 print(f"  nights that disagree   {len(off_by)}   {off_by[:6]}")
 print(f"  flat-nights claimed twice   {len(twice)}   {twice[:6]}")
 print(f"  guest names still carrying digits   {len(dirty)}   {dirty[:6]}")
-ok = not off_by and not twice and not dirty
+# ── the money gate ───────────────────────────────────────────────────────────
+# The reconciliation above counts NIGHTS, and said "the stays reproduce the
+# sheet exactly" while 2.2 lakh of recorded rupees were being dropped by the
+# run merge. A proof about occupancy is not a proof about money, and 24 lakh
+# was riding on the difference. Every rupee written in a cell must land in
+# exactly one stay.
+cellmoney = 0
+for k, h, _ in ids:
+    for off in offs:
+        v = by_off[off][k]
+        if v in (None, "") : continue
+        got = read(v)
+        if got and got[1] != "block":
+            a = got[2]
+            cellmoney += -a if a and a < 0 else (a or 0)
+booked = 0
+for r in books:
+    a = r["amount"]
+    booked += a / r["nights"] if r.get("derived") else a
+print(f"  rupees written in cells {round(cellmoney):>12,}")
+print(f"  rupees carried to stays {round(booked):>12,}   "
+      + ("match" if abs(cellmoney - booked) < 1 else f"LOST {round(cellmoney-booked):,}"))
+money_ok = abs(cellmoney - booked) < 1
+cutn = [r for r in books if r.get("cut")]
+print(f"  stays the window cut ({len(cutn)}) — no check-out is claimed for a 2 or 3:")
+for r in cutn: print(f"     {r['flat']:8} {r['guest']:<14} cut={r['cut']}  {r['start']:+d} x{r['nights']}")
+ok = not off_by and not twice and not dirty and money_ok
 print("\n" + ("PASS — the stays reproduce the sheet exactly" if ok else "FAIL — not written"))
 if not ok: sys.exit(1)
 
 # ── emit ─────────────────────────────────────────────────────────────────────
 SRCS = ["Direct", "Airbnb", "Booking.com", "MakeMyTrip", "Agoda", "Expedia", "Agent"]
 IDX  = {s: i for i, s in enumerate(SRCS)}
-rows_b = sorted(([r["flat"], r["start"], r["nights"], r["guest"], IDX[r["src"]], r["amount"]]
+rows_b = sorted((([r["flat"], r["start"], r["nights"], r["guest"], IDX[r["src"]], r["amount"]]
+                  + ([r["cut"]] if r.get("cut") else []))
                  for r in books), key=lambda r: (r[0], r[1]))
 rows_k = sorted(([r["flat"], r["start"], r["nights"],
                   re.sub(r"\s+", " ", str(r["note"])).strip().title() or "Block"]
