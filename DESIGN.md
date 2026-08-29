@@ -611,13 +611,15 @@ above a live touch.
 
 ## An import is a claim, and a claim needs a proof
 
-The book in this app is Crescent Stays' own — 866 stays read out of the
-Availability tab of their spreadsheet, not generated. That is a claim about
+The book in this app is Crescent Stays' own — at the last import 877 stays read
+out of the Availability tab of their spreadsheet, not generated. The figures
+here move every time they re-export; the check does not. That is a claim about
 somebody else's business, and the operator will check it against the sheet they
 already have open. So the importer ends by reconstructing occupancy from the
 stays it produced and comparing it night by night with the sheet it read:
-**176 dates × 46 flats, 4,415 occupied flat-nights, 0 mismatches, 0 flat-nights
-claimed twice.** Anything less is "it looked right when I opened it".
+**176 dates × 46 flats, 4,438 occupied flat-nights, 0 mismatches, 0 flat-nights
+claimed twice.** The tolerance is zero and the script writes nothing without it.
+Anything less is "it looked right when I opened it".
 
 The proof also caught what reading could not. The cells are written by a person,
 not a schema, and three of their habits each broke the import in a way that
@@ -637,7 +639,7 @@ still rendered:
 And where the sheet is genuinely ambiguous — a bare `28.5`, a lone `bnb` with
 no figure — the rule is to record nothing. **An invented amount is worse than a
 blank one, because a blank asks the question and a number answers it wrongly.**
-That is why 866 stays carry only 170 amounts, and why the four guests still
+That is why 877 stays carry only 171 amounts, and why the guests still
 in-house on a direct booking are shown as owing rather than as settled: that is
 precisely the figure the operator must check, and an app that guesses it hides
 the only question worth asking.

@@ -3076,10 +3076,28 @@ const fmtL = i => { const d=dateAt(i); return `${DOW[d.getDay()]} ${d.getDate()}
    Availability", whose row 3 names them for Banjara Hills and Lotus Pond, plus
    the per-bucket rows in the monthly sheets (Jul26 A40:A50) for the rest.
 
-   The rates are real too, and they are the reason to trust the reading: each
-   monthly bucket carries booked nights and a price total, and the quotient
-   comes out at ₹3,000 / ₹3,200 / ₹4,000 / ₹5,000 / ₹5,200 / ₹6,000. Numbers
-   that round like that are a rate card, not an artefact of arithmetic.
+   MOST of the rates are read, not chosen: each monthly bucket carries booked
+   nights and a price total, and the quotient comes out at ₹3,000 / ₹3,200 /
+   ₹4,000 / ₹5,000 / ₹5,200 / ₹6,000. Numbers that round like that are a rate
+   card, not an artefact of arithmetic. Ttops 1bhk 174/58, Treetops 462.8/89,
+   Mpur 1bhk 86.4/27, Madhapur 690/115, Tnagar Studio 82/41, Tnagar 3bhk
+   130/26, Tnagar 2bhk 488/122, Bhills 3bhk 1038/173, Bhills 1bhk 81/27.
+
+   TWO ARE NOT, and saying so is the point. The monthly sheets have no Lotus
+   Pond bucket at all, so LP's ₹6,000 (3 BHK) and ₹2,500 (Studio) are the one
+   pair of numbers here that nobody at Crescent Stays wrote down. They are
+   inferred, and the inference is checkable: across the stays where the
+   Availability tab does record an amount, LP 3 BHK runs at a median ₹5,355 over
+   31 stays and LP Studio at ₹2,362 over 16 — realised prices, which sit below
+   the card everywhere the card IS known (Tnagar Studio realises ₹1,500 against
+   a ₹2,000 card), so a card a little above each median is the right shape. 4A
+   is a penthouse with no bucket of its own and one recorded stay at ₹4,200; it
+   carries the Tnagar 2 BHK card.
+
+   The rate only pre-fills the total on the booking form, so a wrong one is
+   corrected by the operator on first use rather than silently believed — but it
+   is a guess and it is labelled as one, because the rest of this file refuses
+   to invent money and this is the single place it comes close.
 
    WHAT IS IN. 46 flats over five buildings, every one of which has entries in
    the last sixty days of the Availability tab.
@@ -3756,7 +3774,7 @@ function todayBoard(){
     if(!free.length) continue;
     const depth = d===0 ? 25 : 20;
     const rows = free.map(i=>({fi:i, d,
-      meta:`<b>${esc(flats[i].type)}</b> · ${esc(flats[i].bshort)}<em>free ${runFrom(i,d)} night${runFrom(i,d)>1?"s":""} from ${fmt(d)}</em>`,
+      meta:`<b>${esc(flats[i].type)}</b> · ${esc(flats[i].bshort)}<em>free from ${fmt(d)} ${freeWords(i,d)}</em>`,
       pill:`−${depth}%`}));
     days.push({d, n:free.length, depth,
       soft: free.length - norm[dateAt(d).getDay()] >= 2,
@@ -3865,6 +3883,30 @@ function freeRange(fi,a,b){ for(let d=a;d<b;d++){ if(d<0||d>=DAYS||occ[fi][d]) r
    every caller here already asks it. */
 const freeSpan = (fi,a,b) => a < DAYS && freeRange(fi, Math.max(a,0), Math.min(b, DAYS));
 function runFrom(fi,d){ let n=0; while(d+n<DAYS && !occ[fi][d+n]) n++; return n; }
+/* HOW LONG IS IT FREE — answered with the date it stops being free, not with a
+   count of nights.
+
+   Three surfaces said this three ways — "38 nights free", "63+ nights",
+   "free 38 nights from 29 Aug" — and the worst of them, `63+`, is not a fact
+   about the room at all. 63 is DAYS, the length of the book. Two flats both
+   badged "63+ nights" may be free for sixty-four nights and for three hundred,
+   and the badge leaks an implementation number to an operator who has no reason
+   to know the app holds nine weeks.
+
+   The date is also the question actually being asked. A caller wants 4 nights
+   from Tuesday; "until 6 Oct" answers that without the operator doing
+   arithmetic against a number whose start date is implied. A room whose free
+   run reaches the end of the book has nothing booked ahead of it, and that —
+   not a horizon — is what to say.
+
+   `until` is the check-out morning, which is the idiom the rest of the app
+   already uses: free for nights [day, day+run), next guest arrives day+run, so
+   a stay sold here can run right up to a check-out on that date. */
+function freeWords(fi, day, short){
+  const run = runFrom(fi, day);
+  if(day + run >= DAYS) return short ? "Open" : "no bookings";
+  return (short ? "Till " : "until ") + fmt(day + run);
+}
 /* Derived, not restated. UNIT_TYPES offers "4 BHK" and this table stopped at
    "3 BHK", so SIZE["4 BHK"] was undefined — and every `x < undefined` is
    false, which silently switched OFF the one hard rule in the mover: never
@@ -3872,13 +3914,16 @@ function runFrom(fi,d){ let n=0; while(d+n<DAYS && !occ[fi][d+n]) n++; return n;
    under a row reading "never smaller". Two lists that must agree should be
    one list. */
 const SIZE = Object.fromEntries(UNIT_TYPES.map((t,i)=>[t,i]));
-/* How many guests one booking may be worth disturbing. There IS a number — six
-   people repacking for one arrival is a reorganisation, not a shuffle, and the
-   search cost grows with it — but the number is not the app's opinion to keep
-   to itself, and it should sit where a real operator would already have said no
-   — eight, not four. Anything beyond it is counted and said out loud, so
-   "no options" never quietly means "options you were not shown". */
-const MOVE_CEILING = 8;
+/* How many guests one booking may be worth disturbing. Eight was the app's
+   guess and the operator's answer is three: past three rooms this stops being a
+   shuffle and becomes a morning of phone calls, and nobody at Crescent Stays is
+   going to make five guests repack to sell one flat. Set by the person who has
+   to place those calls, not by the search.
+
+   The number is still not kept quiet. Anything ruled out by this ceiling is
+   counted and said out loud under the options, so "no options" never silently
+   means "options you were not shown". */
+const MOVE_CEILING = 3;
 let movesBeyondCeiling = 0;
 
 /* A block is an entry with kind:"block" — a flat out of service for maintenance,
@@ -4001,6 +4046,7 @@ const BOOK = [
 ["3A",-7,2,"Aditya",1,0],
 ["3A",-4,3,"Ayush",1,0],
 ["3A",-1,1,"Ayush/Anup",0,0],
+["3A",0,2,"Raju",0,0],
 ["3B",-95,1,"Sandhya",1,0],
 ["3B",-94,6,"Mintu",0,21000],
 ["3B",-88,3,"Janakiram",0,0],
@@ -4023,7 +4069,8 @@ const BOOK = [
 ["3B",-10,5,"Murthy",1,0],
 ["3B",-3,1,"Devi Prasad",0,0],
 ["3B",-2,2,"Basudev",1,0],
-["3B",0,2,"Raju",0,0],
+["3B",0,1,"Sairam",0,0],
+["3B",1,1,"Charu",0,0],
 ["3B",5,3,"Ashok",1,0],
 ["4A",-95,30,"Caleb",0,0],
 ["4A",-64,1,"Rajesh",0,4200],
@@ -4034,6 +4081,7 @@ const BOOK = [
 ["4A",-8,1,"Varsha",1,0],
 ["4A",-7,1,"Sampath",1,0],
 ["4A",-2,3,"Surya",0,0],
+["4A",13,3,"Dheeraj",1,0],
 ["B101",-95,1,"Joydeep",1,0],
 ["B101",-93,3,"Het",1,0],
 ["B101",-90,2,"Harshwardhan",1,0],
@@ -4088,7 +4136,7 @@ const BOOK = [
 ["B102",-10,2,"Subhani Shaik",5,0],
 ["B102",-8,1,"Dr Edwin Anthony",1,0],
 ["B102",-7,4,"Shinoj",1,0],
-["B102",-2,4,"Basit",0,0],
+["B102",-2,5,"Basit",0,0],
 ["B201",-95,28,"Caleb",0,0],
 ["B201",-67,9,"Sekhar",1,0],
 ["B201",-58,7,"Syed",1,0],
@@ -4150,7 +4198,7 @@ const BOOK = [
 ["B301",-7,1,"Sumukh",1,0],
 ["B301",-6,2,"Ullas",1,0],
 ["B301",-4,4,"Deepak",1,0],
-["B301",0,1,"Prabhakar",1,0],
+["B301",0,1,"Komali",0,5000],
 ["B302",-95,2,"Analdip",0,0],
 ["B302",-93,1,"Aditya",1,0],
 ["B302",-92,2,"Tadipatri",1,0],
@@ -4178,8 +4226,7 @@ const BOOK = [
 ["B302",-18,8,"Anupam",0,0],
 ["B302",-10,3,"Gitesh",1,0],
 ["B302",-7,4,"Mala",1,0],
-["B302",-1,2,"Jagannath",1,0],
-["B302",1,6,"Prabhakar",1,0],
+["B302",0,7,"Prabhakar",1,0],
 ["B401",-95,28,"Caleb",0,0],
 ["B401",-66,4,"Nitish",1,0],
 ["B401",-62,3,"Sravan",1,0],
@@ -4414,6 +4461,7 @@ const BOOK = [
 ["LP-301",-20,10,"Anupam",0,0],
 ["LP-301",-10,1,"Nikhil",1,0],
 ["LP-301",-9,3,"Raghavendra",0,23250],
+["LP-301",0,1,"Nabeel",0,0],
 ["LP-302",-94,1,"Ratnakar",1,0],
 ["LP-302",-92,1,"Daniel",1,0],
 ["LP-302",-90,1,"Arman",1,0],
@@ -4445,6 +4493,7 @@ const BOOK = [
 ["LP-302",-20,10,"Anupam",0,0],
 ["LP-302",-10,1,"Nikhil",1,0],
 ["LP-302",-9,3,"Raghavendra",0,0],
+["LP-302",0,1,"Nabeel",0,0],
 ["LP-303",-94,1,"Ratnakar",1,0],
 ["LP-303",-92,1,"Daniel",1,0],
 ["LP-303",-90,1,"Arman",1,0],
@@ -4475,6 +4524,7 @@ const BOOK = [
 ["LP-303",-20,10,"Anupam",0,0],
 ["LP-303",-10,1,"Nikhil",1,0],
 ["LP-303",-9,3,"Raghavendra",0,0],
+["LP-303",0,1,"Nabeel",0,0],
 ["LP-304",-95,1,"Mastan",1,0],
 ["LP-304",-91,3,"Swathi",0,1575],
 ["LP-304",-84,1,"Ashish",1,0],
@@ -4607,6 +4657,7 @@ const BOOK = [
 ["M2",-8,2,"Rinkesh",1,0],
 ["M2",-5,2,"Sunny",1,0],
 ["M2",-3,3,"Ishita",1,0],
+["M2",0,1,"Dharahas",0,0],
 ["M3",-95,17,"Praveen",0,12000],
 ["M3",-78,1,"Poorna",1,0],
 ["M3",-77,1,"Ankam",1,0],
@@ -4651,6 +4702,7 @@ const BOOK = [
 ["M4",-10,5,"Sastry",0,30000],
 ["M4",-4,2,"Riyaz",1,0],
 ["M4",-2,3,"Sathwik",0,0],
+["M4",1,1,"Srinath",0,0],
 ["MG",-95,1,"Aditya",1,0],
 ["MG",-93,2,"Chalapathi",1,0],
 ["MG",-91,4,"Karishma",1,0],
@@ -4703,6 +4755,7 @@ const BOOK = [
 ["TG1",-24,8,"Anshuman",1,0],
 ["TG1",-7,1,"Ravichandra",0,0],
 ["TG1",-2,2,"Aamer",1,0],
+["TG1",0,2,"Shaik",1,0],
 ["TG2",-95,1,"Mintu",0,0],
 ["TG2",-93,1,"Sridhar",0,2100],
 ["TG2",-91,1,"Siddu",0,1500],
@@ -4722,7 +4775,8 @@ const BOOK = [
 ["TG2",-16,4,"Manish",1,0],
 ["TG2",-11,3,"Varsha",1,0],
 ["TG2",-7,2,"Shivam",1,0],
-["TG2",-1,1,"Ayush",0,0],
+["TG2",-1,2,"Ayush",0,0],
+["TG2",1,6,"Harikrishna",1,0],
 ["TT-101",-95,176,"Long stay",0,0],
 ["TT-102",-95,10,"Kunal",0,0],
 ["TT-102",-85,3,"Akberuddin",0,0],
@@ -4741,7 +4795,7 @@ const BOOK = [
 ["TT-102",-21,1,"Likith",0,0],
 ["TT-102",-19,3,"Dheeraj",0,0],
 ["TT-102",-15,2,"Rabbani",0,0],
-["TT-102",-12,12,"Mahesh",0,0],
+["TT-102",-12,14,"Mahesh",0,0],
 ["TT-102",2,5,"Sunil",0,0],
 ["TT-201",-95,176,"Long stay",0,0],
 ["TT-202",-95,3,"Rabbani",0,0],
@@ -4775,6 +4829,8 @@ const BOOK = [
 ["TT-302",-15,3,"RAJU sir Vasavi",0,0],
 ["TT-302",-7,1,"Prudhvi",1,0],
 ["TT-302",-1,1,"Sandeep",0,0],
+["TT-302",0,1,"Amogh",3,0],
+["TT-302",3,1,"Karan",0,0],
 ["TT-302",38,4,"Suhrit",0,0],
 ["TT-401",-95,176,"Long stay",0,0],
 ["TT-402",-93,2,"Praveen",0,0],
@@ -4846,7 +4902,16 @@ function seedRealBook(){
    Stored against flat IDs, not array indexes, so the file can gain or lose flats
    without corrupting saved bookings. Dates are stored as offsets from the day
    they were saved and shifted on load, so "3 days out" stays 3 days out.       */
-const STORE = "vacancy.bookings.v1";
+/* v2, and the bump is the point. Until today this app shipped a GENERATED book —
+   invented guests with invented phone numbers — and every browser that opened it
+   wrote that book to `vacancy.bookings.v1`. load() succeeds on it, usingDemo
+   stays false, and seedRealBook() is never reached: the operator installs the
+   real thing and is shown made-up people forever, with no way to tell from
+   inside the app which book they are looking at. Changing the key is what
+   retires the demo; leaving it would have shipped the fiction into the pilot.
+   The old key is deleted rather than orphaned, so nothing can resurrect it. */
+const STORE = "vacancy.bookings.v2";
+try{ localStorage.removeItem("vacancy.bookings.v1"); }catch(e){}
 const isoDay = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 
 function save(){
@@ -6431,7 +6496,7 @@ function roomTile(fi, day, stay){
   const takenTonight = !!occ[fi][day];
   const partial = !open && !blocked && !turn && !takenTonight ? runFrom(fi, day) : 0;
   const note = open
-    ? (run >= DAYS-day ? `Free ${run}+n` : `Free ${run}n`)
+    ? freeWords(fi, day, true)
     : blocked ? (resv.find(r=>isBlock(r) && r.fi===fi && day>=r.start && day<r.end)?.reason || "Blocked")
     : turn ? "Turnaround"
     : partial ? `Free ${partial} of ${nights}`
@@ -6540,8 +6605,7 @@ function roomRow(fi, day, tail){
   m.innerHTML = `<b>${esc(fl.type)}</b> · ${esc(fl.bshort)}`
               + (tail ? `<em>${esc(tail)}</em>` : "");
   r.appendChild(m);
-  const run = runFrom(fi, day);
-  r.appendChild(el("span","pill good", run>=DAYS-day ? `${run}+ nights` : `${run} night${run>1?"s":""} free`));
+  r.appendChild(el("span","pill good", freeWords(fi, day)));
   r.onclick = ()=>{ haptic(9); openSheet(fi, day); };
   return r;
 }
@@ -6584,12 +6648,12 @@ const soonestFor = (n, from) => { for(let d=from; d<=DAYS-n; d++) if(countFreeFo
    had, because five buildings across Hyderabad are five different journeys to
    work, and a guest chose one of them.
 
-   There is no cap on how many guests may be moved. That is the operator's call,
-   not the software's — three moves for one long booking might be obviously
-   worth it in December and obviously not in June — so the count is put in front
-   of them and the options are ranked fewest-first. The only ceiling is a
-   practical one: past four this is not a shuffle, it is a reorganisation
-   (MOVE_CEILING, declared with the other primitives above).                  */
+   Within the ceiling there is no second-guessing how many guests may be moved.
+   That is the operator's call, not the software's — two moves for one long
+   booking might be obviously worth it in December and obviously not in June —
+   so the count is put in front of them and the options are ranked fewest-first.
+   The ceiling itself is MOVE_CEILING (three, declared with the other primitives
+   above), and what it excludes is counted and shown rather than dropped.     */
 function roomMoves(a, b, pool){
   const out = [];
   movesBeyondCeiling = 0;
@@ -10029,13 +10093,12 @@ function openBooking(fi, from, nights){
 
   const phone = el("input");
   phone.type = "tel"; phone.inputMode = "numeric"; phone.autocomplete = "tel";
-  /* Said out loud, because it is true and was not obvious. The form has never
-     required a number — go.disabled follows availability alone — but a field
-     labelled "Phone number" beside one labelled "Guest name" reads as required,
-     and an operator taking a walk-in with no number in hand cannot tell whether
-     the booking will be refused. Crescent Stays' own book carries no numbers at
-     all, so on day one every stay they enter goes in without one. */
-  phone.placeholder = "Phone number (optional)";
+  /* The form has never required a number — go.disabled follows availability
+     alone — and Crescent Stays' own book carries none at all, so on day one
+     every stay they enter goes in without one. The label says so in the
+     accessible name rather than in the placeholder, which has one line to name
+     the field and should spend it on the field's name. */
+  phone.placeholder = "Phone Number";
   phone.setAttribute("aria-label", `Guest phone number for ${fl.id} — optional`);
   const who = el("input");
   who.type = "text"; who.placeholder = "Guest name"; who.autocomplete = "off";

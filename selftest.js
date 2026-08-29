@@ -131,7 +131,7 @@ export async function run(filter) {
   /* ══ data loss ══════════════════════════════════════════════════════════ */
 
   await test("a guest who leaves owing survives the next day's rollover", async () => {
-    const KEY = "vacancy.bookings.v1";
+    const KEY = STORE;   // the app's own key, not a copy of it — see the v2 bump
     const backup = localStorage.getItem(KEY);
     const owedBefore = owedStats().total;
     save();
@@ -177,7 +177,7 @@ export async function run(filter) {
      reload. A money assertion has to survive a round trip through storage,
      because storage is what the operator's next launch reads. */
   await test("undo does not invent a platform payment — and it stays gone after a reload", async () => {
-    const KEY = "vacancy.bookings.v1";
+    const KEY = STORE;   // the app's own key, not a copy of it — see the v2 bump
     const backup = localStorage.getItem(KEY);
     /* Built here rather than found in the book. The bug needs one specific
        shape — a platform stay carrying an amount and NO payment — and which
@@ -219,7 +219,7 @@ export async function run(filter) {
   });
 
   await test("undo persists a stay that began before today", async () => {
-    const KEY = "vacancy.bookings.v1";
+    const KEY = STORE;   // the app's own key, not a copy of it — see the v2 bump
     const backup = localStorage.getItem(KEY);
     const g = resv.find(r => !isBlock(r) && r.start < 0 && r.end > 0);
     ok(g, "seed has no in-house guest who arrived before today");
@@ -344,14 +344,32 @@ export async function run(filter) {
   });
 
   await test("a room free tonight is not labelled Booked on a longer dial", () => {
-    const fi = flats.findIndex((f, i) => !occ[i][0] && runFrom(i, 0) >= 1 && runFrom(i, 0) < 3);
-    ok(fi >= 0, "no flat is free tonight but booked within 3 nights");
+    /* The bug needs a flat that is free TONIGHT and taken before the 3-night
+       dial runs out, and whether the live book contains one is an accident of
+       the day. It did on the demo book; on the operator's real book, on a night
+       when 43 of 46 rooms are sold and the three that are left are free for
+       weeks, it does not — and the test reported a missing fixture in the same
+       red as a regression. So build it: book the third night out on a flat that
+       is free tonight, which is the exact shape, and take it back afterwards. */
+    let fi = flats.findIndex((f, i) => !occ[i][0] && runFrom(i, 0) >= 1 && runFrom(i, 0) < 3);
+    let built = null;
+    if(fi < 0){
+      const open = flats.findIndex((f, i) => !occ[i][0] && freeSpan(i, 0, 3));
+      ok(open >= 0, "no flat is free for the next three nights, so the fixture cannot be built");
+      ok(addBooking(open, 2, 1, "Fixture Guest", "Direct", {}), "fixture booking refused");
+      built = resv[resv.length - 1];
+      fi = open;
+      eq(runFrom(fi, 0), 2, "fixture did not produce a 2-night run");
+    }
+    const done = () => { if(built){ cancelBooking(built); recompute(); save(); } };
+    try{
     const note = roomTile(fi, 0, 3).querySelector("s").textContent;
     ok(!/^Booked$/.test(note), `tile says "${note}" for a night it is free`);
     ok(/of 3/.test(note), `tile says "${note}", expected "Free n of 3"`);
     const aria = roomTile(fi, 0, 3).getAttribute("aria-label");
     ok(!/not available/.test(aria), `aria says "${aria}"`);
-    return `${flats[fi].id} → "${note}"`;
+    return `${flats[fi].id} → "${note}"` + (built ? " (fixture built)" : "");
+    } finally { done(); }
   });
 
   await test("Ask matches a building added after boot", async () => {
@@ -588,8 +606,16 @@ export async function run(filter) {
     three.click();
     await until(() => document.querySelector(".tile"), "the grid to repaint");
 
+    /* The tile used to say "Free 63+n" here and this asserted that "n+" suffix.
+       The suffix is gone: 63 was DAYS leaking onto the screen, and a run that
+       reaches the end of the book is now said as "Open" (and "no bookings" on
+       the wider Month row). What the test is actually guarding is that the tile
+       does NOT deny a stay the form and the sheet both accept, so assert that —
+       it survives the next rewording, which the literal did not. */
     const note = roomTile(fi, DAYS - 2, 3).querySelector("s").textContent;
-    ok(/\+n$/.test(note), `tile says "${note}" — expected the "n+" edge idiom`);
+    ok(!/^Booked$/.test(note) && !/of 3/.test(note),
+       `tile says "${note}" — it is refusing a stay the form and sheet accept`);
+    eq(note, freeWords(fi, DAYS - 2, true), "the tile and freeWords disagree");
     ok(roomTile(fi, DAYS - 2, 3).classList.contains("free"), "tile is painted as unavailable");
 
     openSheet(fi, DAYS - 2);
