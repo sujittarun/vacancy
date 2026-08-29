@@ -4077,6 +4077,21 @@ function recompute(){
    0 does NOT mean the stay was free and the app never fills the gap in: a made
    up figure in a money column is worse than a blank, because a blank asks the
    question and a number answers it wrongly.                                   */
+/* THE DAY THE OFFSETS BELOW ARE MEASURED FROM.
+
+   Every `start` in BOOK is a number of days from this date, not from whenever
+   the app happens to be opened. Without it the whole book slid forward one day
+   every day: a stay the sheet records on 29 August rendered as 30 August the
+   next morning, 31 August the morning after, and the app quietly disagreed
+   with the operator's own spreadsheet about every date it holds — including
+   which rooms are free tonight. Caught the first time the clock rolled over
+   with real data in the file.
+
+   load() has always done this for a SAVED book, shifting by `savedOn`. The seed
+   simply had no equivalent, because a generated book is generated relative to
+   now and cannot drift. A read book can. */
+const BOOK_ON = "2026-08-29";
+
 const BOOK = [
 ["1A",-95,1,"Mintu",0,0,1],
 ["1A",-94,1,"Akhil",1,0],
@@ -4978,10 +4993,17 @@ const BOOK_BLOCKS = [
    consulted again. */
 function seedRealBook(){
   resv = []; issues = [];
-  BOOK.forEach(([id, start, nights, guest, si, amount, cut])=>{
+  /* Same arithmetic as load(): the book was written against BOOK_ON, so shift
+     every offset by however many days have passed since. A book read on
+     Saturday still says Saturday on Tuesday. */
+  const on = new Date(BOOK_ON + "T00:00:00"); on.setHours(0,0,0,0);
+  const drift = Math.round((on - today) / 86400000);
+  BOOK.forEach(([id, start0, nights, guest, si, amount, cut])=>{
+    let start = start0;
     const fi = flatIndex[id];
     if(fi === undefined) return;          // a flat that has since left the book
     const src = SRC[si] || SRC[0];
+    start += drift;
     const row = {fi, start, end: start + nights, nights, guest, src,
                  amount: amount || undefined, pays: []};
     /* WHAT THE WINDOW CUT OFF. The book holds 176 nights; the operator's sheet
@@ -5012,9 +5034,10 @@ function seedRealBook(){
     }
     resv.push(row);
   });
-  BOOK_BLOCKS.forEach(([id, start, nights, why])=>{
+  BOOK_BLOCKS.forEach(([id, start0, nights, why])=>{
     const fi = flatIndex[id];
     if(fi === undefined) return;
+    const start = start0 + drift;
     resv.push({fi, start, end: start + nights, nights, kind:"block",
                reason: /pest/i.test(why) ? "Maintenance" : "Owner use",
                note: why, guest:"Out of service", src:"Block"});

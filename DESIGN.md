@@ -725,6 +725,34 @@ The earlier fix in this same loop stopped past months being fabricated. It did
 not notice that the *current* month is also partial, at the other end. A period
 that does not cover its row has to say which days it does: `73% (3 of 31 days)`.
 
+## A read book drifts; a generated one cannot
+
+Every `start` in `BOOK` is a number of days from some day. For eighteen months
+that day was implicitly *now*, because the book was generated at boot and could
+not be anything else. The moment the book started being **read out of somebody's
+spreadsheet**, the anchor stopped being now and became the morning the importer
+ran — and nothing in the file knew that.
+
+Found the first time the clock rolled past midnight with real data in it. A stay
+the sheet records on 29 August rendered as 30 August. The 176-night window
+started a day late. `3 of 46 free tonight` was yesterday's three against the
+sheet's twelve. **Silent, cumulative, and wrong about every date the app holds**
+— and it would have grown by a day every day until somebody re-ran the import.
+
+`load()` had solved this years earlier for a *saved* book: stamp it with
+`savedOn`, shift by the difference. The seed simply had no equivalent, because
+the class of bug did not exist while the data was invented. So the fix is the
+same arithmetic one layer earlier — `BOOK_ON` beside `BOOK`, and a shift in
+`seedRealBook`.
+
+The general shape, which is worth more than the fix: **when data stops being
+generated and starts being read, every assumption that was true because you
+made it up needs re-checking.** This one, the invented check-out date at the
+window's edge, and the ₹2.2 lakh the run-merge dropped are all the same
+sentence. The importer now reads its anchor from the clock rather than carrying
+a literal, because a hardcoded date is correct on the day it is written and
+quietly wrong every day after.
+
 ## Prohibitions
 
 - No paper, ruling, stamps, or any ledger device. That world is discarded.

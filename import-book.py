@@ -18,7 +18,11 @@ kept. See DESIGN.md, "An import is a claim, and a claim needs a proof".
 import sys, os
 import openpyxl, datetime, re, json, collections
 
-TODAY = datetime.date(2026, 8, 29)
+# The day the offsets in BOOK are measured FROM. Read from the clock, never
+# pinned: a hardcoded date is right on the day it is written and silently wrong
+# every day after. The app is given this date too (BOOK_ON) and shifts by the
+# difference, so a book exported on Saturday still says Saturday on Tuesday.
+TODAY = datetime.date.today()
 BACK, FWD = 95, 80
 SOLD_OUT = ("vasavi", "mumba")            # sold; not part of the book any more
 
@@ -302,8 +306,10 @@ if "--write" not in sys.argv:
     sys.exit(0)
 p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html")
 h = open(p).read()
+import re as _re
+h = _re.sub(r'const BOOK_ON = "[^"]*";', f'const BOOK_ON = "{TODAY.isoformat()}";', h, count=1)
 for name, body in (("BOOK", emit(rows_b)), ("BOOK_BLOCKS", emit(rows_k))):
     a = h.index("const " + name + " = [\n") + len("const " + name + " = [\n")
-    h = h[:a] + body + h[h.index("\n];", a):]
+    h = h[:a] + body + h[h.index("\n];", a - 1):]
 open(p, "w").write(h)
 print(f"\nwritten to {p}")

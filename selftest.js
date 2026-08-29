@@ -405,6 +405,34 @@ export async function run(filter) {
 
   /* ══ money reporting ════════════════════════════════════════════════════ */
 
+  /* The book is a set of offsets from the day it was READ, and the app computes
+     `today` from the clock. Without a stamp the whole book slid forward one day
+     every day — measured the first morning after a real import: a stay the
+     sheet records on 29 August rendered as 30 August, the 176-night window
+     started a day late, and "3 of 46 free tonight" was yesterday's 3 against
+     the sheet's 12. Silent, cumulative, and wrong about every date it holds. */
+  await test("the book does not drift when the clock rolls over", () => {
+    ok(typeof BOOK_ON === "string" && /^\d{4}-\d{2}-\d{2}$/.test(BOOK_ON),
+       "BOOK carries no date to measure its offsets from");
+    const on = new Date(BOOK_ON + "T00:00:00"); on.setHours(0, 0, 0, 0);
+    const drift = Math.round((on - today) / 86400000);
+    /* every row must sit where BOOK_ON said it sits, whatever day it is now */
+    let checked = 0;
+    for (const [id, start0, nights, guest] of BOOK.slice(0, 40)) {
+      const fi = flatIndex[id];
+      if (fi === undefined) continue;
+      const row = resv.find(r => r.fi === fi && r.guest === guest && r.nights === nights
+                              && r.start === start0 + drift);
+      ok(row, `${id} · ${guest} is not at the offset BOOK_ON puts it at`);
+      /* and the calendar date it lands on is the one the sheet recorded */
+      const want = new Date(on); want.setDate(want.getDate() + start0);
+      eq(dateAt(row.start).toDateString(), want.toDateString(), `${id} · ${guest} calendar date`);
+      checked++;
+    }
+    ok(checked > 10, "too few rows checked to mean anything");
+    return `${checked} rows land on their sheet dates, ${drift === 0 ? "same day" : drift + " days of drift corrected"}`;
+  });
+
   await test("the owed rows are a partition of the headline", () => {
     const O = owedStats();
     /* FOUR states, not three. "still in the flat" used to be folded into
