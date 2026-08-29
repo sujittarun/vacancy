@@ -867,12 +867,16 @@ button{background:none;border:0;padding:0;cursor:pointer}
 }
 .calscroll.moreAbove{ --fade-t:transparent 0, #000 16px }
 .calscroll.moreBelow{ --fade-b:#000 calc(100% - 16px), transparent 100% }
-.chipstrip{
+.srcRow{
+  --fade-t:#000 0, #000 0;
+  --fade-b:#000 100%, #000 100%;
+}
+.chipstrip, .srcRow{
   -webkit-mask-image:linear-gradient(to right, var(--fade-t), var(--fade-b));
   mask-image:linear-gradient(to right, var(--fade-t), var(--fade-b));
 }
-.chipstrip.moreAbove{ --fade-t:transparent 0, #000 20px }
-.chipstrip.moreBelow{ --fade-b:#000 calc(100% - 24px), transparent 100% }
+.chipstrip.moreAbove, .srcRow.moreAbove{ --fade-t:transparent 0, #000 20px }
+.chipstrip.moreBelow, .srcRow.moreBelow{ --fade-b:#000 calc(100% - 24px), transparent 100% }
 @media (prefers-reduced-motion:reduce){ .calscroll{transition:none} }
 .calscroll::-webkit-scrollbar{display:none}
 /* the month divider pins to the top of the trough, so which month you are
@@ -3066,13 +3070,6 @@ const dateAt = i => { const d = new Date(today); d.setDate(d.getDate()+i); retur
 const fmt  = i => { const d=dateAt(i); return `${d.getDate()} ${MON[d.getMonth()]}`; };
 const fmtL = i => { const d=dateAt(i); return `${DOW[d.getDay()]} ${d.getDate()} ${MON[d.getMonth()]}`; };
 
-function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);
-  t=t+Math.imul(t^t>>>7,61|t)^t;return ((t^t>>>14)>>>0)/4294967296}}
-const rng = mulberry32(20260806);
-
-/* The real portfolio. `plan` lists unit types smallest-first so studios and smaller
-   flats sit on the lower floors; `per` is units per floor. Flat numbers follow
-   <floor><unit>, e.g. TT-101, LP-403. */
 /* ══ CRESCENT STAYS — THE REAL BOOK ═════════════════════════════════════════
    Read out of the operator's own workbook rather than invented: the flat list
    is the header of the Availability tab, and the types come from "Copy of
@@ -3179,14 +3176,18 @@ const INVENTORY = [
   ["LP-403", "LP", 4, "3 BHK",     6000],
   ["LP-404", "LP", 4, "Studio",    2500],
 ];
-const NAMES = ["R. Menon","S. Kulkarni","A. Fernandes","D. Iyer","K. Bhatt","M. Sequeira","P. Rao",
-  "T. Nayar","J. Dcosta","V. Shetty","N. Pillai","H. Chandra","L. Mathew","G. Saldanha","B. Kaur",
-  "F. Noronha","Y. Deshpande","C. Varghese","E. Pinto","U. Reddy"];
-const SRC = ["Airbnb","Direct call","Walk-in","Booking.com","Repeat guest"];
-/* Declared here rather than beside the money helpers because the demo generator
-   runs during boot, well before that block is evaluated. */
+/* Where the bookings came from. One list, because the demo generator and the
+   booking form each used to carry their own and they had drifted apart — the
+   form offered "Repeat guest", the data never produced one, and the source mix
+   on the Month panel could not add up. These are the channels that actually
+   appear in Crescent Stays' book. */
+const SRC = ["Direct","Airbnb","Booking.com","MakeMyTrip","Agoda","Expedia","Agent"];
+/* Declared here rather than beside the money helpers because the seed runs
+   during boot, well before that block is evaluated. */
 const PAY_METHODS = ["Cash","UPI","Bank","Card","Platform"];
-const PLATFORMS = ["Airbnb","Booking.com"];
+/* A platform holds the guest's money and remits it later, so the stay is paid
+   and the operator is owed. Direct and Agent are settled with the operator. */
+const PLATFORMS = ["Airbnb","Booking.com","MakeMyTrip","Agoda","Expedia"];
 /* The things a serviced flat actually has. The kitchen was three appliances
    short — a chimney, a microwave and a gas stove are not "Other", they are
    what breaks. */
@@ -3275,7 +3276,6 @@ function saveInventory(){
 }
 
 let flats = loadInventory() || defaultInventory();
-flats.forEach(f=>{ f.pop = f.pop ?? (0.55 + rng()*0.45); });
 let NF = flats.length;
 let flatIndex = Object.fromEntries(flats.map((f,i)=>[f.id,i]));
 
@@ -3303,7 +3303,6 @@ function applyInventory(next, renames){
     return {...x, _id: renames[was] || was};
   });
   flats = next;
-  flats.forEach(f=>{ f.pop = f.pop ?? 0.6; });
   NF = flats.length;
   flatIndex = Object.fromEntries(flats.map((f,i)=>[f.id,i]));
   resv = held.filter(r => flatIndex[r._id] !== undefined)
@@ -3908,215 +3907,938 @@ function recompute(){
   });
 }
 
-/* Demand is not flat, and a demo with no pattern in it makes the Month panels
-   look like they have nothing to say. Weekends carry the week and locations
-   differ — which is what the weekday and building views exist to surface. */
-const DOW_DEMAND = [0.86, 0.58, 0.55, 0.60, 0.80, 1.25, 1.20];   // Sun … Sat
-const BLD_DEMAND = {TT:1.05, TN:0.72, MP:1.35, BH:0.66, LP:1.10};
+/* ── the book ───────────────────────────────────────────────────────────────────
+   Crescent Stays' own bookings, read out of the Availability tab of the
+   operator's workbook. Nothing here is generated: every row is a stay somebody
+   actually had, under the name the operator typed for them.
 
-const DEMO_PHONE = {}, DEMO_NUMBERS = [];
-function generateDemo(){
-  resv = []; DEMO_NUMBERS.length = 0;
-  flats.forEach((fl,fi)=>{
-    const bF = BLD_DEMAND[fl.code] ?? 1;
-    let d = -2 - Math.floor(rng()*8);        // stays already in progress, some checking out today
-    while(d < DAYS){
-      const dt = dateAt(Math.max(d,0));
-      const dw = dt.getDay();
-      // guests book close to the date, so the far weeks are genuinely thinner
-      const lead = 0.34 + 0.66 * Math.exp(-Math.max(0,d)/26);
-      if(rng() > fl.pop * bF * DOW_DEMAND[dw] * lead){ d += 1; continue; }
-      let n;
-      if(dw === 5)      n = 2 + (rng() < .35 ? 1 : 0);   // Friday arrivals cover the weekend
-      else if(dw === 6) n = 1 + (rng() < .5  ? 1 : 0);
-      else              n = 1 + Math.floor(rng()*3);
-      if(rng() < .12)   n += 3 + Math.floor(rng()*5);    // the occasional long stay
-      const start=d, end=d+n;
-      // end >= 0 keeps stays that check out this morning — they are today's departures
-      if(end>=0 && start<DAYS){
-        const guest = NAMES[Math.floor(rng()*NAMES.length)];
-        const src = SRC[Math.floor(rng()*SRC.length)];
-        // Most guests come once. Roughly one booking in six reuses an earlier
-        // number, which is about the repeat rate a well-run short-let sees — and
-        // it means the phone lookup has something true to find without claiming
-        // somebody has stayed two dozen times.
-        let ph;
-        if(DEMO_NUMBERS.length && rng() < .17){
-          ph = DEMO_NUMBERS[Math.floor(rng()*DEMO_NUMBERS.length)];
-          DEMO_PHONE[ph] = DEMO_PHONE[ph] || guest;
-        }else{
-          ph = "9" + String(100000000 + Math.floor(rng()*899999999));
-          DEMO_NUMBERS.push(ph); DEMO_PHONE[ph] = guest;
-        }
-        const amount = Math.round((fl.rate * n) / 100) * 100;
-        // a returning number keeps the name it was first booked under
-        const row = {fi, start, end, nights:n, guest: DEMO_PHONE[ph] || guest, src,
-                     phone: ph, pax: 1 + Math.floor(rng()*4),
-                     amount, pays: []};
-        // platform bookings are settled by the guest before arrival; direct ones
-        // usually carry an advance and a balance still to collect
-        if(PLATFORMS.indexOf(src) >= 0) row.pays.push({id:"d"+resv.length, amount, method:"Platform", on:Math.max(start-3,-9)});
-        else if(rng() < .62) row.pays.push({id:"d"+resv.length,
-          amount: Math.round(amount * (rng() < .5 ? .5 : .3) / 100) * 100,
-          method: rng() < .7 ? "UPI" : "Cash", on: Math.max(start - 2, -9)});
-        resv.push(row);
-      }
-      // a well-run short-let re-lets back-to-back roughly a third of the time,
-      // which is exactly what creates a same-day turnaround
-      d = end + (rng() < .3 ? 0 : 1 + Math.floor(rng()*4));
+   The window is the 176 nights the book can hold — 95 back and 80 forward from
+   the day it was exported. A tenancy that began earlier starts on its first
+   night inside the window, which is what a rolling book shows anyway.
+
+   [flat, first night (offset from today), nights, guest, source, ₹ total]
+
+   The amount is 0 wherever the sheet did not record one, which is most of them.
+   0 does NOT mean the stay was free and the app never fills the gap in: a made
+   up figure in a money column is worse than a blank, because a blank asks the
+   question and a number answers it wrongly.                                   */
+const BOOK = [
+["1A",-95,1,"Mintu",0,0],
+["1A",-94,1,"Akhil",1,0],
+["1A",-93,1,"Partha",0,0],
+["1A",-92,3,"Pratap",0,0],
+["1A",-88,1,"Kumaran",0,5000],
+["1A",-85,2,"Chandu",1,0],
+["1A",-83,2,"Vivek",1,0],
+["1A",-80,27,"Venu",5,0],
+["1A",-53,4,"Bashir",0,25200],
+["1A",-49,2,"Rajkumar",0,10500],
+["1A",-47,1,"Partha",0,5250],
+["1A",-46,3,"Manoj",1,0],
+["1A",-42,2,"Raghavendra",1,0],
+["1A",-38,1,"Srinath",0,6300],
+["1A",-36,1,"Pravalika",1,0],
+["1A",-35,1,"Lakshman",1,0],
+["1A",-33,2,"Roshan",1,0],
+["1A",-31,4,"Shruti",1,0],
+["1A",-24,3,"Ayush",0,0],
+["1A",-21,2,"Jeeanusha",0,4000],
+["1A",-15,3,"Sudarshana",0,0],
+["1A",-9,1,"Rajendra",0,0],
+["1A",-7,14,"Muskan",0,0],
+["2A",-95,30,"Caleb",0,0],
+["2A",-65,1,"Hemanth",1,0],
+["2A",-64,1,"Poorna",0,0],
+["2A",-63,2,"Stayezy Mahender",0,8750],
+["2A",-57,4,"Kalyan",0,11500],
+["2A",-50,1,"Sumanth",1,0],
+["2A",-49,2,"Mintu",0,0],
+["2A",-47,4,"Anamya",1,0],
+["2A",-43,1,"Munisankar",1,0],
+["2A",-42,5,"Veeny",0,0],
+["2A",-36,7,"Ujjwal",0,28113],
+["2A",-28,1,"Likith",1,0],
+["2A",-27,1,"Srikanth",0,0],
+["2A",-26,3,"Ravi",0,0],
+["2A",-23,1,"Sachin",1,0],
+["2A",-22,1,"Dixith",1,0],
+["2A",-21,5,"Veeny",0,0],
+["2A",-15,1,"early",0,0],
+["2A",-14,1,"Adyasa",1,0],
+["2A",-11,1,"Nagaraju",0,0],
+["2A",-9,8,"Baidik",1,0],
+["2A",-1,4,"Sahil",1,0],
+["2B",-95,30,"Caleb",0,0],
+["2B",-64,2,"Vishal",1,0],
+["2B",-62,1,"Sai ram",0,0],
+["2B",-60,1,"Anurag",0,0],
+["2B",-57,2,"Biswajyoti",1,0],
+["2B",-51,1,"Mani",0,0],
+["2B",-50,5,"Veeny",0,0],
+["2B",-45,14,"Dr Amlan",0,46100],
+["2B",-28,1,"Rajendra",0,0],
+["2B",-27,2,"Jabir",1,0],
+["2B",-22,4,"Mintu",0,0],
+["2B",-17,1,"Amit",0,0],
+["2B",-16,3,"Sridhar",0,0],
+["2B",-10,2,"Harini",1,0],
+["2B",-8,1,"Shaik",1,0],
+["2B",-6,38,"Suresh",0,0],
+["3A",-95,2,"Partha",0,0],
+["3A",-93,3,"Devyansh",1,0],
+["3A",-90,1,"Mintu Mohan",0,3000],
+["3A",-89,2,"Ashok",0,8000],
+["3A",-85,6,"Manoj",1,0],
+["3A",-79,1,"Srikanth",1,0],
+["3A",-78,16,"Yozna",1,0],
+["3A",-57,1,"Mintu",0,3300],
+["3A",-52,32,"Kiran",0,0],
+["3A",-16,1,"Rakesh",1,0],
+["3A",-15,1,"Anil",1,0],
+["3A",-14,1,"Nikhar",1,0],
+["3A",-12,1,"Sudhakar",0,0],
+["3A",-8,1,"Devi Prasad",0,0],
+["3A",-7,2,"Aditya",1,0],
+["3A",-4,3,"Ayush",1,0],
+["3A",-1,1,"Ayush/Anup",0,0],
+["3B",-95,1,"Sandhya",1,0],
+["3B",-94,6,"Mintu",0,21000],
+["3B",-88,3,"Janakiram",0,0],
+["3B",-85,2,"Vikas",1,0],
+["3B",-83,7,"Santanu",1,0],
+["3B",-76,1,"Prateek",1,0],
+["3B",-75,6,"Manoj",0,0],
+["3B",-69,4,"Akhil",1,0],
+["3B",-64,3,"Gouri",1,0],
+["3B",-57,2,"Mita",0,0],
+["3B",-51,5,"Vijay",6,0],
+["3B",-44,1,"Sudhakar",0,4000],
+["3B",-43,3,"Manoj",1,0],
+["3B",-40,2,"Durga Prasad",0,2000],
+["3B",-38,6,"Debarshi",1,0],
+["3B",-31,2,"Roshan",1,0],
+["3B",-28,3,"Siddamurthi",1,0],
+["3B",-24,5,"Sambasiva",0,0],
+["3B",-16,3,"Pavan",1,0],
+["3B",-10,5,"Murthy",1,0],
+["3B",-3,1,"Devi Prasad",0,0],
+["3B",-2,2,"Basudev",1,0],
+["3B",0,2,"Raju",0,0],
+["3B",5,3,"Ashok",1,0],
+["4A",-95,30,"Caleb",0,0],
+["4A",-64,1,"Rajesh",0,4200],
+["4A",-63,2,"Abhishek",1,0],
+["4A",-57,1,"Yashwanth",0,0],
+["4A",-55,5,"Veeny",0,0],
+["4A",-50,36,"Mani",0,0],
+["4A",-8,1,"Varsha",1,0],
+["4A",-7,1,"Sampath",1,0],
+["4A",-2,3,"Surya",0,0],
+["B101",-95,1,"Joydeep",1,0],
+["B101",-93,3,"Het",1,0],
+["B101",-90,2,"Harshwardhan",1,0],
+["B101",-88,4,"Anagha",1,0],
+["B101",-84,1,"Deep",0,0],
+["B101",-83,4,"Rohit",1,0],
+["B101",-79,4,"Raghuram",1,0],
+["B101",-71,6,"Dinesh",1,0],
+["B101",-65,3,"Bhakti",1,0],
+["B101",-62,1,"Suraj",1,0],
+["B101",-61,3,"Neeraj",1,0],
+["B101",-58,6,"Anil",0,35063],
+["B101",-52,5,"Srinivasarao",1,0],
+["B101",-47,1,"Mujja",1,0],
+["B101",-46,2,"Dharmendra Trusted Stays",0,0],
+["B101",-44,2,"Trusted Stays",0,0],
+["B101",-42,1,"Aamer",1,0],
+["B101",-40,1,"Lalitha",0,6875],
+["B101",-38,1,"Mohammed",1,0],
+["B101",-37,2,"Sudheer",1,0],
+["B101",-35,3,"Shriya",1,0],
+["B101",-32,1,"Lalitha",0,6000],
+["B101",-31,8,"Aditya",1,0],
+["B101",-23,5,"Munni",1,0],
+["B101",-16,1,"Korukonda Jagan",1,0],
+["B101",-15,10,"Mustafa",0,25000],
+["B101",-5,2,"Azhar",0,0],
+["B101",-3,15,"Yaseen",1,0],
+["B102",-93,2,"Ragini",1,0],
+["B102",-91,1,"Daniel",1,0],
+["B102",-90,1,"Maniteja",1,0],
+["B102",-88,2,"Shiva",4,0],
+["B102",-86,4,"Iraj",1,0],
+["B102",-82,1,"Daniel",1,0],
+["B102",-81,2,"Akshay",1,0],
+["B102",-79,2,"Venkatarao",0,0],
+["B102",-76,1,"Sajal",0,7500],
+["B102",-73,1,"Ravi a Kiran",1,0],
+["B102",-72,2,"Ravi Kiran",1,0],
+["B102",-70,1,"Aditya",0,4875],
+["B102",-69,3,"Shaik",1,0],
+["B102",-65,3,"Aatif",1,0],
+["B102",-61,6,"Imamunnisa",1,0],
+["B102",-55,24,"Srini",1,0],
+["B102",-31,1,"kota",1,0],
+["B102",-30,2,"Ullas",1,0],
+["B102",-28,1,"Ullas",0,5512],
+["B102",-27,2,"Saipoojitha",1,0],
+["B102",-25,4,"Ramakrishna",0,28350],
+["B102",-21,1,"Kalyani",1,0],
+["B102",-18,8,"Anupam",0,0],
+["B102",-10,2,"Subhani Shaik",5,0],
+["B102",-8,1,"Dr Edwin Anthony",1,0],
+["B102",-7,4,"Shinoj",1,0],
+["B102",-2,4,"Basit",0,0],
+["B201",-95,28,"Caleb",0,0],
+["B201",-67,9,"Sekhar",1,0],
+["B201",-58,7,"Syed",1,0],
+["B201",-50,2,"Janakiram",0,13750],
+["B201",-48,17,"Vinitha",1,0],
+["B201",-31,9,"Vinitha",0,43169],
+["B201",-22,2,"Shaik Saadath",1,0],
+["B201",-20,1,"Shaik Saadath",0,0],
+["B201",-16,3,"Ajaz",1,0],
+["B201",-13,2,"Prachi",1,0],
+["B201",-9,3,"Ankur",1,0],
+["B201",-6,8,"Narendra",0,0],
+["B201",5,3,"Deepa",1,0],
+["B201",8,3,"Deepa",0,0],
+["B201",12,3,"Anup",1,0],
+["B202",-95,28,"Caleb",0,0],
+["B202",-67,7,"Sheetal",1,0],
+["B202",-60,1,"Sheetal",0,6693],
+["B202",-59,5,"Azaruddin",1,0],
+["B202",-54,2,"Akhila",1,0],
+["B202",-52,2,"Bed bugs",0,0],
+["B202",-50,1,"Abhishek",0,5000],
+["B202",-49,7,"Pijush",2,37485],
+["B202",-42,3,"Ram",1,0],
+["B202",-39,1,"Ram",0,4000],
+["B202",-37,3,"Saboor",1,0],
+["B202",-32,1,"konda kaushik",1,0],
+["B202",-31,3,"Ranga",1,0],
+["B202",-28,4,"Santipada",1,0],
+["B202",-22,23,"Syed",0,40700],
+["B301",-95,2,"Srujana",1,0],
+["B301",-93,2,"Srujana",0,13750],
+["B301",-91,2,"Rajath",1,0],
+["B301",-89,1,"Nuvuluri",1,0],
+["B301",-87,2,"Aman",1,0],
+["B301",-85,1,"Srikanth",1,0],
+["B301",-83,1,"Lalitha",1,0],
+["B301",-82,2,"Satya",1,0],
+["B301",-80,3,"Bashir",0,18651],
+["B301",-77,1,"Daniel",1,0],
+["B301",-76,1,"Lalitha",1,0],
+["B301",-71,7,"Akhila",1,0],
+["B301",-64,6,"Deepika",0,28350],
+["B301",-58,10,"Sushma",0,37050],
+["B301",-47,7,"Naira",1,0],
+["B301",-40,6,"Jeevan",1,0],
+["B301",-34,1,"Jeevan",0,24532],
+["B301",-33,2,"Aditya",1,0],
+["B301",-31,4,"Jagadeesh",1,0],
+["B301",-27,3,"Vinoth",1,0],
+["B301",-24,1,"Patel Abdul Wahid",1,0],
+["B301",-23,3,"Siddhant",1,0],
+["B301",-20,2,"Pankaj",5,0],
+["B301",-18,1,"Pankaj",0,0],
+["B301",-15,4,"Theja",1,0],
+["B301",-11,1,"Epari",1,0],
+["B301",-9,1,"Aashray Raj",1,0],
+["B301",-8,1,"Rahul Tammewar",1,0],
+["B301",-7,1,"Sumukh",1,0],
+["B301",-6,2,"Ullas",1,0],
+["B301",-4,4,"Deepak",1,0],
+["B301",0,1,"Prabhakar",1,0],
+["B302",-95,2,"Analdip",0,0],
+["B302",-93,1,"Aditya",1,0],
+["B302",-92,2,"Tadipatri",1,0],
+["B302",-90,1,"Dasari",1,0],
+["B302",-89,1,"Kiran Mani",0,0],
+["B302",-85,3,"Khizar",1,0],
+["B302",-82,1,"Sandeep",1,0],
+["B302",-81,2,"Sai Karthik",1,0],
+["B302",-79,8,"Ishwar",1,0],
+["B302",-71,1,"Om Sai Krisha Kowshik",1,0],
+["B302",-70,4,"Sagar",1,0],
+["B302",-64,5,"Akash",0,35400],
+["B302",-59,1,"Sheetal",0,6693],
+["B302",-58,1,"Karan",1,0],
+["B302",-57,1,"Kanyaragi",1,0],
+["B302",-56,4,"Karan",0,20000],
+["B302",-52,12,"Sunil",2,0],
+["B302",-36,2,"Amogh",1,0],
+["B302",-33,3,"Jeevan",0,0],
+["B302",-29,4,"Ghule",1,0],
+["B302",-25,1,"Ghule",0,9950],
+["B302",-24,1,"Lalitha",0,6000],
+["B302",-22,1,"Sai Jatin Reddy",1,0],
+["B302",-21,1,"Shlok",1,0],
+["B302",-18,8,"Anupam",0,0],
+["B302",-10,3,"Gitesh",1,0],
+["B302",-7,4,"Mala",1,0],
+["B302",-1,2,"Jagannath",1,0],
+["B302",1,6,"Prabhakar",1,0],
+["B401",-95,28,"Caleb",0,0],
+["B401",-66,4,"Nitish",1,0],
+["B401",-62,3,"Sravan",1,0],
+["B401",-59,2,"Pranav",1,0],
+["B401",-57,1,"Pranav",0,2573],
+["B401",-56,1,"Rishnu",1,0],
+["B401",-54,2,"Karthikeya",1,0],
+["B401",-52,1,"Lalitha",0,3200],
+["B401",-50,4,"Ashish",1,0],
+["B401",-46,7,"Lokesh",1,0],
+["B401",-38,1,"Rishnu",1,0],
+["B401",-36,1,"Lalitha",0,3100],
+["B401",-35,4,"Afsar Ahamed",1,0],
+["B401",-31,2,"Lalitha",0,6000],
+["B401",-29,59,"Rakesh",0,154875],
+["G01",-95,6,"Abhinav",1,0],
+["G01",-89,2,"Gopi",1,0],
+["G01",-87,1,"Vinod",1,0],
+["G01",-86,1,"Khaleel Anjum",1,0],
+["G01",-85,4,"Sai",1,0],
+["G01",-81,1,"Srinu",0,0],
+["G01",-80,2,"Thomas",1,0],
+["G01",-78,1,"Ayush",1,0],
+["G01",-77,4,"Lohitha",1,0],
+["G01",-73,1,"Deepika",1,0],
+["G01",-72,1,"Shyam",1,0],
+["G01",-71,8,"Sumit",1,0],
+["G01",-63,3,"Ram Murthy",1,0],
+["G01",-60,4,"Rama Krishna",0,9072],
+["G01",-56,15,"Akash",1,0],
+["G01",-40,2,"Arunava",1,0],
+["G01",-37,3,"Arishmita",1,0],
+["G01",-34,1,"Raj",0,0],
+["G01",-33,2,"Santraj",1,0],
+["G01",-31,2,"Yogesh",1,0],
+["G01",-29,9,"Arunava",1,0],
+["G01",-20,1,"Bharat",0,2500],
+["G01",-19,5,"Aravind",1,0],
+["G01",-14,2,"Satyam",1,0],
+["G01",-12,45,"Rajkumar",1,0],
+["G02",-95,43,"Aniket",0,0],
+["G02",-52,1,"Mohammad",1,0],
+["G02",-51,1,"Sai Krishna",5,0],
+["G02",-50,9,"Mita",0,20082],
+["G02",-40,2,"Naresh",0,5250],
+["G02",-38,1,"Lokesh",0,2231],
+["G02",-37,3,"Ajay",0,7088],
+["G02",-34,1,"Sai Vamsi",1,0],
+["G02",-32,1,"Lokesh",0,2231],
+["G02",-31,3,"Poulomy",1,0],
+["G02",-28,1,"Dora babu",4,0],
+["G02",-27,1,"Shaik",1,0],
+["G02",-26,4,"Afreena",0,9451],
+["G02",-20,1,"Prajeeth",1,0],
+["G02",-19,1,"Selvam",0,0],
+["G02",-17,1,"Lokesh",0,0],
+["G02",-15,2,"Rabbani",0,0],
+["G02",-13,2,"Brahmith",0,0],
+["G02",-11,3,"Gyanendu",1,0],
+["G02",-8,3,"Satyam",1,0],
+["G02",-5,1,"Lokesh",0,0],
+["G02",-4,4,"Austin",1,0],
+["G02",0,2,"Rohith",1,0],
+["G02",2,6,"Charu",1,0],
+["G02",10,7,"Sumit",1,0],
+["LP-101",-93,3,"Chandu",0,15750],
+["LP-101",-90,1,"Prathipaka",1,0],
+["LP-101",-87,7,"Ramesh",1,0],
+["LP-101",-80,7,"Durga Prasad",0,36750],
+["LP-101",-71,1,"Kanyaragi",1,0],
+["LP-101",-70,1,"Venkat",0,2100],
+["LP-101",-69,1,"Kanyaragi",1,0],
+["LP-101",-67,2,"Prashanth",1,0],
+["LP-101",-65,1,"Rahil",0,6300],
+["LP-101",-64,2,"Madhavi",0,0],
+["LP-101",-60,2,"Krishna Skyla",0,15000],
+["LP-101",-58,1,"Poojitha",1,0],
+["LP-101",-57,1,"Daniel",1,0],
+["LP-101",-56,7,"Anil",1,0],
+["LP-101",-49,5,"Ramling",1,0],
+["LP-101",-44,3,"Shyam",0,16000],
+["LP-101",-41,1,"Kanyaragi",0,6000],
+["LP-101",-37,4,"Mustafa",1,37100],
+["LP-101",-28,3,"Owais Baig",0,17010],
+["LP-101",-25,9,"Padma",0,48000],
+["LP-101",-16,5,"Subhash",1,0],
+["LP-101",-11,2,"Nader",0,0],
+["LP-101",-7,3,"Raghuram",1,0],
+["LP-101",-4,1,"Dhanamjayarao",5,0],
+["LP-101",-2,4,"Shancy",0,0],
+["LP-102",-93,3,"Chandu",0,0],
+["LP-102",-90,1,"Prathipaka",1,0],
+["LP-102",-87,7,"Ramesh",1,0],
+["LP-102",-80,7,"Durga Prasad",0,0],
+["LP-102",-71,1,"Kanyaragi",1,0],
+["LP-102",-69,1,"Kanyaragi",1,0],
+["LP-102",-67,2,"Prashanth",1,0],
+["LP-102",-65,1,"Rahil",0,0],
+["LP-102",-64,2,"Madhavi",0,0],
+["LP-102",-60,2,"Krishna Skyla",0,0],
+["LP-102",-58,1,"Poojitha",1,0],
+["LP-102",-57,1,"Daniel",1,0],
+["LP-102",-56,7,"Anil",1,0],
+["LP-102",-49,5,"Ramling",1,0],
+["LP-102",-44,3,"Shyam",0,0],
+["LP-102",-41,1,"Kanyaragi",0,0],
+["LP-102",-37,4,"Mustafa",1,0],
+["LP-102",-28,3,"Owais Baig",0,0],
+["LP-102",-25,9,"Padma",0,0],
+["LP-102",-16,5,"Subhash",1,0],
+["LP-102",-11,2,"Nader",0,0],
+["LP-102",-7,3,"Raghuram",1,0],
+["LP-102",-4,1,"Dhanamjayarao",5,0],
+["LP-102",-2,4,"Shancy",0,0],
+["LP-103",-93,3,"Chandu",0,0],
+["LP-103",-90,1,"Prathipaka",1,0],
+["LP-103",-87,7,"Ramesh",1,0],
+["LP-103",-80,7,"Durga Prasad",0,0],
+["LP-103",-71,1,"Kanyaragi",1,0],
+["LP-103",-69,1,"Kanyaragi",1,0],
+["LP-103",-67,2,"Prashanth",1,0],
+["LP-103",-65,1,"Rahil",0,0],
+["LP-103",-64,2,"Madhavi",0,0],
+["LP-103",-60,2,"Krishna Skyla",0,0],
+["LP-103",-58,1,"Poojitha",1,0],
+["LP-103",-57,1,"Daniel",1,0],
+["LP-103",-56,7,"Anil",1,0],
+["LP-103",-49,5,"Ramling",1,0],
+["LP-103",-44,3,"Shyam",0,0],
+["LP-103",-41,1,"Kanyaragi",0,0],
+["LP-103",-37,4,"Mustafa",1,0],
+["LP-103",-28,3,"Owais Baig",0,0],
+["LP-103",-25,9,"Padma",0,0],
+["LP-103",-16,5,"Subhash",1,0],
+["LP-103",-11,2,"Nader",0,0],
+["LP-103",-7,3,"Raghuram",1,0],
+["LP-103",-4,1,"Dhanamjayarao",5,0],
+["LP-103",-2,4,"Shancy",0,0],
+["LP-104",-87,7,"Ramesh",1,0],
+["LP-104",-71,4,"Ishwar",0,9450],
+["LP-104",-65,5,"Vamsi",0,11250],
+["LP-104",-58,1,"Poojitha",1,0],
+["LP-104",-51,1,"Anil driver",0,1500],
+["LP-104",-49,1,"Srikant",0,0],
+["LP-104",-44,2,"Mohit",0,4725],
+["LP-104",-40,1,"Srikanth",0,2600],
+["LP-104",-37,4,"Mustafa",1,0],
+["LP-104",-28,3,"Brahmith",0,6562],
+["LP-104",-25,1,"Venkatarao",0,0],
+["LP-104",-22,3,"Anvi",0,0],
+["LP-104",-18,2,"Nader",0,0],
+["LP-104",-16,5,"Subhash",1,0],
+["LP-104",-6,1,"Ibrahim",0,0],
+["LP-104",16,12,"Archana",0,0],
+["LP-201",-92,1,"Aditya",0,5250],
+["LP-201",-91,1,"Reshma sree",1,0],
+["LP-201",-90,2,"Hemanth",0,0],
+["LP-201",-86,10,"Vinay",1,0],
+["LP-201",-76,23,"Islam",0,0],
+["LP-201",-52,2,"Akhila",1,0],
+["LP-201",-50,1,"Akhila",0,3000],
+["LP-201",-49,1,"Sandesh",0,6500],
+["LP-201",-48,1,"chapalamudugu Viswa Kalyan Mitra",1,0],
+["LP-201",-47,1,"chapalamudugu Viswa Kalyan Mitra",0,4500],
+["LP-201",-46,6,"Dr Nayana",0,0],
+["LP-201",-40,18,"Preetam",1,0],
+["LP-201",-21,2,"Yasaswi",1,0],
+["LP-201",-18,10,"Anupam",0,0],
+["LP-201",-8,7,"Venkatarao",0,0],
+["LP-201",0,5,"Mustafa",0,0],
+["LP-202",-92,1,"Aditya",0,0],
+["LP-202",-91,1,"Reshma sree",1,0],
+["LP-202",-90,2,"Hemanth",0,0],
+["LP-202",-86,10,"Vinay",1,0],
+["LP-202",-76,23,"Islam",0,0],
+["LP-202",-52,2,"Akhila",1,0],
+["LP-202",-50,1,"Akhila",0,0],
+["LP-202",-49,1,"Sandesh",0,0],
+["LP-202",-48,1,"chapalamudugu Viswa Kalyan Mitra",1,0],
+["LP-202",-47,1,"chapalamudugu Viswa Kalyan Mitra",0,0],
+["LP-202",-46,6,"Dr Nayana",0,0],
+["LP-202",-40,18,"Preetam",1,0],
+["LP-202",-21,2,"Yasaswi",1,0],
+["LP-202",-18,10,"Anupam",0,0],
+["LP-202",-8,7,"Venkatarao",0,0],
+["LP-202",0,5,"Mustafa",0,0],
+["LP-203",-92,1,"Aditya",0,0],
+["LP-203",-91,1,"Reshma sree",1,0],
+["LP-203",-90,2,"Hemanth",0,0],
+["LP-203",-86,10,"Vinay",1,0],
+["LP-203",-76,23,"Islam",0,0],
+["LP-203",-52,2,"Akhila",1,0],
+["LP-203",-50,1,"Akhila",0,0],
+["LP-203",-49,1,"Sandesh",0,0],
+["LP-203",-48,1,"chapalamudugu Viswa Kalyan Mitra",1,0],
+["LP-203",-47,1,"chapalamudugu Viswa Kalyan Mitra",0,0],
+["LP-203",-46,6,"Dr Nayana",0,0],
+["LP-203",-40,18,"Preetam",1,0],
+["LP-203",-21,2,"Yasaswi",1,0],
+["LP-203",-18,10,"Anupam",0,0],
+["LP-203",-8,7,"Venkatarao",0,0],
+["LP-203",0,5,"Mustafa",0,0],
+["LP-204",-91,124,"Swathi",0,0],
+["LP-301",-94,1,"Ratnakar",1,0],
+["LP-301",-92,1,"Daniel",1,0],
+["LP-301",-90,1,"Arman",1,0],
+["LP-301",-89,5,"Deep",0,28500],
+["LP-301",-84,1,"Ashish",1,0],
+["LP-301",-83,1,"Aman",3,0],
+["LP-301",-82,1,"Aman",0,7875],
+["LP-301",-81,1,"Kaushik",1,0],
+["LP-301",-80,3,"Konda Reddy",3,0],
+["LP-301",-77,2,"Venkatarao",0,0],
+["LP-301",-74,4,"Govardhan",0,22680],
+["LP-301",-70,1,"Sahil",0,5000],
+["LP-301",-68,10,"Ahmad",0,53550],
+["LP-301",-58,3,"Kashif",1,0],
+["LP-301",-55,1,"Rahul",1,0],
+["LP-301",-54,3,"Vijay",6,0],
+["LP-301",-51,1,"Ashwin",0,0],
+["LP-301",-50,3,"Somesh",1,0],
+["LP-301",-47,1,"Dr Nayana",0,28350],
+["LP-301",-45,1,"Bharat/Sonu",0,0],
+["LP-301",-44,4,"Mallikarjuna",1,0],
+["LP-301",-37,4,"Mustafa",0,22500],
+["LP-301",-29,1,"Venkatarao",0,0],
+["LP-301",-28,1,"Abhishek",1,0],
+["LP-301",-27,1,"Prashanth",1,0],
+["LP-301",-25,2,"Manikanth",0,6300],
+["LP-301",-22,1,"Santhosh",1,0],
+["LP-301",-21,1,"Prasad",1,0],
+["LP-301",-20,10,"Anupam",0,0],
+["LP-301",-10,1,"Nikhil",1,0],
+["LP-301",-9,3,"Raghavendra",0,23250],
+["LP-302",-94,1,"Ratnakar",1,0],
+["LP-302",-92,1,"Daniel",1,0],
+["LP-302",-90,1,"Arman",1,0],
+["LP-302",-89,5,"Deep",0,0],
+["LP-302",-84,1,"Ashish",1,0],
+["LP-302",-83,1,"Aman",3,0],
+["LP-302",-82,1,"Aman",0,0],
+["LP-302",-81,1,"Kaushik",1,0],
+["LP-302",-80,3,"Konda Reddy",3,0],
+["LP-302",-77,2,"Venkatarao",0,0],
+["LP-302",-74,4,"Govardhan",0,22680],
+["LP-302",-70,1,"Sahil",0,0],
+["LP-302",-68,10,"Ahmad",0,0],
+["LP-302",-58,3,"Kashif",1,0],
+["LP-302",-55,1,"Rahul",1,0],
+["LP-302",-54,3,"Vijay",6,0],
+["LP-302",-51,1,"Ashwin",0,0],
+["LP-302",-50,3,"Somesh",1,0],
+["LP-302",-47,1,"Dr Nayana",0,0],
+["LP-302",-45,1,"Bharat/Sonu",0,0],
+["LP-302",-44,4,"Mallikarjuna",1,0],
+["LP-302",-37,4,"Mustafa",0,0],
+["LP-302",-29,1,"Venkatarao",0,0],
+["LP-302",-28,1,"Abhishek",1,0],
+["LP-302",-27,1,"Prashanth",1,0],
+["LP-302",-25,2,"Manikanth",0,0],
+["LP-302",-22,1,"Santhosh",1,0],
+["LP-302",-21,1,"Prasad",1,0],
+["LP-302",-20,10,"Anupam",0,0],
+["LP-302",-10,1,"Nikhil",1,0],
+["LP-302",-9,3,"Raghavendra",0,0],
+["LP-303",-94,1,"Ratnakar",1,0],
+["LP-303",-92,1,"Daniel",1,0],
+["LP-303",-90,1,"Arman",1,0],
+["LP-303",-89,5,"Deep",0,0],
+["LP-303",-84,1,"Ashish",1,0],
+["LP-303",-83,1,"Aman",3,0],
+["LP-303",-82,1,"Aman",0,0],
+["LP-303",-81,1,"Kaushik",1,0],
+["LP-303",-80,3,"Konda Reddy",3,0],
+["LP-303",-77,2,"Venkatarao",0,0],
+["LP-303",-74,4,"Govardhan",0,22680],
+["LP-303",-70,1,"Sahil",0,0],
+["LP-303",-68,10,"Ahmad",0,0],
+["LP-303",-58,3,"Kashif",1,0],
+["LP-303",-55,1,"Rahul",1,0],
+["LP-303",-54,3,"Vijay",6,0],
+["LP-303",-51,1,"Ashwin",0,0],
+["LP-303",-50,3,"Somesh",1,0],
+["LP-303",-47,1,"Dr Nayana",0,0],
+["LP-303",-45,1,"Bharat/Sonu",0,0],
+["LP-303",-44,4,"Mallikarjuna",1,0],
+["LP-303",-37,4,"Mustafa",0,0],
+["LP-303",-29,1,"Venkatarao",0,0],
+["LP-303",-28,1,"Abhishek",1,0],
+["LP-303",-27,1,"Prashanth",1,0],
+["LP-303",-22,1,"Santhosh",1,0],
+["LP-303",-21,1,"Prasad",1,0],
+["LP-303",-20,10,"Anupam",0,0],
+["LP-303",-10,1,"Nikhil",1,0],
+["LP-303",-9,3,"Raghavendra",0,0],
+["LP-304",-95,1,"Mastan",1,0],
+["LP-304",-91,3,"Swathi",0,1575],
+["LP-304",-84,1,"Ashish",1,0],
+["LP-304",-83,1,"Aman",3,0],
+["LP-304",-82,1,"Aman",0,0],
+["LP-304",-81,1,"Kaushik",1,0],
+["LP-304",-79,1,"Bashir",0,2625],
+["LP-304",-78,1,"Venkatarao",0,0],
+["LP-304",-77,5,"Swathi",0,3000],
+["LP-304",-72,2,"Venkatarao",0,0],
+["LP-304",-70,1,"Srinu",0,2100],
+["LP-304",-66,11,"Venkataro",0,0],
+["LP-304",-50,3,"Somesh",1,0],
+["LP-304",-44,1,"Mahesh/Rajanikanth",0,2625],
+["LP-304",-37,4,"Mustafa",0,0],
+["LP-304",-29,7,"Sowmya",0,21861],
+["LP-304",-20,10,"Anupam",0,0],
+["LP-304",-10,1,"Nikhil",1,0],
+["LP-304",-9,3,"Raghavendra",0,0],
+["LP-401",-95,6,"Venkatarao",0,0],
+["LP-401",-88,1,"Leela Mahesh",1,0],
+["LP-401",-86,3,"Saista",1,0],
+["LP-401",-83,1,"Kanyaragi",1,0],
+["LP-401",-82,2,"Sainath",0,7500],
+["LP-401",-80,1,"Kashyap",1,0],
+["LP-401",-79,2,"Irfan",1,0],
+["LP-401",-77,8,"Nader",0,0],
+["LP-401",-69,1,"Sonu",0,5000],
+["LP-401",-66,4,"Akshay",1,0],
+["LP-401",-62,1,"Sonu",0,5000],
+["LP-401",-60,6,"Anto",0,36000],
+["LP-401",-52,1,"Anil",0,5355],
+["LP-401",-50,2,"Subrat",1,0],
+["LP-401",-48,95,"Lakshmi",0,90875],
+["LP-402",-88,1,"Leela Mahesh",1,0],
+["LP-402",-86,3,"Saista",1,0],
+["LP-402",-83,1,"Kanyaragi",1,0],
+["LP-402",-82,2,"Sainath",0,0],
+["LP-402",-80,1,"Kashyap",1,0],
+["LP-402",-79,2,"Irfan",1,0],
+["LP-402",-77,8,"Nader",0,0],
+["LP-402",-66,4,"Akshay",1,0],
+["LP-402",-62,1,"Sonu",0,0],
+["LP-402",-60,6,"Anto",0,0],
+["LP-402",-52,1,"Anil",0,0],
+["LP-402",-50,2,"Subrat",1,0],
+["LP-402",-48,95,"Lakshmi",0,0],
+["LP-403",-88,1,"Leela Mahesh",1,0],
+["LP-403",-86,3,"Saista",1,0],
+["LP-403",-83,1,"Kanyaragi",1,0],
+["LP-403",-82,2,"Sainath",0,0],
+["LP-403",-80,1,"Kashyap",1,0],
+["LP-403",-79,2,"Irfan",1,0],
+["LP-403",-77,8,"Nader",0,0],
+["LP-403",-66,4,"Akshay",1,0],
+["LP-403",-62,1,"Sonu",0,0],
+["LP-403",-60,6,"Anto",0,0],
+["LP-403",-52,1,"Anil",0,0],
+["LP-403",-50,2,"Subrat",1,0],
+["LP-403",-48,95,"Lakshmi",0,0],
+["LP-404",-92,3,"Anirudh",1,0],
+["LP-404",-87,1,"Srikanth",1,0],
+["LP-404",-84,1,"Maaz",1,0],
+["LP-404",-83,1,"Indu Priya",1,0],
+["LP-404",-75,5,"Venkatarao",0,0],
+["LP-404",-70,1,"Avinash",0,2625],
+["LP-404",-66,4,"Akshay",1,0],
+["LP-404",-60,2,"Krishna",0,5350],
+["LP-404",-55,2,"Venkataro",0,0],
+["LP-404",-49,2,"Venkataro",0,0],
+["LP-404",-44,1,"Karhtik",1,0],
+["LP-404",-43,7,"Sireesha",0,7088],
+["LP-404",-36,2,"Srikanth",0,7000],
+["LP-404",-34,1,"Srikanth",1,0],
+["LP-404",-33,15,"Nader",0,0],
+["LP-404",-18,8,"Anupam",0,0],
+["M1",-95,1,"AMITbnb",0,0],
+["M1",-93,1,"Akhileshwar",1,0],
+["M1",-91,1,"Vamshi Krishna",3,0],
+["M1",-90,1,"Raju",1,0],
+["M1",-89,2,"Rohit",1,0],
+["M1",-87,1,"early",0,2500],
+["M1",-86,2,"Logesh",1,0],
+["M1",-84,1,"Priya",1,0],
+["M1",-83,1,"Shamirpet Mutyala",1,0],
+["M1",-82,1,"early",0,0],
+["M1",-81,3,"Sai Vemu",1,0],
+["M1",-78,2,"Harsha",1,0],
+["M1",-76,1,"Ashwini",1,0],
+["M1",-74,1,"Shiv",1,0],
+["M1",-73,1,"Thilak",0,6000],
+["M1",-71,1,"Nava",1,0],
+["M1",-70,2,"Satish",0,7351],
+["M1",-68,14,"Uday",0,110000],
+["M1",-54,5,"Sastry",0,43732],
+["M1",-49,1,"Naresh",1,0],
+["M1",-47,2,"Rajkumar",0,10000],
+["M1",-45,3,"Sastry",0,31237],
+["M1",-42,1,"Goutham",1,0],
+["M1",-41,6,"Sastry",0,24990],
+["M1",-33,4,"Sastry",0,24000],
+["M1",-28,1,"Harish",1,0],
+["M1",-24,1,"Murali",0,7874],
+["M1",-23,1,"Guest",3,0],
+["M1",-22,2,"Rakesh",1,6000],
+["M1",-16,4,"Aliakbar",1,0],
+["M1",-12,18,"Services",1,0],
+["M2",-92,2,"Palani",0,11700],
+["M2",-90,4,"Kalyan",1,0],
+["M2",-86,2,"Karan",1,0],
+["M2",-84,1,"Govind",1,0],
+["M2",-83,1,"Kaushik",1,0],
+["M2",-80,1,"Nameer",0,5500],
+["M2",-79,2,"Karan",1,0],
+["M2",-77,3,"Poorna",1,0],
+["M2",-73,14,"Durga Prasad",0,44100],
+["M2",-59,1,"Pavan/Bharath",0,5000],
+["M2",-58,23,"Sravani",0,69300],
+["M2",-35,3,"Ajay",1,0],
+["M2",-31,2,"Srinath",0,14175],
+["M2",-26,1,"Priya",0,6300],
+["M2",-25,1,"Rajesh",0,6300],
+["M2",-22,1,"Shyam Prasad",1,0],
+["M2",-21,1,"Pranav",1,0],
+["M2",-20,1,"Pranav",0,0],
+["M2",-18,2,"Riyaz",1,0],
+["M2",-15,1,"Guest",0,3000],
+["M2",-14,1,"Bala",1,0],
+["M2",-11,2,"Dhruv",1,0],
+["M2",-8,2,"Rinkesh",1,0],
+["M2",-5,2,"Sunny",1,0],
+["M2",-3,3,"Ishita",1,0],
+["M3",-95,17,"Praveen",0,12000],
+["M3",-78,1,"Poorna",1,0],
+["M3",-77,1,"Ankam",1,0],
+["M3",-73,2,"Dr PC Rayulu",0,13750],
+["M3",-71,2,"Dande",1,0],
+["M3",-66,5,"Guru",0,70000],
+["M3",-61,3,"Dheeraj",0,0],
+["M3",-58,1,"Srinath",0,7875],
+["M3",-57,1,"Guest",0,4200],
+["M3",-56,2,"Guru",0,0],
+["M3",-54,6,"Sreerag",1,0],
+["M3",-47,1,"Sastry",0,0],
+["M3",-46,11,"Ganesh",0,0],
+["M3",-34,4,"Raghu",0,22750],
+["M3",-29,2,"Abhishek",1,5000],
+["M3",-27,4,"Abhishek",0,12000],
+["M3",-23,1,"Mahesh",0,7000],
+["M3",-22,3,"Lakshmi",1,0],
+["M3",-19,2,"Sastry",0,12000],
+["M3",-16,2,"Raghu",0,12000],
+["M3",-14,1,"Kiran Ravi",0,0],
+["M3",-13,3,"Vidita",1,0],
+["M3",-9,1,"Arun",0,6500],
+["M3",-8,1,"Srinath",0,6700],
+["M3",-7,2,"Richard",3,0],
+["M3",-4,6,"Hima",0,31500],
+["M4",-92,3,"Anant",1,0],
+["M4",-89,1,"Rajesh",1,0],
+["M4",-87,3,"Yamini",1,0],
+["M4",-84,8,"Guru",0,0],
+["M4",-73,9,"Sastry",0,43732],
+["M4",-64,1,"ARUN slc",0,8000],
+["M4",-63,2,"Praveen",0,6300],
+["M4",-61,5,"Guru",0,0],
+["M4",-56,28,"Ganesh",0,140000],
+["M4",-28,1,"Sastry",0,6000],
+["M4",-26,5,"Sastry",0,30000],
+["M4",-21,1,"Amrita",1,0],
+["M4",-20,2,"Ganesh",1,0],
+["M4",-16,4,"Sastry",0,24000],
+["M4",-11,1,"Srinath",0,6700],
+["M4",-10,5,"Sastry",0,30000],
+["M4",-4,2,"Riyaz",1,0],
+["M4",-2,3,"Sathwik",0,0],
+["MG",-95,1,"Aditya",1,0],
+["MG",-93,2,"Chalapathi",1,0],
+["MG",-91,4,"Karishma",1,0],
+["MG",-87,3,"Ankur",1,0],
+["MG",-84,1,"Karan",1,0],
+["MG",-83,1,"Vamshi",1,0],
+["MG",-82,5,"Mita",0,0],
+["MG",-77,1,"Nikhil",1,0],
+["MG",-76,1,"Ankit",1,0],
+["MG",-75,1,"Karthik",1,0],
+["MG",-74,2,"Harshvardhan",1,0],
+["MG",-72,1,"Srikar",1,0],
+["MG",-71,2,"Mahesh",1,0],
+["MG",-69,1,"Durga",1,0],
+["MG",-68,1,"Muktheswar",1,0],
+["MG",-67,10,"Mita",0,0],
+["MG",-57,2,"Divya",1,0],
+["MG",-55,3,"Ramaswamy",1,0],
+["MG",-52,3,"Ramakrishna",0,7087],
+["MG",-49,2,"Ramaswamy",1,0],
+["MG",-47,1,"Kartheek",1,0],
+["MG",-46,1,"Sai",1,0],
+["MG",-45,1,"Rahul",1,0],
+["MG",-43,2,"Apurba",1,0],
+["MG",-41,1,"Sai",1,0],
+["MG",-38,2,"Ashok",1,0],
+["MG",-36,6,"Veeny",0,0],
+["MG",-28,1,"Rohit",1,0],
+["MG",-26,3,"Kavita",0,3150],
+["MG",-22,1,"Raviteja",1,0],
+["MG",-21,1,"Rajendar",0,3150],
+["MG",-18,1,"Satish",0,2625],
+["MG",-16,2,"Ashirth",1,0],
+["MG",-14,7,"Dolly",0,0],
+["MG",-7,60,"Haritha",0,0],
+["TG1",-94,6,"Sandhya",1,0],
+["TG1",-88,4,"Anurag",1,0],
+["TG1",-84,5,"Ayush",4,0],
+["TG1",-79,4,"Shruti",0,1500],
+["TG1",-75,7,"Prateek",1,0],
+["TG1",-64,2,"Amit",1,0],
+["TG1",-60,5,"Amrit",1,0],
+["TG1",-53,5,"Sidharth",1,0],
+["TG1",-48,5,"Rashi",1,0],
+["TG1",-43,1,"Nitin",1,0],
+["TG1",-42,1,"Ramakrishna",0,0],
+["TG1",-35,4,"Mintu",0,4000],
+["TG1",-28,2,"Umapathy",1,0],
+["TG1",-26,1,"Narendra",0,0],
+["TG1",-24,8,"Anshuman",1,0],
+["TG1",-7,1,"Ravichandra",0,0],
+["TG1",-2,2,"Aamer",1,0],
+["TG2",-95,1,"Mintu",0,0],
+["TG2",-93,1,"Sridhar",0,2100],
+["TG2",-91,1,"Siddu",0,1500],
+["TG2",-89,1,"Vikram",4,0],
+["TG2",-88,11,"Karna",1,0],
+["TG2",-77,2,"Puja",1,0],
+["TG2",-75,1,"Dileep",1,0],
+["TG2",-70,1,"Kushboo",1,0],
+["TG2",-66,10,"Ankit",1,0],
+["TG2",-56,5,"Ankit",0,7363],
+["TG2",-50,2,"Saravana",0,4200],
+["TG2",-45,4,"Cindy",0,0],
+["TG2",-35,4,"Aryan",1,0],
+["TG2",-31,7,"Murali Ganesh",1,0],
+["TG2",-24,2,"Narendra",0,0],
+["TG2",-18,1,"Amit",0,0],
+["TG2",-16,4,"Manish",1,0],
+["TG2",-11,3,"Varsha",1,0],
+["TG2",-7,2,"Shivam",1,0],
+["TG2",-1,1,"Ayush",0,0],
+["TT-101",-95,176,"Long stay",0,0],
+["TT-102",-95,10,"Kunal",0,0],
+["TT-102",-85,3,"Akberuddin",0,0],
+["TT-102",-80,2,"Aswini",1,0],
+["TT-102",-77,1,"Praveen",0,0],
+["TT-102",-74,1,"Faizan",0,5250],
+["TT-102",-73,3,"Sravanthi",0,0],
+["TT-102",-70,23,"Rhiti",0,0],
+["TT-102",-47,1,"late pm",0,0],
+["TT-102",-45,1,"Navakanth",1,0],
+["TT-102",-35,3,"Venkat Sai",0,12600],
+["TT-102",-31,2,"Venu White Fern",6,0],
+["TT-102",-29,1,"Guest",0,2100],
+["TT-102",-26,3,"Naveen",0,36300],
+["TT-102",-22,1,"Charan",0,3500],
+["TT-102",-21,1,"Likith",0,0],
+["TT-102",-19,3,"Dheeraj",0,0],
+["TT-102",-15,2,"Rabbani",0,0],
+["TT-102",-12,12,"Mahesh",0,0],
+["TT-102",2,5,"Sunil",0,0],
+["TT-201",-95,176,"Long stay",0,0],
+["TT-202",-95,3,"Rabbani",0,0],
+["TT-202",-92,1,"early",0,0],
+["TT-202",-91,41,"Callie",0,0],
+["TT-202",-50,2,"Praveen",0,0],
+["TT-202",-47,1,"Sai Teja/Raghu",0,5250],
+["TT-202",-43,1,"Karthik",0,0],
+["TT-202",-41,3,"Rabbani",0,15000],
+["TT-202",-36,2,"Sanagamesh",0,0],
+["TT-202",-33,1,"Chandrakanth",0,6300],
+["TT-202",-31,9,"Shatabdi",1,0],
+["TT-202",-21,2,"Viswesh",1,0],
+["TT-202",-15,3,"RAJU sir Vasavi",0,0],
+["TT-202",-8,2,"Chandrababu",1,0],
+["TT-202",-2,3,"Sakshi",1,0],
+["TT-301",-95,176,"Long stay",0,0],
+["TT-302",-93,1,"Pratap",0,0],
+["TT-302",-92,1,"early",0,0],
+["TT-302",-91,41,"Callie",0,0],
+["TT-302",-50,4,"Sunny",0,0],
+["TT-302",-42,1,"Sri",1,0],
+["TT-302",-41,1,"Kranthi",0,6300],
+["TT-302",-38,2,"Selvan",0,0],
+["TT-302",-35,1,"Laxmi Narayan",0,6000],
+["TT-302",-30,2,"Vamsi White Fern",6,0],
+["TT-302",-27,1,"Rajini",0,4000],
+["TT-302",-26,2,"Swaroop",0,2650],
+["TT-302",-21,1,"Sangamesh",0,0],
+["TT-302",-19,1,"Srikanth",0,0],
+["TT-302",-15,3,"RAJU sir Vasavi",0,0],
+["TT-302",-7,1,"Prudhvi",1,0],
+["TT-302",-1,1,"Sandeep",0,0],
+["TT-302",38,4,"Suhrit",0,0],
+["TT-401",-95,176,"Long stay",0,0],
+["TT-402",-93,2,"Praveen",0,0],
+["TT-402",-91,41,"Callie",0,0],
+["TT-402",-50,15,"Adif",1,0],
+["TT-402",-35,1,"Yash",0,4500],
+["TT-402",-33,1,"Dr Aditya",0,6300],
+["TT-402",-29,3,"Samai",1,0],
+["TT-402",-23,3,"Ujjwal",0,12000],
+["TT-402",-16,2,"Sultan",1,0],
+["TT-402",-14,2,"RAJU sir Vasavi",0,0],
+["TT-402",-9,2,"Sourav",1,0],
+["TT-402",-7,5,"Dhaya",0,0],
+["TT-402",-1,3,"Sneha Dinesh",0,0]
+];
+
+/* Nights a flat was not sellable, as the operator wrote them: pest control, a
+   clean, or a bare "block". Where they named somebody the flat was being used
+   rather than repaired, so that is an owner hold and not maintenance.
+   [flat, first night, nights, what they wrote]                                */
+const BOOK_BLOCKS = [
+["2B",-7,1,"Block"],
+["3B",-46,1,"Pest"],
+["3B",-29,1,"Block"],
+["M1",-92,1,"Block Karishma"],
+["M3",-17,1,"Block"],
+["MG",-94,1,"Block"],
+["MG",-30,1,"Block"],
+["TG2",-94,1,"Pest Control"],
+["TT-402",-2,1,"Block"]
+];
+
+/* The book, laid into the app's own shape. Runs once at boot when there is
+   nothing saved; after that the operator's edits are the book and this is never
+   consulted again. */
+function seedRealBook(){
+  resv = []; issues = [];
+  BOOK.forEach(([id, start, nights, guest, si, amount])=>{
+    const fi = flatIndex[id];
+    if(fi === undefined) return;          // a flat that has since left the book
+    const src = SRC[si] || SRC[0];
+    const row = {fi, start, end: start + nights, nights, guest, src,
+                 amount: amount || undefined, pays: []};
+    /* Who has already paid, and nobody else. A platform stay was settled by the
+       guest before arrival and the money is sitting with the platform, so that
+       payment is real. A direct guest who has already checked out has paid —
+       nobody leaves a serviced apartment owing the whole stay. A direct guest
+       still here, or still to come, is left unpaid: that is precisely the
+       figure the operator must check against their own records, and an app
+       that guesses it hides the only question worth asking. */
+    if(amount){
+      if(PLATFORMS.indexOf(src) >= 0)
+        row.pays.push({id:"b" + resv.length, amount, method:"Platform", on: Math.max(start - 3, -95)});
+      else if(row.end <= 0)
+        row.pays.push({id:"b" + resv.length, amount, method:"Cash", on: Math.max(row.end - 1, -95)});
     }
+    resv.push(row);
   });
-}
-
-/* A demo with no flats out of service never shows the maintenance side of the
-   app, so seed a few — including one due back tomorrow, which is what makes
-   the "is it back in service?" question appear. */
-function seedDemoBlocks(){
-  /* Two of these are the same AC in the same flat, six weeks apart and the
-     second one inside the month after Ramesh's visit — which is the whole
-     point of the feature and is invisible without a history to find. */
-  const wants = [
-    {reason:"Maintenance", note:"compressor topped up", start:-26, nights:2, at:"BH",
-     fault:"AC", fixer:"Ramesh", phone:"9848012345", cost:1400},
-    {reason:"Maintenance", note:"not cooling again",    start:-3,  nights:4, at:"BH",
-     fault:"AC", fixer:"Ramesh", phone:"9848012345", cost:1200},
-    {reason:"Maintenance", note:"geyser leaking",       start:-20, nights:2, at:"TT",
-     fault:"Geyser", fixer:"Iqbal", phone:"9700045566", cost:900},
-    {reason:"Deep clean",  note:"quarterly clean",      start: 4,  nights:2, at:"LP"},
-    {reason:"Renovation",  note:"bathroom re-tiling",   start: 8,  nights:6, at:"TT",
-     fault:"Plumbing", fixer:"Iqbal", phone:"9700045566"},
-  ];
-  wants.forEach(w=>{
-    // occ only covers today onward, so nights before today must be checked
-    // against the reservations themselves or a block can overlap a past stay
-    const fits = (i, s) => {
-      const to = s + w.nights, from = Math.max(s, 0);
-      if(resv.some(r => r.fi === i && r.start < to && r.end > s)) return false;
-      for(let d = from; d < to; d++) if(d < DAYS && occ[i][d]) return false;
-      return true;
-    };
-    /* Spread them across buildings so the demo does not put every block in one
-       block — except a repeat fault, which is only a repeat if it is the SAME
-       flat. When the remembered flat is busy on the requested nights the answer
-       is to slide the dates, not to give up and use a different flat: a second
-       AC failure in a different apartment is not a fault coming back, and the
-       whole "who fixed this last time" feature then has nothing to show. */
-    let start = w.start, fi = -1;
-    const want = w.fault ? DEMO_FAULT_FLAT[w.at + w.fault] : undefined;
-    if(want !== undefined){
-      for(const shift of [0,1,-1,2,-2,3,4,5,6,7]){
-        if(fits(want, w.start + shift)){ fi = want; start = w.start + shift; break; }
-      }
-    }
-    if(fi < 0) fi = flats.findIndex((f,i)=> f.code === w.at && fits(i, start));
-    if(fi < 0) fi = flats.findIndex((f,i)=> fits(i, start));
-    if(fi < 0) return;
-    if(w.fault) DEMO_FAULT_FLAT[w.at + w.fault] = fi;
-    resv.push({fi, start, end: start + w.nights, nights:w.nights, kind:"block",
-               reason:w.reason, note:w.note, guest:"Out of service", src:"Block",
-               fault:w.fault, fixer:w.fixer, fixer_phone:w.phone, cost:w.cost});
-    recompute();                       // so the next block sees this one
-  });
-}
-const DEMO_FAULT_FLAT = {};
-
-/* One flat out of service whose wall a shuffle could actually push back.
-
-   Every other block is placed blind, so whether the guest standing at the end
-   of it happens to be movable is luck — and the offer to move them is invisible
-   unless the demo contains a case where it fires. This finds a short stay a few
-   days out that has somewhere to go, and puts a block in front of it.        */
-function seedMoveableWall(){
-  const cands = resv.filter(r => !isBlock(r) && r.start >= 2 && r.start <= 12
-                                 && r.end - r.start <= 6);
-  let best = null;
-  for(const B of cands){
-    for(const gap of [2,3,1]){
-      const end = B.start - gap, start = end - 3;
-      if(end < 0 || end > 2) continue;         // it has to be a decision due now
-      // the block's own nights and the gap after it must both be clear
-      if(resv.some(r => r.fi === B.fi && r.start < B.start && r.end > start)) continue;
-      const row = {fi:B.fi, start, end, nights: end - start, kind:"block",
-                   reason:"Maintenance", note:"kitchen chimney rewire",
-                   guest:"Out of service", src:"Block", fault:"Electrical",
-                   fixer:"Ramesh", fixer_phone:"9848012345", cost:2200};
-      resv.push(row); recompute();
-      const mv = moveFor(B);
-      // a shuffle that buys one night is not worth a guest changing rooms, and
-      // a demo of it teaches the wrong lesson — hold out for a real one
-      const gain = mv ? extendAfter(row, mv) - maxExtend(row) : 0;
-      resv.pop(); recompute();
-      if(gain >= 3 && (!best || gain > best.gain)) best = {row, gain};
-    }
-  }
-  if(!best) return false;
-  resv.push(best.row); recompute();
-  return true;
-}
-
-/* A festival weekend, staggered.
-
-   Filling every flat for the SAME three nights would make the window
-   unbookable and the shuffle impossible at once — there would be nowhere to
-   move anyone to. A real book is not blocked like that: it is blocked by stays
-   that cross the window at different angles, and that is exactly what leaves
-   room to shuffle. So half the flats are busy over the front of the window and
-   half over the back. Nothing is free for all three nights, plenty is free for
-   part of it, and one flat is deliberately held by two back-to-back stays so
-   the multi-guest case appears beside the single-guest one. */
-const FULL_FROM = 18, FULL_NIGHTS = 3;
-function seedFullHouse(){
-  const A = FULL_FROM, B = A + FULL_NIGHTS;
-  resv = resv.filter(r => !(r.start < B && r.end > A));
-  const cash = (f, n) => Math.round(f.rate * n / 100) * 100;
-  const num = i => "9" + String(100000000 + i * 7919).slice(0, 9);
-  /* Two flats are deliberately held by MORE than one stay, so the shuffle has
-     something bigger than a single move to offer. Without them every option in
-     the window is one guest and the multi-guest case is invisible in the demo. */
-  const chain = (i, f, cuts)=>{
-    cuts.forEach(([s,e],k)=> resv.push({fi:i, start:s, end:e, nights:e-s,
-      guest:NAMES[(3 + k*6 + i) % NAMES.length], src:SRC[(k+i) % SRC.length],
-      phone:num(i + k*40), pax:2, amount:cash(f, e-s), pays:[]}));
-  };
-  flats.forEach((f, i)=>{
-    if(i === 2){                                   // two guests → a 2-move option
-      chain(i, f, [[A, A+1], [A+1, B]]);
-      return;
-    }
-    if(i === 4){                                   // three guests → a 3-move option
-      chain(i, f, [[A, A+1], [A+1, A+2], [A+2, B]]);
-      return;
-    }
-    const front = i % 2 === 0;
-    const s = front ? A : A + 1;
-    const e = front ? A + 1 : B;
-    resv.push({fi:i, start:s, end:e, nights:e - s,
-               guest: NAMES[(i * 7) % NAMES.length], src: SRC[(i * 3) % SRC.length],
-               phone:num(i), pax:2, amount:cash(f, e - s), pays:[]});
-  });
-}
-
-/* A few things wrong with flats that are still perfectly sellable — which is
-   the ordinary case, and invisible unless the demo has some. */
-function seedDemoIssues(){
-  issues = [];
-  const want = [
-    {code:"TT", fault:"Geyser", note:"slow to heat, guest mentioned it", urgency:"soon", on:-9},
-    {code:"TT", fault:"Wi-Fi",  note:"drops in the back bedroom",        urgency:"whenever", on:-4},
-    {code:"MP", fault:"AC",     note:"due its six-month service",        urgency:"soon", on:-15},
-    {code:"BH", fault:"Furniture", note:"wardrobe door off its runner",  urgency:"whenever", on:-2},
-    {code:"LP", fault:"Plumbing",  note:"kitchen tap dripping",          urgency:"urgent", on:-1},
-  ];
-  const used = {};
-  want.forEach(w=>{
-    // two on the same flat, so the "one visit" case has something to batch
-    let fi = used[w.code] !== undefined && w.fault !== "AC"
-      ? used[w.code]
-      : flats.findIndex(f => f.code === w.code);
-    if(fi < 0) fi = 0;
-    used[w.code] = fi;
-    issues.push({id:"demo-" + issues.length, fi, fault:w.fault, note:w.note,
-                 urgency:w.urgency, on:w.on, fixed:null});
+  BOOK_BLOCKS.forEach(([id, start, nights, why])=>{
+    const fi = flatIndex[id];
+    if(fi === undefined) return;
+    resv.push({fi, start, end: start + nights, nights, kind:"block",
+               reason: /pest/i.test(why) ? "Maintenance" : "Owner use",
+               note: why, guest:"Out of service", src:"Block"});
   });
 }
 
@@ -4356,11 +5078,10 @@ function signOut(silent){
     headers:{apikey:SUPA_KEY, Authorization:"Bearer " + tok}}).catch(()=>{});
   if(!silent){
     flats = loadInventory() || defaultInventory();
-    flats.forEach(f=>{ f.pop = f.pop ?? 0.6; });
     NF = flats.length;
     flatIndex = Object.fromEntries(flats.map((f,i)=>[f.id,i]));
     usingDemo = !load();
-    if(usingDemo){ generateDemo(); seedFullHouse(); recompute(); seedDemoBlocks(); seedMoveableWall(); seedDemoIssues(); }
+    if(usingDemo){ seedRealBook(); }
     else issues = [];
     recompute(); paintAcct(); refreshScreen();
   }
@@ -4601,9 +5322,8 @@ if(MODE === "live"){
   if(!cacheLoad()) recompute();
 }else{
   usingDemo = !load();
-  if(usingDemo) generateDemo();
+  if(usingDemo) seedRealBook();
   recompute();
-  if(usingDemo){ seedFullHouse(); recompute(); seedDemoBlocks(); seedMoveableWall(); seedDemoIssues(); }
 }
 
 /* Refuses to double-book. The UI already hides the form on an unavailable flat,
@@ -5173,8 +5893,17 @@ function cancelWithUndo(r, fi){
          you cannot re-take nights already behind you — but writing it into the
          row shortens a spell that began before today and moves its first night
          forward, which is a different outage from the one that was cancelled. */
-      if(copy.start < 0){
-        back.start = copy.start; back.nights = back.end - back.start; recompute();
+      /* The END was not restored, and addBooking clamps nights to the length of
+         the book. A tenancy running past the horizon therefore came back cut
+         off at it: measured on a 176-night let in TT-101, undo returned it 158
+         nights long and silently ended it 18 nights early. Nothing on screen
+         says so — the calendar only draws as far as the book goes — so the
+         truncation is invisible in exactly the place it does damage. Both
+         clamps are right for a booking somebody is typing now and wrong for a
+         restore, whose only job is to return the row that was cancelled. */
+      if(copy.start !== back.start || copy.end !== back.end){
+        back.start = copy.start; back.end = copy.end;
+        back.nights = back.end - back.start; recompute();
         /* and PERSIST it. This branch corrected the row in memory and stopped.
            addBooking had already written the clamped start to storage, and the
            only later write is addPayment's save(), which a row with nothing but
@@ -5184,6 +5913,16 @@ function cancelWithUndo(r, fi){
            and "Nights" columns wrong with it. Measured on a 14→20 Aug stay:
            memory {start:-3, end:3}, storage {start:0, end:3}. */
         save(); cacheSave();
+        /* and the write already on its way to the server. addBooking queued the
+           clamped span before this correction existed, so the row was right on
+           the phone and short in the cloud until the next full pull overwrote
+           the phone with it. flush() yields before its first request, so the
+           op is still here to correct. */
+        if(MODE === "live" && back.sid){
+          const q = queue.find(o => o.k === "stay+" && o.id === back.sid);
+          if(q){ q.body.starts_on = dayISO(back.start); q.body.ends_on = dayISO(back.end);
+                 jset(QUEUE_KEY, queue); }
+        }
       }
       /* PAYMENTS ARE RESTORED, NOT RE-DERIVED.
          This used to skip every Platform payment in the copy, on the assumption
@@ -6429,6 +7168,26 @@ function goMonth(day){
     if(cell) cell.scrollIntoView({behavior: calm ? "auto" : "smooth", block:"center"});
   });
 }
+/* A fade means "there is more this way", so an edge only fades where there IS
+   more. Toggles the two classes the mask reads, on scroll and once immediately.
+   Hoisted out of renderMonth when the booking form's channel row grew past the
+   width of a phone: the rule is the app's, not the calendar's, and a second
+   copy of it is a second chance for the two to disagree. */
+const edges = (box, axis)=>{
+  const mark = ()=>{
+    const pos  = axis === "x" ? box.scrollLeft : box.scrollTop;
+    const size = axis === "x" ? box.clientWidth : box.clientHeight;
+    const full = axis === "x" ? box.scrollWidth : box.scrollHeight;
+    box.classList.toggle("moreAbove", pos > 1);
+    box.classList.toggle("moreBelow", pos + size < full - 1);
+  };
+  box.addEventListener("scroll", mark, {passive:true});
+  /* now, not next frame — rAF does not fire in a backgrounded tab and this
+     decides whether the first row of dates is dimmed */
+  mark();
+  return mark;
+};
+
 function renderMonth(){
   const s = document.getElementById("scr-month");
   s.textContent = "";
@@ -6589,21 +7348,6 @@ function renderMonth(){
   /* An edge only fades when there is something past it. Applied to whichever
      axis the box scrolls on, so the same two class names serve the vertical
      calendar and the horizontal chip row. */
-  const edges = (box, axis)=>{
-    const mark = ()=>{
-      const pos  = axis === "x" ? box.scrollLeft : box.scrollTop;
-      const size = axis === "x" ? box.clientWidth : box.clientHeight;
-      const full = axis === "x" ? box.scrollWidth : box.scrollHeight;
-      box.classList.toggle("moreAbove", pos > 1);
-      box.classList.toggle("moreBelow", pos + size < full - 1);
-    };
-    box.addEventListener("scroll", mark, {passive:true});
-    /* now, not next frame — rAF does not fire in a backgrounded tab and this
-       decides whether the first row of dates is dimmed */
-    mark();
-    return mark;
-  };
-
   /* Which month is under the top of the trough, said once, above it. Recomputed
      on scroll from the first day cell still visible — cheap, and it cannot
      disagree with the grid because it is read FROM the grid. */
@@ -9285,8 +10029,14 @@ function openBooking(fi, from, nights){
 
   const phone = el("input");
   phone.type = "tel"; phone.inputMode = "numeric"; phone.autocomplete = "tel";
-  phone.placeholder = "Phone number";
-  phone.setAttribute("aria-label", `Guest phone number for ${fl.id}`);
+  /* Said out loud, because it is true and was not obvious. The form has never
+     required a number — go.disabled follows availability alone — but a field
+     labelled "Phone number" beside one labelled "Guest name" reads as required,
+     and an operator taking a walk-in with no number in hand cannot tell whether
+     the booking will be refused. Crescent Stays' own book carries no numbers at
+     all, so on day one every stay they enter goes in without one. */
+  phone.placeholder = "Phone number (optional)";
+  phone.setAttribute("aria-label", `Guest phone number for ${fl.id} — optional`);
   const who = el("input");
   who.type = "text"; who.placeholder = "Guest name"; who.autocomplete = "off";
   who.setAttribute("aria-label", `Guest name for ${fl.id}`);
@@ -9314,7 +10064,7 @@ function openBooking(fi, from, nights){
 
   let src = "Direct";
   const srcRow = el("div","srcRow");
-  ["Direct","Airbnb","Walk-in","Booking.com","Repeat guest"].forEach(s=>{
+  SRC.forEach(s=>{
     const c = el("button", null, s);
     c.setAttribute("aria-pressed", s === src);
     c.onclick = ()=>{ src = s; haptic(8);
@@ -9387,6 +10137,13 @@ function openBooking(fi, from, nights){
 
   form.append(whenCap, whenRow, state, phone, who, back, capRow, row, srcRow, go);
   sheetB.append(form);
+  /* AFTER the row is in the document, because the question is how wide it came
+     out. Seven channels do not fit a phone — measured at 375px, the row scrolls
+     and "MakeMyTrip" was cut mid-word with nothing to say the rest existed,
+     which reads as a rendering fault rather than as more content. Asked before
+     the append, every width is 0 and the answer is a confident "it all fits";
+     asked in a rAF, it is never answered at all in a backgrounded tab. */
+  edges(srcRow, "x");
   paint();
   sheet.classList.add("on"); scrim.classList.add("on");
   sheetB.scrollTop = 0;

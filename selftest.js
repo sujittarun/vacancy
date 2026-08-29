@@ -152,15 +152,24 @@ export async function run(filter) {
   await test("undo restores a stay that runs past the end of the book", async () => {
     const past = resv.find(r => !isBlock(r) && r.end > DAYS);
     ok(past, "seed has no stay ending past DAYS — this test can no longer see the bug it guards");
-    const { fi, guest } = past, n0 = resv.length;
+    const { fi, guest } = past, n0 = resv.length, end0 = past.end, start0 = past.start;
     cancelWithUndo(past, fi);
     const btn = document.querySelector(".toast button");
     ok(btn, "no Undo button on the cancellation toast");
     btn.click();
     await wait(60);
     eq(resv.length, n0, "row count after undo");
-    ok(resv.some(r => r.fi === fi && r.guest === guest && r.end > DAYS), "the stay did not come back");
-    return `${flats[fi].id} · ${guest} · end ${past.end} > DAYS ${DAYS}`;
+    /* The exact end, not merely "past the horizon". addBooking clamps nights at
+       the length of the book, so a 176-night let came back 158 nights long —
+       still past DAYS, so a `> DAYS` assertion greened a stay that had lost 18
+       nights. The number the row went in with is the number it must come back
+       with. */
+    const again = resv.find(r => r.fi === fi && r.guest === guest && r.end > DAYS);
+    ok(again, "the stay did not come back");
+    eq(again.end, end0, "restored end");
+    eq(again.start, start0, "restored start");
+    eq(again.nights, end0 - start0, "restored nights");
+    return `${flats[fi].id} · ${guest} · ${end0 - start0}n restored intact, end ${end0} > DAYS ${DAYS}`;
   });
 
   /* This test used to assert memory only, and passed while the bug was still
@@ -170,9 +179,26 @@ export async function run(filter) {
   await test("undo does not invent a platform payment — and it stays gone after a reload", async () => {
     const KEY = "vacancy.bookings.v1";
     const backup = localStorage.getItem(KEY);
-    const plat = resv.find(r => !isBlock(r) && PLATFORMS.indexOf(r.src) >= 0
+    /* Built here rather than found in the book. The bug needs one specific
+       shape — a platform stay carrying an amount and NO payment — and which
+       shapes a seed happens to contain is not the test's business. The real
+       book seeds every platform stay it has an amount for as paid, so hunting
+       for this one found nothing and the test reported a missing fixture as if
+       it were a result. The state is reachable in the app: openPayment offers
+       Platform as a chip and the payment can be removed again, which is
+       exactly what is done here. */
+    let plat = resv.find(r => !isBlock(r) && PLATFORMS.indexOf(r.src) >= 0
       && r.amount > 0 && (!r.pays || !r.pays.length) && r.start >= 0);
-    ok(plat, "seed has no unpaid platform booking");
+    let built = false;
+    if(!plat){
+      const fi = flats.findIndex((f, i) => freeSpan(i, 0, 2));
+      ok(fi >= 0, "no flat is free for the next two nights, so the fixture cannot be built");
+      ok(addBooking(fi, 0, 2, "Fixture Guest", "Airbnb", {amount: 2200}), "fixture booking refused");
+      plat = resv[resv.length - 1];
+      (plat.pays || []).slice().forEach(pay => dropPayment(plat, pay));   // the unpaid case
+      save(); built = true;
+    }
+    ok(plat, "no unpaid platform booking to test with");
     const { fi, guest, start, amount } = plat, id = flats[fi].id, owed0 = owedStats().total;
     cancelWithUndo(plat, fi);
     document.querySelector(".toast button").click();
@@ -188,7 +214,8 @@ export async function run(filter) {
     eq(dueFrom(after), amount, "amount still due after a reload");
     eq(owedStats().total, owed0, "owedStats total after a reload");
     localStorage.setItem(KEY, backup); load(); recompute();
-    return `${guest} · ${money(amount)} still due through a full reload`;
+    return `${guest} · ${money(amount)} still due through a full reload`
+         + (built ? " (fixture built)" : "");
   });
 
   await test("undo persists a stay that began before today", async () => {

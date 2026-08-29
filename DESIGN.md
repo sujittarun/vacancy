@@ -609,6 +609,64 @@ during a gesture moves the target out from under the finger. Reserve the space,
 take it out of flow, or compensate the scroll — but never let the page reflow
 above a live touch.
 
+## An import is a claim, and a claim needs a proof
+
+The book in this app is Crescent Stays' own — 866 stays read out of the
+Availability tab of their spreadsheet, not generated. That is a claim about
+somebody else's business, and the operator will check it against the sheet they
+already have open. So the importer ends by reconstructing occupancy from the
+stays it produced and comparing it night by night with the sheet it read:
+**176 dates × 46 flats, 4,415 occupied flat-nights, 0 mismatches, 0 flat-nights
+claimed twice.** Anything less is "it looked right when I opened it".
+
+The proof also caught what reading could not. The cells are written by a person,
+not a schema, and three of their habits each broke the import in a way that
+still rendered:
+
+- **A number in a cell is not always money.** `NARENDRA 10/42` … `10/49` runs
+  the second figure up by one per night. Read as part of the name, eight
+  distinct guests appeared and one eight-night stay became eight one-night
+  bookings — with the flat still fully occupied, so no total ever disagreed.
+- **A number glued to a name is still a number.** `Swaroop2650`, `SWATHI3k`.
+  `\b` does not hold between a letter and a digit, so the amount stayed in the
+  guest's name and the money column stayed blank.
+- **Two amounts in a cell are two payments, not two opinions.** `SUSHMA
+  13650+cash23.4k` is ₹37,050 in two parts. Taking the first match reported
+  ₹13,650 and left `cash23.4k` sitting in the name.
+
+And where the sheet is genuinely ambiguous — a bare `28.5`, a lone `bnb` with
+no figure — the rule is to record nothing. **An invented amount is worse than a
+blank one, because a blank asks the question and a number answers it wrongly.**
+That is why 866 stays carry only 170 amounts, and why the four guests still
+in-house on a direct booking are shown as owing rather than as settled: that is
+precisely the figure the operator must check, and an app that guesses it hides
+the only question worth asking.
+
+## A restore is not a new booking
+
+`addBooking` clamps a stay at both ends: a start before today cannot be
+re-taken, and nights are capped at the length of the book. Both are right for a
+booking somebody is typing now. Undo calls the same function, and both are
+wrong there — its only job is to return the row that was cancelled.
+
+The start had already been corrected after the fact. The end had not, and the
+demo book never held a stay long enough to notice: nothing overhung the horizon
+by more than two nights. The real book has a 176-night let. **Measured: cancel
+and undo returned it 158 nights long, ending it 18 nights early.** The calendar
+only draws as far as the book goes, so the truncation was invisible in exactly
+the place it does damage, and the test that guarded this asserted `end > DAYS` —
+which 158 still satisfies. A test that asserts the shape of a number instead of
+the number greens the bug it was written for.
+
+## A test that cannot find its fixture has not passed
+
+Two tests here hunt the live book for a row of a particular shape and skip if
+they cannot find one. Replacing the demo seed with the real book removed the
+shape one of them needed — every platform stay with an amount is seeded paid, so
+there was no unpaid one to cancel — and it reported a missing fixture in the
+same red as a regression. Which shapes a seed happens to contain is not the
+test's business. If the state is reachable in the app, the test builds it.
+
 ## Prohibitions
 
 - No paper, ruling, stamps, or any ledger device. That world is discarded.
