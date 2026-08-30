@@ -1426,6 +1426,66 @@ export async function run(filter) {
     } finally { expenses.length = 0; expenses.push(...keep); expSave(); closeSheet(); }
   });
 
+  /* ══ Ask, when the question is a person ═════════════════════════════════ */
+
+  /* Ask could only answer "is anything free". A guest's name recognises no date,
+     so the parser fell back to its default and reported confidently on rooms
+     free TONIGHT — a wrong answer to a question nobody asked. */
+  await test("a guest's name is answered with the guest, not with tonight", async () => {
+    const who = bookings().filter(r => r.guest && r.nights)
+      .reduce((m,r)=>{ const k = nameKey(r.guest); (m[k] = m[k] || []).push(r); return m; }, {});
+    const name = Object.keys(who).find(k => who[k].length >= 2 && !NOT_A_NAME.test(k));
+    ok(name, "the book has nobody who stayed twice to search for");
+    const label = who[name][0].guest;
+    /* the route, first: a name must never reach the availability parser */
+    const p = parseQuery(label);
+    eq(p.how, "tonight", "the parser should find no date in a name");
+    const found = personQuery(label, p);
+    ok(found && found.length, `"${label}" did not route to a person`);
+    eq(found[0].rows.length, who[name].length, "stays found for that person");
+    /* and the three states the operator actually asks about */
+    const g = found[0];
+    eq(g.past.length + g.here.length + g.ahead.length, g.rows.length,
+      "past, here and ahead must partition the stays");
+    /* a date question still belongs to the parser */
+    ok(!personQuery("this weekend", parseQuery("this weekend")), "'this weekend' routed to a person");
+    ok(!personQuery("3 bhk", parseQuery("3 bhk")), "'3 bhk' routed to a person");
+    ok(!personQuery("tonight", parseQuery("tonight")), "'tonight' routed to a person");
+    const fl = flats[0].id;
+    ok(!personQuery(fl, parseQuery(fl)), `a flat id (${fl}) routed to a person`);
+    return `${label}: ${g.rows.length} stays — ${g.past.length} past, ${g.here.length} in, ${g.ahead.length} ahead`;
+  });
+
+  /* A misspelt name used to fall back to the parser and get answered about
+     tonight, which is the same wrong answer wearing a different hat. */
+  await test("a name that is not in the book says so", async () => {
+    const miss = personQuery("Zzyzx", parseQuery("Zzyzx"));
+    ok(Array.isArray(miss), "an unknown name did not route to a person at all");
+    eq(miss.length, 0, "matches for a name nobody has");
+    /* but a long pasted enquiry is not a name and still belongs to the parser */
+    const paste = "Hi do you have a 2bhk for four people";
+    ok(!personQuery(paste, parseQuery(paste)), "a pasted enquiry routed to a person");
+    return "unknown names answered, pasted enquiries left to the parser";
+  });
+
+  /* A phone is proof where a name is a guess, so a number wins outright. */
+  await test("a phone number finds its guest", async () => {
+    const r = bookings().find(x => x.start > 0 && x.guest);
+    ok(r, "no forward booking to hang a number on");
+    const had = r.phone;
+    r.phone = "9876543210";
+    try {
+      const found = personQuery("9876543210", parseQuery("9876543210"));
+      ok(found && found.length, "the number found nobody");
+      eq(nameKey(found[0].name), nameKey(r.guest), "which guest the number found");
+      eq(found[0].phone, "9876543210", "the number carried onto the person");
+      /* and part of a number works, the way part of a name does */
+      const part = personQuery("543210", parseQuery("543210"));
+      ok(part && part.length, "a partial number found nobody");
+      return `${r.guest} found by number, and by the last six digits`;
+    } finally { if(had == null) delete r.phone; else r.phone = had; }
+  });
+
   /* ══ the whole surface ══════════════════════════════════════════════════ */
 
   await test("no text falls below AA in either theme", async () => {

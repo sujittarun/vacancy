@@ -8792,6 +8792,83 @@ function guestStats(){
                      .sort((a,b)=> b.spend - a.spend || b.stays - a.stays)};
 }
 
+/* ── FINDING A PERSON ────────────────────────────────────────────────────────
+   Ask could only ever answer "is anything free". Typing a guest's name into it
+   produced a confident answer about TONIGHT — the parser recognises no date in
+   "Venkatarao", falls back to its default, and reports on rooms free this
+   evening. A wrong answer to a question nobody asked.
+
+   The operator's actual question is the oldest one in the trade: when did this
+   person stay, and are they coming back. The book has 708 rows and 444 names in
+   it and could always answer that; nothing was asking.
+
+   Matched on the name, and on the number where the book has one — same identity
+   rule the repeat-guest card settled on, for the same reason: a phone is proof,
+   a name is a guess, and the imported book carries no numbers at all. */
+function findPeople(q){
+  const raw = String(q || "").trim();
+  if(raw.length < 2) return [];
+  const digits = raw.replace(/\D/g, "");
+  const byPhone = digits.length >= 6;
+  const needle = nameKey(raw);
+  const hit = r => byPhone
+    ? (r.phone && digits10(r.phone).indexOf(digits.slice(-10)) >= 0)
+    : nameKey(r.guest).indexOf(needle) >= 0;
+  const by = {};
+  bookings().forEach(r=>{
+    if(NOT_A_NAME.test(nameKey(r.guest))) return;
+    if(!hit(r)) return;
+    (by[nameKey(r.guest)] = by[nameKey(r.guest)] || []).push(r);
+  });
+  return Object.values(by).map(rows=>{
+    rows.sort((a,b)=> a.start - b.start);
+    const last = rows[rows.length-1];
+    return {
+      name: last.guest,
+      phone: (rows.find(r=>r.phone) || {}).phone || null,
+      rows,
+      /* three states, because "when did they come" and "are they coming" are
+         different questions and the answer to both is on this screen */
+      past:  rows.filter(r=> r.end <= 0),
+      here:  rows.filter(r=> r.start <= 0 && r.end > 0),
+      ahead: rows.filter(r=> r.start > 0),
+      nights: rows.reduce((a,r)=> a + (r.openEnd ? 0 : r.nights), 0),
+      billed: rows.reduce((a,r)=> a + (r.amount || 0), 0),
+      open:   rows.some(r=> r.openEnd),
+    };
+  }).sort((a,b)=>{
+    /* A NAME THAT STARTS WITH WHAT YOU TYPED COMES FIRST. "ra" matches 97
+       people somewhere in the middle of their names and two dozen at the front,
+       and the ones the operator is reaching for are almost always the second
+       kind — Rajkumar, Ramesh — not Venkatarao. */
+    const pa = nameKey(a.name).indexOf(needle) === 0 ? 0 : 1;
+    const pb = nameKey(b.name).indexOf(needle) === 0 ? 0 : 1;
+    return pa - pb || b.rows.length - a.rows.length || (b.billed - a.billed);
+  });
+}
+/* Ask is an availability box first. A person only takes it over when the query
+   could not have been about availability at all: the parser found no date and
+   no piece of inventory in it, and somebody in the book answers to it. A phone
+   number is unambiguous enough to win outright. */
+function personQuery(q, p){
+  const raw = String(q || "").trim();
+  if(raw.length < 2) return null;
+  const digits = raw.replace(/\D/g, "");
+  if(digits.length >= 6) return findPeople(raw);
+  if(!/[a-z]/i.test(raw)) return null;
+  if(p && (p.how !== "tonight" || p.flat != null || p.type || p.bldg)) return null;
+  if(/^(tonight|today|tomorrow|now|free|empty|any|anything)$/i.test(raw)) return null;
+  const found = findPeople(raw);
+  if(found.length) return found;
+  /* A NAME THAT IS NOT IN THE BOOK IS STILL A NAME. Returning null here sent a
+     misspelt guest back to the availability parser, which finds no date in it,
+     falls back to its default and reports confidently on rooms free tonight —
+     the exact wrong answer that started this. Anything short enough to be a
+     name gets told plainly that nobody answers to it; a longer sentence is a
+     pasted enquiry and still belongs to the parser. */
+  return raw.split(/\s+/).length <= 3 && raw.length <= 30 ? [] : null;
+}
+
 /* What keeping the place standing actually costs — the invoice plus the nights
    the repair took off the market, which is the half that never appears on any
    bill and is usually the larger one. */
@@ -10434,9 +10511,9 @@ function renderAsk(focus){
      anyone had asked anything. What was asked is shown above the answer
      instead, where it belongs. */
   input.type="text"; input.value = askText; input.autocomplete="off";
-  input.placeholder = "Ask, or paste a message";
+  input.placeholder = "A guest's name, or ask about dates";
   input.setAttribute("enterkeyhint","search");
-  input.setAttribute("aria-label","Ask about availability in plain words");
+  input.setAttribute("aria-label","Search a guest by name or number, or ask about availability in plain words");
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   let mic = null, rec = null;
   if(SR){
@@ -10548,6 +10625,98 @@ function renderAsk(focus){
   if(focus) setTimeout(()=>input.focus(),120);
   run(true);
 
+  /* ── a person's whole history, on one screen ─────────────────────────── */
+  function stayLine(r){
+    const from = dateAt(Math.max(r.start, -3650)), to = dateAt(r.end);
+    const dd = d => d.getDate() + " " + MON[d.getMonth()]
+              + (d.getFullYear() !== dateAt(0).getFullYear() ? " " + d.getFullYear() : "");
+    return r.openEnd ? `${dd(from)} → no end recorded` : `${dd(from)} → ${dd(to)}`;
+  }
+  function showPeople(people, q){
+    ansWrap.textContent = ""; listWrap.textContent = "";
+    const ans = el("p","answer");
+    if(!people.length){
+      ans.innerHTML = `<b class="n">Nobody</b> in the book answers to “${esc(q)}”.`;
+      ansWrap.append(ans);
+      const note = el("p","movenote");
+      note.style.margin = "8px 0 0";
+      note.textContent = "Names are matched as you typed them, and part of a name works. "
+        + "Only guests already in the book can be found — a booking you have not entered yet is not here.";
+      ansWrap.append(note);
+      return;
+    }
+    const one = people.length === 1;
+    const SHOWN = 8;
+    ans.innerHTML = one
+      ? `<b class="y">${esc(people[0].name)}</b> — ${people[0].rows.length} stay${people[0].rows.length>1?"s":""} in the book.`
+      : `<b class="y">${people.length} people</b> match “${esc(q)}”`
+        + (people.length > SHOWN
+            ? ` — the ${SHOWN} who have stayed most are below. Type more of the name to narrow it.`
+            : ".");
+    ansWrap.append(ans);
+
+    people.slice(0, one ? 1 : SHOWN).forEach(g=>{
+      const sect = el("div","sect");
+      const right = g.here.length ? "in a flat now"
+                  : g.ahead.length ? "due back"
+                  : "no booking ahead";
+      sect.append(el("span","lbl", esc(g.name)),
+                  el("span","lbl", right));
+      listWrap.append(sect);
+
+      const card = el("div","card");
+      /* One line of who they are, before the stays — the thing an operator
+         reads out on the phone while the guest is still talking. */
+      const head = el("div","row bk");
+      const hm = el("div","meta");
+      hm.innerHTML = `<b>${g.rows.length} stay${g.rows.length>1?"s":""}`
+        + (g.nights ? ` · ${g.nights} night${g.nights>1?"s":""}` : "")
+        + `</b><em>${g.phone ? esc(g.phone) : "no number on file"}`
+        + (g.billed ? " · " + money(g.billed) + " billed" : " · no amount recorded")
+        + (g.open ? " · one stay has no end date" : "") + `</em>`;
+      const he = el("div","rowend");
+      if(g.phone){
+        const call = el("a","rowx");
+        call.href = "tel:" + String(g.phone).replace(/[^\d+]/g,"");
+        call.textContent = "☎";
+        call.setAttribute("aria-label", "Call " + g.name);
+        he.append(call);
+      }
+      head.append(hm, he);
+      card.append(head);
+
+      /* Newest first: "when are they coming" is asked far more often than
+         "when did they first come", and the answer to the first question is
+         at the top of a list sorted this way. */
+      const shown = one ? g.rows.slice().reverse() : g.rows.slice(-3).reverse();
+      shown.forEach(r=>{
+        const row = el("div","row bk");
+        const m = el("div","meta");
+        const when = r.start > 0 ? "coming" : r.end > 0 ? "in the flat now" : "stayed";
+        m.innerHTML = `<b>${esc(flats[r.fi] ? flats[r.fi].id : "—")}</b> · ${esc(stayLine(r))}`
+          + `<em>${when}${r.openEnd ? "" : " · " + r.nights + "n"} · ${esc(r.src || "Direct")}`
+          + (r.amount ? " · " + money(r.amount) : "") + `</em>`;
+        const e2 = el("div","rowend");
+        e2.append(el("span","pill" + (r.start > 0 ? " now" : ""), when === "coming" ? fmt(r.start) : when === "stayed" ? "past" : "now"));
+        row.append(m, e2);
+        /* straight to the flat and the night it starts, which is where any
+           follow-up question is answered */
+        row.style.cursor = "pointer";
+        row.onclick = ()=>{ haptic(10); openSheet(r.fi, Math.max(r.start, 0)); };
+        card.append(row);
+      });
+      if(!one && g.rows.length > 3)
+        card.append(el("div","rowMore", `${g.rows.length - 3} more — tap the name to see them all`));
+      if(!one){
+        const go = el("button","rowMore", "Show only " + g.name);
+        go.style.cssText = "width:100%;text-align:center;cursor:pointer";
+        go.onclick = ()=>{ input.value = g.name; paintSlot(); run(); };
+        card.append(go);
+      }
+      listWrap.append(card);
+    });
+  }
+
   function remember(q){
     if(!q || SUGGEST.indexOf(q) >= 0) return;          // the standing chips are not history
     recentAsks = [q, ...recentAsks.filter(x => x !== q)].slice(0, 4);
@@ -10563,6 +10732,13 @@ function renderAsk(focus){
     // only a deliberate ask becomes history — not every keystroke on the way
     if(!quiet) remember(lastQuery);
     const p = parseQuery(lastQuery);
+
+    /* A PERSON, BEFORE A DATE. Everything below answers "what is free"; if the
+       query was somebody's name it must not reach that code at all, or the tab
+       answers a question that was not asked. */
+    const people = personQuery(lastQuery, p);
+    if(people){ showPeople(people, lastQuery); return; }
+
     const a = p.start, b = p.start + p.n;
     let pool = flats.map((f,i)=>({f,i}));
     if(p.flat != null) pool = pool.filter(x=>x.i === p.flat);

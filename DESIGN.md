@@ -968,6 +968,36 @@ fixed commercial tariff, or paying a maintenance retainer, has different
 answers — so the kind sits beside the amount in the editor and only overrides
 are stored, which lets better defaults still reach anyone who never disagreed.
 
+## A box that answers everything answers the wrong thing confidently
+
+Ask parses availability. Type a guest's name into it and the parser finds no
+date, falls back to its default, and reports — in the same large type it uses
+for a real answer — on the rooms free **tonight**. Not "I don't know". A
+confident answer to a question nobody asked, which is worse than silence
+because it looks like it worked.
+
+The book had 708 rows and 444 names in it and could always have said when
+somebody stayed. Nothing was asking it.
+
+So a person takes the box over, but only when the query could not have been
+about availability: the parser found no date and no piece of inventory in it,
+and the string is short enough to be a name. A phone number wins outright —
+six digits is not a sentence.
+
+Two details that matter more than the search itself:
+
+**A name that is not in the book still routes to a person.** The first version
+returned "no match" to the parser, which meant a misspelt guest got answered
+about tonight — the original bug, wearing a different hat. Anything short enough
+to be a name now gets told plainly that nobody answers to it; a longer sentence
+is a pasted enquiry and still belongs to the parser.
+
+**Prefix before substring.** "ra" matches ninety-seven people somewhere inside
+their names and two dozen at the front, and the operator is reaching for
+Rajkumar, not Venkatarao. The list says how many it is showing and that typing
+more will narrow it, because a truncated list that does not admit it is a list
+that has quietly answered a different question.
+
 ## Prohibitions
 
 - No paper, ruling, stamps, or any ledger device. That world is discarded.
