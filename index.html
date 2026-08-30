@@ -3685,18 +3685,30 @@ function turnLoad(n){
 
 /* How broken up the empty time is. Ten scattered single nights are far harder
    to sell than one ten-night hole, and the raw vacancy count hides that. */
+/* GAPS BETWEEN BOOKINGS, WHICH IS NOT ALL THE EMPTY TIME. A run that reaches the
+   end of the book is not a gap — nothing bounds it, and it may be filled by a
+   booking that has not been taken yet — so it is skipped. That is right for the
+   question, and it was silently wrong for the card: on the real book 8 runs of
+   72 nights are counted and 42 runs of 2,148 nights are not, so the card was
+   describing 3.2% of the empty time and calling it "how sellable your empty
+   time really is". One flat's 34-night gap carried the average; without it the
+   figure falls from 9.0 nights to 5.4.
+
+   Both numbers are returned now, so the card can scope its own claim. */
 function fragmentation(){
-  let runs = 0, orphans = 0, nights = 0;
+  let runs = 0, orphans = 0, nights = 0, openRuns = 0, openNights = 0;
   flats.forEach((f,fi)=>{
     let d = 0;
     while(d < DAYS){
       if(occ[fi][d]){ d++; continue; }
       let n = 0; while(d+n < DAYS && !occ[fi][d+n]) n++;
       if(d + n < DAYS){ runs++; nights += n; if(n === 1) orphans++; }
+      else { openRuns++; openNights += n; }        // runs off the end of the book
       d += n;
     }
   });
-  return {runs, orphans, nights, avg: runs ? nights/runs : 0};
+  return {runs, orphans, nights, avg: runs ? nights/runs : 0,
+          openRuns, openNights, allNights: nights + openNights};
 }
 
 /* ── the cheapest booking you will ever take ─────────────────────────────────
@@ -4030,8 +4042,11 @@ function todayBoard(){
     meta:`<b>${esc(flats[o.fi].type)}</b> · ${esc(flats[o.fi].bshort)}<em>${fmtL(o.d)} · booked either side</em>`,
     pill:"−25%"}));
   const ext = extensionOffers().filter(x=>x.from <= NOW + 1).map(x=>({fi:x.fi, d:x.from,
-    meta:`Offer <b>${esc(x.r.guest)}</b> a discounted extra night<em>leaves ${fmt(x.from)} · ${x.nights} night${x.nights>1?"s":""} empty after</em>`,
-    pill: x.orphan ? "closes a gap" : `+${x.nights}n`}));
+    meta:`Offer <b>${esc(x.r.guest)}</b> a discounted extra night<em>leaves ${fmt(x.from)} · `
+      + (x.bounded
+          ? `${x.nights} night${x.nights>1?"s":""} empty after`
+          : `nothing booked after, as far as the book goes`) + `</em>`,
+    pill: x.orphan ? "closes a gap" : x.bounded ? `+${x.nights}n` : "open after"}));
 
   const extras = [];
   if(orph.length) extras.push({
@@ -4070,10 +4085,26 @@ function leadTimes(){
           avg: days.reduce((a,b)=>a+b,0)/days.length};
 }
 
+/* The same confound weekdayPattern carried, in the feed that decides which
+   dates get called "emptier than a typical Tuesday": a raw per-weekday mean
+   over the horizon is mostly a statement about how far ahead each weekday
+   falls. Centred window here too, so "typical for that weekday" means typical
+   against its own neighbourhood rather than against the booking curve. */
 function weekdayFreeNorm(){
   const acc = Array.from({length:7}, ()=>({sum:0,n:0}));
-  for(let d=0; d<DAYS; d++){ const w = dateAt(d).getDay(); acc[w].sum += freeCount(d); acc[w].n++; }
-  return acc.map(a => a.n ? a.sum/a.n : 0);
+  const R = 3;
+  for(let d = R; d < DAYS - R; d++){
+    let local = 0;
+    for(let j = d - R; j <= d + R; j++) local += freeCount(j);
+    local /= (R*2 + 1);
+    if(local <= 0) continue;
+    const w = dateAt(d).getDay();
+    acc[w].sum += freeCount(d) / local; acc[w].n++;
+  }
+  /* back to a free-count so softDates can compare it with freeCount(d) */
+  let all = 0; for(let d = 0; d < DAYS; d++) all += freeCount(d);
+  const base = DAYS ? all/DAYS : 0;
+  return acc.map(a => a.n ? a.sum/a.n * base : base);
 }
 function softDates(norm){
   const out = [];
@@ -8093,10 +8124,34 @@ function moneyStats(){
      Below either, the Money card stops averaging and says what it has, and the
      answer to the same question comes from the workbook instead, where fifteen
      closed months measured it. */
+  /* ENOUGH IS NOT THE SAME AS REPRESENTATIVE, and the first version of this
+     gate confused them. "8 priced rows and half the nights" sounds strict and
+     is trivially satisfied by exactly the sample it was written to reject: on
+     this book, pricing the eight longest forward stays — four TreeTops
+     tenancies, three of Lakshmi's, one of Haritha's — clears BOTH gates on 18%
+     of the rows, because eight tenancies hold 65% of the nights. The card then
+     prints the original defect back, verbatim: Rs 386 a night and "66% off the
+     card". Verified by construction.
+
+     The flaw is that a tenancy night and a nightly-let night are different
+     products at different prices, and "what a night is worth" is a question
+     about the second. A sample made of the first cannot answer it however big
+     it is. So the gate counts the stays the question is actually about — the
+     short ones — and asks for enough of THOSE, priced, covering enough of
+     their own nights. */
+  const SHORT = 14;                        // a let, rather than a tenancy
+  let shortN = 0, shortPriced = 0, shortNights = 0, shortPricedNights = 0;
+  bk.forEach(r=>{
+    if(r.nights > SHORT) return;
+    const n = Math.max(0, Math.min(r.end, DAYS) - Math.max(r.start, 0));
+    shortN++; shortNights += n;
+    if(r.amount && r.nights){ shortPriced++; shortPricedNights += n; }
+  });
+  const shortShare = shortNights ? shortPricedNights / shortNights : 0;
   const nightShare = nightsSold ? pricedNights / nightsSold : 0;
   return {nightsSold, sellable, revenue, adr, priced, total: bk.length,
-          pricedNights, nightShare,
-          usable: priced >= 8 && nightShare >= 0.5,
+          pricedNights, nightShare, shortN, shortPriced, shortShare,
+          usable: shortPriced >= 8 && shortShare >= 0.5,
           coverage: bk.length ? priced / bk.length : 0,
           revpar: sellable ? projected / sellable : 0,
           listed: NF ? flats.reduce((s,f)=> s + (f.rate||0), 0) / NF : 0};
@@ -9079,21 +9134,29 @@ function renderTrends(){
     head.append(el("b", null, money(revpar)));
     head.append(el("s", null, `per available night · ${money(adr)} average when sold`));
     b.appendChild(head);
+    /* The rate card must cover the same flats the achieved rate does, or the
+       "discount" is partly the difference between two portfolios. When the
+       figure comes from the workbook it covers the buildings the sheet prices —
+       30 of 46 flats — so the card average is taken over those same flats. */
+    const priceCodes = useBook ? new Set(W.rows.filter(r=>r.state!=="absent").map(r=>r.code)) : null;
+    const lot = priceCodes ? flats.filter(f=> priceCodes.has(f.code)) : flats;
+    const listed = lot.length ? lot.reduce((a,f)=> a + (f.rate||0), 0) / lot.length : M.listed;
     b.appendChild(vbars([
       {v: revpar,   label: Math.round(revpar/100)/10 + "k", k:"RevPAR"},
       {v: adr,      label: Math.round(adr/100)/10 + "k",    k:"Achieved"},
-      {v: M.listed, label: Math.round(M.listed/100)/10 + "k", k:"Listed"},
+      {v: listed,   label: Math.round(listed/100)/10 + "k",   k:"Listed"},
     ], 0));
-    const gap = adr >= M.listed
+    const gap = adr >= listed
       ? "holding your rate"
-      : `discounting about <span class="hi">${Math.round((1 - adr/M.listed)*100)}%</span> off the card`;
+      : `discounting about <span class="hi">${Math.round((1 - adr/listed)*100)}%</span> off the card`;
     said(c, M.priced === 0 && !useBook
       ? `No amounts recorded yet, so there is nothing to average. Put a figure on a booking and this fills in.`
       : useBook
-      ? `Only <b>${M.priced} of your ${M.total}</b> bookings ahead carry an amount, and all of them are long `
-        + `stays — too thin to price a night from. So this reads your workbook: <b>${money(revpar)}</b> is what `
-        + `an available night earned in ${MON[+W.month.split("-")[1]-1]}. You are ${gap}. Put amounts on the `
-        + `bookings ahead and it switches to your own book.`
+      ? `Only <b>${M.shortPriced} of your ${M.shortN}</b> ordinary stays ahead carry an amount — too few to `
+        + `price a night from, and the long tenancies that do carry one bill at a different rate entirely. So `
+        + `this reads your workbook: <b>${money(revpar)}</b> is what an available night earned in `
+        + `${MON[+W.month.split("-")[1]-1]}. You are ${gap}. Put amounts on the bookings ahead and it switches `
+        + `to your own book.`
       : `Occupancy alone cannot tell you this: a full house at a poor rate and a half-empty one at a good rate `
         + `look the same on an occupancy chart. <b>${money(revpar)}</b> is what each of your ${M.sellable.toLocaleString("en-IN")} `
         + `sellable nights earns on average. The gap between <b>achieved</b> and <b>listed</b> is what you are actually `
@@ -9151,10 +9214,11 @@ function renderTrends(){
                   + `and only until they hand the keys back. ` : "")
         + `<b>${money(O.soon)}</b> arrives this week.`
       : O.here
-      ? `Nothing has walked out unpaid. <b>${money(O.here)}</b> is with guests in the flats tonight`
+      ? `Nothing <b>with a figure on it</b> has walked out unpaid. <b>${money(O.here)}</b> is with guests in the flats tonight`
         + (O.going ? `, and <b>${money(O.going)}</b> of it leaves within two days` : "")
         + ` — collect at the door, because after that it is the kind that quietly never arrives.`
-      : `Nothing has walked out unpaid. The balance is with guests still to arrive, which is the easy kind to collect.`);
+      : `Nothing with a figure on it has walked out unpaid. The balance is with guests still to arrive, `
+        + `which is the easy kind to collect.`);
   }
 
   /* ── GUESTS ────────────────────────────────────────────────────────────── */
@@ -9468,7 +9532,7 @@ function renderTrends(){
   /* 8 — fragmentation */
   if(seg === "rooms"){
     const f = fragmentation();
-    const {c,b} = card("How broken up the gaps are", "empty stretches between bookings");
+    const {c,b} = card("How broken up the gaps are", "empty runs boxed in by a booking each side");
     const head = el("div","headline");
     head.append(el("b",null, String(f.orphans)));
     head.append(el("s",null, `single orphan nights, out of ${f.runs} empty stretches`));
@@ -9480,11 +9544,12 @@ function renderTrends(){
     /* It described ten orphan nights whatever the number was — on the real book,
        one. Copy that does not read its own data is copy the reader learns to
        skip. */
-    said(c, `Your empty time comes in <b>${f.runs} stretch${f.runs===1?"":"es"}</b>, averaging `
-      + `${f.avg.toFixed(1)} nights`
-      + (f.orphans ? `, ${f.orphans} of them a single night` : `, none of them a single night`)
-      + `. Scattered single nights are far harder to fill than one long hole, so this — not the vacancy `
-      + `count — is how sellable your empty time really is.`);
+    said(c, `<b>${f.nights} of your ${f.allNights.toLocaleString("en-IN")} empty nights</b> sit in `
+      + `${f.runs} gap${f.runs===1?"":"s"} between two bookings, averaging ${f.avg.toFixed(1)} nights`
+      + (f.orphans ? `, ${f.orphans} of them a single night` : ` with no single nights among them`)
+      + `. Those are the hard ones — a night boxed in on both sides has to be sold to somebody arriving `
+      + `and leaving on exactly those dates. The other ${f.openNights.toLocaleString("en-IN")} run to the `
+      + `end of the book and are still ordinary open time.`);
   }
 
   s.appendChild(deck);
@@ -11421,9 +11486,15 @@ function openRate(key, monthKey){
   const note = el("p");
   note.style.cssText = "margin:16px 0 22px;font-size:11.5px;line-height:1.55;color:var(--txt-3)";
   note.innerHTML = key === "revpar"
-    ? `Revenue ÷ every night you had to sell, empty ones included. It is the only one of the three `
-      + `that cannot be flattered: a full house at a poor rate and a half-empty one at a good rate both `
-      + `show up here honestly.`
+    ? `Revenue ÷ every night you had to sell, empty ones included — so a full house at a poor rate and a `
+      + `half-empty one at a good rate both show up honestly. It can still be dragged down by a building `
+      + `whose revenue line does not cover all its nights` + (()=>{
+          const fl = finRows(monthKey).rows.filter(r=> r.state === "floor");
+          return fl.length
+            ? `: ${fl.map(r=>`${esc(r.name)} bills ${r.billed} of the ${r.book} it sold`).join(", ")}, so `
+              + `${fl.length>1?"those figures are floors":"that figure is a floor"}, not ${fl.length>1?"rates":"a rate"}.`
+            : `. Every building here bills the nights it sold.`;
+        })()
     : key === "adr"
     ? `What a night earns <b>when it sells</b>. On its own it says nothing about how many sold — `
       + `that is Occupied, and the two multiply into per available night.`
