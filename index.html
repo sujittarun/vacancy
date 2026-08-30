@@ -231,7 +231,26 @@
      size and weight instead, which is what the top bar already does and what
      this design system says type should be doing anyway. */
   --txt:#0D1017; --txt-2:#2D3442; --txt-3:#363C4A;
-  --free:#1C2331; --free-ink:#F2F5FB; --held:#C9D0DE; --held-ink:#3E4657;
+  /* BOOKED IS THE RECESSED STATE, and at #C9D0DE it had stopped being a state
+     at all: measured against the light ground it reached 1.04:1 on the ground's
+     brighter regions — the tile and the page were the same colour, and once the
+     room grid moved down the page under its filter row, identical tiles read as
+     different greys depending which building they sat under.
+
+     The fill alone could not be darkened. Light renders the tile's 9px label at
+     .9 opacity, and at anything past #C2CAD9 that composite drops under AA —
+     which only lifts the worst ground case to 1.11, barely moving the problem.
+     So the ink moves with the fill, the same pairing this file already made
+     once when --held-ink was #69738A and measured 3.46 here.
+
+     Searched over both ramps, scoring the ground's BRIGHTEST region rather than
+     its mean, because that is where the tile disappeared:
+        before   ground 1.04-1.16   number 6.11   9px label 4.92
+        now      ground 1.28-1.43   number 6.37   9px label 5.18
+     The tile gains a quarter of a stop against its worst ground and both inks
+     on it gain as well. --free still dominates at 8.2:1, so booked stays quiet
+     and vacancy still owns the loud end of the scale. */
+  --free:#1C2331; --free-ink:#F2F5FB; --held:#B2BCD0; --held-ink:#2F3642;
   --oos:#747E92;
   /* One orange cannot be both a live fill and 4.5:1 text on white. --now is the
      fill and keeps dark's hue (OkLCh H 64.7 against dark's 64.2, so the accent
