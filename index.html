@@ -5782,7 +5782,18 @@ const APP_VERSION = "2026-08-30";           // bumped by hand with each deploy
    real risk. Knowing that an app crashed is a small thing and carries almost
    none, so it gets its own switch. The app is local-only today; this is the
    only thing it says to a server, and it says it as `anon`. */
-const TELEMETRY_ON = true;
+/* OFF UNTIL THE OWNER IS READY. This is the only thing in the app that talks to
+   a server, and with the anon-insert migration not yet run it was posting two
+   requests per launch and getting 401 on both — silently, because they are
+   caught, but pointlessly.
+
+   Turning it on is this flag plus the migration in
+   supabase/migrations/20260830120000_telemetry_anon_insert.sql. Nothing else
+   changes: it needs no account and no sign-in.
+
+   The activity log — Data → "Everything you have done" — is unaffected and
+   keeps working, because it never left the phone in the first place. */
+const TELEMETRY_ON = false;
 const TEL_KEY = "vacancy.device.v1";
 let telSession = null, telQueue = [], telTimer = null, telOff = false;
 
@@ -5909,7 +5920,11 @@ async function adoptLocalBook(){
     const f = flats[r.fi];
     if(!f) return;
     enqueue({k:"stay+", id:r.sid, body:{
-      flat_id: f.uid, kind: isBlock(r) ? "block" : "stay",
+      /* "booking", not "stay" — the column is `check (kind in ('booking','block'))`
+         and every other enqueue in this file already says booking. Sending
+         "stay" would have had the server reject all 708 rows, one by one,
+         while the app reported the adoption as done. */
+      flat_id: f.uid, kind: isBlock(r) ? "block" : "booking",
       starts_on: dayISO(r.start), ends_on: dayISO(r.end),
       guest_name: isBlock(r) ? null : (r.guest || null),
       guest_phone: r.phone || null, source: r.src || null,
@@ -5919,8 +5934,14 @@ async function adoptLocalBook(){
       fixer_phone: r.fixer_phone || null, cost: r.cost || null,
       booked_on: dayISO(typeof r.bookedOn === "number" ? r.bookedOn : 0),
       created_by: session && session.uid }});
+    const isUuid = v => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v || "");
     (r.pays || []).forEach(pay=>{
-      enqueue({k:"pay+", id: pay.id || uuid(), body:{
+      /* The seeded book mints payment ids as "b" + a counter — "b4", "b17" —
+         because until now they never left the phone. payments.id is a uuid, so
+         every one of them would be rejected on arrival. Give it a real id here
+         AND on the local row, so the two agree afterwards. */
+      if(!isUuid(pay.id)) pay.id = uuid();
+      enqueue({k:"pay+", id: pay.id, body:{
         stay_id: r.sid, amount: pay.amount, method: pay.method,
         received_on: dayISO(pay.on || 0), note: pay.note || null,
         created_by: session && session.uid }});

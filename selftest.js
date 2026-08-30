@@ -1799,6 +1799,40 @@ export async function run(filter) {
     return `${named.length} rooms named, status wording kept where it carries a fact`;
   });
 
+  /* The owner asked for no cloud until he is ready. That has to be true of the
+     whole app, not just the sign-in screen: with the flags off NOTHING may
+     leave the phone, on any path, including the one that was quietly posting
+     two 401s per launch. */
+  await test("with the cloud off, the app never talks to a server", async () => {
+    eq(CLOUD_ENABLED, false, "CLOUD_ENABLED");
+    eq(TELEMETRY_ON, false, "TELEMETRY_ON");
+    eq(MODE, "sample", "MODE with the cloud off");
+    const real = window.fetch, seen = [];
+    try {
+      window.fetch = (...a)=>{ seen.push(String(a[0])); return real(...a); };
+      /* every outbound path the app has */
+      await telStart();
+      track("probe", {x:1});
+      telError("probe error");
+      await telFlush();
+      /* and a full round of ordinary work */
+      const fi = flats.map((f,i)=>i).find(i => freeSpan(i, 0, 2));
+      addBooking(fi, 0, 1, "No Network Fixture", "Direct", {amount: 1000});
+      const b = resv.find(r => r.guest === "No Network Fixture");
+      addPayment(b, 500, "UPI");
+      cancelBooking(resv.find(r => r.guest === "No Network Fixture"));
+      SCREENS.forEach(sc => sc.render());
+      await wait(120);
+      const off = seen.filter(u => !/^(blob:|data:)/.test(u) && !/localhost|127\.0\.0\.1/.test(u));
+      eq(off.length, 0, `the app called out to: ${off.slice(0,3).join(", ")}`);
+      /* and the sign-in gate must not be reachable */
+      const gate = document.getElementById("gate");
+      ok(!gate || !gate.classList.contains("on"), "the sign-in gate is showing");
+      ok(!/sign in/i.test(document.body.innerText), "'sign in' is on screen somewhere");
+      return "no outbound request on any path, and no sign-in on screen";
+    } finally { window.fetch = real; recompute(); }
+  });
+
   /* ══ the whole surface ══════════════════════════════════════════════════ */
 
   await test("no text falls below AA in either theme", async () => {
