@@ -1357,6 +1357,75 @@ export async function run(filter) {
     return `${document.querySelectorAll("button").length} buttons, none selectable`;
   });
 
+  /* Eleven lines were charged the way rent is charged: one number, the same
+     every month, stated with the confidence of a lease. Rent has earned that.
+     An electricity meter and a lift motor have not. */
+  await test("a cost line knows what kind of cost it is", async () => {
+    const keepK = JSON.parse(JSON.stringify(costKind));
+    const keepE = expenses.slice();
+    try {
+      expenses.length = 0; expSave();
+      const K = FIN[FIN.length-1][0];
+      const cm = costMonth("TT", K);
+      eq(cm.kind["Rent"], "fixed", "what kind of cost rent is");
+      eq(cm.kind["Electricity"], "varies", "what kind of cost electricity is");
+      eq(cm.kind["Maintenance"], "one-off", "what kind of cost maintenance is");
+      /* Known is fixed lines plus anything logged — NOT a count of rows, which
+         would treat rent and bonuses as equals. */
+      const fixedSum = Object.keys(cm.lines)
+        .filter(k => cm.kind[k] === "fixed").reduce((a,k)=> a + cm.lines[k], 0);
+      eq(cm.known, fixedSum, "known against the fixed lines");
+      eq(cm.known + cm.estimated, cm.total, "known and estimated must partition the total");
+      ok(cm.certainty > 0 && cm.certainty < 1,
+        `certainty ${cm.certainty} — the shipped model should be neither all known nor all guessed`);
+      /* Logging a line makes it known WHATEVER kind it is. */
+      expenses.push({id:"test-kind-1", code:"TT", line:"Electricity", amount: 71000, on: K + "-09"});
+      expSave();
+      const cm2 = costMonth("TT", K);
+      eq(cm2.basis["Electricity"], "actual", "basis once the bill is logged");
+      eq(cm2.known - cm.known, 71000, "a logged variable line did not become known");
+      /* And the classification is correctable, because these defaults are a
+         reading of the trade and not of this business. */
+      costKind["TT"] = {Electricity: "fixed"};
+      expenses.length = 0; expSave();
+      const cm3 = costMonth("TT", K);
+      eq(cm3.kind["Electricity"], "fixed", "an operator override of a line's kind");
+      eq(cm3.known - cm.known, cm.lines["Electricity"], "the override did not move what is known");
+      return `${money(cm.known)} known of ${money(cm.total)} — ${Math.round(cm.certainty*100)}% — and an override moves it`;
+    } finally {
+      Object.keys(costKind).forEach(k=> delete costKind[k]);
+      Object.assign(costKind, keepK); jset(KIND_STORE, costKind);
+      expenses.length = 0; expenses.push(...keepE); expSave();
+    }
+  });
+
+  /* Rent is the one number in the model nobody is guessing at. An earlier pass
+     hatched every unlogged line, which drew it in the same pattern as a
+     maintenance average. */
+  await test("rent is drawn as known and an unlogged average is not", async () => {
+    const keep = expenses.slice();
+    try {
+      expenses.length = 0; expSave();
+      await settle();
+      document.querySelectorAll(".tabbar button")[3].click();
+      await until(() => document.getElementById("tabseg"), "the Business segments");
+      const chip = [...document.querySelectorAll("#tabseg *")].find(e => e.textContent.trim() === "Profit");
+      ok(chip, "no Profit segment"); chip.click();
+      await until(() => document.querySelector(".wrow"), "the waterline rows");
+      const row = [...document.querySelectorAll(".wrow")].find(w => /Telecom|TreeTops|Madhapur/.test(w.innerText));
+      ok(row, "no building row to open"); row.click();
+      await until(() => document.querySelector(".costsplit"), "the cost breakdown");
+      const rows = [...document.querySelectorAll(".costsplit .cs-r")];
+      ok(rows.length, "no cost lines drawn");
+      const rent = rows.find(x => /^Rent/.test(x.textContent));
+      ok(rent, "no rent line in the breakdown");
+      ok(!rent.classList.contains("est"), "rent is drawn as an estimate");
+      const est = rows.filter(x => x.classList.contains("est"));
+      ok(est.length, "nothing is drawn as an estimate, so the distinction says nothing");
+      return `${rows.length} lines, ${est.length} estimated, rent among the known`;
+    } finally { expenses.length = 0; expenses.push(...keep); expSave(); closeSheet(); }
+  });
+
   /* ══ the whole surface ══════════════════════════════════════════════════ */
 
   await test("no text falls below AA in either theme", async () => {

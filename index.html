@@ -1632,22 +1632,20 @@ button{background:none;border:0;padding:0;cursor:pointer;
 .cs-r i{display:block;height:5px;border-radius:3px;justify-self:start;
   background:color-mix(in srgb, var(--free) 52%, var(--surface-2))}
 .cs-r s{text-decoration:none;color:var(--txt);font-weight:600;white-space:nowrap}
-/* A LOGGED LINE IS A DIFFERENT KIND OF NUMBER FROM A BUDGETED ONE — and the
-   app already has a rule for exactly that distinction. Every track on the
-   Profit tab reads "solid is what the sheet bills, hatch is what it does not",
-   so the same sentence carries here: SOLID IS WHAT YOU PAID, HATCH IS THE
-   STANDING ESTIMATE. Same tone for both, because they are charged identically.
+/* SOLID IS WHAT YOU KNOW, HATCH IS WHAT IS ESTIMATED — the same sentence every
+   other track on this tab is drawn with, now that a line declares what kind of
+   cost it is. Rent is solid because rent is contracted and known on the 1st;
+   electricity is hatched until its bill is logged, because until then the
+   figure is an average of other months. Same tone for both: they are charged
+   identically, and only their standing differs.
 
-   The first pass painted the logged bar solid --free instead, which in light is
-   near-black — a dark slab beside ten grey ones, reading as an alert rather
-   than as a fact. Tone was the wrong channel: it says "more" when the thing
-   being said is "different in kind".
-
-   And only when it means something. With nothing logged every line is an
-   estimate, so hatching all eleven would be noise on every breakdown in the
-   app; the pattern appears only on a month that has both. */
+   An earlier pass hatched EVERY unlogged line, which put rent — the one number
+   in the model nobody is guessing at — in the same pattern as a maintenance
+   average. And the pass before that painted logged lines solid --free, which in
+   light is near-black: a dark slab reading as an alert. Tone was the wrong
+   channel; it says "more" where the thing being said is "different in kind". */
 .cs-r.act b{color:var(--txt);font-weight:600}
-.costsplit.mixed .cs-r:not(.act) i{
+.cs-r.est i{
   background:repeating-linear-gradient(135deg,
     color-mix(in srgb,var(--free) 52%,var(--surface-2)) 0 4px, transparent 4px 8px)}
 /* one rate, fifteen months, in its own sheet */
@@ -8397,21 +8395,72 @@ function ledgerLines(monthKey){
 }
 
 const costFor = code => Object.assign({}, FIN_COST[code] || {}, costUser[code] || {});
-/* WHAT A MONTH ACTUALLY COST. A line you logged this month is charged at what
-   you logged; a line you did not is charged at your standing figure. That rule
-   is the only one that neither double-counts nor asks the operator to keep two
-   sets of books — but it does mean a half-logged line understates, so every
-   surface that reads this also says which lines are actual and which are the
-   standing estimate. Same discipline as the revenue coverage gate. */
+/* ── ELEVEN LINES, THREE KINDS OF COST ───────────────────────────────────────
+   Everything here was charged the way RENT is charged: one number, the same
+   every month, stated with the confidence of a lease. Rent has earned that —
+   it is contracted, it is known on the 1st, and it will be the same in March.
+   The other ten had not.
+
+   Electricity is a meter that is read; it is a different number every month and
+   nobody knows it until the bill lands. Laundry and refills rise and fall with
+   how many people actually stayed. Maintenance is a lift motor that fails in
+   April and never in May — a "Rs 15,000 a month" maintenance line describes no
+   month that has ever happened. Charging all eleven as a flat monthly figure
+   made the app equally confident about the one it could not be wrong about and
+   the one it could not possibly be right about.
+
+   So a line declares what KIND it is, and the app stops pretending they are
+   alike:
+
+     fixed     contracted and known without being told — rent, salaries, AMC
+     varies    a real cost with a different figure every month — power, water,
+               laundry, refills — an average until the actual is logged
+     one-off   happens when it happens — maintenance, replacements, bonuses —
+               a monthly average for these is a fiction with a decimal point
+
+   The arithmetic does not change: every line is still charged, so the profit is
+   the profit. What changes is that the app can now say how much of a month's
+   cost it actually KNOWS — fixed lines plus whatever was logged — which is the
+   mirror of the revenue coverage gate, and the answer to "is this figure worth
+   trusting". */
+const COST_KIND = {
+  "Rent":"fixed", "Salaries":"fixed", "AMC (Lift, Gen)":"fixed",
+  "Electricity":"varies", "Water":"varies", "Laundry":"varies", "Refills":"varies",
+  "Maintenance":"one-off", "Replacements":"one-off", "Bonus / gifts":"one-off",
+  "Contingency":"one-off",
+};
+const KIND_STORE = "vacancy.costkind.v1";
+let costKind = jget(KIND_STORE) || {};
+/* A line the operator added is "varies" until they say otherwise — the safe
+   default, because it is the one that says "this is an estimate". */
+const kindOf = (code, line) =>
+  (costKind[code] && costKind[code][line]) || COST_KIND[line] || "varies";
+
+/* WHAT A MONTH ACTUALLY COST, AND HOW MUCH OF IT IS KNOWN. A line you logged
+   is charged at what you logged; a line you did not is charged at its standing
+   figure — the only rule that neither double-counts nor asks for two sets of
+   books. On top of that each line is now marked KNOWN or ESTIMATED: a fixed
+   line is known whether or not anybody logged it, because that is what fixed
+   means, and everything else is an estimate until its actual arrives. */
 function costMonth(code, monthKey){
   const std = costFor(code);
   const act = monthKey ? (ledgerLines(monthKey)[code] || {}) : {};
-  const out = {}, basis = {};
+  const out = {}, basis = {}, kind = {};
   Object.keys(std).forEach(k=>{ out[k] = std[k]; basis[k] = "standing"; });
   Object.keys(act).forEach(k=>{ out[k] = act[k]; basis[k] = "actual"; });
-  return {lines: out, basis,
+  let known = 0, estimated = 0;
+  Object.keys(out).forEach(k=>{
+    kind[k] = kindOf(code, k);
+    const v = +out[k] || 0;
+    /* Logged beats kind: once a real figure exists for the month, the line is
+       known whatever sort of cost it is. */
+    if(basis[k] === "actual" || kind[k] === "fixed") known += v; else estimated += v;
+  });
+  const total = known + estimated;
+  return {lines: out, basis, kind, known, estimated, total,
           actualLines: Object.keys(act).length,
-          total: Object.values(out).reduce((a,v)=> a + (+v || 0), 0)};
+          /* the share of the month's cost the app is not guessing at */
+          certainty: total ? known / total : 0};
 }
 /* null still means "this building has no cost model at all", which is what puts
    Lotus Pond under the rule rather than in the ranking. A month with a ledger
@@ -8446,6 +8495,7 @@ function finRows(monthKey){
     isig = (isig + (x.fixed == null ? 0 : x.fixed * 3) + (x.cost || 0)) | 0; }
   const stamp = NF + "|" + resv.length + ":" + sig + "|i" + issues.length + ":" + isig
               + "|" + JSON.stringify(costUser) + "|" + JSON.stringify(finUser)
+              + "|k" + JSON.stringify(costKind)
               + "|e" + JSON.stringify(expenses);
   if(stamp !== finCacheKey){ finCache = {}; finCacheKey = stamp; }
   if(finCache[monthKey]) return finCache[monthKey];
@@ -9281,6 +9331,27 @@ function renderTrends(){
                 : `<b>${esc(r.name)}</b> needs ${Math.ceil(r.beNights)} of its ${r.cap} nights to cover itself `
                   + `and sold ${r.billed}. <b>It is ${Math.ceil(r.beNights) - r.billed} nights short.</b>`);
           inner.appendChild(line);
+          /* AND HOW FAR THAT FIGURE CAN BE TRUSTED. The sentence above computes
+             a break-even and a profit off the cost, so it has to say what the
+             cost is made of: rent is contracted and known, an electricity
+             average is not. Without this the two arrive in the same type, and
+             the reader has no way to tell a lease from a guess. */
+          if(r.cost){
+            const cmv = costMonth(r.code, finMonth);
+            if(cmv.estimated){
+              const sure = el("div","vsay-l");
+              sure.style.cssText = "margin-top:9px;color:var(--txt-2);font-weight:500";
+              const soft = Object.keys(cmv.lines)
+                .filter(k => cmv.basis[k] !== "actual" && cmv.kind[k] !== "fixed" && +cmv.lines[k] > 0)
+                .sort((a,b2)=> cmv.lines[b2] - cmv.lines[a]);
+              sure.innerHTML = `<b>${Math.round(cmv.certainty*100)}% of that cost is known</b> — `
+                + `${money(cmv.known)} of contracted lines and anything you logged. The other `
+                + `${money(cmv.estimated)} is an average across ${soft.length} line${soft.length===1?"":"s"}`
+                + (soft.length ? `, mostly ${esc(soft[0])}` : "")
+                + `. Log those and this row stops being an estimate.`;
+              inner.appendChild(sure);
+            }
+          }
           /* WHERE THE MONEY GOES. The row could only ever say "₹4,62,000 out",
              which reads as one bill — and because rent is 55-68% of it, a
              reader lands on "that must be the rent". It is eleven lines: rent,
@@ -9292,19 +9363,29 @@ function renderTrends(){
             const cm = costMonth(r.code, finMonth);
             const lines = Object.entries(cm.lines)
               .filter(([,v])=> +v > 0).sort((a2,b2)=> b2[1] - a2[1]);
-            const tbl = el("div","costsplit" + (cm.actualLines ? " mixed" : ""));
+            const tbl = el("div","costsplit");
             /* WHICH FIGURE IS A FACT AND WHICH IS AN ESTIMATE. A line the
                operator logged this month is what they actually paid; the rest
                are the standing model. Both are charged, so both are shown — but
                they are not the same kind of number and the row says so, because
                a half-logged line understates and only the operator can tell. */
+            /* THE HEADER SAYS HOW MUCH OF IT IS KNOWN, not how many rows are
+               ticked. A count of lines treats rent and bonuses as equals; the
+               operator wants to know what share of the MONEY is a fact. */
             tbl.appendChild(el("div","cs-h", `Where the ${money(r.cost)} goes`
-              + (cm.actualLines ? ` · ${cm.actualLines} logged, ${lines.length - cm.actualLines} estimated` : "")));
+              + (cm.estimated
+                  ? ` · ${money(cm.known)} known, ${money(cm.estimated)} estimated`
+                  : ` · all of it known`)));
             lines.forEach(([k,v])=>{
-              const ln = el("div","cs-r" + (cm.basis[k] === "actual" ? " act" : ""));
+              const known = cm.basis[k] === "actual" || cm.kind[k] === "fixed";
+              const ln = el("div","cs-r" + (cm.basis[k] === "actual" ? " act" : "")
+                                         + (known ? "" : " est"));
               const bar = el("i"); bar.style.width = (v / lines[0][1] * 100).toFixed(1) + "%";
               ln.append(el("b",null,k), bar, el("s",null,money(v)));
-              if(cm.basis[k] === "actual") ln.title = k + " for this month is what you logged, not the standing figure";
+              ln.title = cm.basis[k] === "actual" ? `${k} — what you logged for this month`
+                       : cm.kind[k] === "fixed"   ? `${k} — fixed, the same every month`
+                       : cm.kind[k] === "one-off" ? `${k} — happens when it happens; this is an average until you log one`
+                       :                            `${k} — a different figure every month; this is an average until you log the bill`;
               tbl.appendChild(ln);
             });
             const edit = el("button","vsay-go","Change these figures →");
@@ -12210,7 +12291,10 @@ function openCosts(r){
     ? `Your workbook prices four buildings. <b>${esc(r.name)}</b> is not one of them, so the app cannot say `
       + `what it keeps — and will not guess. It sold <b>${r.book} nights</b> in ${MON[+finMonth.split("-")[1]-1]}. `
       + `Fill in what it costs and it joins the ranking.`
-    : `These are the figures from your Costing sheet. Change one and every number on the Profit tab follows.`;
+    : `These are the figures from your Costing sheet. Change one and every number on the Profit tab follows. `
+      + `<b>Fixed</b> is contracted and known before the month starts — rent, salaries. <b>Varies</b> is a real `
+      + `bill with a different figure each month. <b>One-off</b> happens when it happens, so its monthly figure `
+      + `is only an average until you log a real one.`;
   sheetB.appendChild(why);
 
   const form = el("div","bkform");
@@ -12253,22 +12337,42 @@ function openCosts(r){
     if(tot && r.book) bits.push(`needs <b>${money(tot / r.book)}</b> a night across its ${r.book} nights to cover itself`);
     if(tot && rev) bits.push(`<b>${rev - tot >= 0 ? "+" : "−"}${money(Math.abs(rev - tot))}</b> kept, `
       + `${Math.round((rev - tot) / rev * 100)}% margin`);
+    /* What the kinds add up to, live, so the operator can see the consequence
+       of calling a line fixed rather than variable while they are doing it. */
+    const fx = Object.keys(inputs).reduce((a,k)=>
+      a + ((kinds[k] && kinds[k].value) === "fixed" ? (+inputs[k].value || 0) : 0), 0);
+    if(tot) bits.push(`<b>${money(fx)}</b> of it fixed and known before the month starts`);
     live.innerHTML = bits.join("<br>");
   };
   if(revIn) revIn.addEventListener("input", paint);
+  /* THE KIND IS PART OF THE FIGURE. The defaults are a reading of a serviced-
+     apartment business, not of THIS one — an operator whose power is on a fixed
+     commercial tariff, or who pays a maintenance retainer, has a different
+     answer, and a classification they cannot correct is worse than none. It
+     sits beside the amount because it changes what the amount MEANS. */
+  const kinds = {};
+  const KINDS = [["fixed","Fixed"],["varies","Varies"],["one-off","One-off"]];
   costLines(r.code).forEach(k=>{
     const row = el("label");
-    row.style.cssText = "display:flex;align-items:center;gap:10px";
+    row.style.cssText = "display:flex;align-items:center;gap:8px";
     const nm = el("span", null, k);
-    nm.style.cssText = "flex:1 1 auto;font-size:12.5px;color:var(--txt-2)";
+    nm.style.cssText = "flex:1 1 auto;min-width:0;font-size:12.5px;color:var(--txt-2);"
+      + "white-space:nowrap;overflow:hidden;text-overflow:ellipsis";
+    const kSel = el("select");
+    kSel.style.cssText = "flex:0 0 96px;padding:9px 24px 9px 9px;font-size:12px";
+    kSel.setAttribute("aria-label", `What kind of cost ${k} is for ${r.name}`);
+    KINDS.forEach(([v,lab])=>{ const o = el("option", null, lab); o.value = v;
+      if(v === kindOf(r.code, k)) o.selected = true; kSel.appendChild(o); });
+    kinds[k] = kSel;
     const inp = el("input");
     inp.type = "tel"; inp.inputMode = "numeric"; inp.placeholder = "₹";
     inp.setAttribute("aria-label", k + " for " + r.name);
-    inp.style.cssText = "flex:0 0 118px;text-align:right;padding:9px 11px";
+    inp.style.cssText = "flex:0 0 104px;text-align:right;padding:9px 11px";
     if(cur[k] != null) inp.value = cur[k];
     inp.addEventListener("input", paint);
+    kSel.addEventListener("change", paint);
     inputs[k] = inp;
-    row.append(nm, inp);
+    row.append(nm, kSel, inp);
     form.appendChild(row);
   });
   /* ADD A LINE. Their sheet has eleven; a building has more than eleven costs,
@@ -12302,6 +12406,15 @@ function openCosts(r){
     Object.keys(inputs).forEach(k=>{ const v = +inputs[k].value; if(v > 0) next[k] = Math.round(v); });
     if(!Object.keys(next).length) delete costUser[r.code]; else costUser[r.code] = next;
     jset(COST_STORE, costUser);
+    /* Only what DIFFERS from the default is stored, so improving the defaults
+       later still reaches every operator who never disagreed with them. */
+    const kn = {};
+    Object.keys(kinds).forEach(k=>{
+      const v = kinds[k].value;
+      if(next[k] != null && v !== (COST_KIND[k] || "varies")) kn[k] = v;
+    });
+    if(!Object.keys(kn).length) delete costKind[r.code]; else costKind[r.code] = kn;
+    jset(KIND_STORE, costKind);
     finBust();
     if(revIn){
       const v = Math.round(+revIn.value || 0);

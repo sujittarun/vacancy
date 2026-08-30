@@ -933,6 +933,41 @@ missing from the revenue line, and charging them again would bill the operator
 twice for one empty room. The Upkeep card is right to show both; the P&L may
 only have one.
 
+## Eleven lines charged the way rent is charged
+
+Rent is contracted. It is known on the 1st, it will be the same in March, and an
+app that states it flatly is right to. The Costing sheet has ten other lines and
+the app charged every one of them the same way: a single number, the same every
+month, in the same type, with the same confidence.
+
+Electricity is a meter that gets read — a different number every month, and
+nobody knows it until the bill lands. Laundry and refills rise and fall with how
+many people actually stayed. Maintenance is a lift motor that fails in April and
+never in May; **a "₹15,000 a month" maintenance line describes no month that has
+ever happened.** Charging all eleven identically made the app equally confident
+about the number it could not be wrong about and the number it could not
+possibly be right about.
+
+So a line declares its kind — `fixed`, `varies`, `one-off` — and the arithmetic
+does not change at all. Every line is still charged; the profit is still the
+profit. What changes is that the app can now say **how much of a month's cost it
+actually knows**: ₹3,53,000 of TreeTops' ₹5,08,000, or 69%, being rent, salaries
+and the AMC, plus anything logged. The other ₹1,55,000 is an average across
+eight lines.
+
+That is the mirror of the revenue coverage gate, and it uses the same drawing
+rule the rest of the tab already uses: **solid is what you know, hatch is what is
+estimated.** An earlier pass hatched every unlogged line, which put rent — the
+one number in the model nobody is guessing at — in the same pattern as a
+maintenance average. The pass before that painted logged lines solid `--free`,
+near-black in light: a dark slab reading as an alert. Tone was the wrong channel
+twice; it says *more* where the thing being said is *different in kind*.
+
+The defaults are a reading of the trade, not of this business — an operator on a
+fixed commercial tariff, or paying a maintenance retainer, has different
+answers — so the kind sits beside the amount in the editor and only overrides
+are stored, which lets better defaults still reach anyone who never disagreed.
+
 ## Prohibitions
 
 - No paper, ruling, stamps, or any ledger device. That world is discarded.
