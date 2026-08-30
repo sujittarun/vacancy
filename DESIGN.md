@@ -864,6 +864,38 @@ appears, which is why the regression test prices every August stay and asserts
 a profit comes out the other side. A refusal nobody can leave is a dead card
 that has been taught to apologise.
 
+## Local variation and regional spread are two different quantities
+
+The room grid gained a filter row and a heading per building, which pushed it
+about 100px down the page. The tiles did not change — every `.tile` rule and
+every token byte-identical, the painted value `rgb(201,208,222)` in both builds,
+no filter, no overlay, nothing above them. They just landed on a different part
+of the ground, and the light ground is seven blooms alternating white and cool.
+Identical tiles read as different greys depending which building they sat under.
+
+The obvious fix is to dim the blooms, and it is wrong. Alpha lowers **local**
+variation — the change inside one card's own footprint, which is the entire
+reason the glass reads as glass — at the same rate it lowers **regional**
+spread, the drift across the screen that made the tiles disagree. Dimming walks
+straight back to the flat ground this replaced, where every glass card sampled
+one tint and rendered as paint.
+
+Size is the lever that separates them. Structure finer than a card averages out
+across the screen while still changing inside one card, so halving the bloom
+size collapses the regional term and leaves the local one nearly intact:
+
+    before   local 27.6–36.0   regional 13.4   darkest 196
+    now      local 21.6–31.5   regional  5.8   darkest 200
+
+Searched over both alpha and size, and scored on the **worst** local window
+rather than the best — the failure mode of small blooms is a dead patch between
+them, and a metric that reports the best window cannot see it. Regional falls
+57%, the glass keeps twice the variation that rendered as flat paint, and every
+ink on the ground gains four levels.
+
+The general form: when two things you care about move together under the
+control you reached for first, the control is wrong, not the goal.
+
 ## Prohibitions
 
 - No paper, ruling, stamps, or any ledger device. That world is discarded.

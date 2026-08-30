@@ -670,9 +670,15 @@ button{background:none;border:0;padding:0;cursor:pointer}
   color:var(--free-ink)}
 .roomfilt button[aria-selected="true"] i.none{background:color-mix(in srgb,var(--free-ink) 13%,transparent);
   color:color-mix(in srgb,var(--free-ink) 68%,transparent)}
-.bsec + .bsec{margin-top:14px}
+/* Closer, and quieter. Splitting one continuous field of 38 tiles into five
+   groups gave every group a heading and a rule, and that chrome ended up
+   competing with the tiles it was meant to organise — the grid stopped reading
+   as one dense block. The heading earns its line; it does not need a cut across
+   the card as well. */
+.bsec + .bsec{margin-top:9px}
 .bsec-h{display:flex;align-items:baseline;justify-content:space-between;gap:8px;
-  margin:0 0 7px;padding-bottom:5px;border-bottom:1px solid var(--line)}
+  margin:0 0 5px;padding-bottom:3px;
+  border-bottom:1px solid color-mix(in srgb,var(--line) 50%,transparent)}
 .bsec-h b{font-size:11px;font-weight:680;letter-spacing:.07em;text-transform:uppercase;
   color:var(--txt-2)}
 .bsec-h s{text-decoration:none;font-size:11px;font-weight:600;color:var(--txt-3);
@@ -2650,14 +2656,32 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
         before   local 54, regional spread 16   — glassy but patchy
         now      local 30, regional spread  9   — still glassy, reads as one
      The darkest region also lifts 165 to 183, so every ink on it gains. */
+  /* THIRD PASS, AND THE LEVER WAS SIZE, NOT ALPHA. The room grid moved down the
+     page when it gained a filter row and per-building headings, and the same
+     opaque tile then sat over a visibly different part of the ground depending
+     which building it was under — so identical tiles read as different greys.
+     That is REGIONAL spread, and it is a separate quantity from the LOCAL
+     variation the glass needs: dimming the blooms lowers both together and
+     walks straight back toward the flat-paint ground this replaced.
+
+     Halving the bloom SIZE lowers only the regional term, because structure
+     finer than a card averages out across the screen while still changing
+     inside one card's own footprint. Searched over alpha and size, scoring the
+     worst local window rather than the best so a card cannot land in a dead
+     patch:
+        before   local 27.6-36.0, regional 13.4, darkest 196
+        now      local 21.6-31.5, regional  5.8, darkest 200
+     Regional falls 57%, the glass keeps essentially all of what it reveals —
+     still twice the 11 that rendered as flat paint — and every ink gains
+     four levels. */
   background:
-    radial-gradient(400px 400px at 14% 4%,   rgba(255,255,255,.42),  rgba(255,255,255,0) 70%),
-    radial-gradient(380px 380px at 86% 12%,  rgba(158,175,210,.54),  rgba(158,175,210,0) 70%),
-    radial-gradient(360px 360px at 60% 32%,  rgba(255,255,255,.36),  rgba(255,255,255,0) 70%),
-    radial-gradient(370px 370px at 16% 48%,  rgba(150,168,204,.49),  rgba(150,168,204,0) 70%),
-    radial-gradient(390px 390px at 90% 64%,  rgba(255,255,255,.34),  rgba(255,255,255,0) 70%),
-    radial-gradient(400px 400px at 36% 80%,  rgba(148,166,202,.51),  rgba(148,166,202,0) 70%),
-    radial-gradient(380px 380px at 82% 97%,  rgba(255,255,255,.32),  rgba(255,255,255,0) 70%),
+    radial-gradient(200px 200px at 14% 4%,   rgba(255,255,255,.34),  rgba(255,255,255,0) 70%),
+    radial-gradient(190px 190px at 86% 12%,  rgba(158,175,210,.43),  rgba(158,175,210,0) 70%),
+    radial-gradient(180px 180px at 60% 32%,  rgba(255,255,255,.29),  rgba(255,255,255,0) 70%),
+    radial-gradient(185px 185px at 16% 48%,  rgba(150,168,204,.39),  rgba(150,168,204,0) 70%),
+    radial-gradient(195px 195px at 90% 64%,  rgba(255,255,255,.27),  rgba(255,255,255,0) 70%),
+    radial-gradient(200px 200px at 36% 80%,  rgba(148,166,202,.41),  rgba(148,166,202,0) 70%),
+    radial-gradient(190px 190px at 82% 97%,  rgba(255,255,255,.26),  rgba(255,255,255,0) 70%),
     #D8DFEC;
   background-attachment:fixed;
 }
