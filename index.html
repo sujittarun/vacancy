@@ -1473,15 +1473,24 @@ button{background:none;border:0;padding:0;cursor:pointer}
   transform-origin:left;transform:scaleX(var(--v,1))}
 .wrow.short .hr{background:var(--hot)}
 .wrow .cap2{font-size:10.5px;color:var(--txt-3);margin-top:5px;line-height:1.35}
-/* The two percentages the bar IS. They were only ever in the caption as words
-   ("breaks even at 83 of its 217 nights"), which made the reader translate a
-   sentence back into the picture above it. Sat under the split, at the split,
-   they are the picture's own labels. */
-.wrow .pcts{display:flex;justify-content:space-between;align-items:baseline;
-  margin-top:4px;font-size:10px;line-height:1;color:var(--txt-3)}
-.wrow .pcts b{font-weight:640;color:var(--txt-2);font-size:11px}
-.wrow .pcts .p-head{color:var(--free);font-weight:640;font-size:11px}
-.wrow.short .pcts .p-head{color:var(--hot)}
+/* THE NUMBERS SIT AT THE POINTS THEY NAME. A justified row underneath put
+   "44%" at the far left and "76%" at the far right while the things they
+   describe sat at 44% and 76% ALONG the bar — so the reader still had to map a
+   caption onto a picture, which is the work the picture was supposed to do.
+   Each label is now positioned at its own mark: the break-even figure under the
+   tick, the sold figure under the end of the fill.
+
+   Clamped at both ends, because a label centred on 4% or 97% hangs off the card
+   and a number you cannot read is worse than one you have to hunt for. */
+.wrow .pcts{position:relative;height:13px;margin-top:5px;font-size:10px;line-height:13px;
+  color:var(--txt-3);white-space:nowrap}
+.wrow .pcts span{position:absolute;top:0}
+.wrow .pcts .p-sold{color:var(--txt);font-weight:640;font-size:11px}
+/* the tick's own label carries a hairline up to the tick so the pairing is not
+   left to proximity alone */
+.wrow .pcts .p-be::before{content:"";position:absolute;left:50%;top:-5px;width:1px;height:4px;
+  background:var(--line-2)}
+.wrow .pcts .p-be.edgeL::before{left:6px}
 /* the key for the bar, said once at the top of the card */
 .wkey{display:flex;gap:14px;align-items:center;margin:0 0 10px;font-size:10.5px;color:var(--txt-3)}
 .wkey span{display:inline-flex;align-items:center;gap:5px}
@@ -1511,6 +1520,19 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .rcol s{text-decoration:none;font-size:9.5px;color:var(--txt-3)}
 .ratesay{margin-top:12px;font-size:12px;line-height:1.5;color:var(--txt-2)}
 .ratesay b{color:var(--txt);font-weight:640}
+/* card 2's key, in place of the paragraph that used to explain its own picture */
+.railkey{display:flex;gap:14px;align-items:center;margin:9px 0 0;font-size:10.5px;color:var(--txt-3)}
+.railkey span{display:inline-flex;align-items:center;gap:5px}
+.railkey i{display:block;width:11px;height:7px;border-radius:2px}
+.railkey .k-cost{background:var(--held)}
+.railkey .k-kept{background:var(--free)}
+/* the way in to the cost model, on the card the model drives */
+.costsbtn{display:flex;align-items:baseline;justify-content:space-between;gap:10px;width:100%;
+  margin-top:14px;padding:11px 13px;border-radius:var(--r-sm);background:var(--surface-2);
+  border:1px solid var(--line);text-align:left;transition:transform .38s var(--spring)}
+.costsbtn:active{transform:scale(.97)}
+.costsbtn span{font-size:12.5px;font-weight:600;color:var(--txt)}
+.costsbtn em{font-style:normal;font-size:10.5px;color:var(--txt-3);white-space:nowrap}
 .wgroup{border-top:1px solid var(--line);margin:12px 0 0;padding-top:10px}
 .wrows.picked .wrow{opacity:.45}
 .wrows.picked .wrow.on{opacity:1;transform:translateY(-2px)}
@@ -7977,9 +7999,16 @@ let costUser = jget(COST_STORE) || {};
    into a month it was not true of.                                           */
 const FINU_STORE = "vacancy.revenue.v1";
 let finUser = jget(FINU_STORE) || {};
-const costLines = ()=>{
+/* The workbook's eleven lines, plus anything the operator has added. Their
+   sheet does not carry internet, society charges, property tax or a dozen other
+   things a real building has, and a cost model you cannot add a line to is a
+   cost model that goes stale the first time a bill arrives. */
+const costLines = code =>{
   const seen = [];
-  Object.values(FIN_COST).forEach(m => Object.keys(m).forEach(k => { if(seen.indexOf(k) < 0) seen.push(k); }));
+  const add = m => Object.keys(m || {}).forEach(k => { if(seen.indexOf(k) < 0) seen.push(k); });
+  Object.values(FIN_COST).forEach(add);
+  if(code) add(costUser[code]);
+  else Object.values(costUser).forEach(add);
   return seen;
 };
 const costFor = code => Object.assign({}, FIN_COST[code] || {}, costUser[code] || {});
@@ -8567,9 +8596,22 @@ function renderTrends(){
 
         if(r.state !== "absent"){
           const p = el("div","pcts");
-          p.innerHTML = `<span><b>${Math.round(r.be*100)}%</b> to cover costs</span>`
-                      + `<span><span class="p-head">${r.head >= 0 ? "+" : "−"}${Math.abs(Math.round(r.head*100))} pts</span>`
-                      + ` kept · <b>${Math.round(r.occ*100)}%</b> sold</span>`;
+          /* Placed at a fraction along the bar, clamped so a label near either
+             end sits inside the card instead of centred on the edge. */
+          const at = (node, frac, cls)=>{
+            const f = pct(frac);
+            if(f < 0.10){ node.style.left = "0"; node.classList.add("edgeL"); }
+            else if(f > 0.90){ node.style.right = "0"; node.style.textAlign = "right"; }
+            else { node.style.left = (f*100).toFixed(1)+"%"; node.style.transform = "translateX(-50%)"; }
+            p.appendChild(node);
+          };
+          /* BARE PERCENTAGES. Positioning a label means it has to be narrow
+             enough to sit at a point without reaching the next one — "44%
+             covers costs" is 105px on a 305px bar and collided with everything.
+             The key above the rows already says which mark is which, so the
+             number is the whole job. */
+          at(el("span","p-be",   Math.round(r.be*100) + "%"), r.be);
+          at(el("span","p-sold", Math.round(billedOcc*100) + "%"), billedOcc);
           row.appendChild(p);
         }
         const cap2 = el("div","cap2");
@@ -8643,18 +8685,41 @@ function renderTrends(){
         return wrap;
       };
 
+      /* ONE RULE, NOT TWO. Two full-width headings each carrying five words of
+         explanation was more chrome than the four ranked rows above them, and
+         both said the same thing in different words: this building's figures
+         are not comparable with the ones above. The rule now says that once,
+         and which KIND of not-comparable each row is rides on the row itself,
+         where the badge already was. */
       complete.forEach(r=> rowsBox.appendChild(drawRow(r)));
-      if(floors.length){
-        const g = el("div","wgroup"); g.appendChild(el("div","lbl","BILLED OUTSIDE THIS SHEET"));
+      const odd = floors.concat(absent);
+      if(odd.length){
+        const g = el("div","wgroup");
+        /* Two words. Which KIND of not-comparable each one is rides on the row,
+           where its badge already says "understated" or "Add costs". */
+        g.appendChild(el("div","lbl", "NOT COMPARABLE"));
         rowsBox.appendChild(g);
-        floors.forEach(r=> rowsBox.appendChild(drawRow(r)));
-      }
-      if(absent.length){
-        const g = el("div","wgroup"); g.appendChild(el("div","lbl","NOT IN THE P&L"));
-        rowsBox.appendChild(g);
-        absent.forEach(r=> rowsBox.appendChild(drawRow(r)));
+        odd.forEach(r=> rowsBox.appendChild(drawRow(r)));
       }
       b.appendChild(rowsBox);
+
+      /* A ROUTE TO THE COSTS THAT DOES NOT START WITH FINDING A READOUT. Editing
+         them was only reachable by tapping a building, reading its breakdown and
+         then finding a button inside it — three steps down a path nobody takes
+         unless they already know it is there. The costs ARE the model this whole
+         card is computed from; changing them belongs on the card. */
+      const edit = el("button","costsbtn");
+      edit.innerHTML = `<span>Edit what a building costs</span><em>${
+        F.rows.filter(x=>x.state!=="absent").length} priced · ${
+        F.rows.filter(x=>x.state==="absent").length} still to cost</em>`;
+      edit.onclick = ()=>{
+        haptic(9);
+        /* one building and there is nothing to choose between */
+        const pick = F.rows.filter(x=> x.state !== "absent" || true);
+        if(pick.length === 1) return openCosts(pick[0]);
+        openCostPicker(pick);
+      };
+      b.appendChild(edit);
 
       const best = complete[complete.length-1], worst = complete[0];
       said(c, complete.length >= 2
@@ -8714,9 +8779,14 @@ function renderTrends(){
         labs.appendChild(sp);
       });
       b.appendChild(labs);
-      said(c, `The dark base is the same height in every column, because your Costing sheet is a standing `
-        + `monthly model and not dated invoices. So every change in the lit cap above it is a change in `
-        + `<b>revenue</b> — nothing here can tell you a cost went up.`);
+      /* Was five lines saying "the dark base never changes height". The drawing
+         says that; a caption repeating it is teaching a reader who has already
+         looked. What the picture CANNOT say is why the base is flat, and that
+         is six words. */
+      const cost0 = all.find(f=>f.totals);
+      b.appendChild(Object.assign(el("div","railkey"), {innerHTML:
+        `<span><i class="k-cost"></i>costs · ${money(cost0 ? cost0.totals.cost : 0)} every month</span>`
+      + `<span><i class="k-kept"></i>kept</span>`}));
     }
 
     /* ── CARD 3 — the three rates, and what changed ────────────────────── */
@@ -8803,10 +8873,8 @@ function renderTrends(){
       line("Rolling twelve months", "every twelve-month window has a hole in it",
            null, firstFull ? "not until " + monName(firstFull) : "not yet");
       b.appendChild(rows);
-      said(c, `Every percentage above is revenue — something your workbook measured. There is deliberately `
-        + `<b>no percentage on profit</b>: your cost model is the same every month, so profit moves by exactly `
-        + `the rupees revenue moved, and a percentage on the smaller number would dress that up as an `
-        + `efficiency gain that did not happen.`);
+      said(c, `Percentages here are revenue. Profit has none on purpose — costs are flat, so profit moves `
+        + `by exactly the rupees revenue moved.`);
     }
 
     }
@@ -9171,25 +9239,13 @@ function renderTrends(){
   if(seg === "profit"){
     const kept = FIN.length, ref = FIN_DROP.length;
     foot.style.cssText = "margin:20px 2px 0;font-size:12px;line-height:1.6;color:var(--txt-3)";
-    foot.innerHTML = `Revenue and nights come from the monthly sheets in your workbook, `
-      + `${FIN.length ? MON[+FIN[0][0].split("-")[1]-1] + " " + FIN[0][0].slice(0,4) : ""} to `
-      + `${FIN.length ? MON[+FIN[kept-1][0].split("-")[1]-1] + " " + FIN[kept-1][0].slice(0,4) : ""}. `
-      + `<b style="color:var(--txt-2)">${ref} month${ref===1?" is":"s are"} not drawn</b> — `
-      + `${FIN_DROP.slice(0,1).map(d=> d[0] + ", where " + esc(d[1])).join("")}, and the rest for the same reason. `
-      + `Costs come from your Costing sheet: a standing monthly model rather than dated invoices, so it is the same `
-      + `figure every month. Change it there, or on any building here, and every number follows. Occupancy is counted `
-      + `from the Availability tab. Vasavi and Mumbai are excluded as sold.<br><br>`
-      + `<b style="color:var(--txt-2)">Out</b> is not rent. It is every line in your Costing sheet for that `
-      + `building — rent, salaries, electricity, water, laundry, refills, maintenance, AMC, replacements, `
-      + `contingency and bonuses. Rent is the biggest of them at ${
-          (()=>{ const t = finRows(finMonth).rows.filter(r=>r.state!=="absent");
-                 if(!t.length) return "most";
-                 const share = t.reduce((s,r)=> s + (costFor(r.code).Rent||0), 0) / t.reduce((s,r)=> s + r.cost, 0);
-                 return Math.round(share*100) + "%"; })()
-        } of it, never all of it. Tap a building to see where the rest goes.<br><br>`
-      + `What your Costing sheet does NOT carry is interest, tax and depreciation — so `
-      + `<b style="color:var(--txt-2)">kept</b> is operating profit, close to EBITDA for a leased model, and not `
-      + `what your accountant will call net profit.`;
+    foot.innerHTML = `Read from your workbook: revenue and nights from the monthly sheets, `
+      + `${FIN.length ? MON[+FIN[0][0].split("-")[1]-1] + " " + FIN[0][0].slice(0,4) : ""}–`
+      + `${FIN.length ? MON[+FIN[FIN.length-1][0].split("-")[1]-1] + " " + FIN[FIN.length-1][0].slice(0,4) : ""}, `
+      + `costs from your Costing sheet, occupancy counted off the Availability tab. `
+      + `<b style="color:var(--txt-2)">${FIN_DROP.length} months are not drawn</b> because they could not be `
+      + `checked against the book. No interest, tax or depreciation — so <b style="color:var(--txt-2)">kept</b> `
+      + `is operating profit, not net profit.`;
     s.appendChild(foot);
     return;
   }
@@ -11103,6 +11159,34 @@ function openRate(key, monthKey){
   sheet.classList.add("on"); scrim.classList.add("on");
 }
 
+/* Which building's costs. A list, not a dropdown: five rows the operator reads
+   by name, each already saying what it costs today so the one that is wrong is
+   the one that looks wrong. */
+function openCostPicker(rows){
+  sheetWipe();
+  const t = el("div");
+  t.innerHTML = `<div class="n">What it costs to run</div>`
+              + `<div class="m">pick a building · figures are your Costing sheet's</div>`;
+  const x = el("button", null, "✕"); x.setAttribute("aria-label","Close");
+  x.onclick = closeSheet;
+  sheetH.append(t, x);
+  const list = el("div","card"); list.style.margin = "14px 20px 22px";
+  rows.forEach(r=>{
+    const row = el("button","row bk");
+    const m = el("div","meta");
+    const tot = costTotal(r.code);
+    m.innerHTML = `<b>${esc(r.name)}</b><em>${r.flats} flats · ${
+      tot ? money(tot / r.flats) + " a flat" : "no cost line yet"}</em>`;
+    const e = el("div","rowend");
+    e.append(el("span", "paid " + (tot ? "clear" : "due"), tot ? money(tot) : "Add"));
+    row.append(m, e);
+    row.onclick = ()=>{ haptic(9); openCosts(r); };
+    list.appendChild(row);
+  });
+  sheetB.appendChild(list);
+  sheet.classList.add("on"); scrim.classList.add("on");
+}
+
 function openCosts(r){
   const monName = k => MON[+k.split("-")[1]-1] + " " + k.split("-")[0];
   sheetWipe();
@@ -11166,7 +11250,7 @@ function openCosts(r){
     live.innerHTML = bits.join("<br>");
   };
   if(revIn) revIn.addEventListener("input", paint);
-  costLines().forEach(k=>{
+  costLines(r.code).forEach(k=>{
     const row = el("label");
     row.style.cssText = "display:flex;align-items:center;gap:10px";
     const nm = el("span", null, k);
@@ -11181,10 +11265,34 @@ function openCosts(r){
     row.append(nm, inp);
     form.appendChild(row);
   });
+  /* ADD A LINE. Their sheet has eleven; a building has more than eleven costs,
+     and the first bill that does not fit one of the eleven is the moment a
+     fixed list stops being a model and starts being a lie. */
+  const addRow = el("div");
+  addRow.style.cssText = "display:flex;gap:8px;margin-top:10px;padding-top:11px;border-top:1px solid var(--line)";
+  const nm2 = el("input"); nm2.type = "text"; nm2.placeholder = "Another cost — internet, tax…";
+  nm2.setAttribute("aria-label","Name of a cost line to add");
+  nm2.style.cssText = "flex:1 1 auto;padding:9px 11px;font-size:12.5px";
+  const amt2 = el("input"); amt2.type = "tel"; amt2.inputMode = "numeric"; amt2.placeholder = "₹";
+  amt2.setAttribute("aria-label","Amount for the new cost line");
+  amt2.style.cssText = "flex:0 0 92px;text-align:right;padding:9px 11px";
+  const addBtn = el("button","invAdd","Add");
+  addBtn.onclick = ()=>{
+    const k = nm2.value.trim(), v = Math.round(+amt2.value || 0);
+    if(!k || v <= 0) return;
+    if(inputs[k]){ inputs[k].value = v; nm2.value = amt2.value = ""; paint(); haptic(10); return; }
+    costUser[r.code] = Object.assign({}, costUser[r.code], {[k]: v});
+    jset(COST_STORE, costUser); finBust();
+    haptic(14); openCosts(r);                       // redrawn with the new line in place
+  };
+  addRow.append(nm2, amt2, addBtn);
+  form.appendChild(addRow);
   form.appendChild(live);
   const go = el("button","bkgo","Save");
   go.onclick = ()=>{
     const next = {};
+    /* A line left blank or zeroed is REMOVED, not stored as zero — a building
+       with no laundry bill should show ten lines, not eleven with a nought. */
     Object.keys(inputs).forEach(k=>{ const v = +inputs[k].value; if(v > 0) next[k] = Math.round(v); });
     if(!Object.keys(next).length) delete costUser[r.code]; else costUser[r.code] = next;
     jset(COST_STORE, costUser);
