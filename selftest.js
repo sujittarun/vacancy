@@ -1571,6 +1571,60 @@ export async function run(filter) {
     }
   });
 
+  /* ══ the activity log ═══════════════════════════════════════════════════ */
+
+  /* Every action the operator takes is a change to somebody's booking, and none
+     of it left a trace on the phone. "Did I cancel that, or did the app?" had
+     no answer without opening Supabase, which is the wrong place to look. */
+  await test("every change the operator makes is recorded, in order", async () => {
+    const keep = activity.slice();
+    const KEY = LOG_STORE;
+    const backup = localStorage.getItem(STORE);
+    try {
+      activity.length = 0; jset(KEY, activity);
+      const fi = flats.map((f,i)=>i).find(i => freeSpan(i, 0, 3));
+      ok(fi != null, "no flat free for the fixture");
+      ok(addBooking(fi, 0, 2, "Log Fixture", "Direct", {amount: 15000}), "fixture booking refused");
+      const b = resv.find(r => r.guest === "Log Fixture");
+      addPayment(b, 5000, "UPI");
+      const to = flats.map((f,i)=>i).find(i => i !== b.fi && freeSpan(i, 0, b.end));
+      if(to != null) moveBooking(b, to);
+      cancelBooking(resv.find(r => r.guest === "Log Fixture"));
+
+      const kinds = activity.map(a => a.k);
+      /* newest first — the answer to "what did I just do" is the top line */
+      eq(kinds[0], "cancel", `the newest entry is "${kinds[0]}", not the cancellation`);
+      ok(kinds.indexOf("book") === kinds.length - 1, "the booking is not the oldest entry");
+      ["book","paid","cancel"].forEach(k =>
+        ok(kinds.indexOf(k) >= 0, `no "${k}" entry was recorded`));
+      if(to != null) ok(kinds.indexOf("move") >= 0, "no move entry was recorded");
+
+      /* precise: the flat and the guest, so a line can be audited */
+      const booked = activity.find(a => a.k === "book");
+      ok(/Log Fixture/.test(booked.s), `the line does not name the guest: ${booked.s}`);
+      ok(/₹15,000/.test(booked.s), `the line does not carry the amount: ${booked.s}`);
+      eq(booked.g, "Log Fixture", "the guest on the entry");
+      eq(booked.f, flats[fi].id, "the flat on the entry");
+
+      /* an absolute timestamp, like the expense ledger — an action happened at
+         a wall clock moment and is still that moment tomorrow */
+      ok(/^\d{4}-\d{2}-\d{2}T/.test(booked.on), `the time is not an ISO stamp: ${booked.on}`);
+
+      /* capped, so it can never crowd out the bookings in the same storage */
+      for(let i = 0; i < LOG_CAP + 20; i++) logAct("book", "filler " + i);
+      eq(activity.length, LOG_CAP, "the log grew past its cap");
+
+      /* and it survives a reload */
+      const round = JSON.parse(localStorage.getItem(KEY));
+      eq(round.length, LOG_CAP, "the log on disk does not match the log in memory");
+      return `book → paid → move → cancel, newest first, capped at ${LOG_CAP}`;
+    } finally {
+      activity.length = 0; keep.forEach(a => activity.push(a)); jset(KEY, activity);
+      if(backup != null) localStorage.setItem(STORE, backup);
+      load(); recompute();
+    }
+  });
+
   /* ══ the whole surface ══════════════════════════════════════════════════ */
 
   await test("no text falls below AA in either theme", async () => {

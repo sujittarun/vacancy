@@ -1632,6 +1632,33 @@ button{background:none;border:0;padding:0;cursor:pointer;
 .cs-r i{display:block;height:5px;border-radius:3px;justify-self:start;
   background:color-mix(in srgb, var(--free) 52%, var(--surface-2))}
 .cs-r s{text-decoration:none;color:var(--txt);font-weight:600;white-space:nowrap}
+
+/* ── the activity timeline ───────────────────────────────────────────────────
+   A log is scanned, not read, so the kind is a glyph in a fixed column the eye
+   can run down, and the time sits where a time belongs — right, quiet, and in
+   tabular figures so the column is straight. */
+/* THREE COLUMNS: the kind, the sentence, the time. `.row.bk` is two columns and
+   `.row .meta` ellipsises to one line — right for a booking row, wrong for a
+   log, where the end of the sentence is the answer: "Could not move Log Probe
+   to 1A — it is not f…" is not a log entry, it is a tease. */
+/* .row.bk sets two columns at (0,2,0); this needs to beat it, not tie with it —
+   at one class the third child wrapped onto its own line and the time ended up
+   under the sentence instead of beside it. */
+.row.bk.actrow{grid-template-columns:auto 1fr auto;align-items:start;gap:9px}
+.actrow .meta{white-space:normal;overflow:visible;text-overflow:clip}
+.actrow .meta b{display:block;white-space:normal}
+.actrow .meta em{white-space:normal;overflow:visible;text-overflow:clip}
+.actrow .rowend{align-self:start;padding-top:3px}
+.actk{flex:0 0 22px;height:22px;margin-right:2px;display:grid;place-items:center;
+  border-radius:6px;background:var(--surface-2);color:var(--txt-2);
+  font-size:11px;font-weight:700;line-height:1}
+/* --now-ink, not --now. In light the accent is #F59300 and the wash under it is
+   made of the same colour, so the glyph measured 1.81:1 against its own
+   background — the app already keeps a darker ink for amber on amber and this
+   is exactly what it is for. Identical in dark, where the two are one value. */
+.actk.warn{background:color-mix(in srgb,var(--now) 18%,transparent);color:var(--now-ink)}
+.acttime{font-size:11px;color:var(--txt-3);font-variant-numeric:tabular-nums;white-space:nowrap}
+.actrow .meta b{font-weight:560;line-height:1.35}
 /* SOLID IS WHAT YOU KNOW, HATCH IS WHAT IS ESTIMATED — the same sentence every
    other track on this tab is drawn with, now that a line declares what kind of
    cost it is. Rent is solid because rent is contracted and known on the 1st;
@@ -5600,6 +5627,40 @@ const CLOUD_KEY   = "vacancy.cloud.v1";
 
 const jget = k => { try{ return JSON.parse(localStorage.getItem(k) || "null"); }catch(e){ return null; } };
 const jset = (k,v) => { try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} };
+
+/* ── WHAT HAS HAPPENED IN THIS APP ───────────────────────────────────────────
+   Everything the operator does is a change to somebody's booking, and until now
+   none of it left a trace. "Did I cancel that, or did the app?" and "who moved
+   Ashok, and when?" had no answer on the phone itself — telemetry answers them
+   in Supabase, which is the wrong place to look and the wrong person to ask.
+
+   So the app keeps its own log. Local, so it works with no network and no
+   account; capped, so it can never grow into the thing that fills the storage
+   the bookings live in; and written at the point of the change rather than
+   inferred afterwards, so it records what was actually done.
+
+   THE TIME IS ABSOLUTE. Bookings are stored as offsets and shifted on load —
+   "three days out" stays three days out — but an action happened at a wall
+   clock moment and is still that moment tomorrow. Same rule as the expense
+   ledger and BOOK_ON.                                                        */
+const LOG_STORE = "vacancy.activity.v1";
+const LOG_CAP = 300;
+let activity = jget(LOG_STORE) || [];
+/* One line, in the operator's own vocabulary, plus the two things that make it
+   auditable: which flat and which guest. Never a rate, never a note. */
+function logAct(kind, line, ref){
+  try{
+    activity.unshift({on: new Date().toISOString(), k: kind,
+                      s: String(line).slice(0, 160),
+                      f: (ref && ref.flat) || undefined,
+                      g: (ref && ref.guest) ? String(ref.guest).slice(0, 40) : undefined});
+    if(activity.length > LOG_CAP) activity.length = LOG_CAP;
+    jset(LOG_STORE, activity);
+  }catch(e){ /* a log that can break the app is worse than no log */ }
+}
+/* The flat id, not the index — an index stops meaning anything the moment the
+   inventory changes shape, which this app has now proved twice. */
+const flatLabel = fi => (flats[fi] && flats[fi].id) || "—";
 const jdel = k => { try{ localStorage.removeItem(k); }catch(e){} };
 const uuid = () => (crypto.randomUUID ? crypto.randomUUID()
   : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c=>{
@@ -6123,6 +6184,8 @@ function addPayment(r, amount, method, note){
     enqueue({k:"pay+", id:p.id, body:{stay_id:r.sid, amount, method,
       received_on: dayISO(0), note: p.note || null, created_by: session && session.uid}});
   save(); cacheSave();
+  logAct("paid", `Took ${money(amount)} from ${r.guest || "a guest"} · ${method} · ${flatLabel(r.fi)}`,
+    {flat: flatLabel(r.fi), guest: r.guest});
   return true;
 }
 function dropPayment(r, p){
@@ -6169,6 +6232,9 @@ function addBooking(fi, start, nights, guest, src, extra){
   recompute(); save(); cacheSave();
   track("booking_added", {nights, priced: !!amount, src: row.src || null,
                           ahead: start > 0, live: MODE === "live"});
+  logAct("book", `Booked ${guest} into ${flatLabel(fi)} · ${fmt(start)}–${fmt(start+nights)}`
+    + ` · ${nights} night${nights>1?"s":""}` + (amount ? ` · ${money(amount)}` : " · no amount"),
+    {flat: flatLabel(fi), guest});
   return true;
 }
 
@@ -6241,6 +6307,9 @@ function closeIssue(x, fixer, phone, cost){
   x.fixer_phone = (phone||"").trim() || undefined;
   x.cost = toAmount(cost) || undefined;
   track("issue_closed", {fault: x.fault || null, billed: !!x.cost, fi: x.fi});
+  logAct("fixed", `Closed ${x.fault || "a fault"} in ${flatLabel(x.fi)}`
+    + (x.fixer ? ` · ${x.fixer}` : "") + (x.cost ? ` · ${money(x.cost)}` : " · no bill"),
+    {flat: flatLabel(x.fi)});
   if(MODE === "live") enqueue({k:"iss~", id:x.id, body:{
     fixed_on: dayISO(0), fixer: x.fixer || null,
     fixer_phone: x.fixer_phone || null, cost: x.cost || null}});
@@ -6331,6 +6400,10 @@ function addBlock(fi, start, nights, reason, note, extra){
   resv.push(row);
   usingDemo = false;
   recompute(); save(); cacheSave();
+  logAct("block", `${flatLabel(fi)} out of service · ${row.reason}`
+    + ` · ${fmt(start)}–${fmt(start+nights)}`
+    + (row.fault ? ` · ${row.fault}` : "") + (row.cost ? ` · ${money(row.cost)}` : ""),
+    {flat: flatLabel(fi)});
   return true;
 }
 /* Push an existing block further out — "the technician did not come". Extends
@@ -6445,6 +6518,8 @@ function moveBooking(r, toFi){
   if(!freeRange(toFi, from, r.end)){
     track("move_refused", {from: r.fi, to: toFi, start: r.start, end: r.end,
                            openEnd: !!r.openEnd, span: r.end - from, nf: NF});
+    logAct("refused", `Could not move ${r.guest || "a booking"} to ${flatLabel(toFi)}`
+      + ` — it is not free for ${fmt(from)}–${fmt(r.end)}`, {flat: flatLabel(toFi), guest: r.guest});
     return false;                                      // somebody took it meanwhile
   }
   const wasFi = r.fi;
@@ -6454,6 +6529,8 @@ function moveBooking(r, toFi){
   recompute(); save(); cacheSave();
   /* Ids as well as indexes: an index is meaningless in a log once the inventory
      changes shape underneath it, which is exactly the failure being hunted. */
+  logAct("move", `Moved ${r.guest || "a booking"} from ${flatLabel(wasFi)} to ${flatLabel(toFi)}`
+    + ` · ${fmt(Math.max(r.start,0))}–${fmt(r.end)}`, {flat: flatLabel(toFi), guest: r.guest});
   track("move_done", {from: wasFi, to: toFi,
                       fromId: (flats[wasFi]||{}).id, toId: (flats[toFi]||{}).id,
                       live: MODE === "live", hadSid: !!r.sid, nf: NF,
@@ -6486,6 +6563,9 @@ function cancelBooking(r){
   }
   recompute(); save(); cacheSave();
   track("booking_cancelled", {nights: r.nights, priced: !!r.amount, past: r.end <= 0});
+  logAct("cancel", `${isBlock(r) ? "Removed the block on" : "Cancelled " + (r.guest||"a booking") + " in"} `
+    + `${flatLabel(r.fi)} · ${fmt(Math.max(r.start,0))}–${fmt(r.end)}`
+    + (r.amount ? ` · ${money(r.amount)}` : ""), {flat: flatLabel(r.fi), guest: r.guest});
 }
 function clearAll(){
   resv = []; usingDemo = false;
@@ -6872,6 +6952,7 @@ function buildXlsx(sheets){                       // [{name, rows}]
    because a zero would read as "free stay" and get summed. */
 function exportRows(){
   track("export_built", {flats: NF, bookings: bookings().length});
+  logAct("export", `Exported the book · ${NF} flats · ${bookings().length} bookings`);
   const bk = bookings().slice().sort((a,b)=> a.start - b.start);
   const fmtDay = d => dateAt(d);
   const H = a => a.map(v => ({v, t:"h"}));
@@ -7135,6 +7216,74 @@ function openAccount(){
 /* With the server off there is no account to manage, so this is simply where the
    data is: what is in the book, how to get it out, and the plain fact that it
    lives on this phone and nowhere else. */
+/* ── THE TIMELINE ────────────────────────────────────────────────────────────
+   Newest first, grouped by the day it happened, because "what did I do this
+   morning" and "when did that booking go" are both questions about a day. One
+   line each: the time, the sentence, and the flat it touched. No filters, no
+   search, no pagination — three hundred entries is a fortnight of ordinary use
+   and the answer is nearly always in the first ten.                          */
+const ACT_ICON = {book:"+", cancel:"✕", move:"⇄", refused:"!", paid:"₹",
+                  fixed:"✓", block:"⌂", expense:"₹", costs:"₹", export:"↓"};
+function openActivity(){
+  sheetWipe();
+  const t = el("div");
+  t.innerHTML = `<div class="n">Everything you have done</div>`
+    + `<div class="m">${activity.length ? activity.length + " on this phone" : "nothing yet"}`
+    + `${activity.length >= LOG_CAP ? " · the last " + LOG_CAP : ""}</div>`;
+  const x = el("button", null, "‹"); x.setAttribute("aria-label","Back to your data");
+  x.onclick = ()=> openDataSheet();
+  sheetH.append(t, x);
+
+  if(!activity.length){
+    const e = el("div","blocked");
+    e.style.margin = "14px 20px";
+    e.innerHTML = `<b>Nothing recorded yet.</b> Every booking, cancellation, move, payment, `
+      + `repair and expense you enter from now on appears here, with the time it happened.`;
+    sheetB.append(e);
+    sheet.classList.add("on"); scrim.classList.add("on");
+    return;
+  }
+
+  /* Local time, and the operator's own day boundary — an ISO string is stored
+     so the entry cannot drift, but it is READ in whatever zone they are in. */
+  const when = iso => new Date(iso);
+  const dayKey = d => d.getFullYear() + "-" + d.getMonth() + "-" + d.getDate();
+  const t0 = new Date(); t0.setHours(0,0,0,0);
+  const dayName = d =>{
+    const k = new Date(d); k.setHours(0,0,0,0);
+    const off = Math.round((k - t0) / 86400000);
+    return off === 0 ? "Today" : off === -1 ? "Yesterday"
+         : k.getDate() + " " + MON[k.getMonth()]
+           + (k.getFullYear() !== t0.getFullYear() ? " " + k.getFullYear() : "");
+  };
+  const clock = d => String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0");
+
+  let last = null, card = null;
+  activity.forEach(a=>{
+    const d = when(a.on);
+    if(isNaN(d)) return;
+    const k = dayKey(d);
+    if(k !== last){
+      last = k;
+      const h = el("div","sect");
+      h.style.cssText = "margin:14px 20px 6px";
+      h.append(el("span","lbl", dayName(d)));
+      sheetB.append(h);
+      card = el("div","card"); card.style.cssText = "margin:0 20px";
+      sheetB.append(card);
+    }
+    const row = el("div","row bk actrow");
+    const m = el("div","meta");
+    m.innerHTML = `<b>${esc(a.s)}</b>`
+      + (a.g || a.f ? `<em>${[a.g, a.f].filter(Boolean).map(esc).join(" · ")}</em>` : "");
+    const e2 = el("div","rowend");
+    e2.append(el("span","acttime", clock(d)));
+    row.append(el("div","actk" + (a.k === "refused" ? " warn" : ""), ACT_ICON[a.k] || "·"), m, e2);
+    card.append(row);
+  });
+  sheet.classList.add("on"); scrim.classList.add("on");
+}
+
 function openDataSheet(){
   sheetWipe();
   const t = el("div");
@@ -7151,6 +7300,16 @@ function openDataSheet(){
     + `but it is not shared with another phone and it is not backed up — so export `
     + `anything you would mind losing.`;
   sheetB.append(state);
+
+  /* A ROUTE TO THE HISTORY. The Data sheet is reachable from every screen and
+     is already about what this app is holding, which is exactly where "what has
+     it been doing" belongs. */
+  const hist = el("button","costsbtn");
+  hist.style.cssText = "margin:14px 20px 0;width:calc(100% - 40px)";
+  hist.innerHTML = `<span>Everything you have done</span><em>${
+    activity.length ? activity.length + " recorded" : "nothing yet"}</em>`;
+  hist.onclick = ()=>{ haptic(10); openActivity(); };
+  sheetB.append(hist);
 
   const row = el("div","dataTools");
   row.style.cssText = "padding:14px 20px 0";
@@ -12628,6 +12787,8 @@ function openExpense(code, monthKey, after){
                    on: when.value, note: note.value.trim() || undefined});
     expSave();
     track("expense_logged", {code: bSel.value, line: lSel.value, month: monthOf(when.value)});
+    logAct("expense", `Logged ${money(v)} · ${lSel.value} · `
+      + `${(B.find(z=>z.code===bSel.value)||{}).name || bSel.value} · paid ${when.value}`);
     haptic(18); closeSheet(); refreshScreen();
     const b = B.find(z=> z.code === bSel.value);
     toast("", `<b>${money(v)} logged.</b> ${esc(b ? b.name : bSel.value)} · ${esc(lSel.value)} · `
@@ -12857,6 +13018,7 @@ function openCosts(r){
     Object.keys(inputs).forEach(k=>{ const v = +inputs[k].value; if(v > 0) next[k] = Math.round(v); });
     if(!Object.keys(next).length) delete costUser[r.code]; else costUser[r.code] = next;
     jset(COST_STORE, costUser);
+    logAct("costs", `Changed what ${r.name} costs · ${money(costTotal(r.code) || 0)} a month`);
     /* Only what DIFFERS from the default is stored, so improving the defaults
        later still reaches every operator who never disagreed with them. */
     const kn = {};
