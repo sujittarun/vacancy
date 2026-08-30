@@ -3584,19 +3584,7 @@ function syncInventory(prev){
    An unsold night is perishable stock: once the date passes it can never be
    sold again. These turn the calendar from "what is" into "what is about to be
    lost", which is the thing an operator can still act on.                     */
-function monthStats(days){
-  let sold = 0, open = 0, openValue = 0, soon = 0, soonValue = 0, total = 0, blocked = 0;
-  days.forEach(d=>{
-    flats.forEach((f,i)=>{
-      if(blk[i][d]){ blocked++; return; }        // out of service — not sellable, not sold
-      total++;
-      if(occ[i][d]) sold++;
-      else { open++; openValue += f.rate; if(d < 7){ soon++; soonValue += f.rate; } }
-    });
-  });
-  return {total, sold, open, openValue, soon, soonValue, blocked,
-          pct: total ? sold/total : 0};
-}
+
 
 /* "22 free" tells you nothing on its own — is that a bad Saturday or a normal
    Tuesday? This compares each date against how that weekday usually runs, which
@@ -3632,8 +3620,31 @@ function groupOcc(days, keyOf){
     if(blk[i][d]) return;                        // out of service leaves the denominator
     const a = acc.get(keyOf(f)); a.total++; if(occ[i][d]) a.sold++;
   }));
-  return [...acc.values()].map(a=>({...a, pct: a.total ? a.sold/a.total : 0}))
-                          .sort((x,y)=> x.pct - y.pct);
+  /* THIN carries through to the caller. A bucket of one flat still divides
+     perfectly well — 3 nights of 63 is 5% — and that 5% then got set beside a
+     31-flat bucket as though the two were the same kind of measurement, and the
+     one-flat bucket was named the weak size. It is not a size, it is a flat.
+     Three is the line: below it the card shows the nights and withholds the
+     rate, and the comparison skips it. */
+  /* How much of each bucket's occupancy is a handful of long tenancies rather
+     than nights being sold. Without it the card compared TreeTops at 50% with
+     Telecom Nagar at 11% and blamed "pricing, photos or listing reach" — when
+     284 of TreeTops' 314 sold nights are stays over a month, and stripped of
+     them TreeTops is 5%, BELOW Telecom Nagar. The gap was four tenancies. */
+  const longIn = new Map();
+  resv.forEach(r=>{
+    if(isBlock(r)) return;
+    const n = Math.min(r.end, DAYS) - Math.max(r.start, 0);
+    if(n <= 30 || !flats[r.fi]) return;
+    const k = keyOf(flats[r.fi]);
+    longIn.set(k, (longIn.get(k) || 0) + n);
+  });
+  return [...acc.values()].map(a=>{
+    const lng = longIn.get(a.k) || 0;
+    return {...a, pct: a.total ? a.sold/a.total : 0, thin: a.units < 3,
+            longNights: lng, longShare: a.sold ? lng/a.sold : 0,
+            shortPct: a.total ? (a.sold - lng)/a.total : 0};
+  }).sort((x,y)=> x.pct - y.pct);
 }
 
 /* CLAMPED TO THE HORIZON, like occupancyValue() beside it and unlike the
@@ -3652,7 +3663,10 @@ function stayMix(){
                    {k:"4–6",lo:4,hi:6},{k:"7+",lo:7,hi:999}];
   const out = buckets.map(b=>({...b, n: rs.filter(r=>{ const n = held(r); return n>=b.lo && n<=b.hi; }).length}));
   const alos = rs.length ? rs.reduce((s,r)=> s + held(r), 0) / rs.length : 0;
-  return {out, alos, total: rs.length};
+  const sorted = rs.map(held).sort((a,b)=> a - b);
+  return {out, alos, total: rs.length,
+          median: sorted.length ? sorted[Math.floor(sorted.length/2)] : 0,
+          long: sorted.filter(n => n > 30).length};
 }
 
 function sourceMix(){
@@ -4071,14 +4085,59 @@ function softDates(norm){
   return out.sort((a,b)=> b.over - a.over);
 }
 
+/* WEEKDAY, NOT DISTANCE. Averaging each weekday's occupancy straight across the
+   horizon measures the booking curve and calls it a weekday.
+
+   Every weekday gets nine samples over nine weeks, but they sit at different
+   average distances from today, and a forward book empties as it goes out.
+   Measured on the real book, opening on a Sunday:
+
+     occupancy   Sun 27.1  Mon 24.4  Tue 24.4  Wed 23.7  Thu 22.2  Fri 22.2  Sat 20.8
+     mean offset     28        29        30        31        32        33        34
+
+   Occupancy falls monotonically as the mean offset rises — correlation -0.96
+   with distance, which is to say the chart WAS the booking curve. Sunday is not
+   a good night; Sunday is the nearest weekday. And the card prescribed midweek
+   pricing off it.
+
+   Dividing by each week's own mean does not fix it, which is worth recording
+   because it was tried: within any seven-day slice the later days are still the
+   further ones, so the trend survives the ratio (measured: -0.965, no better).
+   What cancels a local trend is a CENTRED window — each day against the mean of
+   the seven days around it, three either side. The days before and after pull
+   in opposite directions, so distance drops out and what is left is whether
+   that day of the week sits above or below its own neighbourhood.
+
+   The first and last three days have no centred window and are dropped; on a
+   63-night horizon that leaves 57 days, about eight per weekday. */
 function weekdayPattern(days){
-  const acc = Array.from({length:7}, ()=>({sold:0,total:0}));
-  days.forEach(d=>{
+  const dayOcc = d =>{
+    let sold = 0, total = 0;
+    for(let i=0;i<NF;i++){ if(blk[i][d]) continue; total++; if(occ[i][d]) sold++; }
+    return total ? sold/total : null;
+  };
+  const acc = Array.from({length:7}, ()=>({sum:0,n:0}));
+  const R = 3;
+  for(let k = R; k < days.length - R; k++){
+    const d = days[k], here = dayOcc(d);
+    if(here === null) continue;
+    let sum = 0, n = 0;
+    for(let j = k - R; j <= k + R; j++){ const v = dayOcc(days[j]); if(v !== null){ sum += v; n++; } }
+    const local = n ? sum/n : 0;
+    if(local <= 0) continue;
     const w = dateAt(d).getDay();
-    for(let i=0;i<NF;i++){ if(blk[i][d]) continue; acc[w].total++; if(occ[i][d]) acc[w].sold++; }
-  });
-  return acc.map(a => a.total ? a.sold/a.total : null);
+    acc[w].sum += here/local; acc[w].n++;
+  }
+  /* Scaled back onto the horizon's own average so the bars still read as
+     occupancy rather than as a ratio nobody asked for. */
+  let sold = 0, total = 0;
+  days.forEach(d=>{ for(let i=0;i<NF;i++){ if(blk[i][d]) continue; total++; if(occ[i][d]) sold++; } });
+  const base = total ? sold/total : 0;
+  return acc.map(a => a.n ? Math.max(0, Math.min(1, a.sum/a.n * base)) : null);
 }
+/* How many days actually carried a centred window, so a card naming a best and
+   worst day can say what it read. */
+function weekdaySamples(days){ return Math.max(0, days.length - 6); }
 
 const buildingsOf = ()=>{
   const seen = new Map();
@@ -9102,9 +9161,24 @@ function renderTrends(){
   if(seg === "guests"){
     const G = guestStats();
     const {c,b} = card("Guests who come back", "repeat business in the book");
+    /* A RATE NEEDS A DENOMINATOR. The operator's book carries no phone numbers
+       at all, so this printed "0%" at 39px over "0 of 0 people have stayed
+       before" — a repeat rate measured on nobody, in the same type the app uses
+       for figures it stands behind. Zero percent is a finding; zero percent OF
+       ZERO is an empty set, and the two must not look alike.
+
+       Eight, the same floor the lead-time median uses: below it there is no rate
+       and the headline says what is missing instead. */
     const head = el("div","headline");
-    head.append(el("b", null, Math.round(G.share*100) + "%"));
-    head.append(el("s", null, `of bookings · ${G.repeat} of ${G.people} people have stayed before`));
+    if(G.bookings >= 8){
+      head.append(el("b", null, Math.round(G.share*100) + "%"));
+      head.append(el("s", null, `of bookings · ${G.repeat} of ${G.people} people have stayed before`));
+    } else {
+      head.append(el("b", null, String(G.bookings)));
+      head.append(el("s", null, G.bookings
+        ? `bookings carry a number — too few to read a repeat rate from`
+        : `bookings carry a phone number, so there is nothing to match on yet`));
+    }
     b.appendChild(head);
     if(G.avgRepeat && G.avgOnce) b.appendChild(vbars([
       {v: G.avgOnce,  label: Math.round(G.avgOnce/100)/10 + "k",  k:"First time"},
@@ -9248,7 +9322,7 @@ function renderTrends(){
   /* 2 — which nights sell */
   if(seg === "rooms"){
     const wk = weekdayPattern(all);
-    const {c,b} = card("Which nights sell", "occupancy by day of week");
+    const {c,b} = card("Which nights sell", "each day against the week around it");
     const order = [1,2,3,4,5,6,0];
     const worst = order.reduce((a,d)=> wk[d] < wk[a] ? d : a, order[0]);
     const best  = order.reduce((a,d)=> wk[d] > wk[a] ? d : a, order[0]);
@@ -9260,7 +9334,8 @@ function renderTrends(){
         const emptiest = days.map(d2=>({d:d2, free:freeCount(d2)})).sort((x,y)=> y.free - x.free)[0];
         const gap = Math.round((wk[best] - wk[dow]) * 100);
         return {text: `<b>${DOWF[dow]}s</b> run at ${Math.round(wk[dow]*100)}%`
-                    + (gap > 0 ? ` — <span class="hi">${gap} points</span> under ${DOWF[best]}s` : ` — your strongest night`)
+                    + (gap >= 3 ? ` — <span class="hi">${gap} points</span> under ${DOWF[best]}s`
+                       : gap > 0 ? ` — level with the rest of the week` : ` — your strongest night`)
                     + (emptiest ? `. Emptiest is ${fmt(emptiest.d)}, ${emptiest.free} free.` : "."),
                 /* Rooms paints a 14-night strip; every weekday bar here points
                    past it, so sending the cursor there left the grid clamped to
@@ -9271,7 +9346,22 @@ function renderTrends(){
                                 run:()=>{ if(emptiest.d < STRIP){ setPickedNight(emptiest.d); switchTo(0); }
                                           else goMonth(emptiest.d); }} : null};
       }));
-    said(c, `<b>${DOWF[worst]}s</b> run at <span class="hi">${Math.round(wk[worst]*100)}%</span> against ${Math.round(wk[best]*100)}% on ${DOWF[best]}s — a ${Math.round((wk[best]-wk[worst])*100)} point gap. Midweek pricing, or a minimum stay that forces weekend guests to take a shoulder night, is what usually closes it.`);
+    /* A GAP HAS TO BE BIGGER THAN THE NOISE BEFORE IT IS ADVICE. This card used
+       to name the weakest day, quote the gap, and prescribe midweek pricing —
+       every time, whatever the gap was. On the real book the gap it quoted was
+       6 points and was the booking curve; with the curve taken out (see
+       weekdayPattern) the spread is 1.6 points across 57 days, which is nothing.
+
+       Three points is the line: below it the days are the same day and the card
+       says so, because "no pattern" is a finding and inventing one is not. */
+    const spread = Math.round((wk[best] - wk[worst]) * 100);
+    said(c, spread < 3
+      ? `Nothing separates your weekdays — ${Math.round(wk[worst]*100)}% to ${Math.round(wk[best]*100)}% `
+        + `across ${weekdaySamples(all)} nights, which is noise. Whatever is holding occupancy back, it is `
+        + `not which day of the week it is.`
+      : `<b>${DOWF[worst]}s</b> run at <span class="hi">${Math.round(wk[worst]*100)}%</span> against `
+        + `${Math.round(wk[best]*100)}% on ${DOWF[best]}s. Each day is measured against the week around it, `
+        + `so this is the day of the week and not simply how far ahead it falls.`);
   }
 
   /* 3 — by building */
@@ -9280,10 +9370,24 @@ function renderTrends(){
     const {c,b} = card("How each building is doing", "occupancy across the nine weeks");
     b.appendChild(hbars(rows.slice().reverse().map(r=>({k:r.k, pct:r.pct, right:Math.round(r.pct*100)+"%"})),
                         rows[0].k));
-    const gap = Math.round((rows[rows.length-1].pct - rows[0].pct)*100);
-    said(c, gap > 8
-      ? `<b>${rows[0].k}</b> is <span class="hi">${gap} points behind</span> ${rows[rows.length-1].k}. Same city, same weeks — a gap that size is pricing, photos or listing reach, not demand.`
-      : `All ${rows.length} buildings sit within ${gap} points of each other. Nothing here needs attention.`);
+    const lo = rows[0], hi = rows[rows.length-1];
+    const gap = Math.round((hi.pct - lo.pct)*100);
+    /* The old sentence asserted a cause — "pricing, photos or listing reach,
+       not demand" — from two occupancy figures, which cannot distinguish any of
+       those from a long tenancy. On the real book the whole gap WAS long
+       tenancies, and the card ruled out the only explanation that was true.
+       Where the leader is carried by them, say so and let the operator judge. */
+    const carried = hi.longShare >= 0.5;
+    const shortGap = Math.round((hi.shortPct - lo.shortPct)*100);
+    said(c, gap <= 8
+      ? `All ${rows.length} buildings sit within ${gap} points of each other. Nothing here needs attention.`
+      : carried
+      ? `<b>${lo.k}</b> is <span class="hi">${gap} points behind</span> ${hi.k} — but `
+        + `${hi.longNights} of ${hi.k}${/s$/.test(hi.k) ? "'" : "'s"} ${hi.sold} sold nights are stays over a month. On everything `
+        + `shorter the two are ${Math.abs(shortGap)} point${Math.abs(shortGap)===1?"":"s"} apart. `
+        + `The gap is a few long lets, not nightly demand.`
+      : `<b>${lo.k}</b> is <span class="hi">${gap} points behind</span> ${hi.k}, on the same weeks in the `
+        + `same city. Worth asking what is different about the listing before assuming it is demand.`);
   }
 
   /* 4 — by unit type */
@@ -9291,22 +9395,43 @@ function renderTrends(){
     const rows = groupOcc(all, f=>f.type);
     const {c,b} = card("Which sizes sell", "occupancy by unit type");
     b.appendChild(hbars(rows.slice().reverse().map(r=>({k:`${r.k} · ${r.units} flat${r.units>1?"s":""}`,
-      pct:r.pct, right:Math.round(r.pct*100)+"%"})), null));
-    const lo = rows[0], hi = rows[rows.length-1];
-    said(c, `Your <b>${hi.k}</b> stock runs at ${Math.round(hi.pct*100)}% while <b>${lo.k}</b> sits at <span class="hi">${Math.round(lo.pct*100)}%</span>. If the weak size is also the one you hold most of, that is where the portfolio is losing nights.`);
+      pct:r.pct, right: r.thin ? `${r.sold} of ${r.total} nights` : Math.round(r.pct*100)+"%"})), null));
+    /* Ranked over the buckets big enough to be a size rather than a flat. */
+    const fat = rows.filter(r=> !r.thin);
+    const thin = rows.filter(r=> r.thin);
+    const lo = fat[0], hi = fat[fat.length-1];
+    said(c, !lo || fat.length < 2
+      ? `Too few of each size to compare them.`
+      : `Your <b>${hi.k}</b> stock runs at ${Math.round(hi.pct*100)}% while <b>${lo.k}</b> sits at `
+        + `<span class="hi">${Math.round(lo.pct*100)}%</span>.`
+        + (thin.length
+            ? ` ${thin.map(r=>r.k).join(" and ")} ${thin.length>1?"are":"is"} left out of that: `
+              + `${thin.length>1?"they are":"it is"} ${thin.map(r=>r.units).join(" and ")} flat`
+              + `${thin.length===1 && thin[0].units===1 ? "" : "s"}, so ${thin.length>1?"their":"its"} `
+              + `occupancy is one room's luck rather than a fact about the size.`
+            : ""));
   }
 
   /* 5 — length of stay */
   if(seg === "guests"){
     const m = stayMix();
     const {c,b} = card("How long people stay", `${m.total} bookings in the next nine weeks`);
+    /* THE MEDIAN, NOT THE MEAN. "14.8 nights, average stay" was true and
+       useless: eleven of these 46 bookings run past thirty nights and four are
+       open-ended tenancies, so the mean describes the tenancies and the typical
+       guest stays 4. A mean is the wrong statistic for a distribution with a
+       tail like that, and the advice hung off it ("nudge the average from 14.8
+       to 15.3") was advice about the tail. */
     const head = el("div","headline");
-    head.append(el("b",null, m.alos.toFixed(1)));
-    head.append(el("s",null, "nights, average stay"));
+    head.append(el("b",null, String(m.median)));
+    head.append(el("s",null, `nights, typical stay · ${m.alos.toFixed(1)} average`));
     b.appendChild(head);
     b.appendChild(vbars(m.out.map(x=>({v:x.n, label:String(x.n), k:x.k})), 0));
     const short = m.out[0].n / Math.max(1,m.total);
-    said(c, `<span class="hi">${Math.round(short*100)}%</span> of your bookings are single nights. Every one is a full changeover — a clean, a key handover and a gap either side — for one night's income. Nudging the average from ${m.alos.toFixed(1)} to ${(m.alos+0.5).toFixed(1)} nights is usually worth more than filling extra dates.`);
+    said(c, `<span class="hi">${Math.round(short*100)}%</span> of your bookings are single nights, and every `
+      + `one is a full changeover — a clean, a key handover and a gap either side — for one night's income.`
+      + (m.long ? ` The average is ${m.alos.toFixed(1)} rather than ${m.median} because ${m.long} of these `
+                + `run past a month; those are tenancies, not stays.` : ""));
   }
 
   /* 6 — where bookings come from */
@@ -9316,8 +9441,12 @@ function renderTrends(){
     b.appendChild(hbars(m.rows.map(r=>({k:r.k, pct:r.n/Math.max(1,m.total),
       right:Math.round(r.n/Math.max(1,m.total)*100)+"%"})), null));
     const direct = m.rows.filter(r=>/direct|walk|repeat/i.test(r.k)).reduce((a,r)=>a+r.n,0);
-    said(c, `<b>${Math.round(direct/Math.max(1,m.total)*100)}%</b> come to you directly — phone, walk-in or a `
-      + `returning guest — and pay no platform commission.`);
+    /* "Direct" is also where the importer puts a cell that named no channel, so
+       this share is "direct, or never written down". Reporting it as a choice
+       the guest made is a claim the book does not carry. */
+    said(c, `<b>${Math.round(direct/Math.max(1,m.total)*100)}%</b> carry no platform — phone, walk-in, a `
+      + `returning guest, or a booking whose channel was never written down. Those are the ones paying no `
+      + `commission, and recording the channel as you take them is the only way to tell them apart.`);
   }
 
   /* 7 — turnaround load */
@@ -9348,7 +9477,14 @@ function renderTrends(){
       {k:"Orphan (1 night)", pct: f.orphans/Math.max(1,f.runs), right:String(f.orphans)},
       {k:"Sellable stretches", pct:(f.runs-f.orphans)/Math.max(1,f.runs), right:String(f.runs-f.orphans)},
     ], "Orphan (1 night)"));
-    said(c, `Your empty time averages <b>${f.avg.toFixed(1)} nights</b> per stretch. Ten scattered single nights are far harder to fill than one ten-night hole, so this — not the vacancy count — is the honest measure of how sellable your empty time actually is.`);
+    /* It described ten orphan nights whatever the number was — on the real book,
+       one. Copy that does not read its own data is copy the reader learns to
+       skip. */
+    said(c, `Your empty time comes in <b>${f.runs} stretch${f.runs===1?"":"es"}</b>, averaging `
+      + `${f.avg.toFixed(1)} nights`
+      + (f.orphans ? `, ${f.orphans} of them a single night` : `, none of them a single night`)
+      + `. Scattered single nights are far harder to fill than one long hole, so this — not the vacancy `
+      + `count — is how sellable your empty time really is.`);
   }
 
   s.appendChild(deck);
