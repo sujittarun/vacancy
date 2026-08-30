@@ -1020,6 +1020,110 @@ export async function run(filter) {
     return "still arms where it should";
   });
 
+  /* ══ figures that outran their samples ══════════════════════════════════ */
+
+  /* The repeat card matched on phone alone. The imported book carries no phone
+     column at all, so it refused forever on the only book that exists, while
+     the same book held 162 names recurring across 595 rows. A refusal you can
+     never leave is a dead card, not a refusal. */
+  await test("the repeat card matches on what the book actually carries", async () => {
+    const backup = resv.slice();
+    try {
+      const mk = (fi, start, guest, extra) => Object.assign(
+        {fi, start, end: start + 2, nights: 2, guest, src: "Direct", kind: "stay"}, extra || {});
+      resv = [mk(0, 1, "Ravi"), mk(1, 4, "Ravi"), mk(2, 7, "Meena"),
+              mk(3, 10, "Sunil"), mk(0, 14, "Meena")];
+      const byName = guestStats();
+      eq(byName.idBy, "name", "identity used when no row carries a number");
+      eq(byName.repeat, 2, "names seen more than once");
+      eq(byName.bookings, 5, "bookings it could match on");
+      /* One number is not enough to switch on — the floor is eight, and below
+         it the numbers that exist are too few to beat the names. */
+      resv = resv.map((r, i) => i === 0 ? Object.assign({}, r, {phone: "9000000001"}) : r);
+      eq(guestStats().idBy, "name", "identity with a single number in the book");
+      resv = backup.slice();
+      /* Enough numbers, and it switches back to the identity that is proof. */
+      resv = Array.from({length: 9}, (_, i) =>
+        mk(i % NF, i, "G" + i, {phone: "90000000" + String(10 + i)}));
+      eq(guestStats().idBy, "phone", "identity once nine rows carry a number");
+      return "name → phone, with a floor of 8 between them";
+    } finally { resv = backup; recompute(); }
+  });
+
+  /* "Yours also spend 57% more than first-timers" was one priced repeat booking
+     (Rs 90,875 across 95 nights) against four priced first-timers of 1 to 59
+     nights: it compared booking TOTALS, so it measured stay length. */
+  await test("the repeat-spend comparison needs a sample on both sides", async () => {
+    const backup = resv.slice();
+    try {
+      const mk = (fi, start, nights, guest, amount) =>
+        ({fi, start, end: start + nights, nights, guest, src: "Direct", kind: "stay", amount});
+      /* The shipped shape: one priced repeat, four priced first-timers. */
+      resv = [mk(0, 1, 95, "Lakshmi", 90875), mk(1, 2, 1, "Lakshmi", 0),
+              mk(2, 3, 23, "Syed", 40700), mk(3, 4, 1, "Komali", 5000),
+              mk(0, 5, 59, "Rakesh", 154875), mk(1, 6, 6, "Hima", 31500)];
+      const thin = guestStats();
+      eq(thin.pricedRepeat, 1, "priced returning bookings");
+      eq(thin.pricedOnce, 4, "priced first-time bookings");
+      eq(thin.cmp, false, "the comparison was drawn from 1 against 4");
+      /* Five a side, and it may speak — per NIGHT, so a tenancy cannot beat a
+         weekend by being longer. Repeat rows: 2000/night. Once: 1000/night. */
+      const rep = [], once = [];
+      for (let i = 0; i < 5; i++) {
+        rep.push(mk(i % NF, i, 2, "R" + i, 4000), mk(i % NF, 20 + i, 2, "R" + i, 4000));
+        once.push(mk(i % NF, 40 + i, 4, "O" + i, 4000));
+      }
+      resv = rep.concat(once);
+      const fat = guestStats();
+      eq(fat.cmp, true, "the comparison with five priced rows a side");
+      eq(Math.round(fat.avgRepeat), 2000, "returning, per night");
+      eq(Math.round(fat.avgOnce), 1000, "first-time, per night");
+      return "refuses at 1v4, speaks at 5v5, and compares per night";
+    } finally { resv = backup; recompute(); }
+  });
+
+  /* Billed sat beside the month's full arrival count on the sheet that goes to
+     the accountant, and three of thirty-nine arrivals carried an amount. */
+  await test("the export's money columns carry their own denominator", async () => {
+    const sum = exportRows().find(s => s.name === "Summary");
+    const head = sum.rows[0].map(c => c.v);
+    const at = head.indexOf("Arrivals with an amount");
+    ok(at > 0, `the Summary has no priced-coverage column — ${head.join(", ")}`);
+    ok(at === head.indexOf("Billed") + 1, "the coverage column is not beside the money it qualifies");
+    const body = sum.rows.slice(1);
+    ok(body.length, "the Summary has no month rows to check");
+    body.forEach(r => {
+      const arrivals = r[head.indexOf("Arrivals")].v, cell = r[at].v;
+      const m = /^(\d+) of (\d+)$/.exec(cell);
+      ok(m || cell === "—", `coverage cell reads "${cell}"`);
+      if (m) {
+        eq(+m[2], arrivals, `denominator against the arrival count on the same row`);
+        ok(+m[1] <= +m[2], `${cell} claims more priced arrivals than arrivals`);
+      }
+    });
+    return `${body.length} months, each naming the arrivals behind its money`;
+  });
+
+  /* Nothing in the app reads a price, a conversion or an elasticity, so the
+     discount depths are constants. They rendered in the pill slot beside real
+     money and real night counts, where a reader cannot tell the two apart. */
+  await test("a suggested discount does not render as a measured one", async () => {
+    const board = todayBoard();
+    const pills = board.days.flatMap(d => {
+      const seen = [];
+      const open = openFlatList;
+      try {
+        window.openFlatList = (t, s, rows) => rows.forEach(r => seen.push(r.pill));
+        d.open();
+      } finally { window.openFlatList = open; }
+      return seen;
+    }).concat(board.extras.map(e => e.pill));
+    const depths = pills.filter(p => /%/.test(String(p)));
+    ok(depths.length, "no discount pills on the board to check");
+    depths.forEach(p => ok(/^try /.test(p), `discount pill reads "${p}", which is a claim, not a suggestion`));
+    return `${depths.length} discount pills, all offered rather than asserted`;
+  });
+
   /* ══ the whole surface ══════════════════════════════════════════════════ */
 
   await test("no text falls below AA in either theme", async () => {

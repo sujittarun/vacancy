@@ -753,6 +753,83 @@ sentence. The importer now reads its anchor from the clock rather than carrying
 a literal, because a hardcoded date is correct on the day it is written and
 quietly wrong every day after.
 
+## An honest refusal that can never stop refusing is a broken card
+
+The repeat-guest card matched people by phone number, which is the right
+identity: a number is proof, a name is a guess. It also had a proper floor —
+below eight matchable bookings it printed the count instead of a rate, so it
+never showed the `0%` that an empty denominator would have produced.
+
+And on the operator's own book it said, forever: **"0 bookings carry a phone
+number, so there is nothing to match on yet."** Zero of 877 imported rows carry
+a number, and none ever will — the sheet does not have that column. Meanwhile
+the same book held 162 names recurring across 595 of its rows. The refusal was
+accurate, well-built, and permanently wrong about what the app could know.
+
+A refusal is a *state you can leave*. If no reachable book can leave it, it is
+not a refusal, it is a dead card that has been taught to apologise. Match on
+whatever the book actually carries, and name the identity used, because two
+guests called Aditya are one guest to a `groupBy` and only the operator can tell
+them apart.
+
+## A chosen number must not sit where measured ones do
+
+The perishing tile offered `−25%` tonight and `−20%` tomorrow. Both are
+constants written into the source; nothing in the app reads a price, a
+conversion or an elasticity. But they rendered in the pill slot, beside pills
+holding `₹31,500` and `+3n` — real money and real night counts — and a reader
+has no way to tell a literal from a calculation when both are set in the same
+type in the same corner of the same row.
+
+The app cannot compute the right discount. It can suggest starting somewhere.
+So the pills say **try −25%** and the lead says whose call it is. The number did
+not change; the claim it makes did.
+
+## Zero is a finding; no figure is an absence
+
+A guest who has stayed three times, with no amount ever recorded, was rendered
+as **₹0** — crisp, right-aligned, in the same chip as a real total. It says
+"worth nothing" where the truth is "nobody wrote it down", and those two
+readings lead to opposite decisions about whether to ring them.
+
+The same mistake, one altitude up: `owedStats().gone === 0` printed *"Nothing
+has walked out unpaid"* across 832 departed stays of which 664 carry no amount.
+The sentence was true of the 168 it could see and silent about the rest, which
+is exactly how an all-clear should never work. It now says *nothing with a
+figure on it* has.
+
+## A money column needs its denominator on the same row
+
+The export's Summary already knew this about time — the occupancy cell says
+`63% (2 of 31 days)` because `occ[]` starts today and the month does not. It did
+not know it about money. `Billed ₹77,200` sat beside `Arrivals 39` on the sheet
+that goes to the accountant, and three of those thirty-nine carry an amount.
+
+Nothing on the row was false. The row still read as the month's revenue. The
+fix is a column, not a footnote: **Arrivals with an amount — 3 of 39**, next to
+the money it qualifies, because a caveat that is not adjacent to the number is a
+caveat nobody applies.
+
+## Enough of a sample is not the same as a representative one
+
+Two versions of the same bug, found in the same audit.
+
+`moneyStats()` gated its nightly rate on how many bookings carried an amount and
+what share of nights they covered. Both gates were passable by a sample that
+could not answer the question: pricing the eight longest forward stays — all
+month-plus tenancies — cleared the old gate and would have printed a nightly
+rate built entirely from tenancy pricing. Verified by running the attack: old
+gate passed, and the figure it would have printed was ₹405 against a real
+₹3,475. The gate now asks whether **ordinary** stays are priced, not how many
+nights are.
+
+The repeat-guest card, once it could see the book at all, immediately produced
+the second version: *"Yours also spend 57% more than first-timers"* — one priced
+repeat booking (₹90,875 across 95 nights) against four priced first-timers
+running 1 to 59 nights. It was comparing booking totals, so it measured **stay
+length and called it spending**. Per night, and five priced rows on each side,
+or there is no comparison to draw.
+
 ## Prohibitions
 
 - No paper, ruling, stamps, or any ledger device. That world is discarded.

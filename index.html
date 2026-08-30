@@ -1888,6 +1888,12 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
 .paid.due:active{transform:scale(.94)}
 .paid.plat{background:var(--surface-2);color:var(--txt-3);font-weight:560}
 .paid.clear{background:transparent;color:var(--txt-3);font-weight:560}
+/* An absence, set apart from a figure: no weight, no box, and italic, so it
+   never reads as a number that happens to be small. The separation is carried
+   by the slant, NOT by opacity — --txt-3 is already the quietest ink that
+   clears AA, and knocking it back to .72 dropped this to 3.37:1 in dark. A
+   caveat nobody can read is worse than the zero it replaced. */
+.paid.none{background:transparent;color:var(--txt-3);font-weight:500;font-style:italic}
 
 /* booking entry */
 .book{margin:16px 20px 0;display:flex;gap:8px;align-items:stretch}
@@ -4026,21 +4032,28 @@ function todayBoard(){
   for(let d=0; d<=NOW; d++){
     const free = flats.map((f,i)=>i).filter(i=>!occ[i][d]);
     if(!free.length) continue;
+    /* A CHOSEN NUMBER MUST NOT SIT WHERE MEASURED ONES DO. These depths are
+       constants the app was written with — nothing here reads a price, a
+       conversion or an elasticity — but "−25%" in the pill slot, beside pills
+       holding real money and real night counts, reads as a calculation. The
+       app cannot compute the right discount; it can only suggest starting
+       somewhere, so the pills say "try" and the lead says whose call it is. */
     const depth = d===0 ? 25 : 20;
     const rows = free.map(i=>({fi:i, d,
       meta:`<b>${esc(flats[i].type)}</b> · ${esc(flats[i].bshort)}<em>free from ${fmt(d)} ${freeWords(i,d)}</em>`,
-      pill:`−${depth}%`}));
+      pill:`try −${depth}%`}));
     days.push({d, n:free.length, depth,
       soft: free.length - norm[dateAt(d).getDay()] >= 2,
       open:()=>openFlatList(`${free.length} unsold ${d===0?"tonight":fmt(d)}`,
         d===0 ? "gone at midnight" : "one day left to sell", rows,
         {depth, when: d===0 ? `tonight, ${fmtL(0)}` : fmtL(d),
-         lead:"These nights stop existing the morning after. Anything you take for them beats nothing."})});
+         lead:"These nights stop existing the morning after. Anything you take for them beats nothing. "
+            + "The percentage is a starting point, not a calculation — you know your market."})});
   }
 
   const orph = orphanNights().filter(o=>o.d <= NOW).map(o=>({fi:o.fi, d:o.d,
     meta:`<b>${esc(flats[o.fi].type)}</b> · ${esc(flats[o.fi].bshort)}<em>${fmtL(o.d)} · booked either side</em>`,
-    pill:"−25%"}));
+    pill:"try −25%"}));
   const ext = extensionOffers().filter(x=>x.from <= NOW + 1).map(x=>({fi:x.fi, d:x.from,
     meta:`Offer <b>${esc(x.r.guest)}</b> a discounted extra night<em>leaves ${fmt(x.from)} · `
       + (x.bounded
@@ -4051,17 +4064,19 @@ function todayBoard(){
   const extras = [];
   if(orph.length) extras.push({
     label:`${orph.length} single spare night${orph.length>1?"s":""}`,
-    note:"booked either side, so they will not sell at a normal rate", pill:"−25%",
+    note:"booked either side, so they will not sell at a normal rate", pill:"try −25%",
     open:()=>openFlatList(`${orph.length} single spare night${orph.length>1?"s":""}`,
       "booked either side · today and tomorrow", orph,
       {depth:25, when: orph.length===1 ? fmtL(orph[0].d) : "single nights, today and tomorrow",
-       lead:"A single night between two bookings will not sell at a normal rate — most guests want two or more. The alternative is leaving it empty."})});
+       lead:"A single night between two bookings will not sell at a normal rate — most guests want two or more. "
+          + "The alternative is leaving it empty. The percentage is a starting point, not a calculation."})});
   if(ext.length) extras.push({
     label:`Offer ${ext.length} guest${ext.length>1?"s":""} an extra night`,
-    note:"checking out soon, with the flat empty behind them", pill:"−20%",
+    note:"checking out soon, with the flat empty behind them", pill:"try −20%",
     open:()=>openFlatList(`${ext.length} extension offer${ext.length>1?"s":""}`,
       "guests leaving today or tomorrow", ext,
-      {lead:"A discounted extra night beats an empty one, and costs no commission and no clean in between. Speak to each guest before they check out."})});
+      {lead:"A discounted extra night beats an empty one, and costs no commission and no clean in between. "
+         + "Speak to each guest before they check out — and pick the discount yourself, the app has no way to know it."})});
 
   return {decide, todo, days, extras,
           count: decide.length + todo.length + days.length + extras.length};
@@ -6648,7 +6663,7 @@ function exportRows(){
   for(let d = Math.min(firstStart, 0); d < DAYS; d++){
     const dt = dateAt(d), key = dt.getFullYear() + "-" + String(dt.getMonth()+1).padStart(2,"0");
     const m = months[key] = months[key] || {key, label: MONF[dt.getMonth()] + " " + dt.getFullYear(),
-                                             sold:0, sellable:0, billed:0, paid:0, arrivals:0,
+                                             sold:0, sellable:0, billed:0, paid:0, arrivals:0, priced:0,
                                              days:0, cal: new Date(dt.getFullYear(), dt.getMonth()+1, 0).getDate()};
     /* SEED THE BUCKET, DO NOT COUNT THE NIGHTS. Two different jobs sharing one
        loop, and running the second one over past days corrupted every occupancy
@@ -6688,6 +6703,7 @@ function exportRows(){
     const key = dt.getFullYear() + "-" + String(dt.getMonth()+1).padStart(2,"0");
     if(!months[key]) return;
     months[key].arrivals++; months[key].billed += r.amount || 0;
+    if(r.amount) months[key].priced++;
     /* ONE basis for the whole row: the month the stay ARRIVES.
        Billed was always counted that way, and collected was counted by the date
        the money came in, so any advance paid in a different month from the
@@ -6702,8 +6718,14 @@ function exportRows(){
        day it was taken, which is the right place for that question. */
     (r.pays || []).forEach(p=> months[key].paid += p.amount);
   });
+  /* THE MONEY COLUMNS NEED THEIR DENOMINATOR ON THE SAME ROW. Billed is the
+     sum over the arrivals that carry an amount, and on the operator's own book
+     most do not — the sheet showed a month's Billed beside its full arrival
+     count, which reads as the month's revenue rather than as the part of it
+     that has a figure. Occupancy already names the days it covers; this names
+     the bookings it covers, in the column beside the money. */
   const sumRows = [H(["Arrival month","Arrivals","Nights sold","Sellable nights","Occupancy",
-                      "Billed","Collected on those","Still owed on those"])];
+                      "Billed","Arrivals with an amount","Collected on those","Still owed on those"])];
   /* A month with nothing in it is not a fact, it is a gap in the seeding loop.
      Buckets are created for every month between the earliest arrival and the
      horizon, so one stay retained from four months ago produced three entirely
@@ -6724,7 +6746,9 @@ function exportRows(){
     {v: !m.sellable ? "—"
       : Math.round(m.sold / m.sellable * 100) + "%"
         + (m.days < m.cal ? ` (${m.days} of ${m.cal} days)` : "")},
-    m.billed ? {v:m.billed, t:"m"} : null, m.paid ? {v:m.paid, t:"m"} : null,
+    m.billed ? {v:m.billed, t:"m"} : null,
+    {v: m.arrivals ? `${m.priced} of ${m.arrivals}` : "—"},
+    m.paid ? {v:m.paid, t:"m"} : null,
     (m.billed - m.paid) > 0 ? {v:m.billed - m.paid, t:"m"} : null]));
 
   return [{name:"Summary", rows:sumRows}, {name:"Bookings", rows:bookingRows},
@@ -8376,23 +8400,60 @@ function owedStats(){
 /* Repeat business, which is the cheapest revenue there is — no commission, no
    listing, no photographs. Only visible at all because a booking now carries a
    phone number. */
+/* WHAT COUNTS AS THE SAME PERSON. A phone number is proof; a name is a guess.
+   This matched on the number alone, and the imported book carries none at all —
+   0 of 877 rows — so the card was permanently empty on the only book the
+   operator actually has, while that same book held 162 names recurring across
+   595 of its rows. An honest refusal that can never stop refusing is not much
+   better than a wrong number: it just fails quietly instead of loudly.
+
+   So: match on whatever the book has, and say which. Numbers when there are
+   enough of them, names otherwise — and when it is names, the card says so,
+   because two guests called Aditya are one guest to this function and the
+   operator is the only one who can tell them apart. */
+const nameKey = s => String(s || "").trim().toLowerCase().replace(/\s+/g," ");
+/* Placeholders are not people. These are what the import writes when the sheet
+   had no name, and left in they become the book's biggest "repeat guest". */
+const NOT_A_NAME = /^(guest|long stay|block(ed)?|maintenance|owner( use)?|na|n\/a|-+|\?+)$/;
 function guestStats(){
-  const bk = bookings().filter(r => r.phone && r.end > 0 && r.start < DAYS);
+  const all = bookings().filter(r => !NOT_A_NAME.test(nameKey(r.guest)));
+  const phoned = all.filter(r => r.phone);
+  /* Eight, the same floor the lead-time median uses. Below it the numbers that
+     do exist are too few to read a rate from, so fall back rather than refuse. */
+  const byPhone = phoned.length >= 8;
+  const bk  = byPhone ? phoned : all.filter(r => nameKey(r.guest));
+  const key = byPhone ? (r => digits10(r.phone)) : (r => nameKey(r.guest));
   const by = {};
-  bk.forEach(r=> (by[digits10(r.phone)] = by[digits10(r.phone)] || []).push(r));
+  bk.forEach(r=> (by[key(r)] = by[key(r)] || []).push(r));
   const people = Object.values(by);
   const repeat = people.filter(p => p.length > 1);
   const repeatRows = repeat.reduce((a,p)=> a.concat(p), []);
   const onceRows = people.filter(p => p.length === 1).map(p => p[0]);
-  const avg = rows => { const v = rows.filter(r=>r.amount);
-    return v.length ? v.reduce((s,r)=> s + r.amount, 0) / v.length : 0; };
-  return {people: people.length, repeat: repeat.length,
+  /* PER NIGHT, NOT PER BOOKING. Comparing booking totals answers "who books
+     longer", not "who is worth more": on the real book this put one 95-night
+     tenancy against a one-night stay and reported the difference as spending.
+     Per night is the only comparison the two sides can both survive.
+
+     And it needs a sample on BOTH sides. The same card would otherwise print
+     "returning guests spend 57% more" from exactly one priced repeat booking
+     against four priced first-timers. Five each, below which there is no
+     comparison to draw rather than a small one. */
+  const priced = rows => rows.filter(r => r.amount && r.nights);
+  const avg = rows => { const v = priced(rows);
+    return v.length ? v.reduce((s,r)=> s + r.amount / r.nights, 0) / v.length : 0; };
+  const CMP = 5;
+  const cmp = priced(repeatRows).length >= CMP && priced(onceRows).length >= CMP;
+  return {people: people.length, repeat: repeat.length, idBy: byPhone ? "phone" : "name",
+          cmp, pricedRepeat: priced(repeatRows).length, pricedOnce: priced(onceRows).length,
           bookings: bk.length, repeatBookings: repeatRows.length,
           share: bk.length ? repeatRows.length / bk.length : 0,
           avgRepeat: avg(repeatRows), avgOnce: avg(onceRows),
+          /* Stays break the tie, because on a book where almost nothing carries
+             an amount a pure spend sort leaves everyone below the first name in
+             arbitrary order. */
           top: repeat.map(p=>({name: p[p.length-1].guest, phone: p[0].phone, stays: p.length,
                                spend: p.reduce((s,r)=> s + (r.amount||0), 0)}))
-                     .sort((a,b)=> b.spend - a.spend)};
+                     .sort((a,b)=> b.spend - a.spend || b.stays - a.stays)};
 }
 
 /* What keeping the place standing actually costs — the invoice plus the nights
@@ -9236,43 +9297,60 @@ function renderTrends(){
     const head = el("div","headline");
     if(G.bookings >= 8){
       head.append(el("b", null, Math.round(G.share*100) + "%"));
-      head.append(el("s", null, `of bookings · ${G.repeat} of ${G.people} people have stayed before`));
+      head.append(el("s", null, `of bookings · ${G.repeat} of ${G.people} `
+        + `${G.idBy === "name" ? "names" : "people"} have stayed before`));
     } else {
       head.append(el("b", null, String(G.bookings)));
       head.append(el("s", null, G.bookings
-        ? `bookings carry a number — too few to read a repeat rate from`
-        : `bookings carry a phone number, so there is nothing to match on yet`));
+        ? `bookings to match on — too few to read a repeat rate from`
+        : `bookings with a guest on them, so there is nothing to match on yet`));
     }
     b.appendChild(head);
-    if(G.avgRepeat && G.avgOnce) b.appendChild(vbars([
-      {v: G.avgOnce,  label: Math.round(G.avgOnce/100)/10 + "k",  k:"First time"},
-      {v: G.avgRepeat,label: Math.round(G.avgRepeat/100)/10 + "k",k:"Returning"},
+    if(G.cmp) b.appendChild(vbars([
+      {v: G.avgOnce,  label: money(Math.round(G.avgOnce)),  k:"First time"},
+      {v: G.avgRepeat,label: money(Math.round(G.avgRepeat)),k:"Returning"},
     ], G.avgRepeat >= G.avgOnce ? 1 : 0));
     const top = el("div","card");
     G.top.slice(0,5).forEach(g=>{
       const r = el("div","row bk");
       const m = el("div","meta");
-      m.innerHTML = `<b>${esc(g.name)}</b><em>${g.stays} stays · ${esc(g.phone)}</em>`;
+      m.innerHTML = `<b>${esc(g.name)}</b><em>${g.stays} stays${g.phone ? " · " + esc(g.phone) : ""}</em>`;
       const e = el("div","rowend");
-      e.append(el("span","paid clear", money(g.spend)));
-      const call = el("a","rowx");
-      call.href = "tel:" + String(g.phone).replace(/[^\d+]/g,"");
-      call.textContent = "☎";
-      call.setAttribute("aria-label", "Call " + g.name);
-      e.append(call);
+      /* ZERO RUPEES IS NOT NO RUPEES. Most rows on the operator's book carry no
+         amount at all, and printing a crisp Rs 0 against a guest who has stayed
+         three times says they were worth nothing rather than that nobody wrote
+         the figure down. */
+      e.append(g.spend ? el("span","paid clear", money(g.spend))
+                       : el("span","paid none", "no amount"));
+      /* No number, no call button. A ☎ that dials "tel:" is a control that
+         looks live and does nothing, which is worse than no control. */
+      if(g.phone){
+        const call = el("a","rowx");
+        call.href = "tel:" + String(g.phone).replace(/[^\d+]/g,"");
+        call.textContent = "☎";
+        call.setAttribute("aria-label", "Call " + g.name);
+        e.append(call);
+      }
       r.append(m, e);
       top.appendChild(r);
     });
-    if(!G.top.length) top.appendChild(el("div","empty","Nobody has booked twice yet — this fills in as numbers repeat."));
+    if(!G.top.length) top.appendChild(el("div","empty","Nobody has booked twice yet — this fills in as guests return."));
     b.appendChild(top);
     said(c, G.repeat
       ? `Repeat guests are the cheapest revenue there is: no commission, no listing, no photographs. `
-        + (G.avgRepeat > G.avgOnce
-            ? `Yours also spend <span class="hi">${Math.round((G.avgRepeat/G.avgOnce - 1)*100)}% more</span> than first-timers.`
-            : `They are worth about the same as a first-timer here, so the saving is the commission you did not pay.`)
-        + ` The numbers are in the export — that list is who to message when a week looks thin.`
-      : `This only counts once a phone number turns up twice, so it grows with use. It is worth entering numbers `
-        + `even on walk-ins for exactly this reason.`);
+        + (!G.cmp
+            ? `Whether yours are also worth more a night is not something this book can say yet — `
+              + `${G.pricedRepeat} returning and ${G.pricedOnce} first-time bookings carry an amount.`
+            : G.avgRepeat > G.avgOnce
+            ? `Yours are also worth <span class="hi">${Math.round((G.avgRepeat/G.avgOnce - 1)*100)}% more a night</span> than first-timers.`
+            : `They are worth about the same a night as a first-timer here, so the saving is the commission you did not pay.`)
+        + (G.idBy === "name"
+            ? ` These are matched on the name, because none of your bookings carry a phone number — so two guests `
+              + `sharing one are counted as the same person here. Adding numbers as you take bookings makes this `
+              + `exact, and gives you someone to actually ring.`
+            : ` The numbers are in the export — that list is who to message when a week looks thin.`)
+      : `This only counts once a guest turns up twice, so it grows with use. Entering a phone number as you take `
+        + `each booking is what makes it exact.`);
   }
 
   /* ── UPKEEP ────────────────────────────────────────────────────────────── */
