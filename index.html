@@ -942,21 +942,19 @@ button{background:none;border:0;padding:0;cursor:pointer}
 
    What separates the months now is a hairline and a change of month name, which
    is all a separator has to be. */
-/* The month divider is a hairline and nothing else. Its name moved OUT of the
-   grid to the fixed chrome above, for two reasons that both came from building
-   it: sticking a text label to the top of a scrolling trough needs an opaque
-   background, and in light theme the page ground is a gradient — measured, the
-   label painted rgb(229,233,240) over rgb(216,223,236), a lighter strip with a
-   visible edge that no flat colour can fix. And three text labels cost 129px of
-   the very trough that is short of room.
-   Above the grid it is a single line that always says which month you are
-   looking at, updated as the trough scrolls. Subtler, always right, and it
-   gives back the one thing paging used to provide for free. */
-.mlab{
-  grid-column:1 / -1;height:1px;padding:0;margin:9px 0 8px;
-  background:var(--line);
-}
-.mlab:first-child{display:none}
+/* THE FULL-WIDTH DIVIDER IS GONE, and with it the row it cost. It spanned all
+   seven columns, which forced the grid to break at every month — so a month
+   ending mid-week left a stub row and the next opened with its own lead pads.
+   Two part-empty rows per boundary, ~55px each, on the screen whose whole
+   problem is that the answer does not fit.
+
+   What replaced it is smaller and says more: the weeks run on unbroken, and the
+   1st carries a hairline seam down its left edge and names its own month. The
+   month you are scrolled to is still stated above the trough, which is where
+   that label went for its own reasons — sticking text to the top of a scrolling
+   trough needs an opaque background, and in light theme the page ground is a
+   gradient, so the strip painted rgb(229,233,240) over rgb(216,223,236) with a
+   visible edge no flat colour fixes. */
 /* the month you are looking at, in the fixed chrome above the trough */
 /* min-height is the FILLED height, not a guess under it: reserve what the text
    will need so the line cannot grow when the text arrives. */
@@ -992,6 +990,17 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .day.today .dd{color:var(--now)}
 .day.none .fn{color:var(--hot)}
 .day.none .gg i{background:var(--hot)}
+/* The seam where one month becomes the next, now that the grid runs on through
+   it. A hairline down the left edge of the 1st and nothing else — the cell's own
+   label already says "1 Sep", and the sticky month name above the trough says
+   which month you are scrolled to. Subtle on purpose: a month boundary is a
+   fact about the calendar, not about the rooms. */
+.day.mstart::after{content:"";position:absolute;left:-4px;top:2px;bottom:2px;width:1px;
+  background:var(--line-2);border-radius:1px}
+/* "1 Sep" has to hold one line in a 35px inner width, or it wraps onto the
+   free count underneath it — which is what it did: the month sat on top of the
+   number the cell exists to show. */
+.day.mstart .dd{color:var(--txt-2);white-space:nowrap;font-size:9px;letter-spacing:-.01em}
 .day.sel{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink), var(--shadow-sm)}
 
 /* ── THE PICKER HEAD ────────────────────────────────────────────────────────
@@ -1443,7 +1452,7 @@ button{background:none;border:0;padding:0;cursor:pointer}
    muted version of the fill beside it in either theme rather than a third
    colour that happens to work in one. */
 .wrow .t i.cover{left:0;border-radius:6px 0 0 6px;
-  background:color-mix(in srgb, var(--free) 30%, var(--surface-2))}
+  background:color-mix(in srgb, var(--free) 52%, var(--surface-2))}
 .wrow .t i.kept{background:var(--free);border-radius:0 6px 6px 0}
 .wrow .t i.only{left:0;background:var(--free);border-radius:6px}
 .wrow.short .t i.cover{background:var(--hot);opacity:.55}
@@ -1464,11 +1473,20 @@ button{background:none;border:0;padding:0;cursor:pointer}
   transform-origin:left;transform:scaleX(var(--v,1))}
 .wrow.short .hr{background:var(--hot)}
 .wrow .cap2{font-size:10.5px;color:var(--txt-3);margin-top:5px;line-height:1.35}
+/* The two percentages the bar IS. They were only ever in the caption as words
+   ("breaks even at 83 of its 217 nights"), which made the reader translate a
+   sentence back into the picture above it. Sat under the split, at the split,
+   they are the picture's own labels. */
+.wrow .pcts{display:flex;justify-content:space-between;align-items:baseline;
+  margin-top:4px;font-size:10px;line-height:1;color:var(--txt-3)}
+.wrow .pcts b{font-weight:640;color:var(--txt-2);font-size:11px}
+.wrow .pcts .p-head{color:var(--free);font-weight:640;font-size:11px}
+.wrow.short .pcts .p-head{color:var(--hot)}
 /* the key for the bar, said once at the top of the card */
 .wkey{display:flex;gap:14px;align-items:center;margin:0 0 10px;font-size:10.5px;color:var(--txt-3)}
 .wkey span{display:inline-flex;align-items:center;gap:5px}
 .wkey i{display:block;width:11px;height:7px;border-radius:2px}
-.wkey .k-cover{background:color-mix(in srgb, var(--free) 30%, var(--surface-2))}
+.wkey .k-cover{background:color-mix(in srgb, var(--free) 52%, var(--surface-2))}
 .wkey .k-kept{background:var(--free)}
 .wkey .k-tick{width:2px;height:9px;border-radius:1px;background:var(--txt-2)}
 
@@ -1480,8 +1498,19 @@ button{background:none;border:0;padding:0;cursor:pointer}
   padding:3px 0;font-size:11.5px}
 .cs-r b{font-weight:500;color:var(--txt-2);white-space:nowrap}
 .cs-r i{display:block;height:5px;border-radius:3px;justify-self:start;
-  background:color-mix(in srgb, var(--free) 30%, var(--surface-2))}
+  background:color-mix(in srgb, var(--free) 52%, var(--surface-2))}
 .cs-r s{text-decoration:none;color:var(--txt);font-weight:600;white-space:nowrap}
+/* one rate, fifteen months, in its own sheet */
+.raterail{display:flex;align-items:flex-end;gap:4px;height:140px;margin:14px 0 0}
+.rcol{flex:1 1 0;min-width:0;height:100%;display:flex;flex-direction:column;
+  justify-content:flex-end;align-items:center;gap:5px;opacity:.5;
+  transition:opacity .2s var(--out), transform .2s var(--out)}
+.rcol.on{opacity:1;transform:translateY(-2px)}
+.rcol i{display:block;width:100%;border-radius:3px 3px 0 0;background:var(--free)}
+.rcol.on i{background:var(--free)}
+.rcol s{text-decoration:none;font-size:9.5px;color:var(--txt-3)}
+.ratesay{margin-top:12px;font-size:12px;line-height:1.5;color:var(--txt-2)}
+.ratesay b{color:var(--txt);font-weight:640}
 .wgroup{border-top:1px solid var(--line);margin:12px 0 0;padding-top:10px}
 .wrows.picked .wrow{opacity:.45}
 .wrows.picked .wrow.on{opacity:1;transform:translateY(-2px)}
@@ -7608,12 +7637,20 @@ function renderMonth(){
   const dow = el("div","dow");
   ["M","T","W","T","F","S","S"].forEach(d=>dow.appendChild(el("span",null,d)));
   const grid = el("div","cal");
-  /* every month, in one grid. A full-width label starts each one, which also
-     forces the grid to a new row, so a month that ends mid-week does not leave
-     the next month's 1st hanging off it. Each month still gets its own lead
-     pads, because a new month starts on whatever weekday it starts on. */
+  /* ONE UNBROKEN GRID. Restarting at every month meant a month ending mid-week
+     left a stub row — 31 August alone in a row of seven — and the next month
+     opened with its own lead pads. Two part-empty rows at every boundary, about
+     55px each, on the screen whose whole problem is that the answer does not
+     fit. Nine weeks crosses two or three boundaries.
 
-  const makeDay = (d, mo)=>{
+     Now the weeks just run on, the way they do on a wall calendar: Mon 31 Aug
+     sits in the same row as Tue 1 Sep. The month change is marked where it
+     actually happens — a seam down the left edge of the 1st, and that cell
+     naming its month instead of just its number. The sticky label above the
+     trough still says which month you are looking at as you scroll, so nothing
+     is lost by dropping the full-width divider that used to force the break. */
+
+  const makeDay = (d)=>{
     const dt = dateAt(d), f = freeCount(d);
     const c = el("button","day");
     if(d===0) c.classList.add("today");
@@ -7634,14 +7671,20 @@ function renderMonth(){
       else if(d === hi)         { c.classList.add("rngB"); capR(); if(col===0) capL(); }
       else if(d > lo && d < hi) { c.classList.add("rng");
                                   if(col===0) capL(); if(col===6) capR(); }
-      /* the month ends before the stay does — close the band rather than let it
-         run off an edge that is not a week edge */
-      if(d === mo.days[mo.days.length-1] && d < hi) capR();
-      if(d === mo.days[0] && d > lo) capL();
+      /* No month-edge caps any more. They existed because the grid restarted
+         at every month, so a band running past the 31st ran off an edge that
+         was not a week edge. In a continuous grid it does not: 31 August and
+         1 September are neighbours in the same row, and a stay across them is
+         one stay. Capping it would draw a break the book does not have. */
     }
     else if(d === lo)           c.classList.add("sel");
     if(softSet.has(d)) c.classList.add("soft");
-    c.append(el("div","dd",String(dt.getDate())), el("div","fn",String(f)));
+    /* The 1st says which month it is, because in a continuous grid nothing else
+       in the row does. Everything else is just its number, as before. */
+    const first = dt.getDate() === 1;
+    if(first) c.classList.add("mstart");
+    c.append(el("div","dd", first ? "1 " + MON[dt.getMonth()] : String(dt.getDate())),
+             el("div","fn",String(f)));
     const g = el("div","gg"); const i = el("i");
     i.style.width = (f/NF*100).toFixed(0)+"%";
     g.appendChild(i); c.appendChild(g);
@@ -7668,17 +7711,13 @@ function renderMonth(){
 
   /* 63 days crosses a new year about once a year; the rest of the time the
      year is four characters of noise on every divider. */
+  /* 63 days crosses a new year about once a year; the rest of the time the
+     year is four characters of noise on the sticky label. */
   const crossesYear = ms.some(x => x.y !== ms[0].y);
-  ms.forEach(m=>{
-    /* A separator separates; it does not also report. The fullness went to
-       Business, which owns occupancy analysis, and the name went to the chrome
-       above the trough — see the .mlab note in the stylesheet. */
-    const lab = el("div","mlab");
-    grid.appendChild(lab);
-    const lead = (dateAt(m.days[0]).getDay()+6)%7;
-    for(let i=0;i<lead;i++) grid.appendChild(el("div","day pad"));
-    m.days.forEach(d=> makeDay(d, m));
-  });
+  const run = ms.reduce((a,m)=> a.concat(m.days), []);
+  const lead = (dateAt(run[0]).getDay()+6)%7;
+  for(let i=0;i<lead;i++) grid.appendChild(el("div","day pad"));
+  run.forEach(d=> makeDay(d));
   cal.style.padding = "0";
   /* the grid scrolls inside a bounded trough; the weekday bar stays above it as
      fixed chrome, because a header that scrolls away is a header you look for */
@@ -8457,10 +8496,15 @@ function renderTrends(){
                     + `<span><i class="k-kept"></i>kept</span>`
                     + `<span><i class="k-tick"></i>break-even</span>`;
       b.appendChild(key);
-      const wrap = el("div","vwrap");
+      /* THE ANSWER OPENS UNDER THE ROW YOU TOUCHED. It used to open in a fixed
+         slot below all five, so tapping Telecom Nagar at the top meant
+         scrolling past four other buildings to read about it — the reader
+         hunting for their own answer, which is the failure this whole tab
+         exists to avoid. Each row now carries its own readout directly beneath
+         it, and only one is open at a time, so nothing below the touched row
+         moves further than the row's own growth. */
       const rowsBox = el("div","wrows");
-      const out = el("div","vsay");
-      let picked = -1; const made = [];
+      let openRow = null; const made = [];
       const complete = F.rows.filter(r=>r.state==="complete").sort((a,b2)=> a.head - b2.head);
       const floors   = F.rows.filter(r=>r.state==="floor").sort((a,b2)=> a.head - b2.head);
 
@@ -8521,24 +8565,34 @@ function renderTrends(){
         }
         row.appendChild(rail);
 
+        if(r.state !== "absent"){
+          const p = el("div","pcts");
+          p.innerHTML = `<span><b>${Math.round(r.be*100)}%</b> to cover costs</span>`
+                      + `<span><span class="p-head">${r.head >= 0 ? "+" : "−"}${Math.abs(Math.round(r.head*100))} pts</span>`
+                      + ` kept · <b>${Math.round(r.occ*100)}%</b> sold</span>`;
+          row.appendChild(p);
+        }
         const cap2 = el("div","cap2");
         cap2.textContent = r.state === "absent"
           ? `${r.flats} flats · ${r.book} nights sold in ${MON[+finMonth.split("-")[1]-1]} · no revenue line and no cost line`
-          : `${money(r.revenue)} in · ${money(r.cost)} to run · ` + (r.unreachable
-              ? `cannot break even at ${money(r.adr)} a night`
-              : `breaks even at ${Math.ceil(r.beNights)} of its ${r.cap} nights`)
-            + (r.state==="floor" ? ` · covers ${r.billed} of the ${r.book} nights the book counted` : "");
+          : `${money(r.revenue)} in · ${money(r.cost)} to run`
+            + (r.state==="floor" ? ` · covers ${r.billed} of ${r.book} nights sold` : "");
         row.appendChild(cap2);
 
+        const wrap = el("div","vwrap");
+        const out = el("div","vsay");
+        wrap.append(row, out);
         row.onclick = ()=>{
           if(r.state === "absent"){ haptic(10); openCosts(r); return; }
-          const i = made.indexOf(row);
-          picked = picked === i ? -1 : i;
-          rowsBox.classList.toggle("picked", picked >= 0);
-          made.forEach((z,j)=> z.classList.toggle("on", j === picked));
+          const already = wrap.classList.contains("telling");
+          /* one at a time: a second open readout doubles the scroll and the
+             operator is comparing two buildings by memory anyway */
+          if(openRow && openRow !== wrap){ openRow.classList.remove("telling"); openRow.querySelector(".vsay").textContent = ""; }
+          made.forEach(z=> z.classList.remove("on"));
           out.textContent = "";
-          if(picked < 0){ wrap.classList.remove("telling"); return; }
-          wrap.classList.add("telling");
+          if(already){ wrap.classList.remove("telling"); openRow = null; rowsBox.classList.remove("picked"); return; }
+          rowsBox.classList.add("picked"); row.classList.add("on");
+          wrap.classList.add("telling"); openRow = wrap;
           const inner = el("div","vsay-in"), line = el("div","vsay-l");
           line.innerHTML = r.state === "floor"
             ? `<b>${esc(r.name)}</b> sold ${r.book} of its ${r.cap} nights — ${Math.round(r.bookOcc*100)}%. `
@@ -8546,15 +8600,19 @@ function renderTrends(){
               + `outside this sheet, so <b>${money(r.net)} is a floor, not a figure</b>. Its cost line covers all `
               + `${r.flats} flats and its revenue covers fewer, and headroom rises with both nights and revenue — `
               + `so this row can only go up.`
-            : `<b>${esc(r.name)}</b> · ${monName(finMonth)} · ${r.flats} flats<br>`
-              + `${money(r.revenue)} in, ${money(r.cost)} to run → <b>${(r.net>=0?"+":"−")+money(Math.abs(r.net))}</b> kept, `
-              + `${Math.round(r.margin*100)}% margin, ${money(r.adr)} a night.<br>`
-              + `Sold ${Math.round(r.occ*100)}%. ` + (r.unreachable
-                  ? `<b>It cannot cover ${money(r.cost)} at ${money(r.adr)} a night however full it gets. The rate is the problem, not the fill.</b>`
-                  : `Breaks even at ${Math.ceil(r.beNights)} of its ${r.cap} nights — ${Math.round(r.be*100)}%. `
-                    + `<b>${r.head >= 0
-                        ? "You could lose " + Math.round(r.head*100) + " points of occupancy before it stops paying for itself."
-                        : "It is " + Math.round(-r.head*100) + " points of occupancy short of paying for itself."}</b>`);
+            /* Short, because the row above now SHOWS the occupancy, the
+               break-even and the headroom as three labelled numbers under its
+               own bar. Repeating them in a paragraph made the reader check the
+               sentence against the picture. What is left is the one thing the
+               picture cannot say: what the headroom MEANS. */
+            : (r.unreachable
+                ? `<b>${esc(r.name)}</b> cannot cover ${money(r.cost)} at ${money(r.adr)} a night however full `
+                  + `it gets. <b>The rate is the problem, not the fill.</b>`
+                : `<b>${esc(r.name)}</b> keeps ${Math.round(r.margin*100)}p in the rupee at ${money(r.adr)} a night. `
+                  + (r.head >= 0
+                      ? `<b>Occupancy could fall ${Math.round(r.head*100)} points — to ${Math.round(r.be*100)}% — `
+                        + `before it stops paying for itself.</b>`
+                      : `<b>It is ${Math.round(-r.head*100)} points short of paying for itself.</b>`));
           inner.appendChild(line);
           /* WHERE THE MONEY GOES. The row could only ever say "₹4,62,000 out",
              which reads as one bill — and because rent is 55-68% of it, a
@@ -8582,7 +8640,7 @@ function renderTrends(){
           out.appendChild(inner); haptic(7);
         };
         made.push(row);
-        return row;
+        return wrap;
       };
 
       complete.forEach(r=> rowsBox.appendChild(drawRow(r)));
@@ -8596,8 +8654,7 @@ function renderTrends(){
         rowsBox.appendChild(g);
         absent.forEach(r=> rowsBox.appendChild(drawRow(r)));
       }
-      wrap.append(rowsBox, out);
-      b.appendChild(wrap);
+      b.appendChild(rowsBox);
 
       const best = complete[complete.length-1], worst = complete[0];
       said(c, complete.length >= 2
@@ -8684,13 +8741,22 @@ function renderTrends(){
                 cap: parts.reduce((s,p)=>s+p.cap,0), cost: parts.reduce((s,p)=>s+p.cost,0)}; };
       const qName = ks => MON[+ks[0].split("-")[1]-1] + "–" + MON[+ks[2].split("-")[1]-1]
                         + " " + ks[2].slice(2,4);
+      /* Each rate opens its own fifteen months. A single figure for one month
+         is the least useful form a rate can take — the operator's question is
+         never "what is it" but "which way is it going" — and the trend was
+         only ever available as one blended revenue line on the card above. */
       const opps = el("div","opps");
-      const tile = (v, lab)=>{ const d = el("div","opp");
-        d.append(el("b",null,v), el("s",null,lab)); opps.appendChild(d); };
+      const tile = (key, v, lab)=>{
+        const d = el("button","opp tap");
+        d.append(el("b",null,v), el("s",null,lab));
+        d.setAttribute("aria-label", `${lab}, ${v} — see fifteen months`);
+        d.onclick = ()=>{ haptic(9); openRate(key, finMonth); };
+        opps.appendChild(d);
+      };
       if(T){
-        tile(Math.round(T.occ*100) + "%", `${T.nights} of ${T.cap} nights`);
-        tile(money(T.adr), "average room rate");
-        tile(money(T.revpar), "per available night");
+        tile("occ",    Math.round(T.occ*100) + "%", `${T.nights} of ${T.cap} nights`);
+        tile("adr",    money(T.adr),    "average room rate");
+        tile("revpar", money(T.revpar), "per available night");
       }
       b.appendChild(opps);
 
@@ -10931,6 +10997,112 @@ function openMove(mv, askDay, onFreed, opts){
 
    Saved under the operator's own key, merged over the workbook's model on read,
    so re-running import-finance.py never overwrites what they typed.          */
+/* ══ ONE RATE, FIFTEEN MONTHS ═════════════════════════════════════════════════
+   A rate for a single month is the least useful shape a rate can take. Nobody
+   asks "what is occupancy" — they ask "which way is it going", and answering
+   that needed the whole series, which only existed as one blended revenue line
+   on the card above. Tapping a rate opens it.
+
+   Drawn as a column per month on the same axis the rest of the tab uses, with
+   the selected month lit and the rest at rest. The scale runs from zero for a
+   rupee rate — a bar chart that starts at its own minimum exaggerates every
+   wobble into a story — and from zero to a hundred for a percentage, because
+   that is the range the quantity actually has. */
+const RATES = {
+  occ:    {name:"Occupied",         unit:"%",  sub:"nights sold of nights available",
+           get:t => t.occ * 100,    fmt:v => Math.round(v) + "%",  max:100},
+  adr:    {name:"Average room rate", unit:"₹", sub:"what a sold night earns",
+           get:t => t.adr,          fmt:v => money(v),             max:null},
+  revpar: {name:"Per available night", unit:"₹", sub:"revenue ÷ every night you had to sell",
+           get:t => t.revpar,       fmt:v => money(v),             max:null},
+};
+function openRate(key, monthKey){
+  const R = RATES[key];
+  const monName = k => MON[+k.split("-")[1]-1] + " " + k.split("-")[0];
+  sheetWipe();
+  const t = el("div");
+  t.innerHTML = `<div class="n">${esc(R.name)}</div><div class="m">${esc(R.sub)}</div>`;
+  const x = el("button", null, "✕"); x.setAttribute("aria-label","Close");
+  x.onclick = closeSheet;
+  sheetH.append(t, x);
+
+  const series = FIN.map(r=>{
+    const f = finRows(r[0]);
+    return {key:r[0], v: f.totals ? R.get(f.totals) : null, t: f.totals};
+  }).filter(p=> p.v != null);
+  const top = R.max || Math.max(...series.map(p=>p.v)) * 1.08;
+
+  const box = el("div"); box.style.cssText = "padding:16px 20px 0";
+  const cur = series.find(p=>p.key === monthKey) || series[series.length-1];
+  const head = el("div","headline");
+  head.append(el("b",null,R.fmt(cur.v)));
+  head.append(el("s",null, monName(cur.key)));
+  box.appendChild(head);
+
+  const rail = el("div","raterail");
+  rail.setAttribute("role","img");
+  rail.setAttribute("aria-label", `${R.name} by month, ${series.length} months`);
+  const readout = el("div","ratesay");
+  const paint = k =>{
+    const p = series.find(z=>z.key===k) || cur;
+    head.querySelector("b").textContent = R.fmt(p.v);
+    head.querySelector("s").textContent = monName(p.key);
+    /* against the same month a year earlier, where there IS one */
+    const [yy,mm] = p.key.split("-").map(Number);
+    const prevY = series.find(z=> z.key === `${yy-1}-${String(mm).padStart(2,"0")}`);
+    const prevM = series[series.indexOf(p) - 1];
+    const say = [];
+    if(prevM) say.push(`${R.fmt(prevM.v)} the month before`);
+    if(prevY) say.push(`<b>${R.fmt(prevY.v)}</b> the same month last year`);
+    readout.innerHTML = say.length ? say.join(" · ") : "no earlier month to compare with";
+    [...rail.children].forEach(c=> c.classList.toggle("on", c.dataset.k === p.key));
+  };
+  series.forEach(p=>{
+    const cell = el("button","rcol" + (p.key === cur.key ? " on" : ""));
+    cell.dataset.k = p.key;
+    const col = el("i"); col.style.height = Math.max(3, p.v / top * 118) + "px";
+    cell.append(col, el("s", null, MON[+p.key.split("-")[1]-1][0]));
+    cell.setAttribute("aria-label", `${monName(p.key)}, ${R.fmt(p.v)}`);
+    cell.onclick = ()=>{ haptic(6); paint(p.key); };
+    rail.appendChild(cell);
+  });
+  box.append(rail, readout);
+
+  /* the same series, per building, because a portfolio average hides which one
+     moved — the whole argument of the card this was opened from */
+  const per = el("div"); per.style.cssText = "margin-top:18px";
+  per.appendChild(el("div","lbl","BY BUILDING · " + monName(cur.key).toUpperCase()));
+  const rows = finRows(cur.key).rows.filter(r=> r.state !== "absent")
+    .sort((a,b2)=> R.get(b2) - R.get(a));
+  const hi = Math.max(...rows.map(R.get), 1);
+  rows.forEach(r=>{
+    const ln = el("div","cs-r");
+    const bar = el("i"); bar.style.width = (R.get(r) / hi * 100).toFixed(1) + "%";
+    ln.append(el("b",null,r.name), bar, el("s",null,R.fmt(R.get(r))));
+    per.appendChild(ln);
+  });
+  box.appendChild(per);
+
+  const note = el("p");
+  note.style.cssText = "margin:16px 0 22px;font-size:11.5px;line-height:1.55;color:var(--txt-3)";
+  note.innerHTML = key === "revpar"
+    ? `Revenue ÷ every night you had to sell, empty ones included. It is the only one of the three `
+      + `that cannot be flattered: a full house at a poor rate and a half-empty one at a good rate both `
+      + `show up here honestly.`
+    : key === "adr"
+    ? `What a night earns <b>when it sells</b>. On its own it says nothing about how many sold — `
+      + `that is Occupied, and the two multiply into per available night.`
+    : `Nights sold ÷ nights you had, across the ${
+          finRows(monthKey).rows.filter(r=>r.state!=="absent").length
+        } buildings your monthly sheets price. `
+      + `Lotus Pond is not in it — it has no revenue line, so it has no rate either, and averaging it in `
+      + `at zero would be worse than leaving it out.`;
+  box.appendChild(note);
+  sheetB.appendChild(box);
+  paint(cur.key);
+  sheet.classList.add("on"); scrim.classList.add("on");
+}
+
 function openCosts(r){
   const monName = k => MON[+k.split("-")[1]-1] + " " + k.split("-")[0];
   sheetWipe();

@@ -871,7 +871,15 @@ export async function run(filter) {
 
     /* every day of the book is rendered, so a boundary is just two adjacent
        cells — find one and pick across it */
-    ok(document.querySelectorAll(".mlab").length >= 2, "only one month is rendered");
+    /* Counted from the cells themselves, not from a divider element. The grid
+       used to restart at each month and mark the break with a full-width
+       .mlab; it now runs on unbroken and marks the seam on the 1st itself, so
+       an assertion about .mlab was asserting the old implementation rather than
+       the behaviour. How many months are on screen is a fact about the days. */
+    const monthsOn = new Set([...document.querySelectorAll(".day[data-d]")]
+      .map(c => dateAt(+c.dataset.d).getMonth()));
+    ok(monthsOn.size >= 2, `only ${monthsOn.size} month is rendered`);
+    ok(document.querySelectorAll(".day.mstart").length >= 1, "no month start is marked");
     eq(document.querySelectorAll(".day[data-d]").length, DAYS, "not every day is rendered");
     let cross = -1;
     for (let d = 1; d < DAYS - 3; d++)
