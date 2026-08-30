@@ -1464,6 +1464,24 @@ button{background:none;border:0;padding:0;cursor:pointer}
   transform-origin:left;transform:scaleX(var(--v,1))}
 .wrow.short .hr{background:var(--hot)}
 .wrow .cap2{font-size:10.5px;color:var(--txt-3);margin-top:5px;line-height:1.35}
+/* the key for the bar, said once at the top of the card */
+.wkey{display:flex;gap:14px;align-items:center;margin:0 0 10px;font-size:10.5px;color:var(--txt-3)}
+.wkey span{display:inline-flex;align-items:center;gap:5px}
+.wkey i{display:block;width:11px;height:7px;border-radius:2px}
+.wkey .k-cover{background:color-mix(in srgb, var(--free) 30%, var(--surface-2))}
+.wkey .k-kept{background:var(--free)}
+.wkey .k-tick{width:2px;height:9px;border-radius:1px;background:var(--txt-2)}
+
+/* where the month's cost actually goes — eleven lines, biggest first */
+.costsplit{margin-top:12px;padding-top:11px;border-top:1px solid var(--line)}
+.cs-h{font-size:10.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--txt-3);margin-bottom:8px}
+.cs-r{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:9px;
+  padding:3px 0;font-size:11.5px}
+.cs-r b{font-weight:500;color:var(--txt-2);white-space:nowrap}
+.cs-r i{display:block;height:5px;border-radius:3px;justify-self:start;
+  background:color-mix(in srgb, var(--free) 30%, var(--surface-2))}
+.cs-r s{text-decoration:none;color:var(--txt);font-weight:600;white-space:nowrap}
 .wgroup{border-top:1px solid var(--line);margin:12px 0 0;padding-top:10px}
 .wrows.picked .wrow{opacity:.45}
 .wrows.picked .wrow.on{opacity:1;transform:translateY(-2px)}
@@ -8431,6 +8449,14 @@ function renderTrends(){
       head.append(s2);
       b.appendChild(head);
 
+      /* THE BAR NEEDS A KEY, ONCE. Two tones, a tick and sometimes a hatch is
+         four pieces of vocabulary, and the card was asking the operator to
+         infer all of them from a caption. Said plainly here and never again. */
+      const key = el("div","wkey");
+      key.innerHTML = `<span><i class="k-cover"></i>paying its costs</span>`
+                    + `<span><i class="k-kept"></i>kept</span>`
+                    + `<span><i class="k-tick"></i>break-even</span>`;
+      b.appendChild(key);
       const wrap = el("div","vwrap");
       const rowsBox = el("div","wrows");
       const out = el("div","vsay");
@@ -8498,7 +8524,7 @@ function renderTrends(){
         const cap2 = el("div","cap2");
         cap2.textContent = r.state === "absent"
           ? `${r.flats} flats · ${r.book} nights sold in ${MON[+finMonth.split("-")[1]-1]} · no revenue line and no cost line`
-          : `${money(r.revenue)} in · ${money(r.cost)} out · ` + (r.unreachable
+          : `${money(r.revenue)} in · ${money(r.cost)} to run · ` + (r.unreachable
               ? `cannot break even at ${money(r.adr)} a night`
               : `breaks even at ${Math.ceil(r.beNights)} of its ${r.cap} nights`)
             + (r.state==="floor" ? ` · covers ${r.billed} of the ${r.book} nights the book counted` : "");
@@ -8521,7 +8547,7 @@ function renderTrends(){
               + `${r.flats} flats and its revenue covers fewer, and headroom rises with both nights and revenue — `
               + `so this row can only go up.`
             : `<b>${esc(r.name)}</b> · ${monName(finMonth)} · ${r.flats} flats<br>`
-              + `${money(r.revenue)} in, ${money(r.cost)} out → <b>${(r.net>=0?"+":"−")+money(Math.abs(r.net))}</b> kept, `
+              + `${money(r.revenue)} in, ${money(r.cost)} to run → <b>${(r.net>=0?"+":"−")+money(Math.abs(r.net))}</b> kept, `
               + `${Math.round(r.margin*100)}% margin, ${money(r.adr)} a night.<br>`
               + `Sold ${Math.round(r.occ*100)}%. ` + (r.unreachable
                   ? `<b>It cannot cover ${money(r.cost)} at ${money(r.adr)} a night however full it gets. The rate is the problem, not the fill.</b>`
@@ -8530,6 +8556,29 @@ function renderTrends(){
                         ? "You could lose " + Math.round(r.head*100) + " points of occupancy before it stops paying for itself."
                         : "It is " + Math.round(-r.head*100) + " points of occupancy short of paying for itself."}</b>`);
           inner.appendChild(line);
+          /* WHERE THE MONEY GOES. The row could only ever say "₹4,62,000 out",
+             which reads as one bill — and because rent is 55-68% of it, a
+             reader lands on "that must be the rent". It is eleven lines: rent,
+             salaries, electricity, water, laundry, refills, maintenance, AMC,
+             replacements, contingency and bonuses, all from their own Costing
+             sheet under their own names. Shown biggest first, because that is
+             the order anything can be done about them in. */
+          if(r.cost){
+            const lines = Object.entries(costFor(r.code))
+              .filter(([,v])=> +v > 0).sort((a2,b2)=> b2[1] - a2[1]);
+            const tbl = el("div","costsplit");
+            tbl.appendChild(el("div","cs-h", `Where the ${money(r.cost)} goes`));
+            lines.forEach(([k,v])=>{
+              const ln = el("div","cs-r");
+              const bar = el("i"); bar.style.width = (v / lines[0][1] * 100).toFixed(1) + "%";
+              ln.append(el("b",null,k), bar, el("s",null,money(v)));
+              tbl.appendChild(ln);
+            });
+            const edit = el("button","vsay-go","Change these figures →");
+            edit.onclick = ev=>{ ev.stopPropagation(); haptic(10); openCosts(r); };
+            tbl.appendChild(edit);
+            inner.appendChild(tbl);
+          }
           out.appendChild(inner); haptic(7);
         };
         made.push(row);
@@ -9064,9 +9113,17 @@ function renderTrends(){
       + `Costs come from your Costing sheet: a standing monthly model rather than dated invoices, so it is the same `
       + `figure every month. Change it there, or on any building here, and every number follows. Occupancy is counted `
       + `from the Availability tab. Vasavi and Mumbai are excluded as sold.<br><br>`
-      + `Your Costing sheet carries no interest, tax or depreciation, so what this calls `
-      + `<b style="color:var(--txt-2)">kept</b> is operating profit after rent — close to EBITDA for a leased model, `
-      + `and not what your accountant will call net profit.`;
+      + `<b style="color:var(--txt-2)">Out</b> is not rent. It is every line in your Costing sheet for that `
+      + `building — rent, salaries, electricity, water, laundry, refills, maintenance, AMC, replacements, `
+      + `contingency and bonuses. Rent is the biggest of them at ${
+          (()=>{ const t = finRows(finMonth).rows.filter(r=>r.state!=="absent");
+                 if(!t.length) return "most";
+                 const share = t.reduce((s,r)=> s + (costFor(r.code).Rent||0), 0) / t.reduce((s,r)=> s + r.cost, 0);
+                 return Math.round(share*100) + "%"; })()
+        } of it, never all of it. Tap a building to see where the rest goes.<br><br>`
+      + `What your Costing sheet does NOT carry is interest, tax and depreciation — so `
+      + `<b style="color:var(--txt-2)">kept</b> is operating profit, close to EBITDA for a leased model, and not `
+      + `what your accountant will call net profit.`;
     s.appendChild(foot);
     return;
   }
