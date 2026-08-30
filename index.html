@@ -5866,14 +5866,96 @@ addEventListener("unhandledrejection", ev=>{
 });
 
 /* ── signing in and out ────────────────────────────────────────────────────── */
+/* ── THE FIRST SIGN-IN IS THE DANGEROUS ONE ──────────────────────────────────
+   This used to be: authenticate, cloudPull(), jdel(STORE). cloudPull replaces
+   flats and resv wholesale with whatever the server has, and jdel throws the
+   local book away — which is correct when the server holds the operator's book
+   and the local copy is the sample. It is catastrophic in the other direction.
+
+   The app has been local-only since it shipped. The operator's real book — his
+   bookings, his edits, months of them — exists in localStorage on his phone and
+   NOWHERE ELSE. The server is empty. Signing in would have replaced 700+ real
+   bookings with nothing and then deleted the only copy.
+
+   So the first sign-in ADOPTS rather than replaces:
+
+     the server has a book   ->  pull it, as before
+     the server is empty     ->  push this device's book up, and keep it
+
+   And the local copy is only discarded when it is still the untouched sample —
+   `usingDemo` is exactly that flag. Anything the operator has touched stays on
+   the phone as well as on the server, because a sync that can leave you with
+   neither copy is worse than no sync. */
+async function adoptLocalBook(){
+  /* Buildings and flats first: a stay references a flat uuid, so the flats have
+     to exist (or at least be queued ahead of it) before the stays go. */
+  syncInventory([]);
+  const mine = resv.filter(r => !r.sid);
+  mine.forEach(r=>{
+    r.sid = uuid();
+    const f = flats[r.fi];
+    if(!f) return;
+    enqueue({k:"stay+", id:r.sid, body:{
+      flat_id: f.uid, kind: isBlock(r) ? "block" : "stay",
+      starts_on: dayISO(r.start), ends_on: dayISO(r.end),
+      guest_name: isBlock(r) ? null : (r.guest || null),
+      guest_phone: r.phone || null, source: r.src || null,
+      pax: r.pax || null, amount: r.amount || null,
+      reason: r.reason || null, note: r.note || null,
+      fault: r.fault || null, fixer: r.fixer || null,
+      fixer_phone: r.fixer_phone || null, cost: r.cost || null,
+      booked_on: dayISO(typeof r.bookedOn === "number" ? r.bookedOn : 0),
+      created_by: session && session.uid }});
+    (r.pays || []).forEach(pay=>{
+      enqueue({k:"pay+", id: pay.id || uuid(), body:{
+        stay_id: r.sid, amount: pay.amount, method: pay.method,
+        received_on: dayISO(pay.on || 0), note: pay.note || null,
+        created_by: session && session.uid }});
+    });
+  });
+  issues.filter(x => !x.sent).forEach(x=>{
+    const f = flats[x.fi]; if(!f) return;
+    x.sent = 1;
+    enqueue({k:"iss+", id: x.id || uuid(), body:{
+      flat_id: f.uid, fault: x.fault || null, note: x.note || null,
+      urgency: x.urgency || null, reported_on: dayISO(x.on || 0) }});
+  });
+  logAct("sync", `Signed in — sent ${mine.length} booking${mine.length===1?"":"s"} `
+    + `and ${flats.length} flats up to the shared book`);
+  return mine.length;
+}
+
 async function signIn(email, password){
   keepSession(await api("/auth/v1/token?grant_type=password",
     {method:"POST", auth:false, body:{email: email.trim(), password}}));
   MODE = "live";
   jdel(BROWSE_KEY);
   await loadHost();
+
+  /* Held BEFORE the pull can overwrite them. If the server turns out to be
+     empty these are put straight back, so a failed or empty pull can never be
+     the thing that loses the book. */
+  const hadLocal = resv.slice(), hadFlats = flats.slice(),
+        hadIssues = issues.slice(), wasDemo = usingDemo;
+
   await cloudPull();
-  jdel(STORE);                       // the sample book is not this operator's book
+
+  const serverHasNothing = !resv.length && !flats.length;
+  if(serverHasNothing && hadLocal.length){
+    resv = hadLocal; flats = hadFlats; issues = hadIssues;
+    NF = flats.length;
+    flatIndex = Object.fromEntries(flats.map((f,i)=>[f.id, i]));
+    recompute();
+    await adoptLocalBook();
+    /* The book is now queued for the server AND still on the phone. It stays on
+       the phone until it has actually landed — see the queue, which persists
+       and retries. */
+  } else if(wasDemo){
+    /* Only the untouched sample is safe to discard. Anything he has edited is
+       kept as well as synced. */
+    jdel(STORE);
+  }
+  cacheSave();
   paintAcct();
 }
 async function loadHost(){

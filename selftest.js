@@ -1679,6 +1679,76 @@ export async function run(filter) {
     }
   });
 
+  /* ══ turning the cloud on ═══════════════════════════════════════════════ */
+
+  /* signIn() used to be: authenticate, cloudPull(), jdel(STORE). cloudPull
+     replaces flats and resv wholesale with whatever the server has, and jdel
+     throws the local book away. The app has been local-only since it shipped,
+     so the operator's real book lives in localStorage and NOWHERE ELSE, and the
+     server is empty — signing in would have replaced 700+ real bookings with
+     nothing and then deleted the only copy. */
+  await test("signing in to an empty server adopts the book instead of erasing it", async () => {
+    const keepR = resv.slice(), keepF = flats.slice(), keepNF = NF,
+          keepQ = queue.slice(), keepMode = MODE, keepHost = hostId,
+          keepSess = session, keepIss = issues.slice();
+    const backup = localStorage.getItem(STORE);
+    const realApi = window.api;
+    try {
+      const fi = flats.map((f,i)=>i).find(i => freeSpan(i, 0, 3));
+      ok(addBooking(fi, 0, 2, "Adoption Fixture", "Direct", {amount: 31000}), "fixture refused");
+      const before = bookings().length;
+
+      /* an EMPTY server, and no network touched */
+      window.api = async (path)=>{
+        if(/token\?grant_type=password/.test(path))
+          return {access_token:"t", refresh_token:"r", expires_in:3600, user:{id:"u1"}};
+        if(/\/rest\/v1\/memberships/.test(path))
+          return [{host_id:"h1", role:"owner", hosts:{name:"Crescent Stays", slug:"crescent-stays"}}];
+        return [];
+      };
+      await signIn("x@y.z", "pw");
+
+      /* the book is still here — in memory AND on disk */
+      eq(bookings().length, before, "bookings after signing in to an empty server");
+      ok(bookings().some(r => r.guest === "Adoption Fixture"), "the operator's own booking was erased");
+      eq(NF, keepNF, "flats after signing in");
+      ok(localStorage.getItem(STORE), "the local book was deleted from storage");
+      /* and it is on its way up rather than sitting there */
+      ok(queue.length > before, `only ${queue.length} writes queued for ${before} bookings + ${NF} flats`);
+      ok(queue.some(op => op.k === "flat+"), "no flats queued — a stay would reference nothing");
+      ok(queue.some(op => op.k === "stay+"), "no stays queued");
+      /* every queued stay must name a flat, or it will be rejected on arrival */
+      const bad = queue.filter(op => op.k === "stay+" && !(op.body && op.body.flat_id));
+      eq(bad.length, 0, `${bad.length} queued stays carry no flat_id`);
+      return `${before} bookings kept, ${queue.length} writes queued to adopt them`;
+    } finally {
+      window.api = realApi;
+      resv = keepR; flats = keepF; NF = keepNF; queue = keepQ; issues = keepIss;
+      MODE = keepMode; hostId = keepHost; session = keepSess;
+      flatIndex = Object.fromEntries(flats.map((f,i)=>[f.id,i]));
+      if(backup != null) localStorage.setItem(STORE, backup);
+      jset(QUEUE_KEY, queue);
+      recompute();
+    }
+  });
+
+  /* The owner's one hard requirement: it must stay as fast as it is now. Every
+     read is served from memory in both modes; the cloud only ever appears on
+     the WRITE path, behind a queue. */
+  await test("no read touches the network, in either mode", async () => {
+    const realFetch = window.fetch, seen = [];
+    const wasMode = MODE, wasHost = hostId;
+    try {
+      window.fetch = (...a)=>{ seen.push(String(a[0])); return realFetch(...a); };
+      MODE = "live"; hostId = "h1";
+      recompute(); moneyStats(); owedStats(); finRows(FIN[FIN.length-1][0]);
+      findPeople("ra"); exportRows(); appMonth(dayISO(0).slice(0,7));
+      SCREENS.forEach(sc => sc.render());
+      eq(seen.length, 0, `a read went to the network: ${seen.slice(0,2).join(", ")}`);
+      return "every stat, render and query served from memory";
+    } finally { window.fetch = realFetch; MODE = wasMode; hostId = wasHost; }
+  });
+
   /* ══ the whole surface ══════════════════════════════════════════════════ */
 
   await test("no text falls below AA in either theme", async () => {
