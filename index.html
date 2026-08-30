@@ -633,7 +633,41 @@ button{background:none;border:0;padding:0;cursor:pointer}
    buildings also filters to one. Chips reuse .tabseg, which is already the
    app's word for "pick one of these"; the counts on them are live, so the row
    doubles as a per-building free count for the night in the dial. */
-.roomfilt{margin:0 -20px;padding:0 20px 2px}
+/* Its own control, not a copy of the tab chips. Those are 12.5px pills sized
+   for a thumb travelling a top bar; this row sits mid-screen above a dense
+   grid and has to carry six items without shouting over the tiles it filters.
+
+   So: smaller type, tighter box, and the COUNT BROKEN OUT into its own badge —
+   which is the part the operator is actually reading. The badge is tinted by
+   what it says (free reads in the free colour, nought reads muted), so the row
+   is a per-building availability glance first and a filter second, and the eye
+   can skip the names entirely when it just wants to know where the space is.
+
+   The right edge fades rather than being cut off by the card, because the row
+   scrolls and a hard clip hides that fact. */
+.roomfilt{display:flex;gap:5px;overflow-x:auto;scrollbar-width:none;
+  margin:0 -20px;padding:1px 20px 3px;
+  -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 34px),transparent 100%);
+  mask-image:linear-gradient(90deg,#000 calc(100% - 34px),transparent 100%)}
+.roomfilt::-webkit-scrollbar{display:none}
+.roomfilt button{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;
+  padding:5px 7px 5px 10px;border-radius:var(--r-xs);
+  background:var(--surface-2);border:1px solid var(--line);
+  font-size:11.5px;font-weight:600;letter-spacing:-.005em;color:var(--txt-2);
+  white-space:nowrap;transition:transform .38s var(--spring),background .18s,color .18s}
+.roomfilt button:active{transform:scale(.95);transition-duration:.085s}
+.roomfilt button i{font-style:normal;min-width:17px;padding:1.5px 4px;border-radius:5px;
+  font-size:10.5px;font-weight:700;line-height:1.15;text-align:center;
+  font-variant-numeric:tabular-nums;
+  background:color-mix(in srgb,var(--free) 17%,transparent);color:var(--free)}
+/* nought free is not a quantity to celebrate — it drops to the muted pair */
+.roomfilt button i.none{background:var(--surface-3);color:var(--txt-3)}
+.roomfilt button[aria-selected="true"]{background:var(--free);color:var(--free-ink);
+  border-color:transparent}
+.roomfilt button[aria-selected="true"] i{background:color-mix(in srgb,var(--free-ink) 20%,transparent);
+  color:var(--free-ink)}
+.roomfilt button[aria-selected="true"] i.none{background:color-mix(in srgb,var(--free-ink) 13%,transparent);
+  color:color-mix(in srgb,var(--free-ink) 68%,transparent)}
 .bsec + .bsec{margin-top:14px}
 .bsec-h{display:flex;align-items:baseline;justify-content:space-between;gap:8px;
   margin:0 0 7px;padding-bottom:5px;border-bottom:1px solid var(--line)}
@@ -7262,7 +7296,7 @@ function renderRooms(){
      way of looking at tonight, not a setting, and it should not outlive the tab
      the way the stay dial deliberately does. */
   let roomFilt = null;
-  const filt = el("div","tabseg roomfilt");
+  const filt = el("div","roomfilt");
   const tiles = el("div");
   tilesWrap.append(th, filt, tiles);
 
@@ -7393,7 +7427,8 @@ function renderRooms(){
 
       filt.textContent = "";
       const chip = (code, label, count)=>{
-        const b = el("button", null, count == null ? label : `${label} ${count}`);
+        const b = el("button");
+        b.append(el("span", null, label), el("i", count ? null : "none", String(count)));
         b.setAttribute("aria-selected", roomFilt === code);
         b.setAttribute("aria-label", code
           ? `Show only ${label}, ${count} free`
@@ -8192,11 +8227,71 @@ const finBust = ()=>{ finCache = {}; finCacheKey = ""; };
    console message under a thousand copies of itself during a test run. */
 const finWarned = {};
 function finRows(monthKey){
-  const stamp = NF + "|" + JSON.stringify(costUser) + "|" + JSON.stringify(finUser);
+  /* App-sourced months read the live book, so the book belongs in the stamp —
+     otherwise typing an amount onto an August booking changes nothing on the
+     Profit tab until something else happens to bust the cache. */
+  let sig = 0;
+  for(let i = 0; i < resv.length; i++){ const r = resv[i];
+    sig = (sig + r.fi * 7 + r.start * 13 + r.nights * 31 + (r.amount || 0)) | 0; }
+  const stamp = NF + "|" + resv.length + ":" + sig
+              + "|" + JSON.stringify(costUser) + "|" + JSON.stringify(finUser);
   if(stamp !== finCacheKey){ finCache = {}; finCacheKey = stamp; }
   if(finCache[monthKey]) return finCache[monthKey];
   return (finCache[monthKey] = finRowsCalc(monthKey));
 }
+/* ── THE APP'S OWN BOOK AS A MONTH ───────────────────────────────────────────
+   The workbook was how this app learned the past; it is not how it learns from
+   here. Its newest sheet is Jul 2026 and there is no Aug26 — so the Profit tab
+   stopped at July while the operator's own August sat in the app, 923 nights
+   sold across 243 bookings, unread.
+
+   What the book can answer EXACTLY is nights: a stay either covered a night or
+   it did not, and that is a census, not a sample. What it answers badly is
+   money, because most rows carry no amount — 45 of those 243. So this returns
+   both, and marks how much of the month's sold time has a figure against it.
+   The card decides what it is allowed to say; this only measures.            */
+function appMonth(monthKey){
+  const [y, mo] = monthKey.split("-").map(Number);
+  const d0 = Math.round((new Date(y, mo-1, 1) - dateAt(0)) / 86400000);
+  const d1 = Math.round((new Date(y, mo, 0)   - dateAt(0)) / 86400000) + 1;
+  const per = {};
+  bookings().forEach(r=>{
+    const a = Math.max(r.start, d0), b = Math.min(r.end, d1);
+    if(b <= a) return;
+    const n = b - a, code = flats[r.fi] && flats[r.fi].code;
+    if(!code) return;
+    const g = per[code] = per[code] || {nights:0, revenue:0, priced:0, rows:0, pricedNights:0};
+    g.nights += n; g.rows++;
+    /* Apportioned per night, never whole: a stay running 28 Aug – 4 Sep does
+       not earn all of its money in August, and booking the total into the
+       arrival month is how one card came to disagree with another about the
+       same stay. */
+    if(r.amount && r.nights){
+      g.revenue += r.amount * (n / r.nights); g.priced++; g.pricedNights += n;
+    }
+  });
+  return per;
+}
+/* Every month the app's book touches that the workbook has no sheet for, up to
+   and including the one running now. Nothing beyond it: a future month has
+   a full month's cost and a handful of nights, and the difference is not a
+   loss, it is a calendar. */
+function appMonths(){
+  const have = new Set(FIN.map(r => r[0]));
+  const key = d => { const t = dateAt(d);
+    return t.getFullYear() + "-" + String(t.getMonth()+1).padStart(2,"0"); };
+  const now = key(0), out = [];
+  const seen = new Set();
+  bookings().forEach(r=>{
+    for(let d = Math.max(r.start, -400); d < Math.min(r.end, DAYS); d++){
+      const k = key(d);
+      if(seen.has(k) || have.has(k) || k > now) continue;
+      seen.add(k); out.push(k);
+    }
+  });
+  return out.sort();
+}
+
 function finRowsCalc(monthKey){
   const row = FIN.find(r => r[0] === monthKey);
   const [y, mo] = monthKey.split("-").map(Number);
@@ -8205,7 +8300,70 @@ function finRowsCalc(monthKey){
   const B = buildingsOf();
   const out = {month: monthKey, days, drop, rows: [],
                coverage: {complete: 0, floor: 0, absent: 0}};
-  if(!row) return Object.assign(out, {totals: null});
+  if(!row){
+    const per = appMonth(monthKey);
+    if(!Object.keys(per).length) return Object.assign(out, {totals: null});
+    out.source = "app";
+    ["TT","MP","TN","BH","LP"].forEach(code=>{
+      const flatN = flats.filter(f => f.code === code).length;
+      if(!flatN) return;
+      const g = per[code] || {nights:0, revenue:0, priced:0, rows:0, pricedNights:0};
+      const b = B.find(x => x.code === code), cap = flatN * days;
+      const cost = costTotal(code);
+      const r = {code, name: b ? b.name : code, short: b ? b.short : code,
+                 flats: flatN, cap, book: g.nights, bookOcc: cap ? g.nights/cap : 0,
+                 billed: g.nights, revenue: Math.round(g.revenue), cost,
+                 rows: g.rows, priced: g.priced, pricedNights: g.pricedNights,
+                 /* the share of SOLD TIME that carries a figure — the only
+                    coverage number that means anything about revenue */
+                 cover: g.nights ? g.pricedNights / g.nights : 0,
+                 state: cost == null ? "absent" : "app"};
+      /* A break-even mark is cost ÷ a rate, and this building's rate comes off
+         its priced nights alone — Telecom Nagar's came off ONE. Drawn anyway it
+         is a confident tick in a plausible place built on nothing. */
+      r.canState = r.cover >= 0.8;
+      out.coverage[r.state === "absent" ? "absent" : "floor"] += flatN;
+      if(r.state !== "absent"){
+        r.occ = cap ? g.nights / cap : 0;
+        r.adr = g.pricedNights ? g.revenue / g.pricedNights : 0;
+        r.revpar = cap ? g.revenue / cap : 0;
+        r.net = r.revenue - cost;
+        r.margin = r.revenue ? r.net / r.revenue : 0;
+        r.beNights = r.adr ? cost / r.adr : Infinity;
+        r.be = cap ? r.beNights / cap : Infinity;
+        r.head = r.occ - r.be;
+        r.unreachable = r.be > 1;
+      }
+      out.rows.push(r);
+    });
+    const live = out.rows.filter(r => r.state === "app");
+    out.totals = live.length ? {
+      revenue: live.reduce((s,r)=> s + r.revenue, 0),
+      cost:    live.reduce((s,r)=> s + r.cost, 0),
+      nights:  live.reduce((s,r)=> s + r.book, 0),
+      cap:     live.reduce((s,r)=> s + r.cap, 0),
+      flats:   live.reduce((s,r)=> s + r.flats, 0),
+      rows:    live.reduce((s,r)=> s + r.rows, 0),
+      priced:  live.reduce((s,r)=> s + r.priced, 0),
+      floor:   true, app: true,
+    } : null;
+    if(out.totals){
+      const t = out.totals, pn = live.reduce((s,r)=> s + r.pricedNights, 0);
+      t.cover = t.nights ? pn / t.nights : 0;
+      t.net = t.revenue - t.cost;
+      t.margin = t.revenue ? t.net / t.revenue : 0;
+      t.occ = t.cap ? t.nights / t.cap : 0;
+      t.adr = pn ? t.revenue / pn : 0;
+      t.revpar = t.cap ? t.revenue / t.cap : 0;
+      /* WHAT THE MONTH IS ALLOWED TO SAY. Cost is complete the moment a month
+         starts; revenue arrives one typed amount at a time. Subtracting one
+         from the other at 18% coverage printed -Rs 9,82,170 for August — a
+         catastrophic loss that is entirely a data-entry gap, and the single
+         most misleading number this app could put on a screen. */
+      t.canState = t.cover >= 0.8;
+    }
+    return out;
+  }
 
   ["TT","MP","TN","BH","LP"].forEach((code, i)=>{
     const cell = row[i + 1];
@@ -8664,7 +8822,8 @@ function renderTrends(){
     if(!FIN.length){
       deck.appendChild(el("div","empty","No months have been read from your workbook yet."));
     } else {
-    const keys = FIN.map(r=>r[0]);
+    const appK = appMonths();
+    const keys = FIN.map(r=>r[0]).concat(appK);
     if(keys.indexOf(finMonth) < 0) finMonth = keys[keys.length-1];
     const F = finRows(finMonth);
     const pct = v => Math.max(0, Math.min(1, v));
@@ -8681,7 +8840,9 @@ function renderTrends(){
     prev.disabled = at <= 0; next.disabled = at >= keys.length-1;
     const lab = el("div","lab");
     lab.append(el("b",null,monName(finMonth)),
-               el("s",null,`${keys.length} months read · ${FIN_DROP.length} refused`));
+               el("s",null, F.source === "app"
+                 ? `from your own bookings · not yet in your sheet`
+                 : `${FIN.length} months read · ${FIN_DROP.length} refused`));
     const step = d => { const k = keys[at+d]; if(!k) return; finMonth = k; haptic(9); renderTrends(); };
     prev.onclick = ()=>step(-1); next.onclick = ()=>step(1);
     mo.append(prev, lab, next);
@@ -8700,33 +8861,53 @@ function renderTrends(){
             "repeating-linear-gradient(135deg,color-mix(in srgb,var(--free) 62%,transparent) 0 5px,transparent 5px 10px)";
           strip.appendChild(sp); });
       strip.setAttribute("role","img");
-      strip.setAttribute("aria-label",
-        `${F.coverage.complete} flats priced completely, ${F.coverage.floor} priced short of the book, ${F.coverage.absent} in no sheet`);
+      strip.setAttribute("aria-label", F.source === "app"
+        ? `${F.coverage.floor} flats read from your own bookings, ${F.coverage.absent} with no cost line`
+        : `${F.coverage.complete} flats priced completely, ${F.coverage.floor} priced short of the book, ${F.coverage.absent} in no sheet`);
       b.appendChild(strip);
       const absent = F.rows.filter(r=>r.state==="absent");
       if(absent.length){
-        const note = el("button","covnote",
-          `${F.coverage.absent} flats at ${absent.map(r=>r.name).join(" and ")} are in no revenue or cost sheet →`);
+        const note = el("button","covnote", F.source === "app"
+          ? `${F.coverage.absent} flats at ${absent.map(r=>r.name).join(" and ")} have no cost line, so they are left out →`
+          : `${F.coverage.absent} flats at ${absent.map(r=>r.name).join(" and ")} are in no revenue or cost sheet →`);
         note.onclick = ()=>{ haptic(10); openCosts(absent[0]); };
         b.appendChild(note);
       }
       const head = el("div","headline");
       const t = F.totals;
-      head.append(el("b",null, t ? money(t.net) : "—"));
-      const s2 = el("s"); s2.innerHTML = t
-        ? `kept · <span class="hi">${t.flats} of ${totalFlats} flats</span>`
-        : "nothing priced this month";
-      head.append(s2);
+      /* COST IS COMPLETE THE DAY A MONTH STARTS; REVENUE ARRIVES ONE TYPED
+         AMOUNT AT A TIME. Subtract them at 19% priced and August reads
+         −₹9,82,170 — a catastrophic loss that is entirely a gap in data entry,
+         and the most misleading number this app could print. The month still
+         appears, because what the book knows about NIGHTS is exact and worth
+         seeing; it just leads with that instead. */
+      const thinMonth = t && t.app && !t.canState;
+      if(thinMonth){
+        head.append(el("b",null, Math.round(t.occ*100) + "%"));
+        head.append(el("s",null, `of your ${t.cap.toLocaleString("en-IN")} nights sold · `
+          + `${t.priced} of ${t.rows} bookings carry an amount`));
+      } else {
+        head.append(el("b",null, t ? money(t.net) : "—"));
+        const s2 = el("s"); s2.innerHTML = t
+          ? `kept · <span class="hi">${t.flats} of ${totalFlats} flats</span>`
+          : "nothing priced this month";
+        head.append(s2);
+      }
       b.appendChild(head);
 
       /* THE BAR NEEDS A KEY, ONCE. Two tones, a tick and sometimes a hatch is
          four pieces of vocabulary, and the card was asking the operator to
          infer all of them from a caption. Said plainly here and never again. */
-      const key = el("div","wkey");
-      key.innerHTML = `<span><i class="k-cover"></i>paying its costs</span>`
-                    + `<span><i class="k-kept"></i>kept</span>`
-                    + `<span><i class="k-tick"></i>break-even</span>`;
-      b.appendChild(key);
+      /* A key for marks that are not on the bars. On an app-sourced month there
+         is no split and no tick — the rows draw sold nights and nothing else —
+         so naming three things the reader cannot find is worse than no key. */
+      if(!thinMonth){
+        const key = el("div","wkey");
+        key.innerHTML = `<span><i class="k-cover"></i>paying its costs</span>`
+                      + `<span><i class="k-kept"></i>kept</span>`
+                      + `<span><i class="k-tick"></i>break-even</span>`;
+        b.appendChild(key);
+      }
       /* THE ANSWER OPENS UNDER THE ROW YOU TOUCHED. It used to open in a fixed
          slot below all five, so tapping Telecom Nagar at the top meant
          scrolling past four other buildings to read about it — the reader
@@ -8737,7 +8918,8 @@ function renderTrends(){
       const rowsBox = el("div","wrows");
       let openRow = null; const made = [];
       const complete = F.rows.filter(r=>r.state==="complete").sort((a,b2)=> a.head - b2.head);
-      const floors   = F.rows.filter(r=>r.state==="floor").sort((a,b2)=> a.head - b2.head);
+      const floors   = F.rows.filter(r=>r.state==="floor" || r.state==="app")
+                             .sort((a,b2)=> a.head - b2.head);
 
       const drawRow = (r)=>{
         const row = el("button","wrow" + (r.state==="complete" && r.net < 0 ? " short" : ""));
@@ -8745,8 +8927,17 @@ function renderTrends(){
         const nm = el("b", null, r.name);
         n.appendChild(nm);
         if(r.state === "floor"){ const p2 = el("span","pill now","understated"); n.appendChild(p2); }
+        if(r.state === "app" && !r.canState){
+          const p2 = el("span","pill now", `${Math.round(r.cover*100)}% priced`); n.appendChild(p2);
+        }
         const right = el("em");
         if(r.state === "absent"){ const p2 = el("span","pill now","Add costs →"); n.appendChild(p2); }
+        /* "AT LEAST" IS NOT A THING YOU CAN SAY ABOUT A NEGATIVE. A floor under
+           a loss is not a floor, it is a bigger loss — and at 6% priced the
+           subtraction is measuring how little has been typed in, not how the
+           building did. The row shows the one thing it knows exactly instead. */
+        else if(r.state === "app" && !r.canState)
+          right.textContent = `${r.book} night${r.book===1?"":"s"} sold`;
         else right.textContent = (r.state==="floor" ? "at least " : "") +
                                  (r.net >= 0 ? "+" : "−") + money(Math.abs(r.net));
         n.appendChild(right);
@@ -8756,8 +8947,9 @@ function renderTrends(){
            counted that it does not. And the solid part is split at break-even
            — dim while it is still paying the rent, lit once it is not. */
         const track = el("div","t");
+        const thin = r.state === "app" && !r.canState;
         const billedOcc = r.state==="absent" ? 0 : pct(r.occ);
-        const be = r.state==="absent" ? null : pct(r.be);
+        const be = (r.state==="absent" || thin) ? null : pct(r.be);
         const put = (cls, from, to)=>{
           if(to <= from + 0.0005) return;
           const i2 = el("i", cls);
@@ -8766,7 +8958,8 @@ function renderTrends(){
           i2.style.setProperty("--v","1");
           track.appendChild(i2);
         };
-        if(be === null) { /* nothing billed at all — the hatch below says it */ }
+        if(be === null && thin){ put("only", 0, billedOcc); }   // sold, and that is all it claims
+        else if(be === null) { /* nothing billed at all — the hatch below says it */ }
         else if(billedOcc <= be){ put("cover only", 0, billedOcc); }   // still paying for itself
         else { put("cover", 0, be); put("kept", be, billedOcc); }
         const bookOcc = pct(r.bookOcc);
@@ -8781,8 +8974,8 @@ function renderTrends(){
         /* The threshold also gets a hard mark on its own rail below, on the one
            ground the card surface offers, so the exact point is readable even
            where the two fill segments meet at low contrast. */
-        const rail = el("div","rail" + (r.state==="absent" ? " nocost" : ""));
-        if(r.state !== "absent"){
+        const rail = el("div","rail" + (r.state==="absent" || thin ? " nocost" : ""));
+        if(r.state !== "absent" && !thin){
           const tick = el("span","tick" + (r.unreachable ? " over" : ""), r.unreachable ? "›" : "");
           tick.style.left = (Math.min(be,1)*100).toFixed(2)+"%";
           rail.appendChild(tick);
@@ -8796,7 +8989,7 @@ function renderTrends(){
         }
         row.appendChild(rail);
 
-        if(r.state !== "absent"){
+        if(r.state !== "absent" && !thin){
           const p = el("div","pcts");
           /* Placed at a fraction along the bar, clamped so a label near either
              end sits inside the card instead of centred on the edge. */
@@ -8838,7 +9031,19 @@ function renderTrends(){
           rowsBox.classList.add("picked"); row.classList.add("on");
           wrap.classList.add("telling"); openRow = wrap;
           const inner = el("div","vsay-in"), line = el("div","vsay-l");
-          line.innerHTML = r.state === "floor"
+          line.innerHTML = (r.state === "app" && !r.canState)
+            /* The row knows its nights exactly and its money hardly at all, so
+               it says the first and asks for the second. Naming the gap in
+               bookings rather than in rupees is what makes it actionable: the
+               operator cannot type a revenue figure, but they can put amounts
+               on the stays they already have. */
+            ? `<b>${esc(r.name)}</b> sold <b>${r.book} of its ${r.cap} nights</b> — `
+              + `${Math.round(r.bookOcc*100)}% — and that count is exact, straight off your book. `
+              + `What it earned is not: <b>${r.priced} of its ${r.rows} bookings carry an amount</b>, `
+              + `covering ${Math.round(r.cover*100)}% of the nights it sold. Until that gets closer to all of `
+              + `them, subtracting ${money(r.cost)} of costs from ${money(r.revenue)} would measure your typing, `
+              + `not this building. Put amounts on the stays and this row fills itself in.`
+            : r.state === "floor"
             ? `<b>${esc(r.name)}</b> sold ${r.book} of its ${r.cap} nights — ${Math.round(r.bookOcc*100)}%. `
               + `Your monthly sheet accounts for ${r.billed} of them, ${Math.round(r.occ*100)}%. The rest is billed `
               + `outside this sheet, so <b>${money(r.net)} is a floor, not a figure</b>. Its cost line covers all `
@@ -8901,12 +9106,18 @@ function renderTrends(){
          where the badge already was. */
       complete.forEach(r=> rowsBox.appendChild(drawRow(r)));
       const odd = floors.concat(absent);
+      /* NOT COMPARABLE WITH WHAT? The heading divides two groups, so it needs
+         something above it to divide from. On a month read from the app's own
+         book every row is in this group, and the label sat at the very top
+         separating the list from nothing. */
       if(odd.length){
-        const g = el("div","wgroup");
-        /* Two words. Which KIND of not-comparable each one is rides on the row,
-           where its badge already says "understated" or "Add costs". */
-        g.appendChild(el("div","lbl", "NOT COMPARABLE"));
-        rowsBox.appendChild(g);
+        if(complete.length){
+          const g = el("div","wgroup");
+          /* Two words. Which KIND of not-comparable each one is rides on the row,
+             where its badge already says "understated" or "Add costs". */
+          g.appendChild(el("div","lbl", "NOT COMPARABLE"));
+          rowsBox.appendChild(g);
+        }
         odd.forEach(r=> rowsBox.appendChild(drawRow(r)));
       }
       b.appendChild(rowsBox);
@@ -8930,7 +9141,14 @@ function renderTrends(){
       b.appendChild(edit);
 
       const best = complete[complete.length-1], worst = complete[0];
-      said(c, complete.length >= 2
+      said(c, F.source === "app" && F.totals && !F.totals.canState
+        ? `This month is not in your monthly sheet yet, so it is read from the app's own book. The nights are `
+          + `exact — a stay either covered a night or it did not — and they say you sold `
+          + `<span class="hi">${Math.round(F.totals.occ*100)}%</span> of ${monName(finMonth)}. The money is `
+          + `the part that is missing: ${F.totals.priced} of ${F.totals.rows} bookings carry an amount. `
+          + `Add amounts as you take bookings and this month becomes a profit figure like the ones behind it, `
+          + `without you touching a spreadsheet again.`
+        : complete.length >= 2
         ? `Ranked by rupees, the biggest building wins for being big. Ranked by how far each one runs past its `
           + `own break-even, <span class="hi">${esc(best.name)}</span> is the strongest — it covers itself in `
           + `${Math.ceil(best.beNights)} of its ${best.cap} nights, where <span class="hi">${esc(worst.name)}</span> `
@@ -12923,7 +13141,11 @@ let pulling = false;
     if(sheet.classList.contains("on")) return;
     // elements that own their own horizontal gesture keep it — the calendar's
     // press-and-sweep and the fortnight strip must not flip the tab
-    if(e.target.closest && e.target.closest(".cal, .nights, .deck")){ x0=null; return; }
+    /* Anything that scrolls sideways owns its own horizontal gesture. The
+       building filter was added without being listed here, so dragging it
+       along flipped to Month — the row moved AND the tab changed, which reads
+       as the app losing the gesture rather than sharing it. */
+    if(e.target.closest && e.target.closest(".cal, .nights, .deck, .roomfilt")){ x0=null; return; }
     x0=e.touches[0].clientX; y0=e.touches[0].clientY;
   },{passive:true});
   document.querySelector(".screens").addEventListener("touchend",e=>{

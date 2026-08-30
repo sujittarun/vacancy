@@ -1180,6 +1180,68 @@ export async function run(filter) {
     return `${all} free across ${secs.length} buildings, and the filter shows ${want} free of ${shown}`;
   });
 
+  /* ══ the app's own book as the source ═══════════════════════════════════ */
+
+  /* The workbook's newest sheet is Jul 2026 and there is no Aug26, so the
+     Profit tab stopped at July while the operator's own August sat in the app
+     unread. It now reads those months itself — but cost is complete the day a
+     month starts and revenue arrives one typed amount at a time, so subtracting
+     them at 19% priced printed a -Rs 9,82,170 "loss" that was entirely a gap in
+     data entry. */
+  await test("a month the workbook has not closed is read from the app's own book", async () => {
+    const key = appMonths()[0];
+    ok(key, "no app-sourced month — the book should reach past the workbook's last sheet");
+    ok(FIN.every(r => r[0] !== key), `${key} is in the workbook, so it is not app-sourced`);
+    const F = finRows(key);
+    eq(F.source, "app", "source of the month");
+    ok(F.totals, `${key} has no totals`);
+    /* Nights are a census and must be exact; money is a sample and must not be
+       stated until it covers the nights. */
+    ok(F.totals.nights > 0, "nights sold");
+    eq(F.totals.canState, F.totals.cover >= 0.8, "the gate against its own coverage");
+    ok(!F.totals.canState, `${key} is ${Math.round(F.totals.cover*100)}% priced — expected the shipped book to be thin`);
+    /* The refusal must be a state the operator can LEAVE, or it is a dead card
+       wearing an apology. Price the month and the figure appears. */
+    const d0 = Math.round((new Date(+key.slice(0,4), +key.slice(5,7)-1, 1) - dateAt(0)) / 86400000);
+    const d1 = Math.round((new Date(+key.slice(0,4), +key.slice(5,7),   0) - dateAt(0)) / 86400000) + 1;
+    const touched = [];
+    bookings().forEach(r=>{
+      if(Math.min(r.end,d1) <= Math.max(r.start,d0)) return;
+      if(!r.amount && r.nights){ touched.push(r); r.amount = 5000 * r.nights; }
+    });
+    try {
+      const full = finRows(key);
+      eq(Math.round(full.totals.cover*100), 100, "coverage once every stay is priced");
+      ok(full.totals.canState, "the gate did not open at full coverage");
+      ok(full.totals.net > 0, `priced at Rs 5,000 a night the month nets ${full.totals.net}, expected a profit`);
+    } finally {
+      touched.forEach(r => { delete r.amount; });
+    }
+    const back = finRows(key);
+    eq(back.totals.canState, false, "the gate after the fixture was removed");
+    return `${key}: ${F.totals.nights} nights sold, ${Math.round(F.totals.cover*100)}% priced — refuses, and opens when priced`;
+  });
+
+  /* An amount typed onto a booking has to reach the Profit tab, and finRows is
+     memoised on a stamp that only knew about flats, costs and revenue overrides. */
+  await test("typing an amount onto a booking moves the month that reads it", async () => {
+    const key = appMonths()[0];
+    ok(key, "no app-sourced month to test with");
+    const d0 = Math.round((new Date(+key.slice(0,4), +key.slice(5,7)-1, 1) - dateAt(0)) / 86400000);
+    const d1 = Math.round((new Date(+key.slice(0,4), +key.slice(5,7),   0) - dateAt(0)) / 86400000) + 1;
+    const before = finRows(key).totals.revenue;
+    const r = bookings().find(x => !x.amount && x.nights
+      && Math.min(x.end,d1) > Math.max(x.start,d0));
+    ok(r, "no unpriced booking in that month to type onto");
+    r.amount = 50000;
+    try {
+      const after = finRows(key).totals.revenue;
+      ok(after > before, `revenue stayed at ${before} — the cache did not notice the booking`);
+    } finally { delete r.amount; }
+    eq(finRows(key).totals.revenue, before, "revenue after the fixture was removed");
+    return `${money(before)} moved when an amount was typed, and moved back`;
+  });
+
   /* ══ the whole surface ══════════════════════════════════════════════════ */
 
   await test("no text falls below AA in either theme", async () => {

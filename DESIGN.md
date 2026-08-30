@@ -830,6 +830,40 @@ running 1 to 59 nights. It was comparing booking totals, so it measured **stay
 length and called it spending**. Per night, and five priced rows on each side,
 or there is no comparison to draw.
 
+## The sheet taught it the past; it is not how it learns from here
+
+The workbook's newest monthly sheet is Jul 2026. There is no Aug26 — the
+operator has not closed August, and today is the 30th. So the Profit tab
+stopped at July while their own August sat inside the app: 923 nights sold
+across 243 bookings, entirely unread, in the one place the app has complete
+information.
+
+The fix is to read it. The trap is what happens next.
+
+**Cost is complete the day a month starts. Revenue arrives one typed amount at
+a time.** August's costs are the standing model — ₹16,85,500, known in full on
+the 1st. August's revenue is whatever has been typed onto bookings, which is
+45 of 243 rows, 19% of the sold nights. Subtract one from the other and the
+card reads **−₹9,82,170**: a catastrophic loss that is entirely a data-entry
+gap, on a month that at full pricing nets **+₹18,28,316**.
+
+That would have been the most misleading number this app has ever printed, and
+every part of the arithmetic behind it is correct.
+
+So the month appears, and leads with what it actually knows. Nights are a
+census — a stay either covered a night or it did not — so `79% of your 930
+nights sold` is exact and goes in the headline. Money is a sample, and the card
+may not state a profit until priced nights cover 80% of sold nights. Below that
+each row shows `253 nights sold` and a `6% priced` badge instead of a net, and
+draws no break-even mark at all, because that mark is cost ÷ a rate and Telecom
+Nagar's rate came off **one** priced booking.
+
+And the refusal has to be a door, not a wall — see the repeat-guest card, which
+learned this the expensive way. Pricing the month opens the gate and the figure
+appears, which is why the regression test prices every August stay and asserts
+a profit comes out the other side. A refusal nobody can leave is a dead card
+that has been taught to apologise.
+
 ## Prohibitions
 
 - No paper, ruling, stamps, or any ledger device. That world is discarded.
