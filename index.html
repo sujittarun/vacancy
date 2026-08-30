@@ -74,6 +74,7 @@
      square corners on the sheet, both bars, and every pill, chip, field and
      card. A token in a theme block is a token that only exists in that theme.
      check-css.mjs blocks on this now. */
+  --shell:430px;          /* the app is a phone-shaped column at any window size */
   --r-xs:9px;    /* ≤40px — room tiles, pills, the small round controls */
   --r-sm:11px;   /* 40–56px — chips, calendar cells, most buttons       */
   --r-md:14px;   /* 56–80px — the night strip, list rows, big fields    */
@@ -329,7 +330,27 @@ button{background:none;border:0;padding:0;cursor:pointer}
 :focus-visible{outline:2px solid var(--now);outline-offset:2px;border-radius:4px}
 
 /* ══════════════════════ shell ══════════════════════ */
-.app{position:fixed;inset:0;display:flex;flex-direction:column}
+/* ── THE SHELL IS A PHONE, ON ANY SCREEN ─────────────────────────────────────
+   This app is one-handed and phone-first — 375x812 is the design target and
+   every measurement in DESIGN.md is taken there. With no cap it simply stretched
+   to whatever the window was, and the Month calendar was where that stopped
+   being cosmetic: seven `1fr` columns across 1280px made each day cell 170x194
+   instead of 47x55, so a 224px trough held 2,467px of grid and the operator saw
+   one and a bit weeks of a nine-week calendar, the rest clipped.
+
+   Every other layer — tabbar, sheet, scrim, toasts — is position:absolute inside
+   this element, so capping it here carries all of them without touching one of
+   their rules.
+
+   430px, not 375: the width of a large phone, so the column looks deliberate on
+   a laptop rather than starved, and every internal measurement stays fluid
+   inside it. The hairline only appears once the window is actually wider than
+   the shell, so a real phone never wears an edge it has no room for. */
+.app{position:fixed;inset:0;display:flex;flex-direction:column;
+  max-width:var(--shell);margin-inline:auto}
+@media (min-width:calc(430px + 1px)){
+  .app{border-left:1px solid var(--line);border-right:1px solid var(--line)}
+}
 
 .topbar{
   position:relative;z-index:30;flex:0 0 auto;
@@ -992,8 +1013,13 @@ button{background:none;border:0;padding:0;cursor:pointer}
    the dates got shorter. */
 .pick{
   display:flex;align-items:center;gap:10px;margin:0 0 12px;
-  border-bottom:1px solid var(--line);padding-bottom:10px;
+  border-bottom:1px solid var(--line);padding:0 0 10px 1px;
 }
+/* That 1px is not a nudge, it is a clip. CHECK-IN sits at x=0 of a .card.bare,
+   which is overflow:hidden, and an uppercase 9px label with .08em tracking
+   carries its C a hair left of its own box — so the glyph was shaved and the
+   operator read "HECK-IN". One pixel of inset, and the underline below follows
+   it because it is positioned against the same box. */
 .pick .pfs{display:flex;align-items:stretch;flex:1 1 auto;min-width:0}
 .pick .pf{
   flex:1;min-width:0;text-align:left;padding:1px 0 7px;background:none;border:0;
