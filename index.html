@@ -1646,10 +1646,18 @@ button{background:none;border:0;padding:0;cursor:pointer;
    under the sentence instead of beside it. */
 .row.bk.actrow{grid-template-columns:auto 1fr auto;align-items:start;gap:9px}
 .actrow .meta{white-space:normal;overflow:visible;text-overflow:clip}
-.actrow .meta b{display:block;white-space:normal}
+/* A guest name is arbitrary text and can be one unbroken 60-character run —
+   a pasted address, or the XSS probe the suite books under. Without this it
+   ran straight out of its column and under the time. */
+.actrow .meta b{display:block;white-space:normal;overflow-wrap:anywhere}
+.actrow .meta em{overflow-wrap:anywhere}
 .actrow .meta em{white-space:normal;overflow:visible;text-overflow:clip}
 .actrow .rowend{align-self:start;padding-top:3px}
-.actk{flex:0 0 22px;height:22px;margin-right:2px;display:grid;place-items:center;
+/* WIDTH, not flex-basis. .actrow is a GRID, where `flex:0 0 22px` does nothing
+   at all — so the badge took its width from its glyph and every one of them
+   rendered about 10px wide and 22px tall: a column of narrow vertical slots
+   down the left of the sheet instead of a column of square badges. */
+.actk{width:22px;height:22px;display:grid;place-items:center;
   border-radius:6px;background:var(--surface-2);color:var(--txt-2);
   font-size:11px;font-weight:700;line-height:1}
 /* --now-ink, not --now. In light the accent is #F59300 and the wash under it is
@@ -3816,6 +3824,17 @@ let flatIndex = Object.fromEntries(flats.map((f,i)=>[f.id,i]));
 function applyInventory(next, renames){
   renames = renames || {};
   const prev = flats;
+  /* Logged BEFORE the swap, while both shapes are still in hand — afterwards
+     there is nothing left to compare against. */
+  try{
+    const was = prev.map(f=>f.id), now = next.map(f=>f.id);
+    const gone = was.filter(id => now.indexOf(renames[id] || id) < 0);
+    const made = now.filter(id => was.indexOf(id) < 0 && !Object.values(renames).includes(id));
+    if(gone.length || made.length || was.length !== now.length)
+      logAct("flats", `Inventory changed · ${was.length} flats → ${now.length}`
+        + (made.length ? ` · added ${made.slice(0,3).join(", ")}${made.length>3?"…":""}` : "")
+        + (gone.length ? ` · removed ${gone.slice(0,3).join(", ")}${gone.length>3?"…":""}` : ""));
+  }catch(e){}
   const held = resv.map(r => {
     const was = flats[r.fi] && flats[r.fi].id;
     return {...r, _id: renames[was] || was};
@@ -6200,6 +6219,8 @@ function dropPayment(r, p){
     if(queued && !flying) paintAcct(); else enqueue({k:"pay-", id:p.id});
   }
   save(); cacheSave();
+  logAct("unpaid", `Removed ${money(p.amount)} from ${r.guest || "a guest"} · ${p.method}`
+    + ` · ${flatLabel(r.fi)}`, {flat: flatLabel(r.fi), guest: r.guest});
 }
 
 function addBooking(fi, start, nights, guest, src, extra){
@@ -6292,6 +6313,8 @@ const openIssues = fi => issues.filter(x => x.fixed == null && (fi == null || x.
                                           || a.on - b.on);
 
 function addIssue(fi, fault, note, urgency){
+  logAct("fault", `Logged ${fault || "a fault"} in ${flatLabel(fi)}`
+    + (urgency === "urgent" ? " · urgent" : ""), {flat: flatLabel(fi)});
   if(!(fi >= 0 && fi < NF)) return false;
   const row = {id: uuid(), fi, fault: fault || undefined, note: (note||"").trim(),
                urgency: URGENCY.indexOf(urgency) >= 0 ? urgency : "soon", on: 0, fixed: null};
@@ -6316,6 +6339,8 @@ function closeIssue(x, fixer, phone, cost){
   save(); cacheSave();
 }
 function dropIssue(x){
+  logAct("fault", `Dropped ${x.fault || "a fault"} in ${flatLabel(x.fi)} without a repair`,
+    {flat: flatLabel(x.fi)});
   const i = issues.indexOf(x);
   if(i >= 0) issues.splice(i, 1);
   if(MODE === "live") enqueue({k:"iss-", id:x.id});
@@ -7222,8 +7247,17 @@ function openAccount(){
    line each: the time, the sentence, and the flat it touched. No filters, no
    search, no pagination — three hundred entries is a fortnight of ordinary use
    and the answer is nearly always in the first ten.                          */
-const ACT_ICON = {book:"+", cancel:"✕", move:"⇄", refused:"!", paid:"₹",
-                  fixed:"✓", block:"⌂", expense:"₹", costs:"₹", export:"↓"};
+/* One glyph per kind, and every kind has one — a "·" fallback in a log is the
+   app admitting it does not know what it just recorded. Money is ₹ wherever
+   money moved, in or out, because the sentence beside it says which. */
+const ACT_ICON = {
+  book:"+",      restore:"↩",   cancel:"✕",   move:"⇄",     refused:"⊘",
+  paid:"₹",      unpaid:"−",    fault:"!",    fixed:"✓",    block:"⌂",
+  expense:"₹",   costs:"₹",     revenue:"₹",  flats:"⌗",    export:"↓",
+};
+/* Amber is attention, and both of these are things that want a second look:
+   a fault nobody has closed, and a move the app would not make. */
+const ACT_WARN = {refused:1, fault:1};
 function openActivity(){
   sheetWipe();
   const t = el("div");
@@ -7278,7 +7312,7 @@ function openActivity(){
       + (a.g || a.f ? `<em>${[a.g, a.f].filter(Boolean).map(esc).join(" · ")}</em>` : "");
     const e2 = el("div","rowend");
     e2.append(el("span","acttime", clock(d)));
-    row.append(el("div","actk" + (a.k === "refused" ? " warn" : ""), ACT_ICON[a.k] || "·"), m, e2);
+    row.append(el("div","actk" + (ACT_WARN[a.k] ? " warn" : ""), ACT_ICON[a.k] || "·"), m, e2);
     card.append(row);
   });
   sheet.classList.add("on"); scrim.classList.add("on");
@@ -11380,6 +11414,41 @@ const sheetB = document.getElementById("sheetB");
 /* Numbers get typed with spaces, +91, brackets and none of it consistently, so
    match on the last ten digits and nothing else. */
 const digits10 = s => String(s || "").replace(/\D/g,"").slice(-10);
+/* ── ONE PHONE NUMBER, HOWEVER IT ARRIVES ────────────────────────────────────
+   A number is typed, dictated, and — most often — pasted out of WhatsApp,
+   where it comes wearing "+91 ", or "0", or "+91-98765 43210". The field
+   accepted every one of those verbatim, so the same guest could be stored four
+   ways and match none of them: digits10() takes the last ten, which quietly
+   rescues the lookups but leaves the operator staring at a field that does not
+   look like a phone number.
+
+   So the field normalises as you type. India is the only country this app is
+   used in, so a 91 in front of ten digits is a country code, a single leading
+   0 is the old trunk prefix, and neither belongs in a stored number.        */
+function tidyPhone(raw){
+  let d = String(raw == null ? "" : raw).replace(/\D/g, "");
+  if(d.length > 10 && d.startsWith("91")) d = d.slice(2);   // +91, 0091, 91
+  while(d.length > 10 && d.startsWith("0")) d = d.slice(1); // 0 98765 43210
+  if(d.length > 10) d = d.slice(-10);                       // anything else, keep the last ten
+  return d;
+}
+/* Attach to a field: it tidies on input and on paste, and holds the caret at
+   the end rather than throwing it to the front on every keystroke — which is
+   what a naive value rewrite does and why so many phone fields are miserable. */
+function phoneField(inp){
+  inp.maxLength = 10;
+  const fix = ()=>{
+    const was = inp.value, atEnd = inp.selectionStart === was.length;
+    const now = tidyPhone(was);
+    if(now === was) return;
+    inp.value = now;
+    if(atEnd){ try{ inp.setSelectionRange(now.length, now.length); }catch(e){} }
+  };
+  inp.addEventListener("input", fix);
+  inp.addEventListener("paste", ()=> setTimeout(fix, 0));
+  inp.addEventListener("blur", fix);
+  return inp;
+}
 function guestByPhone(ph){
   const key = digits10(ph);
   if(key.length < 10) return null;
@@ -13095,6 +13164,7 @@ function openBooking(fi, from, nights){
      the field and should spend it on the field's name. */
   phone.placeholder = "Phone Number";
   phone.setAttribute("aria-label", `Guest phone number for ${fl.id} — optional`);
+  phoneField(phone);
   const who = el("input");
   who.type = "text"; who.placeholder = "Guest name"; who.autocomplete = "off";
   who.setAttribute("aria-label", `Guest name for ${fl.id}`);
@@ -13383,6 +13453,7 @@ function openBlockForm(fi, day){
   handName.setAttribute("aria-label","Name of the person fixing it");
   const handPh = el("input"); handPh.type = "tel"; handPh.inputMode = "numeric";
   handPh.placeholder = "Their number"; handPh.setAttribute("aria-label","Their phone number");
+  phoneField(handPh);
   handRow.append(handName, handPh);
 
   /* No bill here. Nobody knows what a repair cost before it has been done, so a
@@ -13645,6 +13716,7 @@ function openFixedForm(o){
   handName.setAttribute("aria-label","Name of the person who fixed it");
   const handPh = el("input"); handPh.type = "tel"; handPh.inputMode = "numeric";
   handPh.placeholder = "Their number"; handPh.setAttribute("aria-label","Their phone number");
+  phoneField(handPh);
   handRow.append(handName, handPh);
 
   const costCap = el("div","bkcap");

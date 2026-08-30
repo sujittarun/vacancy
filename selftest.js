@@ -1625,6 +1625,60 @@ export async function run(filter) {
     }
   });
 
+  /* A number is typed, dictated, and mostly PASTED out of WhatsApp, where it
+     arrives wearing "+91 ", or a leading 0, or dashes. The field took every one
+     of those verbatim, so one guest could be stored four ways. */
+  await test("a phone number is stored one way however it is pasted", async () => {
+    const cases = [
+      ["+91 98765 43210", "9876543210"], ["0 9876543210",    "9876543210"],
+      ["+91-98765-43210", "9876543210"], ["00919876543210",  "9876543210"],
+      ["98765 43210",     "9876543210"], ["9876543210",      "9876543210"],
+      ["(+91) 98765-43210","9876543210"],
+    ];
+    cases.forEach(([raw, want]) => eq(tidyPhone(raw), want, `tidyPhone(${JSON.stringify(raw)})`));
+    /* and through a real field, on the input event a paste fires */
+    const i = document.createElement("input");
+    phoneField(i);
+    eq(i.maxLength, 10, "the field's maxLength");
+    i.value = "+91 98765 43210";
+    i.dispatchEvent(new Event("input", {bubbles:true}));
+    eq(i.value, "9876543210", "the value after an input event");
+    /* a half-typed number must not be mangled while it is being typed */
+    i.value = "98765"; i.dispatchEvent(new Event("input", {bubbles:true}));
+    eq(i.value, "98765", "a partial number was rewritten mid-typing");
+    /* and the lookup key agrees with what is stored, or search breaks */
+    eq(digits10(tidyPhone("+91 98765 43210")), "9876543210", "digits10 of a tidied number");
+    return `${cases.length} shapes, one stored number`;
+  });
+
+  /* "Everything you have done" has to mean everything — repairs, collections,
+     finance and inventory, not just bookings. */
+  await test("the log records repairs, collections and inventory too", async () => {
+    const keep = activity.slice();
+    try {
+      activity.length = 0; jset(LOG_STORE, activity);
+      const fi = flats.map((f,i)=>i).find(i => freeSpan(i, 0, 3));
+      ok(addBooking(fi, 0, 2, "Cover Fixture", "Direct", {amount: 9000}), "fixture refused");
+      const b = resv.find(r => r.guest === "Cover Fixture");
+      addPayment(b, 4000, "UPI");
+      dropPayment(b, b.pays[0]);
+      addIssue(fi, "Geyser", "note", "urgent");
+      closeIssue(issues[issues.length-1], "Ramesh", "9876543210", 3500);
+      cancelBooking(resv.find(r => r.guest === "Cover Fixture"));
+      const kinds = activity.map(a => a.k);
+      ["book","paid","unpaid","fault","fixed","cancel"].forEach(k =>
+        ok(kinds.indexOf(k) >= 0, `nothing recorded for "${k}" — the log is not everything`));
+      /* and every kind the app can emit has a glyph; a "·" in a log is the app
+         admitting it does not know what it recorded */
+      [...new Set(kinds)].forEach(k => ok(ACT_ICON[k], `no glyph for the "${k}" kind`));
+      return `${[...new Set(kinds)].length} kinds recorded, every one with a glyph`;
+    } finally {
+      activity.length = 0; keep.forEach(a => activity.push(a)); jset(LOG_STORE, activity);
+      issues = issues.filter(x => x.fault !== "Geyser" || x.fixer !== "Ramesh");
+      recompute();
+    }
+  });
+
   /* ══ the whole surface ══════════════════════════════════════════════════ */
 
   await test("no text falls below AA in either theme", async () => {
