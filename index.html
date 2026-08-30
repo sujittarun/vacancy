@@ -995,8 +995,19 @@ button{background:none;border:0;padding:0;cursor:pointer}
    label already says "1 Sep", and the sticky month name above the trough says
    which month you are scrolled to. Subtle on purpose: a month boundary is a
    fact about the calendar, not about the rooms. */
-.day.mstart::after{content:"";position:absolute;left:-4px;top:2px;bottom:2px;width:1px;
-  background:var(--line-2);border-radius:1px}
+/* THE SEAM, and only on the one boundary that shares a row. Every later month
+   opens on its own row, and starting a row is already the mark — a rule down
+   the left edge of the card would be pointing at nothing.
+
+   Dashed rather than solid, and taller than the cell, so it reads as a fold in
+   the calendar rather than as a border belonging to the cell beside it: this is
+   the one place in the grid where two months are touching. */
+/* Drawn as the cell's OWN left border, not as a pseudo-element in the gap.
+   .day is overflow:hidden, so a ::before at left:-4px is clipped away and the
+   seam simply did not appear — it was in the CSS and invisible on the phone.
+   A border is not clipped by the box it belongs to. */
+.day.mstart.seam{border-left:2px dashed var(--txt-2)}
+.day.mstart.seam .dd{color:var(--txt)}
 /* "1 Sep" has to hold one line in a 35px inner width, or it wraps onto the
    free count underneath it — which is what it did: the month sat on top of the
    number the cell exists to show. */
@@ -7672,6 +7683,12 @@ function renderMonth(){
      trough still says which month you are looking at as you scroll, so nothing
      is lost by dropping the full-width divider that used to force the break. */
 
+  let seamAt = -1;                       // the one 1st that shares a row with the 31st
+  /* Which month starts open a NEW ROW. ms[0] is where the grid begins and ms[1]
+     is the one merged boundary, so everything from ms[2] on breaks — decided
+     here rather than during layout so makeDay can cap a band against it without
+     depending on the order cells happen to be built in. */
+  const breakBefore = new Set(ms.slice(2).map(m => m.days[0]));
   const makeDay = (d)=>{
     const dt = dateAt(d), f = freeCount(d);
     const c = el("button","day");
@@ -7693,11 +7710,15 @@ function renderMonth(){
       else if(d === hi)         { c.classList.add("rngB"); capR(); if(col===0) capL(); }
       else if(d > lo && d < hi) { c.classList.add("rng");
                                   if(col===0) capL(); if(col===6) capR(); }
-      /* No month-edge caps any more. They existed because the grid restarted
-         at every month, so a band running past the 31st ran off an edge that
-         was not a week edge. In a continuous grid it does not: 31 August and
-         1 September are neighbours in the same row, and a stay across them is
-         one stay. Capping it would draw a break the book does not have. */
+      /* Caps at the boundaries that BREAK, and none at the one that merges.
+         A band running past the 31st into a month that starts a fresh row would
+         otherwise run off an edge that is not a week edge, and pick up again
+         across a run of pads — the ribbon drawn through empty cells that made
+         these caps necessary in the first place. Across the merged seam there
+         is no break to draw: 31 August and 1 September are neighbours, and a
+         stay over them is one stay. */
+      if(breakBefore.has(d + 1) && d < hi) capR();
+      if(breakBefore.has(d) && d > lo)     capL();
     }
     else if(d === lo)           c.classList.add("sel");
     if(softSet.has(d)) c.classList.add("soft");
@@ -7705,6 +7726,7 @@ function renderMonth(){
        in the row does. Everything else is just its number, as before. */
     const first = dt.getDate() === 1;
     if(first) c.classList.add("mstart");
+    if(d === seamAt) c.classList.add("seam");
     c.append(el("div","dd", first ? "1 " + MON[dt.getMonth()] : String(dt.getDate())),
              el("div","fn",String(f)));
     const g = el("div","gg"); const i = el("i");
@@ -7736,10 +7758,39 @@ function renderMonth(){
   /* 63 days crosses a new year about once a year; the rest of the time the
      year is four characters of noise on the sticky label. */
   const crossesYear = ms.some(x => x.y !== ms[0].y);
-  const run = ms.reduce((a,m)=> a.concat(m.days), []);
-  const lead = (dateAt(run[0]).getDay()+6)%7;
-  for(let i=0;i<lead;i++) grid.appendChild(el("div","day pad"));
-  run.forEach(d=> makeDay(d));
+  /* ONE BOUNDARY MERGES, THE REST BREAK.
+
+     Running every month into the next saved a row at each boundary but cost
+     something worth more further out: nine weeks of undifferentiated cells, in
+     which September and October are one long ribbon and the eye has nothing to
+     count from. Breaking at every boundary cost two part-empty rows each time,
+     which is what started this.
+
+     So the merge is spent where it is worth spending — on the boundary the
+     operator is actually living through. The current month runs straight into
+     the next, because "the 31st to the 3rd" is this week's booking and both
+     ends have to be reachable without the grid restarting under the thumb.
+     Every later month opens on its own row, the way a calendar reads, because
+     out there the question is "how does October look", not "can I cross this
+     Sunday".
+
+     The merged seam is drawn; the broken ones need no mark, because starting a
+     row IS the mark. */
+  let col = 0;
+  const cell = n => { for(let i=0;i<n;i++) grid.appendChild(el("div","day pad")); col = (col + n) % 7; };
+  ms.forEach((m, mi)=>{
+    const lead = (dateAt(m.days[0]).getDay()+6)%7;
+    if(mi === 0){ cell(lead); }
+    else if(mi === 1){
+      /* merged: no break, no pads — the 1st simply follows the 31st. It carries
+         the seam UNLESS it happens to fall at the start of a row anyway, where
+         a rule down the left edge of the card would mark nothing. */
+      seamAt = col === 0 ? -1 : m.days[0];
+    } else {
+      cell((7 - col) % 7 + lead);          // finish the row, then lead in
+    }
+    m.days.forEach(d=>{ makeDay(d); col = (col + 1) % 7; });
+  });
   cal.style.padding = "0";
   /* the grid scrolls inside a bounded trough; the weekday bar stays above it as
      fixed chrome, because a header that scrolls away is a header you look for */
@@ -7926,7 +7977,29 @@ function moneyStats(){
   // scale the priced sample up to every sold night, so RevPAR is not understated
   // simply because some bookings have no figure against them
   const projected = pricedNights ? adr * nightsSold : 0;
+  /* CAN THIS SAMPLE CARRY AN EXTRAPOLATION? The line above multiplies one
+     sample's rate across every sold night, and on the operator's real book that
+     sample was THREE BOOKINGS — Rakesh 59 nights, Lakshmi 95, Hima 6, every one
+     of them a long tenancy billed far under a nightly rate. Their average,
+     Rs 1,650, then became Rs 386 RevPAR against a true Rs 3,475, printed at
+     40px as "what a night is worth", and a Rs 4,887 rate card next to it made
+     the app announce "about 66% off".
+
+     Nothing was wrong with the arithmetic. What was missing was a refusal: a
+     mean is not an estimate of anything until the sample looks like the thing
+     it is standing in for. Two conditions, and both have to hold —
+
+       enough bookings   a rate averaged over three stays is those three stays
+       enough NIGHTS     the share that matters is of nights, not of rows: one
+                         95-night tenancy is one row and a quarter of the book
+
+     Below either, the Money card stops averaging and says what it has, and the
+     answer to the same question comes from the workbook instead, where fifteen
+     closed months measured it. */
+  const nightShare = nightsSold ? pricedNights / nightsSold : 0;
   return {nightsSold, sellable, revenue, adr, priced, total: bk.length,
+          pricedNights, nightShare,
+          usable: priced >= 8 && nightShare >= 0.5,
           coverage: bk.length ? priced / bk.length : 0,
           revpar: sellable ? projected / sellable : 0,
           listed: NF ? flats.reduce((s,f)=> s + (f.rate||0), 0) / NF : 0};
@@ -8885,22 +8958,45 @@ function renderTrends(){
   /* ── MONEY ─────────────────────────────────────────────────────────────── */
   if(seg === "money"){
     const M = moneyStats();
-    const {c,b} = card("What a night is worth", "revenue per available night");
+    /* THE SAME QUESTION HAS A REAL ANSWER, and it is not in the forward book.
+       When the priced sample cannot carry an extrapolation (see moneyStats),
+       the figure comes from the workbook — where fifteen closed months actually
+       measured a rate — and the card says which book it read. Two cards in one
+       app answering "what is a night worth" an order of magnitude apart is
+       worse than either answer alone. */
+    const W = FIN.length ? finRows(FIN[FIN.length-1][0]) : null;
+    const useBook = !M.usable && W && W.totals;
+    const src = useBook ? W.totals : M;
+    const revpar = useBook ? W.totals.revpar : M.revpar;
+    const adr    = useBook ? W.totals.adr    : M.adr;
+    const {c,b} = card("What a night is worth",
+      useBook ? `revenue per available night · ${MON[+W.month.split("-")[1]-1]} ${W.month.slice(0,4)}, from your workbook`
+              : "revenue per available night");
     const head = el("div","headline");
-    head.append(el("b", null, money(M.revpar)));
-    head.append(el("s", null, `per available night · ${money(M.adr)} average when sold`));
+    head.append(el("b", null, money(revpar)));
+    head.append(el("s", null, `per available night · ${money(adr)} average when sold`));
     b.appendChild(head);
     b.appendChild(vbars([
-      {v: M.revpar, label: Math.round(M.revpar/100)/10 + "k", k:"RevPAR"},
-      {v: M.adr,    label: Math.round(M.adr/100)/10 + "k",    k:"Achieved"},
+      {v: revpar,   label: Math.round(revpar/100)/10 + "k", k:"RevPAR"},
+      {v: adr,      label: Math.round(adr/100)/10 + "k",    k:"Achieved"},
       {v: M.listed, label: Math.round(M.listed/100)/10 + "k", k:"Listed"},
     ], 0));
-    said(c, M.priced === 0
+    const gap = adr >= M.listed
+      ? "you are holding your rate"
+      : `about <span class="hi">${Math.round((1 - adr/M.listed)*100)}%</span> off`;
+    said(c, M.priced === 0 && !useBook
       ? `No amounts recorded yet, so there is nothing to average. Put a figure on a booking and this fills in.`
+      : useBook
+      ? `Read from your workbook, not from the nine weeks ahead: only <b>${M.priced} of ${M.total}</b> forward `
+        + `bookings carry an amount, and those cover ${Math.round(M.nightShare*100)}% of the nights sold — too `
+        + `thin to average a rate from, and all of them long stays, which bill well under a nightly rate. `
+        + `<b>${money(revpar)}</b> is what each available night earned across the buildings your sheet prices. `
+        + `The gap between <b>achieved</b> and <b>listed</b> is what you are discounting — ${gap}. `
+        + `Put amounts on the bookings ahead and this switches to your own forward book.`
       : `Occupancy alone cannot tell you this: a full house at a poor rate and a half-empty one at a good rate `
-        + `look the same on an occupancy chart. <b>${money(M.revpar)}</b> is what each of your ${M.sellable.toLocaleString("en-IN")} `
+        + `look the same on an occupancy chart. <b>${money(revpar)}</b> is what each of your ${M.sellable.toLocaleString("en-IN")} `
         + `sellable nights earns on average. The gap between <b>achieved</b> and <b>listed</b> is what you are actually `
-        + `discounting — ${M.adr >= M.listed ? "you are holding your rate" : `about <span class="hi">${Math.round((1 - M.adr/M.listed)*100)}%</span> off`}.`
+        + `discounting — ${gap}.`
         + (M.coverage < 0.95 ? ` Based on the <b>${M.priced} of ${M.total}</b> bookings that carry an amount.` : ""));
   }
 
