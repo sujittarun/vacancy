@@ -1859,7 +1859,9 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
    the right space open. So the landing is a reveal rather than a re-layout, and
    no edge is ever caught mid-reflow. */
 .mfly{position:absolute;inset:0;z-index:9;pointer-events:none}
-.mflier{position:absolute;top:0;left:0;will-change:transform}
+/* The flier keeps its own .mguest class now (see carry()), so these have to win
+   against it rather than replace it — same specificity, declared later. */
+.mflier{position:absolute;top:0;left:0;will-change:transform;z-index:2}
 @keyframes carryX{ from{transform:translate3d(var(--x0),var(--y0),0)}
                      to{transform:translate3d(var(--x1),var(--y1),0)} }
 @keyframes carryY{
@@ -1870,7 +1872,7 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
 @keyframes carryLift{0%,100%{box-shadow:var(--shadow-sm)}50%{box-shadow:var(--shadow)}}
 /* An arc is two motions with two curves. One multi-stop keyframe eases between
    EVERY pair of stops, which is why the first version stuttered. */
-.mflier{animation:carryX var(--fly,460ms) cubic-bezier(.4,0,.15,1) var(--delay,0ms) both}
+.mflier{animation:carryX var(--fly,280ms) cubic-bezier(.4,0,.15,1) var(--delay,0ms) both}
 .mflier>.mguest-fx{
   animation:carryY var(--fly,460ms) cubic-bezier(.37,0,.63,1) var(--delay,0ms) both,
             carryLift var(--fly,460ms) linear var(--delay,0ms) both}
@@ -7523,8 +7525,16 @@ function openGuestMove(b, backTo){
         /* deliberate: the move IS the purpose here. Reached from the ⇄ on a
            guest's own row, not from "free up this flat", so there is no
            booking that was supposed to follow it. */
-        openMove(mv, Math.max(b.start, 0), ()=> backTo(),
-          {title: `Move ${b.guest}`, cta: `Done — back to ${from.id}`, deliberate:true});
+        /* DONE GOES WHERE THE GUEST WENT. This said "Done — back to 3B" and
+           opened the flat the guest had just LEFT — which is the right ending
+           for "free up this flat", where the freed room is the point, and the
+           wrong one for a move started from a person. The operator taps Done,
+           lands on the old room, sees no sign of the guest they just moved and
+           reads it as the app not having updated. Show them the flat the guest
+           is now in, which is the thing they actually wanted to confirm. */
+        const day = Math.max(b.start, 0);
+        openMove(mv, day, ()=> openSheet(o.to, day),
+          {title: `Move ${b.guest}`, cta: `Done — see ${flats[o.to].id}`, deliberate:true});
       };
       card.appendChild(r);
     });
@@ -12073,7 +12083,11 @@ function openMove(mv, askDay, onFreed, opts){
     const id = setTimeout(()=>{ const i = timers.indexOf(id); if(i>=0) timers.splice(i,1); fn(); }, ms);
     timers.push(id); return id;
   };
-  const OPEN = 300, FLY = 460, STEP = 110;
+  /* Fast enough to read as one movement, not as a sequence to sit through.
+     The old 300/460/110 put 848ms between tapping Move and being able to do
+     anything else — on a phone that is not a flourish, it is a wait. These
+     keep the arc legible and give the whole move back in under half a second. */
+  const OPEN = 160, FLY = 280, STEP = 70;
 
   const abandoned = ()=>{
     if(booked || !done.length) return;
@@ -12272,7 +12286,14 @@ function openMove(mv, askDay, onFreed, opts){
         const a = p.fromEl.getBoundingClientRect();
         const b = p.toEl.getBoundingClientRect();
         const f = p.fromEl.cloneNode(true);
-        f.className = "mflier";
+        /* ADD the flier class, never REPLACE the element's own. Overwriting
+           className threw away `.mguest`, and with it `.mguest s{text-decoration
+           :none}` — so the <s> carrying the guest's dates fell back to the
+           browser default and the chip flew across the screen with a LINE
+           THROUGH IT. Invisible in a screenshot because the flier only exists
+           for 280ms; perfectly legible on a phone, where it reads as the app
+           striking the booking out before moving it. */
+        f.classList.add("mflier");
         f.style.width = a.width + "px";
         f.style.setProperty("--x0", (a.left - box.left).toFixed(1) + "px");
         f.style.setProperty("--y0", (a.top  - box.top ).toFixed(1) + "px");
