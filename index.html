@@ -5582,6 +5582,127 @@ async function rest(method, path, body, headers){
   return api("/rest/v1" + path, {method, body, headers});
 }
 
+/* ── TELEMETRY — how the app is behaving, on somebody else's phone ───────────
+   The schema for this has existed since the first migration and nothing ever
+   wrote to it. app_sessions, app_events and app_errors were designed, given RLS
+   and three ops views, and left empty — so when the operator says "I moved a
+   guest and the flat still shows open", there is no way to see what the app
+   actually did. That is the whole reason this exists: a bug on a phone in
+   another city is invisible unless the app says something.
+
+   THREE RULES, and they are why this is safe to ship:
+
+   1. NO GUEST DATA. The migration says it outright and this enforces it: props
+      carry counts, ids and flags — never a name, a note, a phone or an amount.
+      A crash report that leaks a guest's name is worse than no crash report.
+   2. NEVER BLOCK AND NEVER THROW. Every call is fire-and-forget behind a catch.
+      Telemetry that can break the app is a bug generator, not a bug detector.
+   3. ONLY WHEN SIGNED IN. The insert policy requires an authenticated user and
+      a host they belong to. In sample mode there is nobody to attribute it to
+      and nothing worth knowing, so it stays off entirely.                    */
+const APP_VERSION = "2026-08-30";           // bumped by hand with each deploy
+/* TELEMETRY IS NOT THE SYNC LAYER, and tying the two together is what made the
+   tables sit empty for a month. CLOUD_ENABLED gates the whole two-way sync —
+   stays, payments, inventory — which is a large thing to switch on and carries
+   real risk. Knowing that an app crashed is a small thing and carries almost
+   none, so it gets its own switch. The app is local-only today; this is the
+   only thing it says to a server, and it says it as `anon`. */
+const TELEMETRY_ON = true;
+const TEL_KEY = "vacancy.device.v1";
+let telSession = null, telQueue = [], telTimer = null, telOff = false;
+
+/* One id per INSTALL, kept locally forever, so a run of events can be attributed
+   to "the same phone" without knowing whose. It is a random uuid and nothing
+   else — not a fingerprint, not derived from the device, and useless anywhere
+   but in these three tables. */
+function telDevice(){
+  let d = null;
+  try{ d = localStorage.getItem(TEL_KEY); }catch(e){}
+  if(!d){ d = uuid(); try{ localStorage.setItem(TEL_KEY, d); }catch(e){} }
+  return d;
+}
+function telOn(){ return TELEMETRY_ON && !telOff; }
+
+/* Signed in, this rides the operator's own token and lands against their host.
+   Signed out — which is every install today — it goes as anon with host_id
+   null, which is exactly what the insert policy allows. */
+function telPost(path, body){
+  const authed = !!(session && session.access_token);
+  return api("/rest/v1" + path, {method:"POST", body, auth: authed,
+                                 headers:{Prefer:"return=minimal"}});
+}
+
+/* One row per app launch, so a session can be followed through its own events. */
+async function telStart(){
+  if(!telOn()) return;
+  try{
+    telSession = uuid();
+    await telPost("/app_sessions", {
+      id: telSession, host_id: hostId || null,
+      app_version: APP_VERSION,
+      user_agent: String(navigator.userAgent || "").slice(0, 300),
+    });
+  }catch(e){ telSession = null; }
+}
+
+/* Batched, because a booking flow fires four events in a second and four
+   round trips on a phone is a stutter the operator can feel. */
+function track(name, props){
+  if(!telOn()) return;
+  telQueue.push({ session_id: telSession, host_id: hostId || null,
+                  name: String(name).slice(0,60),
+                  props: Object.assign({device: telDevice()}, props || {}),
+                  app_version: APP_VERSION });
+  if(telQueue.length >= 12) return telFlush();
+  clearTimeout(telTimer);
+  telTimer = setTimeout(telFlush, 4000);
+}
+async function telFlush(){
+  clearTimeout(telTimer); telTimer = null;
+  if(!telQueue.length || !telOn()) return;
+  const batch = telQueue.splice(0, 40);
+  try{ await telPost("/app_events", batch); }
+  catch(e){
+    /* Put them back ONCE, then give up. An event that cannot be posted must
+       never grow into a queue that retries forever on a metered connection —
+       and a telemetry backlog that outlives the bug it describes is landfill. */
+    if(batch.length < 40 && telQueue.length < 60) telQueue = batch.concat(telQueue);
+  }
+}
+/* The page going away is the only moment a partial batch is guaranteed to be
+   lost, so it is also the only place a synchronous send is worth it. */
+addEventListener("visibilitychange", ()=>{ if(document.visibilityState === "hidden") telFlush(); });
+addEventListener("pagehide", ()=> telFlush());
+
+function telError(message, extra){
+  if(!telOn()) return;
+  const e = extra || {};
+  /* Fire-and-forget and deliberately unbatched: the next thing that happens
+     after an error may be the tab closing. */
+  telPost("/app_errors", {
+    session_id: telSession, host_id: hostId || null,
+    message: String(message || "unknown").slice(0, 400),
+    stack: e.stack ? String(e.stack).slice(0, 2000) : null,
+    source: e.source ? String(e.source).slice(0, 200) : null,
+    line: e.line != null ? (e.line | 0) : null,
+    col: e.col != null ? (e.col | 0) : null,
+    app_version: APP_VERSION,
+    user_agent: String(navigator.userAgent || "").slice(0, 300),
+  }).catch(()=>{});
+}
+
+/* EVERYTHING THE APP THROWS, not just what somebody remembered to wrap. An
+   error that only appears in a console the operator will never open is an error
+   nobody will ever hear about. */
+addEventListener("error", ev=>{
+  telError(ev.message || "error", {stack: ev.error && ev.error.stack,
+    source: ev.filename, line: ev.lineno, col: ev.colno});
+});
+addEventListener("unhandledrejection", ev=>{
+  const r = ev.reason;
+  telError((r && (r.message || r)) || "unhandled rejection", {stack: r && r.stack});
+});
+
 /* ── signing in and out ────────────────────────────────────────────────────── */
 async function signIn(email, password){
   keepSession(await api("/auth/v1/token?grant_type=password",
@@ -5857,6 +5978,30 @@ if(MODE === "live"){
   if(usingDemo) seedRealBook();
   recompute();
 }
+/* THE SHAPE OF THE INVENTORY, ONCE PER LAUNCH. A stored inventory overrides the
+   shipped one for the life of an install, so two people on the same build can be
+   looking at different portfolios — which is precisely the confusion behind "I
+   moved a guest to LP-3" when LP-3 exists in one of them and not the other. One
+   row, no guest data, and the question is answerable without asking anybody to
+   read a console. */
+(async ()=>{
+  try{
+    await telStart();
+    track("app_open", {
+      flats: NF,
+      /* the seed the build ships with, against what this device actually has */
+      seedFlats: (typeof INVENTORY !== "undefined" ? INVENTORY.length : null),
+      storedInventory: !!loadInventory(),
+      demo: usingDemo, live: MODE === "live",
+      bookings: resv.length,
+      /* named because they are the flats the merge created; their presence or
+         absence dates an install more precisely than any version string */
+      hasMergedLotus: !!flats.find(f=> f.id === "LP-3"),
+      hasOldLotus:    !!flats.find(f=> f.id === "LP-301"),
+      theme: document.documentElement.getAttribute("data-theme") || "system",
+    });
+  }catch(e){}
+})();
 
 /* Refuses to double-book. The UI already hides the form on an unavailable flat,
    but a silent overlap is exactly the failure that loses a guest, so the data
@@ -5937,6 +6082,8 @@ function addBooking(fi, start, nights, guest, src, extra){
   if(amount && PLATFORMS.indexOf(row.src) >= 0) addPayment(row, amount, "Platform");
   usingDemo = false;
   recompute(); save(); cacheSave();
+  track("booking_added", {nights, priced: !!amount, src: row.src || null,
+                          ahead: start > 0, live: MODE === "live"});
   return true;
 }
 
@@ -6008,6 +6155,7 @@ function closeIssue(x, fixer, phone, cost){
   x.fixed = 0; x.fixer = (fixer||"").trim() || undefined;
   x.fixer_phone = (phone||"").trim() || undefined;
   x.cost = toAmount(cost) || undefined;
+  track("issue_closed", {fault: x.fault || null, billed: !!x.cost, fi: x.fi});
   if(MODE === "live") enqueue({k:"iss~", id:x.id, body:{
     fixed_on: dayISO(0), fixer: x.fixer || null,
     fixer_phone: x.fixer_phone || null, cost: x.cost || null}});
@@ -6206,12 +6354,26 @@ function releaseBlock(r, done){
 function moveBooking(r, toFi){
   if(isBlock(r) || !(toFi >= 0 && toFi < NF) || toFi === r.fi) return false;
   const from = Math.max(r.start, 0);
-  if(!freeRange(toFi, from, r.end)) return false;      // somebody took it meanwhile
+  /* THE REFUSAL IS THE INTERESTING HALF. "I moved a guest and the flat still
+     shows open" is either a move that never happened or one that did not stick,
+     and only the first leaves a trace unless the refusal says so out loud. */
+  if(!freeRange(toFi, from, r.end)){
+    track("move_refused", {from: r.fi, to: toFi, start: r.start, end: r.end,
+                           openEnd: !!r.openEnd, span: r.end - from, nf: NF});
+    return false;                                      // somebody took it meanwhile
+  }
   const wasFi = r.fi;
   r.fi = toFi;
   if(MODE === "live" && r.sid)
     enqueue({k:"stay~", id:r.sid, body:{flat_id: flats[toFi].uid}});
   recompute(); save(); cacheSave();
+  /* Ids as well as indexes: an index is meaningless in a log once the inventory
+     changes shape underneath it, which is exactly the failure being hunted. */
+  track("move_done", {from: wasFi, to: toFi,
+                      fromId: (flats[wasFi]||{}).id, toId: (flats[toFi]||{}).id,
+                      live: MODE === "live", hadSid: !!r.sid, nf: NF,
+                      /* did it actually take, measured after the fact */
+                      stuck: occ[toFi] ? !!occ[toFi][Math.max(r.start,0)] : null});
   return {from: wasFi, to: toFi};
 }
 
@@ -6238,6 +6400,7 @@ function cancelBooking(r){
     else enqueue({k:"stay-", id:r.sid});
   }
   recompute(); save(); cacheSave();
+  track("booking_cancelled", {nights: r.nights, priced: !!r.amount, past: r.end <= 0});
 }
 function clearAll(){
   resv = []; usingDemo = false;
@@ -6623,6 +6786,7 @@ function buildXlsx(sheets){                       // [{name, rows}]
    invented: a booking with no amount exports a blank cell rather than a zero,
    because a zero would read as "free stay" and get summed. */
 function exportRows(){
+  track("export_built", {flats: NF, bookings: bookings().length});
   const bk = bookings().slice().sort((a,b)=> a.start - b.start);
   const fmtDay = d => dateAt(d);
   const H = a => a.map(v => ({v, t:"h"}));
@@ -12353,6 +12517,7 @@ function openExpense(code, monthKey, after){
                    code: bSel.value, line: lSel.value, amount: v,
                    on: when.value, note: note.value.trim() || undefined});
     expSave();
+    track("expense_logged", {code: bSel.value, line: lSel.value, month: monthOf(when.value)});
     haptic(18); closeSheet(); refreshScreen();
     const b = B.find(z=> z.code === bSel.value);
     toast("", `<b>${money(v)} logged.</b> ${esc(b ? b.name : bSel.value)} · ${esc(lSel.value)} · `
