@@ -520,6 +520,19 @@ button{background:none;border:0;padding:0;cursor:pointer;
 .tile s{display:block;text-decoration:none;font-size:9px;font-weight:600;letter-spacing:.05em;
   text-transform:uppercase;color:var(--held-ink);opacity:.62;margin-top:4px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* A NAME IS NOT A STATUS. The status line is 9px uppercase with wide tracking,
+   which is right for BOOKED and TURNAROUND and wrong for a person — caps make a
+   name harder to read, not louder, and "VENKATARAO" is a shout.
+
+   It also FADES rather than ellipsising. An ellipsis costs three characters of
+   an eleven-character line, which on a 78px tile is most of a first name; a
+   soft edge says "there is more" at no cost. The mask covers only the last 13px
+   of the box, so a name that fits never touches it and shows no fade at all —
+   the effect appears exactly when it is needed and is invisible otherwise. */
+.tile s.who{text-transform:none;letter-spacing:-.005em;font-size:10px;font-weight:560;
+  opacity:.78;text-overflow:clip;
+  -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 13px),transparent);
+  mask-image:linear-gradient(90deg,#000 calc(100% - 13px),transparent)}
 .tile.free{background:var(--free)}
 .tile.free b{color:var(--free-ink)}
 .tile.free s{color:var(--free-ink);opacity:.58}
@@ -7513,13 +7526,27 @@ function roomTile(fi, day, stay){
      ask next. "Booked" is kept only where the night really is occupied. */
   const takenTonight = !!occ[fi][day];
   const partial = !open && !blocked && !turn && !takenTonight ? runFrom(fi, day) : 0;
+  /* WHO IS IN IT, NOT THAT IT IS TAKEN. The fill already says booked — it is
+     the whole point of the colour — so "BOOKED" under the room number spent the
+     one line the tile has restating what the eye had already read. The name is
+     the thing the operator actually wants off this grid: which of these rooms
+     is Ashok in.
+
+     Only for a genuine stay. A block says why it is out, a turnaround says it
+     needs cleaning, a partial says how much of the span is free — all three are
+     facts the fill cannot carry, so they keep the line. */
+  const who = takenTonight && !blocked
+    ? resv.find(r => !isBlock(r) && r.fi === fi && day >= r.start && day < r.end)
+    : null;
+  const named = !!(who && who.guest && who.guest.trim());
   const note = open
     ? freeWords(fi, day, true)
     : blocked ? (resv.find(r=>isBlock(r) && r.fi===fi && day>=r.start && day<r.end)?.reason || "Blocked")
     : turn ? "Turnaround"
     : partial ? `Free ${partial} of ${nights}`
+    : named ? who.guest.trim()
     : "Booked";
-  b.append(el("b",null,fl.id), el("s",null,note));
+  b.append(el("b",null,fl.id), el("s", named ? "who" : null, note));
   if(open && run === 1) b.appendChild(el("i","flag"));   // orphan night
   /* the spoken label says what the printed one says — "Free 2+n" announced as
      "free for 2 nights" understates a flat that is free to the end of the book,
@@ -7530,6 +7557,7 @@ function roomTile(fi, day, stay){
         : `free for ${run} night${run>1?"s":""} from`)
       : blocked ? "out of service on"
       : partial ? `free for ${partial} of ${nights} nights from`
+      : named ? `booked to ${who.guest.trim()} on`
       : "not available on"} ${fmtL(day)}`);
   b.onclick = ()=>{
     /* honoured only while it could plausibly belong to the gesture that set

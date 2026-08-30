@@ -1749,6 +1749,56 @@ export async function run(filter) {
     } finally { window.fetch = realFetch; MODE = wasMode; hostId = wasHost; }
   });
 
+  /* The fill already says booked — it is the whole point of the colour — so
+     "BOOKED" under the room number spent the tile's one line restating what the
+     eye had read. The name is what the operator wants off this grid. */
+  await test("a booked room names its guest, and the states that carry facts keep them", async () => {
+    await settle();
+    document.querySelectorAll(".tabbar button")[0].click();
+    await until(() => document.querySelector(".tile"), "the room grid");
+    const named = [...document.querySelectorAll(".tile s.who")];
+    ok(named.length, "no tile names a guest");
+    /* every named tile must match a real stay on that flat tonight */
+    named.slice(0, 8).forEach(sEl=>{
+      const id = sEl.parentElement.querySelector("b").textContent;
+      const fi = flatIndex[id];
+      const stay = resv.find(r => !isBlock(r) && r.fi === fi && 0 >= r.start && 0 < r.end);
+      ok(stay, `${id} shows a name but has no stay tonight`);
+      eq(sEl.textContent, (stay.guest || "").trim(), `the name on ${id}`);
+    });
+    /* a name is not a status: no caps, and it does not ellipsise */
+    const cs = getComputedStyle(named[0]);
+    eq(cs.textTransform, "none", "a guest name is being upper-cased");
+    eq(cs.textOverflow, "clip", "a guest name is ellipsising instead of fading");
+    ok(/linear-gradient/.test(cs.maskImage || cs.webkitMaskImage || ""),
+      "no fade mask on the name");
+    /* the states that carry a fact the fill cannot keep their word */
+    const words = [...document.querySelectorAll(".tile s:not(.who)")].map(e=>e.textContent);
+    ok(words.some(w => /^Open|^Till |^Free /.test(w)), `no free-state wording found: ${words.slice(0,4)}`);
+    /* and a name is inert — el() sets textContent, and this proves it stays that way */
+    const probe = '<img src=x onerror="window.__tilepwn=1">Zed';
+    /* Not just any free flat: a stay that ENDS tonight makes the tile a
+       turnaround, and turnaround outranks the name by design — it is a fact the
+       fill cannot carry. The fixture needs a room whose tonight is plain. */
+    const fi2 = flats.map((f,i)=>i).find(i =>
+      freeSpan(i, 0, 3) && !resv.some(r => r.fi === i && r.end === 0));
+    ok(fi2 != null, "no room free for three nights with a quiet tonight");
+    ok(addBooking(fi2, 0, 2, probe, "Direct"), "probe booking refused");
+    try {
+      SCREENS[0].render();
+      await until(() => [...document.querySelectorAll(".tile s.who")]
+        .some(e => e.textContent.indexOf("Zed") >= 0), "the probe tile");
+      ok(!window.__tilepwn, "a guest name executed from a room tile");
+      const t = [...document.querySelectorAll(".tile s.who")].find(e=>e.textContent.indexOf("Zed")>=0);
+      eq(t.children.length, 0, "the name was parsed as markup, not text");
+    } finally {
+      const p = resv.find(r => r.guest === probe);
+      if(p) cancelBooking(p);
+      recompute();
+    }
+    return `${named.length} rooms named, status wording kept where it carries a fact`;
+  });
+
   /* ══ the whole surface ══════════════════════════════════════════════════ */
 
   await test("no text falls below AA in either theme", async () => {
