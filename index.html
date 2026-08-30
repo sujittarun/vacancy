@@ -6008,12 +6008,20 @@ function signOut(silent){
   if(tok) fetch(SUPA_URL + "/auth/v1/logout", {method:"POST",
     headers:{apikey:SUPA_KEY, Authorization:"Bearer " + tok}}).catch(()=>{});
   if(!silent){
-    flats = loadInventory() || defaultInventory();
+    /* migrateInventory, same as boot — without it a sign-out rebuilt the
+       inventory from the raw stored rows and quietly reverted the Lotus Pond
+       merge on any device that had it. */
+    flats = migrateInventory(loadInventory()) || defaultInventory();
     NF = flats.length;
     flatIndex = Object.fromEntries(flats.map((f,i)=>[f.id,i]));
     usingDemo = !load();
-    if(usingDemo){ seedRealBook(); }
-    else issues = [];
+    /* `else issues = []` used to sit here, and it deleted every logged fault —
+       permanently, with no cloud involved. load() has just restored the local
+       issues from storage two lines above; throwing them away was a leftover
+       from when signing out meant discarding a cloud book. The faults are the
+       flat's repair history, which is the one record that cannot be
+       reconstructed from anything else. */
+    if(usingDemo) seedRealBook();
     recompute(); paintAcct(); refreshScreen();
   }
 }
@@ -6178,7 +6186,8 @@ function runOp(op){
     case "flat+": return rest("POST",  "/flats", {...op.body, id:op.id, host_id:hostId}, MIN);
     case "flat~": return rest("PATCH", "/flats?id=eq." + op.id, op.body, MIN);
     case "flat-": return rest("DELETE","/flats?id=eq." + op.id, undefined, MIN);
-    case "wipe":  return rest("DELETE","/stays?host_id=eq." + hostId, undefined, MIN);
+    case "wipeIds": return rest("DELETE",
+      "/stays?id=in.(" + (op.body.ids || []).join(",") + ")", undefined, MIN);
   }
   return Promise.resolve();
 }
@@ -6709,11 +6718,20 @@ function cancelBooking(r){
     + (r.amount ? ` · ${money(r.amount)}` : ""), {flat: flatLabel(r.fi), guest: r.guest});
 }
 function clearAll(){
+  /* BOUNDED TO WHAT THIS DEVICE HOLDS. This enqueued a bare {k:"wipe"}, which
+     issued DELETE /stays?host_id=eq.<host> — every stay belonging to the whole
+     property, not just the ones on this phone. Harmless while the app is
+     local-only and one person has it; the moment two people share a book it is
+     a button that deletes the other person's work from a screen labelled
+     "test bookings". The ids are collected first and only those are removed. */
+  const mine = resv.map(r => r.sid).filter(Boolean);
   resv = []; usingDemo = false;
   if(MODE === "live"){
     // every stay op is moot now, and so is every payment that hangs off one
     queue = queue.filter(op => op.k.indexOf("stay") !== 0 && op.k.indexOf("pay") !== 0);
-    enqueue({k:"wipe"});
+    /* chunked: a URL carrying 700 uuids is past what a server will accept */
+    for(let i = 0; i < mine.length; i += 60)
+      enqueue({k:"wipeIds", id:"w" + i, body:{ids: mine.slice(i, i + 60)}});
   }
   recompute(); save(); cacheSave();
 }

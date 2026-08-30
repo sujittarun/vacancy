@@ -1833,6 +1833,70 @@ export async function run(filter) {
     } finally { window.fetch = real; recompute(); }
   });
 
+  /* signOut() had `else issues = []`, which deleted every logged fault —
+     permanently, with no cloud involved. load() restores them from storage two
+     lines above; throwing them away was a leftover from when signing out meant
+     discarding a cloud book. A flat's repair history cannot be reconstructed
+     from anything else. */
+  await test("signing out does not delete the repair history", async () => {
+    const keepI = issues.slice(), keepR = resv.slice();
+    const backup = localStorage.getItem(STORE);
+    try {
+      const fi = flats.map((f,i)=>i).find(i => freeSpan(i, 0, 2));
+      addIssue(fi, "Geyser", "signout fixture", "urgent");
+      save();
+      /* signOut() falls back to seedRealBook() when load() finds nothing, and
+         that clears issues BY DESIGN — a seeded book has no repair history. The
+         claim under test is only about the path where a book is restored, so
+         the precondition is asserted rather than hoped for. */
+      ok(localStorage.getItem(STORE), "no saved book, so signOut would reseed and the test means nothing");
+      const before = issues.length;
+      ok(before > 0, "no issue to test with");
+      signOut(false);
+      eq(issues.length, before, `${before} faults before signing out, ${issues.length} after`);
+      ok(issues.some(x => x.note === "signout fixture"), "the fixture fault was deleted");
+      return `${before} faults survived a sign-out`;
+    } finally {
+      issues = keepI; resv = keepR;
+      if(backup != null) localStorage.setItem(STORE, backup); else localStorage.removeItem(STORE);
+      load(); recompute();
+    }
+  });
+
+  /* clearAll() enqueued a bare {k:"wipe"} -> DELETE /stays?host_id=eq.<host>:
+     every stay belonging to the whole property. Harmless with one phone; the
+     moment two people share a book it deletes the other person's work from a
+     screen labelled "test bookings". */
+  await test("clearing the test book cannot reach past this device", async () => {
+    const keepR = resv.slice(), keepQ = queue.slice(), keepMode = MODE, keepHost = hostId;
+    const backup = localStorage.getItem(STORE);
+    try {
+      resv = resv.map((r,i) => i < 5 ? {...r, sid: "s" + i} : r);
+      /* MODE is flipped for exactly one synchronous call and put straight back,
+         because clearAll() only queues when live and a leaked "live" makes the
+         next test assert against the wrong mode. */
+      MODE = "live"; hostId = "h1"; queue = [];
+      try { clearAll(); } finally { MODE = keepMode; hostId = keepHost; }
+      const wipes = queue.filter(op => /^wipe/.test(op.k));
+      ok(wipes.length, "nothing queued to remove the stays");
+      wipes.forEach(op=>{
+        ok(op.body && Array.isArray(op.body.ids), `a wipe op carries no id list: ${JSON.stringify(op).slice(0,80)}`);
+        ok(op.body.ids.length <= 60, "a wipe op carries more ids than a URL can hold");
+      });
+      /* the decisive property: it names ids, never the host */
+      const all = JSON.stringify(queue);
+      ok(!/host_id/.test(all), "a queued op still targets the whole host");
+      eq(wipes.reduce((a,op)=> a + op.body.ids.length, 0), 5, "ids queued for removal");
+      return `${wipes.length} chunk(s), 5 ids, none host-wide`;
+    } finally {
+      resv = keepR; queue = keepQ; MODE = keepMode; hostId = keepHost;
+      jset(QUEUE_KEY, queue);
+      eq(MODE, keepMode, "MODE leaked out of the wipe test");
+      if(backup != null) localStorage.setItem(STORE, backup);
+      load(); recompute();
+    }
+  });
+
   /* ══ the whole surface ══════════════════════════════════════════════════ */
 
   await test("no text falls below AA in either theme", async () => {
