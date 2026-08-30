@@ -4,3 +4,5 @@
 supabase/.temp/
 supabase/.branches/
 dev-login.js
+Revenue.xlsx
+*.xlsx

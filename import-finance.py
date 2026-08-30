@@ -40,7 +40,11 @@ quietly reporting a collapse in margin that is really a gap in bookkeeping.
 import sys, os, re, json, datetime, collections
 import openpyxl
 
-XLSX = os.path.expanduser(sys.argv[1]) if len(sys.argv) > 1 else "Revenue.xlsx"
+# Flags are not paths. `--write` as argv[1] was taken as the workbook and the
+# run died on "openpyxl does not support  file format" — a real refusal to write
+# that reads exactly like a corrupt file.
+_args = [a for a in sys.argv[1:] if not a.startswith("-")]
+XLSX = os.path.expanduser(_args[0]) if _args else "Revenue.xlsx"
 HERE = os.path.dirname(os.path.abspath(__file__))
 CODES = ["TT", "MP", "TN", "BH"]          # the buildings with a financial line
 OUT   = CODES + ["LP"]                    # + the one that has none, carried anyway
@@ -68,14 +72,43 @@ def building(k, h):
     # rule import-book.py proves against the flat list
     return "TT" if k <= 12 else "MP" if k <= 22 else "TN" if k <= 32 else "BH" if k <= 40 else "LP"
 cols = [(k, building(k, h)) for k, h in enumerate(hdr) if k > 0 and building(k, h)]
+
+# A COLUMN IS A BEDROOM; A UNIT IS WHAT YOU LET. Lotus Pond's sheet keeps one
+# column per bedroom — "101, 102, 103, Studio 104" under a merged "1st Floor"
+# header — and 101/102/103 are one 3 BHK. Counted per column this building sold
+# three nights every time it sold one, which is how a month came to report 387
+# nights out of a capacity of 248.
+#
+# The book proves the grouping rather than assuming it: across 253 overlapping
+# pairs of those rooms not one carries a different guest, and across the 88
+# stays they describe not one has the three rooms on different dates. So a unit
+# is sold when ANY of its columns is filled, and the trio counts once.
+# LOTUS POND ONLY. The first pass matched any header shaped like 101/102/103
+# and quietly merged TreeTops' rooms as well — TT's book fell from 271 nights to
+# 182 and the gate then rejected eleven months it had been keeping. TreeTops is
+# ten separate flats that happen to be numbered the same way; the merge is a
+# fact about one building's floor plan, not about a numbering scheme.
+def unit_of(k, b, h):
+    if b != "LP" or h is None: return k
+    m = re.fullmatch(r'(\d)0([123])(?:\.0)?', str(h).strip())
+    return f"LP-{m.group(1)}" if m else k
+units = {}
+for k, b in cols:
+    units.setdefault((b, unit_of(k, b, hdr[k])), []).append(k)
+assert sum(1 for (b, _) in units if b == "TT") == 10, \
+    f"TreeTops must stay ten separate flats, got {sum(1 for (b,_) in units if b=='TT')}"
+assert sum(1 for (b, _) in units if b == "LP") == 8, \
+    f"Lotus Pond should be 4 apartments and 4 studios, got {sum(1 for (b,_) in units if b=='LP')}"
+
 sold = collections.Counter(); covered = set()
 for r in rows[2:]:
     d = r[0]
     if isinstance(d, datetime.datetime): d = d.date()
     if not isinstance(d, datetime.date): continue
     covered.add((d.year, d.month))
-    for k, b in cols:
-        if r[k] is not None and str(r[k]).strip(): sold[(d.year, d.month, b)] += 1
+    for (b, _), ks in units.items():
+        if any(r[k] is not None and str(r[k]).strip() for k in ks):
+            sold[(d.year, d.month, b)] += 1
 
 # ── the monthly sheets ───────────────────────────────────────────────────────
 series = {}

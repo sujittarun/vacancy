@@ -1124,6 +1124,62 @@ export async function run(filter) {
     return `${depths.length} discount pills, all offered rather than asserted`;
   });
 
+  /* ══ the shape of the portfolio ═════════════════════════════════════════ */
+
+  /* The sheet keeps a column per bedroom. Read as flats, Lotus Pond's floors
+     became three units that were always booked together — eight phantom flats,
+     a tripled denominator, and a month reporting 387 nights sold out of a
+     capacity of 248. */
+  await test("Lotus Pond's floors are one apartment, not three rooms", async () => {
+    const lp = flats.filter(f => f.bname === "Lotus Pond");
+    eq(lp.length, 8, "units at Lotus Pond");
+    eq(lp.filter(f => f.type === "3 BHK").length, 4, "3 BHKs at Lotus Pond");
+    eq(lp.filter(f => f.type === "Studio").length, 4, "studios at Lotus Pond");
+    ok(!flats.some(f => /^LP-[1-4]0[123]$/.test(f.id)),
+      `a bedroom is still listed as a flat: ${flats.filter(f=>/^LP-[1-4]0[123]$/.test(f.id)).map(f=>f.id).join(", ")}`);
+    /* The merge is only sound if it never stacked two lets onto one unit. */
+    lp.forEach(f => {
+      const fi = flats.indexOf(f);
+      const rs = resv.filter(r => r.fi === fi && !isBlock(r)).sort((a,b)=> a.start - b.start);
+      for(let i = 1; i < rs.length; i++)
+        ok(rs[i-1].end <= rs[i].start,
+          `${f.id}: ${rs[i-1].guest} (${rs[i-1].start}–${rs[i-1].end}) overlaps ${rs[i].guest} (${rs[i].start}–${rs[i].end})`);
+    });
+    /* And TreeTops must NOT have been merged — its rooms are numbered the same
+       way and the first pass at this quietly folded them together too. */
+    eq(flats.filter(f => f.bname === "TreeTops").length, 10, "flats at TreeTops");
+    return `${lp.length} units — 4 apartments, 4 studios — and no unit double-let`;
+  });
+
+  /* Thirty-eight tiles in one field is ten rows with no landmarks. */
+  await test("the room grid is cut by building and the counts reconcile", async () => {
+    await settle();
+    document.querySelectorAll(".tabbar button")[0].click();          // Rooms
+    await until(() => document.querySelectorAll(".roomfilt button").length, "the building filter");
+    const chips = [...document.querySelectorAll(".roomfilt button")];
+    const num = b => +(b.textContent.match(/(\d+)\s*$/) || [0,0])[1];
+    const all = num(chips[0]);
+    eq(chips.slice(1).reduce((a,b)=> a + num(b), 0), all,
+      "the building chips do not add up to the All count");
+    const secs = [...document.querySelectorAll(".bsec")];
+    eq(secs.length, buildingsOf().length, "sections against buildings");
+    eq(secs.reduce((a,s)=> a + s.querySelectorAll(".tiles > *").length, 0), NF,
+      "tiles across the sections against the portfolio");
+    /* Filtering to one building shows that building and drops the header that
+       would only repeat the selected chip. */
+    const pick = chips[chips.length - 1];
+    const want = num(pick);
+    pick.click();
+    await until(() => document.querySelectorAll(".bsec").length === 1, "the filtered grid");
+    eq(document.querySelectorAll(".bsec-h").length, 0, "headers while one building is picked");
+    const shown = document.querySelectorAll(".bsec .tiles > *").length;
+    const b = buildingsOf()[buildingsOf().length - 1];
+    eq(shown, flats.filter(f => f.code === b.code).length, `tiles shown for ${b.name}`);
+    chips[0].click();
+    await until(() => document.querySelectorAll(".bsec").length > 1, "the unfiltered grid");
+    return `${all} free across ${secs.length} buildings, and the filter shows ${want} free of ${shown}`;
+  });
+
   /* ══ the whole surface ══════════════════════════════════════════════════ */
 
   await test("no text falls below AA in either theme", async () => {

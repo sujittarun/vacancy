@@ -20,7 +20,7 @@
   app with a blurred bottom tab bar and a shared spring-up room sheet.
 -->
 <meta charset="utf-8">
-<title>Vacancy — 46 apartments, four ways to read them</title>
+<title>Vacancy — 38 apartments, four ways to read them</title>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
 <meta name="theme-color" content="#08090C">
 
@@ -573,14 +573,24 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .ops-date s{text-decoration:none;font-size:12.5px;color:var(--txt-3);font-weight:500}
 .ops-row{display:grid;grid-template-columns:repeat(3,1fr);background:var(--surface);
   border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow-sm);overflow:hidden}
-.op{padding:14px 8px 13px;text-align:left;position:relative;border-right:1px solid var(--line);
+/* THREE BUTTONS THAT DID NOT LOOK LIKE BUTTONS. Left-aligned text in equal
+   thirds reads as a table — the operator asked whether it was even tappable —
+   and the only affordance was an :active background nobody sees until after
+   they have committed to the tap. Centred, so the trio balances, and each
+   label carries the same "›" the app already uses wherever something opens.
+   Padding drops 8px→6px and tracking .055em→.03em to pay for the glyph:
+   "TURNAROUND" had 16px of slack and ellipsised outright on a narrower phone. */
+.op{padding:14px 6px 12px;text-align:center;position:relative;border-right:1px solid var(--line);
   transition:background .16s}
 .op:last-child{border-right:0}
 .op:active{background:var(--surface-2)}
 .op b{display:block;font-size:30px;font-weight:690;letter-spacing:-.04em;line-height:1}
-.op s{display:block;text-decoration:none;font-size:10.5px;font-weight:600;letter-spacing:.055em;
+.op s{display:block;text-decoration:none;font-size:10.5px;font-weight:600;letter-spacing:.03em;
   text-transform:uppercase;color:var(--txt-3);margin-top:6px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* The button already carries an aria-label naming what it opens, so this is
+   decoration and must not be read out as content. */
+.op s::after{content:"›";margin-left:4px;font-weight:700;opacity:.75;speak:never}
 .op.zero b{color:var(--txt-3)}
 .op.alert b{color:var(--now)}
 .op.alert s{color:var(--now)}
@@ -615,6 +625,23 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .night.sel{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
 
 .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:7px}
+/* ── EVERY ROOM, BY PROPERTY ────────────────────────────────────────────────
+   Thirty-eight tiles in one undifferentiated field is ten rows of scrolling
+   with no landmarks, and the operator does not think in one portfolio — the
+   five buildings are in five parts of Hyderabad and get visited separately.
+   So the grid is cut by building, and the same row of chips that names the
+   buildings also filters to one. Chips reuse .tabseg, which is already the
+   app's word for "pick one of these"; the counts on them are live, so the row
+   doubles as a per-building free count for the night in the dial. */
+.roomfilt{margin:0 -20px;padding:0 20px 2px}
+.bsec + .bsec{margin-top:14px}
+.bsec-h{display:flex;align-items:baseline;justify-content:space-between;gap:8px;
+  margin:0 0 7px;padding-bottom:5px;border-bottom:1px solid var(--line)}
+.bsec-h b{font-size:11px;font-weight:680;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--txt-2)}
+.bsec-h s{text-decoration:none;font-size:11px;font-weight:600;color:var(--txt-3);
+  white-space:nowrap;flex:0 0 auto}
+.bsec-h s.none{color:var(--txt-3);opacity:.7}
 
 /* ══════════════════════ MONTH — perspective panels ══════════════════════ */
 .monthbar{margin:-4px 2px 14px}
@@ -1447,7 +1474,14 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .wrow .n b{font-size:13px;font-weight:620;letter-spacing:-.012em;color:var(--txt)}
 .wrow .n em{font-style:normal;font-size:13px;font-weight:650;color:var(--txt);white-space:nowrap}
 .wrow.short .n em{color:var(--hot)}
-.wrow .t{position:relative;height:13px;border-radius:6px;background:var(--surface-2);overflow:hidden}
+/* THE BAR'S FULL LENGTH IS THE CAPACITY, and the trough is what draws it. On
+   the card surface --surface-2 measures 1.01:1 in dark and 1.33:1 in light, so
+   past the end of the fill the bar simply stopped — the reader could see how
+   much was sold but not what it was sold out of, which is half the comparison.
+   A hairline in a translucent token, so one declaration darkens on light and
+   lightens on dark. The fill is untouched. */
+.wrow .t{position:relative;height:13px;border-radius:6px;background:var(--surface-2);overflow:hidden;
+  box-shadow:0 0 0 1px var(--line-2)}
 /* THE FILL IS SPLIT AT BREAK-EVEN, and that split is the whole panel.
    Left of it are the nights that go on paying the rent; right of it are the
    nights the operator keeps. Both segments sit on the same trough, so neither
@@ -3321,7 +3355,7 @@ const fmtL = i => { const d=dateAt(i); return `${DOW[d.getDay()]} ${d.getDate()}
    is a guess and it is labelled as one, because the rest of this file refuses
    to invent money and this is the single place it comes close.
 
-   WHAT IS IN. 46 flats over five buildings, every one of which has entries in
+   WHAT IS IN. 38 flats over five buildings, every one of which has entries in
    the last sixty days of the Availability tab.
 
    WHAT IS OUT, deliberately. Vasavi (308, 408, 607) and Mumbai 2004 are still
@@ -3394,26 +3428,28 @@ const INVENTORY = [
   ["B302",   "BH", 3, "3 BHK",     6000],
   ["B401",   "BH", 4, "1 BHK",     3000],
 
-  /* ── Lotus Pond ── stated outright too: each floor is a 4 BHK let as three
-     rooms plus a studio. It is live in the Availability tab but has not reached
-     the monthly revenue sheets yet, so these are the only rates here that are
-     NOT read from the book — priced off comparable stock, and worth correcting
-     in the inventory editor once a month of its own exists. */
-  ["LP-101", "LP", 1, "3 BHK",     6000],
-  ["LP-102", "LP", 1, "3 BHK",     6000],
-  ["LP-103", "LP", 1, "3 BHK",     6000],
+  /* ── Lotus Pond ── each floor is a 3 BHK plus a studio. The sheet keeps a
+     COLUMN PER BEDROOM, so rooms x01/x02/x03 are one apartment written down
+     three times, and reading them as three flats inflated the portfolio by
+     eight units and tripled this building's sellable nights — a fully let
+     apartment read as three rooms of which two were usually empty.
+
+     The book settles it: across 253 overlapping pairs of those rooms not one
+     carries a different guest, and across the 88 stays they describe not one
+     has the three rooms on different dates. merge-lotus.py did the join and
+     refused to write unless every let night and every rupee survived it.
+
+     Live in the Availability tab but not yet in the monthly revenue sheets, so
+     these are the only rates here NOT read from the book — priced off
+     comparable stock, and the per-night figures the book does carry (Rs 5,250
+     to Rs 7,500 for the whole apartment) say Rs 6,000 is the right order. */
+  ["LP-1",   "LP", 1, "3 BHK",     6000],   // rooms 101-103, let as one
+  ["LP-2",   "LP", 2, "3 BHK",     6000],   // rooms 201-203, let as one
+  ["LP-3",   "LP", 3, "3 BHK",     6000],   // rooms 301-303, let as one
+  ["LP-4",   "LP", 4, "3 BHK",     6000],   // rooms 401-403, let as one
   ["LP-104", "LP", 1, "Studio",    2500],
-  ["LP-201", "LP", 2, "3 BHK",     6000],
-  ["LP-202", "LP", 2, "3 BHK",     6000],
-  ["LP-203", "LP", 2, "3 BHK",     6000],
   ["LP-204", "LP", 2, "Studio",    2500],
-  ["LP-301", "LP", 3, "3 BHK",     6000],
-  ["LP-302", "LP", 3, "3 BHK",     6000],
-  ["LP-303", "LP", 3, "3 BHK",     6000],
   ["LP-304", "LP", 3, "Studio",    2500],
-  ["LP-401", "LP", 4, "3 BHK",     6000],
-  ["LP-402", "LP", 4, "3 BHK",     6000],
-  ["LP-403", "LP", 4, "3 BHK",     6000],
   ["LP-404", "LP", 4, "Studio",    2500],
 ];
 /* Where the bookings came from. One list, because the demo generator and the
@@ -4649,79 +4685,31 @@ const BOOK = [
 ["G02",0,2,"Rohith",1,0],
 ["G02",2,6,"Charu",1,0],
 ["G02",10,7,"Sumit",1,0],
-["LP-101",-93,3,"Chandu",0,15750],
-["LP-101",-90,1,"Prathipaka",1,0],
-["LP-101",-87,7,"Ramesh",1,0],
-["LP-101",-80,7,"Durga Prasad",0,36750],
-["LP-101",-71,1,"Kanyaragi",1,0],
-["LP-101",-70,1,"Venkat",0,2100],
-["LP-101",-69,1,"Kanyaragi",1,0],
-["LP-101",-67,2,"Prashanth",1,0],
-["LP-101",-65,1,"Rahil",0,6300],
-["LP-101",-64,2,"Madhavi",0,0],
-["LP-101",-60,2,"Krishna Skyla",0,15000],
-["LP-101",-58,1,"Poojitha",1,0],
-["LP-101",-57,1,"Daniel",1,0],
-["LP-101",-56,7,"Anil",1,0],
-["LP-101",-49,5,"Ramling",1,0],
-["LP-101",-44,3,"Shyam",0,16000],
-["LP-101",-41,1,"Kanyaragi",0,6000],
-["LP-101",-37,4,"Mustafa",1,37100],
-["LP-101",-28,3,"Owais Baig",0,17010],
-["LP-101",-25,9,"Padma",0,48000],
-["LP-101",-16,5,"Subhash",1,0],
-["LP-101",-11,2,"Nader",0,0],
-["LP-101",-7,3,"Raghuram",1,0],
-["LP-101",-4,1,"Dhanamjayarao",5,0],
-["LP-101",-2,4,"Shancy",0,0],
-["LP-102",-93,3,"Chandu",0,0],
-["LP-102",-90,1,"Prathipaka",1,0],
-["LP-102",-87,7,"Ramesh",1,0],
-["LP-102",-80,7,"Durga Prasad",0,0],
-["LP-102",-71,1,"Kanyaragi",1,0],
-["LP-102",-69,1,"Kanyaragi",1,0],
-["LP-102",-67,2,"Prashanth",1,0],
-["LP-102",-65,1,"Rahil",0,0],
-["LP-102",-64,2,"Madhavi",0,0],
-["LP-102",-60,2,"Krishna Skyla",0,0],
-["LP-102",-58,1,"Poojitha",1,0],
-["LP-102",-57,1,"Daniel",1,0],
-["LP-102",-56,7,"Anil",1,0],
-["LP-102",-49,5,"Ramling",1,0],
-["LP-102",-44,3,"Shyam",0,0],
-["LP-102",-41,1,"Kanyaragi",0,0],
-["LP-102",-37,4,"Mustafa",1,0],
-["LP-102",-28,3,"Owais Baig",0,0],
-["LP-102",-25,9,"Padma",0,0],
-["LP-102",-16,5,"Subhash",1,0],
-["LP-102",-11,2,"Nader",0,0],
-["LP-102",-7,3,"Raghuram",1,0],
-["LP-102",-4,1,"Dhanamjayarao",5,0],
-["LP-102",-2,4,"Shancy",0,0],
-["LP-103",-93,3,"Chandu",0,0],
-["LP-103",-90,1,"Prathipaka",1,0],
-["LP-103",-87,7,"Ramesh",1,0],
-["LP-103",-80,7,"Durga Prasad",0,0],
-["LP-103",-71,1,"Kanyaragi",1,0],
-["LP-103",-69,1,"Kanyaragi",1,0],
-["LP-103",-67,2,"Prashanth",1,0],
-["LP-103",-65,1,"Rahil",0,0],
-["LP-103",-64,2,"Madhavi",0,0],
-["LP-103",-60,2,"Krishna Skyla",0,0],
-["LP-103",-58,1,"Poojitha",1,0],
-["LP-103",-57,1,"Daniel",1,0],
-["LP-103",-56,7,"Anil",1,0],
-["LP-103",-49,5,"Ramling",1,0],
-["LP-103",-44,3,"Shyam",0,0],
-["LP-103",-41,1,"Kanyaragi",0,0],
-["LP-103",-37,4,"Mustafa",1,0],
-["LP-103",-28,3,"Owais Baig",0,0],
-["LP-103",-25,9,"Padma",0,0],
-["LP-103",-16,5,"Subhash",1,0],
-["LP-103",-11,2,"Nader",0,0],
-["LP-103",-7,3,"Raghuram",1,0],
-["LP-103",-4,1,"Dhanamjayarao",5,0],
-["LP-103",-2,4,"Shancy",0,0],
+["LP-1",-93,3,"Chandu",0,15750],
+["LP-1",-90,1,"Prathipaka",1,0],
+["LP-1",-87,7,"Ramesh",1,0],
+["LP-1",-80,7,"Durga Prasad",0,36750],
+["LP-1",-71,1,"Kanyaragi",1,0],
+["LP-1",-70,1,"Venkat",0,2100],
+["LP-1",-69,1,"Kanyaragi",1,0],
+["LP-1",-67,2,"Prashanth",1,0],
+["LP-1",-65,1,"Rahil",0,6300],
+["LP-1",-64,2,"Madhavi",0,0],
+["LP-1",-60,2,"Krishna Skyla",0,15000],
+["LP-1",-58,1,"Poojitha",1,0],
+["LP-1",-57,1,"Daniel",1,0],
+["LP-1",-56,7,"Anil",1,0],
+["LP-1",-49,5,"Ramling",1,0],
+["LP-1",-44,3,"Shyam",0,16000],
+["LP-1",-41,1,"Kanyaragi",0,6000],
+["LP-1",-37,4,"Mustafa",1,37100],
+["LP-1",-28,3,"Owais Baig",0,17010],
+["LP-1",-25,9,"Padma",0,48000],
+["LP-1",-16,5,"Subhash",1,0],
+["LP-1",-11,2,"Nader",0,0],
+["LP-1",-7,3,"Raghuram",1,0],
+["LP-1",-4,1,"Dhanamjayarao",5,0],
+["LP-1",-2,4,"Shancy",0,0],
 ["LP-104",-87,7,"Ramesh",1,0],
 ["LP-104",-71,4,"Ishwar",0,9450],
 ["LP-104",-65,5,"Vamsi",0,11250],
@@ -4738,150 +4726,55 @@ const BOOK = [
 ["LP-104",-16,5,"Subhash",1,0],
 ["LP-104",-6,1,"Ibrahim",0,0],
 ["LP-104",16,12,"Archana",0,0],
-["LP-201",-92,1,"Aditya",0,5250],
-["LP-201",-91,1,"Reshma sree",1,0],
-["LP-201",-90,2,"Hemanth",0,0],
-["LP-201",-86,10,"Vinay",1,0],
-["LP-201",-76,23,"Islam",0,0],
-["LP-201",-52,2,"Akhila",1,0],
-["LP-201",-50,1,"Akhila",0,3000],
-["LP-201",-49,1,"Sandesh",0,6500],
-["LP-201",-48,1,"chapalamudugu Viswa Kalyan Mitra",1,0],
-["LP-201",-47,1,"chapalamudugu Viswa Kalyan Mitra",0,4500],
-["LP-201",-46,6,"Dr Nayana",0,0],
-["LP-201",-40,18,"Preetam",1,0],
-["LP-201",-21,2,"Yasaswi",1,0],
-["LP-201",-18,10,"Anupam",0,0],
-["LP-201",-8,7,"Venkatarao",0,0],
-["LP-201",0,5,"Mustafa",0,0],
-["LP-202",-92,1,"Aditya",0,0],
-["LP-202",-91,1,"Reshma sree",1,0],
-["LP-202",-90,2,"Hemanth",0,0],
-["LP-202",-86,10,"Vinay",1,0],
-["LP-202",-76,23,"Islam",0,0],
-["LP-202",-52,2,"Akhila",1,0],
-["LP-202",-50,1,"Akhila",0,0],
-["LP-202",-49,1,"Sandesh",0,0],
-["LP-202",-48,1,"chapalamudugu Viswa Kalyan Mitra",1,0],
-["LP-202",-47,1,"chapalamudugu Viswa Kalyan Mitra",0,0],
-["LP-202",-46,6,"Dr Nayana",0,0],
-["LP-202",-40,18,"Preetam",1,0],
-["LP-202",-21,2,"Yasaswi",1,0],
-["LP-202",-18,10,"Anupam",0,0],
-["LP-202",-8,7,"Venkatarao",0,0],
-["LP-202",0,5,"Mustafa",0,0],
-["LP-203",-92,1,"Aditya",0,0],
-["LP-203",-91,1,"Reshma sree",1,0],
-["LP-203",-90,2,"Hemanth",0,0],
-["LP-203",-86,10,"Vinay",1,0],
-["LP-203",-76,23,"Islam",0,0],
-["LP-203",-52,2,"Akhila",1,0],
-["LP-203",-50,1,"Akhila",0,0],
-["LP-203",-49,1,"Sandesh",0,0],
-["LP-203",-48,1,"chapalamudugu Viswa Kalyan Mitra",1,0],
-["LP-203",-47,1,"chapalamudugu Viswa Kalyan Mitra",0,0],
-["LP-203",-46,6,"Dr Nayana",0,0],
-["LP-203",-40,18,"Preetam",1,0],
-["LP-203",-21,2,"Yasaswi",1,0],
-["LP-203",-18,10,"Anupam",0,0],
-["LP-203",-8,7,"Venkatarao",0,0],
-["LP-203",0,5,"Mustafa",0,0],
+["LP-2",-92,1,"Aditya",0,5250],
+["LP-2",-91,1,"Reshma sree",1,0],
+["LP-2",-90,2,"Hemanth",0,0],
+["LP-2",-86,10,"Vinay",1,0],
+["LP-2",-76,23,"Islam",0,0],
+["LP-2",-52,2,"Akhila",1,0],
+["LP-2",-50,1,"Akhila",0,3000],
+["LP-2",-49,1,"Sandesh",0,6500],
+["LP-2",-48,1,"chapalamudugu Viswa Kalyan Mitra",1,0],
+["LP-2",-47,1,"chapalamudugu Viswa Kalyan Mitra",0,4500],
+["LP-2",-46,6,"Dr Nayana",0,0],
+["LP-2",-40,18,"Preetam",1,0],
+["LP-2",-21,2,"Yasaswi",1,0],
+["LP-2",-18,10,"Anupam",0,0],
+["LP-2",-8,7,"Venkatarao",0,0],
+["LP-2",0,5,"Mustafa",0,0],
 ["LP-204",-91,124,"Swathi",0,0],
-["LP-301",-94,1,"Ratnakar",1,0],
-["LP-301",-92,1,"Daniel",1,0],
-["LP-301",-90,1,"Arman",1,0],
-["LP-301",-89,5,"Deep",0,28500],
-["LP-301",-84,1,"Ashish",1,0],
-["LP-301",-83,1,"Aman",3,0],
-["LP-301",-82,1,"Aman",0,7875],
-["LP-301",-81,1,"Kaushik",1,0],
-["LP-301",-80,3,"Konda Reddy",3,0],
-["LP-301",-77,2,"Venkatarao",0,0],
-["LP-301",-74,4,"Govardhan",0,22680],
-["LP-301",-70,1,"Sahil",0,5000],
-["LP-301",-68,10,"Ahmad",0,53550],
-["LP-301",-58,3,"Kashif",1,0],
-["LP-301",-55,1,"Rahul",1,0],
-["LP-301",-54,3,"Vijay",6,0],
-["LP-301",-51,1,"Ashwin",0,0],
-["LP-301",-50,3,"Somesh",1,0],
-["LP-301",-47,1,"Dr Nayana",0,28350],
-["LP-301",-45,1,"Bharat/Sonu",0,0],
-["LP-301",-44,4,"Mallikarjuna",1,0],
-["LP-301",-37,4,"Mustafa",0,45000],
-["LP-301",-29,1,"Venkatarao",0,0],
-["LP-301",-28,1,"Abhishek",1,0],
-["LP-301",-27,1,"Prashanth",1,0],
-["LP-301",-25,2,"Manikanth",0,6300],
-["LP-301",-22,1,"Santhosh",1,0],
-["LP-301",-21,1,"Prasad",1,0],
-["LP-301",-20,10,"Anupam",0,0],
-["LP-301",-10,1,"Nikhil",1,0],
-["LP-301",-9,3,"Raghavendra",0,23250],
-["LP-301",0,1,"Nabeel",0,0],
-["LP-302",-94,1,"Ratnakar",1,0],
-["LP-302",-92,1,"Daniel",1,0],
-["LP-302",-90,1,"Arman",1,0],
-["LP-302",-89,5,"Deep",0,0],
-["LP-302",-84,1,"Ashish",1,0],
-["LP-302",-83,1,"Aman",3,0],
-["LP-302",-82,1,"Aman",0,0],
-["LP-302",-81,1,"Kaushik",1,0],
-["LP-302",-80,3,"Konda Reddy",3,0],
-["LP-302",-77,2,"Venkatarao",0,0],
-["LP-302",-74,4,"Govardhan",0,22680],
-["LP-302",-70,1,"Sahil",0,0],
-["LP-302",-68,10,"Ahmad",0,0],
-["LP-302",-58,3,"Kashif",1,0],
-["LP-302",-55,1,"Rahul",1,0],
-["LP-302",-54,3,"Vijay",6,0],
-["LP-302",-51,1,"Ashwin",0,0],
-["LP-302",-50,3,"Somesh",1,0],
-["LP-302",-47,1,"Dr Nayana",0,0],
-["LP-302",-45,1,"Bharat/Sonu",0,0],
-["LP-302",-44,4,"Mallikarjuna",1,0],
-["LP-302",-37,4,"Mustafa",0,0],
-["LP-302",-29,1,"Venkatarao",0,0],
-["LP-302",-28,1,"Abhishek",1,0],
-["LP-302",-27,1,"Prashanth",1,0],
-["LP-302",-25,2,"Manikanth",0,0],
-["LP-302",-22,1,"Santhosh",1,0],
-["LP-302",-21,1,"Prasad",1,0],
-["LP-302",-20,10,"Anupam",0,0],
-["LP-302",-10,1,"Nikhil",1,0],
-["LP-302",-9,3,"Raghavendra",0,0],
-["LP-302",0,1,"Nabeel",0,0],
-["LP-303",-94,1,"Ratnakar",1,0],
-["LP-303",-92,1,"Daniel",1,0],
-["LP-303",-90,1,"Arman",1,0],
-["LP-303",-89,5,"Deep",0,0],
-["LP-303",-84,1,"Ashish",1,0],
-["LP-303",-83,1,"Aman",3,0],
-["LP-303",-82,1,"Aman",0,0],
-["LP-303",-81,1,"Kaushik",1,0],
-["LP-303",-80,3,"Konda Reddy",3,0],
-["LP-303",-77,2,"Venkatarao",0,0],
-["LP-303",-74,4,"Govardhan",0,22680],
-["LP-303",-70,1,"Sahil",0,0],
-["LP-303",-68,10,"Ahmad",0,0],
-["LP-303",-58,3,"Kashif",1,0],
-["LP-303",-55,1,"Rahul",1,0],
-["LP-303",-54,3,"Vijay",6,0],
-["LP-303",-51,1,"Ashwin",0,0],
-["LP-303",-50,3,"Somesh",1,0],
-["LP-303",-47,1,"Dr Nayana",0,0],
-["LP-303",-45,1,"Bharat/Sonu",0,0],
-["LP-303",-44,4,"Mallikarjuna",1,0],
-["LP-303",-37,4,"Mustafa",0,0],
-["LP-303",-29,1,"Venkatarao",0,0],
-["LP-303",-28,1,"Abhishek",1,0],
-["LP-303",-27,1,"Prashanth",1,0],
-["LP-303",-22,1,"Santhosh",1,0],
-["LP-303",-21,1,"Prasad",1,0],
-["LP-303",-20,10,"Anupam",0,0],
-["LP-303",-10,1,"Nikhil",1,0],
-["LP-303",-9,3,"Raghavendra",0,0],
-["LP-303",0,1,"Nabeel",0,0],
+["LP-3",-94,1,"Ratnakar",1,0],
+["LP-3",-92,1,"Daniel",1,0],
+["LP-3",-90,1,"Arman",1,0],
+["LP-3",-89,5,"Deep",0,28500],
+["LP-3",-84,1,"Ashish",1,0],
+["LP-3",-83,1,"Aman",3,0],
+["LP-3",-82,1,"Aman",0,7875],
+["LP-3",-81,1,"Kaushik",1,0],
+["LP-3",-80,3,"Konda Reddy",3,0],
+["LP-3",-77,2,"Venkatarao",0,0],
+["LP-3",-74,4,"Govardhan",0,68040],
+["LP-3",-70,1,"Sahil",0,5000],
+["LP-3",-68,10,"Ahmad",0,53550],
+["LP-3",-58,3,"Kashif",1,0],
+["LP-3",-55,1,"Rahul",1,0],
+["LP-3",-54,3,"Vijay",6,0],
+["LP-3",-51,1,"Ashwin",0,0],
+["LP-3",-50,3,"Somesh",1,0],
+["LP-3",-47,1,"Dr Nayana",0,28350],
+["LP-3",-45,1,"Bharat/Sonu",0,0],
+["LP-3",-44,4,"Mallikarjuna",1,0],
+["LP-3",-37,4,"Mustafa",0,45000],
+["LP-3",-29,1,"Venkatarao",0,0],
+["LP-3",-28,1,"Abhishek",1,0],
+["LP-3",-27,1,"Prashanth",1,0],
+["LP-3",-25,2,"Manikanth",0,6300],
+["LP-3",-22,1,"Santhosh",1,0],
+["LP-3",-21,1,"Prasad",1,0],
+["LP-3",-20,10,"Anupam",0,0],
+["LP-3",-10,1,"Nikhil",1,0],
+["LP-3",-9,3,"Raghavendra",0,23250],
+["LP-3",0,1,"Nabeel",0,0],
 ["LP-304",-95,1,"Mastan",1,0,1],
 ["LP-304",-91,3,"Swathi",0,1575],
 ["LP-304",-84,1,"Ashish",1,0],
@@ -4901,47 +4794,21 @@ const BOOK = [
 ["LP-304",-20,10,"Anupam",0,0],
 ["LP-304",-10,1,"Nikhil",1,0],
 ["LP-304",-9,3,"Raghavendra",0,0],
-["LP-401",-95,6,"Venkatarao",0,0,1],
-["LP-401",-88,1,"Leela Mahesh",1,0],
-["LP-401",-86,3,"Saista",1,0],
-["LP-401",-83,1,"Kanyaragi",1,0],
-["LP-401",-82,2,"Sainath",0,7500],
-["LP-401",-80,1,"Kashyap",1,0],
-["LP-401",-79,2,"Irfan",1,0],
-["LP-401",-77,8,"Nader",0,0],
-["LP-401",-69,1,"Sonu",0,5000],
-["LP-401",-66,4,"Akshay",1,0],
-["LP-401",-62,1,"Sonu",0,5000],
-["LP-401",-60,6,"Anto",0,36000],
-["LP-401",-52,1,"Anil",0,5355],
-["LP-401",-50,2,"Subrat",1,0],
-["LP-401",-48,95,"Lakshmi",0,90875],
-["LP-402",-88,1,"Leela Mahesh",1,0],
-["LP-402",-86,3,"Saista",1,0],
-["LP-402",-83,1,"Kanyaragi",1,0],
-["LP-402",-82,2,"Sainath",0,0],
-["LP-402",-80,1,"Kashyap",1,0],
-["LP-402",-79,2,"Irfan",1,0],
-["LP-402",-77,8,"Nader",0,0],
-["LP-402",-66,4,"Akshay",1,0],
-["LP-402",-62,1,"Sonu",0,0],
-["LP-402",-60,6,"Anto",0,0],
-["LP-402",-52,1,"Anil",0,0],
-["LP-402",-50,2,"Subrat",1,0],
-["LP-402",-48,95,"Lakshmi",0,0],
-["LP-403",-88,1,"Leela Mahesh",1,0],
-["LP-403",-86,3,"Saista",1,0],
-["LP-403",-83,1,"Kanyaragi",1,0],
-["LP-403",-82,2,"Sainath",0,0],
-["LP-403",-80,1,"Kashyap",1,0],
-["LP-403",-79,2,"Irfan",1,0],
-["LP-403",-77,8,"Nader",0,0],
-["LP-403",-66,4,"Akshay",1,0],
-["LP-403",-62,1,"Sonu",0,0],
-["LP-403",-60,6,"Anto",0,0],
-["LP-403",-52,1,"Anil",0,0],
-["LP-403",-50,2,"Subrat",1,0],
-["LP-403",-48,95,"Lakshmi",0,0],
+["LP-4",-95,6,"Venkatarao",0,0,1],
+["LP-4",-88,1,"Leela Mahesh",1,0],
+["LP-4",-86,3,"Saista",1,0],
+["LP-4",-83,1,"Kanyaragi",1,0],
+["LP-4",-82,2,"Sainath",0,7500],
+["LP-4",-80,1,"Kashyap",1,0],
+["LP-4",-79,2,"Irfan",1,0],
+["LP-4",-77,8,"Nader",0,0],
+["LP-4",-69,1,"Sonu",0,5000],
+["LP-4",-66,4,"Akshay",1,0],
+["LP-4",-62,1,"Sonu",0,5000],
+["LP-4",-60,6,"Anto",0,36000],
+["LP-4",-52,1,"Anil",0,5355],
+["LP-4",-50,2,"Subrat",1,0],
+["LP-4",-48,95,"Lakshmi",0,90875],
 ["LP-404",-92,3,"Anirudh",1,0],
 ["LP-404",-87,1,"Srikanth",1,0],
 ["LP-404",-84,1,"Maaz",1,0],
@@ -5306,10 +5173,10 @@ const FIN = [
 ["2026-01",[252,1191600,252],[126,680400,126],[201,718000,201],[184,1011000,184],null],
 ["2026-02",[239,1135000,236],[133,722400,133],[208,747000,208],[186,1032000,186],null],
 ["2026-03",[255,1233600,255],[125,671600,125],[225,807000,225],[189,1041000,189],null],
-["2026-04",[243,1142600,245],[123,654000,123],[191,683000,221],[196,1086000,196],[null,null,80]],
-["2026-05",[155,669600,275],[127,680800,127],[222,788000,222],[188,1035000,188],[null,null,235]],
-["2026-06",[175,778000,295],[134,720000,135],[208,764000,208],[188,1041000,188],[null,null,390]],
-["2026-07",[147,636800,271],[142,776400,142],[189,700000,189],[200,1119000,200],[null,null,387]]
+["2026-04",[243,1142600,245],[123,654000,123],[191,683000,221],[196,1086000,196],[null,null,40]],
+["2026-05",[155,669600,275],[127,680800,127],[222,788000,222],[188,1035000,188],[null,null,123]],
+["2026-06",[175,778000,295],[134,720000,135],[208,764000,208],[188,1041000,188],[null,null,186]],
+["2026-07",[147,636800,271],[142,776400,142],[189,700000,189],[200,1119000,200],[null,null,179]]
 ];
 
 /* The months the gate threw out, and why. A stepper that skips a month teaches
@@ -7391,8 +7258,13 @@ function renderRooms(){
   leftBox.style.cssText = "display:flex;align-items:center;min-width:0;flex:1";
   leftBox.append(thLeft, reset);
   th.append(leftBox, thRight);
-  const tiles = el("div","tiles");
-  tilesWrap.append(th, tiles);
+  /* null is every building. Held on the screen rather than globally: it is a
+     way of looking at tonight, not a setting, and it should not outlive the tab
+     the way the stay dial deliberately does. */
+  let roomFilt = null;
+  const filt = el("div","tabseg roomfilt");
+  const tiles = el("div");
+  tilesWrap.append(th, filt, tiles);
 
   const note = el("div","dataTools");
 
@@ -7436,7 +7308,7 @@ function renderRooms(){
       o.b.classList.toggle("zero", c === 0);
       o.b.classList.toggle("alert", o.key === "turnovers" && c > 0);
       o.b.setAttribute("aria-label",
-        `${c} ${o.key === "turnovers" ? "same-day turnarounds" : o.key} on ${fmtL(d)}`);
+        `Show the ${c} ${o.key === "turnovers" ? "same-day turnarounds" : o.key} on ${fmtL(d)}`);
     });
 
     scrSub.textContent = n === 1
@@ -7448,6 +7320,7 @@ function renderRooms(){
     reset.style.display = d===0 ? "none" : "inline-flex";
 
     tiles.textContent = "";
+    filt.hidden = f === 0;
     if(f === 0){
       // a dead end is still a question worth answering: when *is* this stay possible?
       tiles.style.display = "block";
@@ -7508,7 +7381,50 @@ function renderRooms(){
       tiles.appendChild(box);
     } else {
       tiles.style.display = "";
-      flats.forEach((fl,fi)=> tiles.appendChild(roomTile(fi, d, n)));
+      const B = buildingsOf();
+      const freeIn = code => flats.reduce((a,fl,fi)=>
+        a + (fl.code === code ? (freeSpan(fi, d, n) ? 1 : 0) : 0), 0);
+
+      /* A filter that can strand you shows only what it can reach. If the
+         picked building has nothing free for this stay the chip still says so
+         — a zero is an answer — but a filter left pointing at a building that
+         no longer exists (deleted in the inventory editor) falls back to all. */
+      if(roomFilt && !B.some(b => b.code === roomFilt)) roomFilt = null;
+
+      filt.textContent = "";
+      const chip = (code, label, count)=>{
+        const b = el("button", null, count == null ? label : `${label} ${count}`);
+        b.setAttribute("aria-selected", roomFilt === code);
+        b.setAttribute("aria-label", code
+          ? `Show only ${label}, ${count} free`
+          : `Show every building, ${count} free`);
+        b.onclick = ()=>{ haptic(9); roomFilt = code; paint(); };
+        filt.appendChild(b);
+        return b;
+      };
+      chip(null, "All", f);
+      B.forEach(b=> chip(b.code, b.short || b.name, freeIn(b.code)));
+
+      const show = B.filter(b=> !roomFilt || b.code === roomFilt);
+      show.forEach(b=>{
+        const mine = flats.map((fl,fi)=>({fl,fi})).filter(x=> x.fl.code === b.code);
+        if(!mine.length) return;
+        const sec = el("div","bsec");
+        /* One building on screen is already named by the selected chip, so the
+           header would be saying it twice. */
+        if(!roomFilt){
+          const h = el("div","bsec-h");
+          const free = mine.reduce((a,x)=> a + (freeSpan(x.fi, d, n) ? 1 : 0), 0);
+          const cnt = el("s", null, free ? `${free} of ${mine.length} free` : `all ${mine.length} booked`);
+          if(!free) cnt.className = "none";
+          h.append(el("b", null, b.short || b.name), cnt);
+          sec.appendChild(h);
+        }
+        const g = el("div","tiles");
+        mine.forEach(x=> g.appendChild(roomTile(x.fi, d, n)));
+        sec.appendChild(g);
+        tiles.appendChild(sec);
+      });
     }
 
     const sel = nights.querySelector(".night.sel");
@@ -9198,7 +9114,7 @@ function renderTrends(){
     /* The rate card must cover the same flats the achieved rate does, or the
        "discount" is partly the difference between two portfolios. When the
        figure comes from the workbook it covers the buildings the sheet prices —
-       30 of 46 flats — so the card average is taken over those same flats. */
+       30 of 38 flats — so the card average is taken over those same flats. */
     const priceCodes = useBook ? new Set(W.rows.filter(r=>r.state!=="absent").map(r=>r.code)) : null;
     const lot = priceCodes ? flats.filter(f=> priceCodes.has(f.code)) : flats;
     const listed = lot.length ? lot.reduce((a,f)=> a + (f.rate||0), 0) / lot.length : M.listed;
