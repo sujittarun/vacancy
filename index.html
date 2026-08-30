@@ -135,6 +135,7 @@
   --txt:#FFFFFF; --txt-2:#98A1B5; --txt-3:#868FA2;
   --free:#EAEFF9; --free-ink:#0A0C11; --held:#1B1F2A; --held-ink:#7E8AA3;
   --oos:#4E586E;
+  --cal-ico:invert(1);   /* the OS calendar glyph is dark ink; dark needs it flipped */
   --now:#FFA23A; --now-ink:#FFA23A; --hot:#FF5F52;
   /* --ink is --free under another name. They hold the same value here, but they
      are not the same idea: --free is a WORLD STATE (this room is sellable) and
@@ -252,6 +253,7 @@
      and vacancy still owns the loud end of the scale. */
   --free:#1C2331; --free-ink:#F2F5FB; --held:#B2BCD0; --held-ink:#2F3642;
   --oos:#747E92;
+  --cal-ico:none;
   /* One orange cannot be both a live fill and 4.5:1 text on white. --now is the
      fill and keeps dark's hue (OkLCh H 64.7 against dark's 64.2, so the accent
      is the same colour in both themes); --now-ink is every accented word, rule
@@ -274,6 +276,7 @@
   --txt:#FFFFFF; --txt-2:#98A1B5; --txt-3:#868FA2;
   --free:#EAEFF9; --free-ink:#0A0C11; --held:#1B1F2A; --held-ink:#7E8AA3;
   --oos:#4E586E;
+  --cal-ico:invert(1);
   --now:#FFA23A; --now-ink:#FFA23A; --hot:#FF5F52;
   --ink:#EAEFF9; --ink-on:#0A0C11;
   --raise:#1F2330;
@@ -345,7 +348,15 @@ body{
   font-size:14px; line-height:1.5; overscroll-behavior:none;
 }
 button,input{font:inherit;color:inherit;font-variant-numeric:tabular-nums}
-button{background:none;border:0;padding:0;cursor:pointer}
+/* A LONG PRESS IS A GESTURE, NOT A SELECTION. Holding a room tile is how you
+   see its timeline, and on a touch device the browser's own long-press ran
+   first: it selected the word "BOOKED", raised the copy bubble, and the peek
+   either never appeared or appeared under a selection highlight. Nothing in
+   this app is a button AND a passage of text, so no button is selectable, and
+   the iOS callout is off for the same reason. Inputs are untouched — they are
+   the one place a selection is the point. */
+button{background:none;border:0;padding:0;cursor:pointer;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 :focus-visible{outline:2px solid var(--now);outline-offset:2px;border-radius:4px}
 
 /* ══════════════════════ shell ══════════════════════ */
@@ -499,6 +510,12 @@ button{background:none;border:0;padding:0;cursor:pointer}
   min-height:56px;display:flex;flex-direction:column;justify-content:space-between;
 }
 .tile:active{transform:scale(.93)}
+/* HELD, AND SHOWING. The peek opens as a panel elsewhere on the screen, so
+   without this the tile the operator's thumb is on gives no sign it is the one
+   being described — with 38 tiles and a thumb covering one, that is a real
+   question. It holds the pressed geometry rather than springing back, and takes
+   the app's focus ring so the link between finger and panel is unmistakable. */
+.tile.peeking{transform:scale(.93);box-shadow:0 0 0 2px var(--now);z-index:2}
 .tile b{display:block;font-size:13px;font-weight:620;letter-spacing:-.01em;color:var(--held-ink)}
 .tile s{display:block;text-decoration:none;font-size:9px;font-weight:600;letter-spacing:.05em;
   text-transform:uppercase;color:var(--held-ink);opacity:.62;margin-top:4px;
@@ -1615,12 +1632,24 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .cs-r i{display:block;height:5px;border-radius:3px;justify-self:start;
   background:color-mix(in srgb, var(--free) 52%, var(--surface-2))}
 .cs-r s{text-decoration:none;color:var(--txt);font-weight:600;white-space:nowrap}
-/* A LOGGED LINE IS A DIFFERENT KIND OF NUMBER FROM A BUDGETED ONE. Same row,
-   same weight — it is charged identically — but the bar is solid rather than
-   the muted mix, and the name carries the app's own ink instead of --txt-2, so
-   "this is what you actually paid" is legible without a legend or a badge. */
+/* A LOGGED LINE IS A DIFFERENT KIND OF NUMBER FROM A BUDGETED ONE — and the
+   app already has a rule for exactly that distinction. Every track on the
+   Profit tab reads "solid is what the sheet bills, hatch is what it does not",
+   so the same sentence carries here: SOLID IS WHAT YOU PAID, HATCH IS THE
+   STANDING ESTIMATE. Same tone for both, because they are charged identically.
+
+   The first pass painted the logged bar solid --free instead, which in light is
+   near-black — a dark slab beside ten grey ones, reading as an alert rather
+   than as a fact. Tone was the wrong channel: it says "more" when the thing
+   being said is "different in kind".
+
+   And only when it means something. With nothing logged every line is an
+   estimate, so hatching all eleven would be noise on every breakdown in the
+   app; the pattern appears only on a month that has both. */
 .cs-r.act b{color:var(--txt);font-weight:600}
-.cs-r.act i{background:var(--free)}
+.costsplit.mixed .cs-r:not(.act) i{
+  background:repeating-linear-gradient(135deg,
+    color-mix(in srgb,var(--free) 52%,var(--surface-2)) 0 4px, transparent 4px 8px)}
 /* one rate, fifteen months, in its own sheet */
 .raterail{display:flex;align-items:flex-end;gap:4px;height:140px;margin:14px 0 0}
 .rcol{flex:1 1 0;min-width:0;height:100%;display:flex;flex-direction:column;
@@ -1940,6 +1969,40 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
   transition:border-color .18s, background .18s}
 .bkform input:focus{outline:none;border-color:var(--line-2);background:var(--surface-3)}
 .bkform input::placeholder{color:var(--txt-3)}
+/* A NATIVE SELECT IS NOT A THEME. Dropped into the expense sheet these rendered
+   as the browser's own white boxes with a system chevron — the only two
+   controls in the app not made of its own materials, on the newest screen in
+   it. Same box as the inputs beside them, appearance stripped, and the chevron
+   drawn here so it takes the app's ink in both themes. */
+.bkform select{width:100%;padding:12px 34px 12px 13px;border-radius:var(--r-sm);
+  background:var(--surface-2);border:1px solid var(--line);color:var(--txt);
+  font-family:var(--ui);font-size:16px;
+  -webkit-appearance:none;appearance:none;
+  background-image:linear-gradient(45deg,transparent 50%,var(--txt-3) 50%),
+                   linear-gradient(135deg,var(--txt-3) 50%,transparent 50%);
+  background-position:calc(100% - 17px) calc(50% + 1px), calc(100% - 12px) calc(50% + 1px);
+  background-size:5px 5px, 5px 5px;
+  background-repeat:no-repeat;
+  transition:border-color .18s, background-color .18s}
+.bkform select:focus{outline:none;border-color:var(--line-2)}
+/* The date field keeps the OS picker — on a phone that is the best control
+   there is — but its indicator is a system glyph in a system colour, so it is
+   dimmed to the app's own weight rather than left shouting in blue. */
+.bkform input[type="date"]{padding-right:11px}
+.bkform input[type="date"]::-webkit-calendar-picker-indicator{
+  opacity:.5;cursor:pointer;filter:var(--cal-ico)}
+.bkform input[type="date"]::-webkit-date-and-time-value{text-align:left}
+/* WHEN, IN ONE TAP. Almost every expense is logged the day it happened or the
+   day after, so the two common answers are buttons and the picker is the
+   fallback rather than the first move. */
+.daychips{display:flex;gap:6px;margin:-2px 0 2px}
+.daychips button{flex:0 0 auto;padding:6px 11px;border-radius:var(--r-xs);
+  background:var(--surface-2);border:1px solid var(--line);
+  font-size:12px;font-weight:600;color:var(--txt-2);white-space:nowrap;
+  transition:transform .38s var(--spring),background .18s,color .18s}
+.daychips button:active{transform:scale(.95);transition-duration:.085s}
+.daychips button[aria-pressed="true"]{background:var(--free);color:var(--free-ink);
+  border-color:transparent}
 /* captions sit above the pair and line up with them, so neither number has to
    be guessed at */
 .bkcap{display:flex;gap:8px;margin:2px 0 -3px;font-size:10.5px;font-weight:640;
@@ -3069,6 +3132,8 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 :root[data-theme="light"] .tabseg button:not([aria-selected="true"]),
 :root[data-theme="light"] .sheet-h button,
 :root[data-theme="light"] .bkform input,
+:root[data-theme="light"] .bkform select,
+:root[data-theme="light"] .daychips button:not([aria-pressed="true"]),
 :root[data-theme="light"] .paid.plat,
 :root[data-theme="light"] .blocked{
   background-color:var(--s-sunk);
@@ -6976,13 +7041,15 @@ function attachPeek(btn, fi, day){
      Only a pointerup produces a click, so only a pointerup arms the latch — and
      it is time-bounded as well, because a latch that outlives its own gesture
      is the bug, not the mechanism. */
-  const stop = ()=>{ clearTimeout(timer); timer = null; if(fired){ hidePeek(); fired = false; } };
+  const stop = ()=>{ clearTimeout(timer); timer = null; btn.classList.remove("peeking");
+    if(fired){ hidePeek(); fired = false; } };
   const cancel = ()=>{ stop(); };
   const finish = ()=>{ if(fired){ btn._peeked = performance.now(); } stop(); };
   btn.addEventListener("pointerdown", e=>{
     if(e.pointerType === "mouse" && e.button !== 0) return;
     x0 = e.clientX; y0 = e.clientY; fired = false;
-    timer = setTimeout(()=>{ fired = true; haptic(11); showPeek(fi, day); }, 330);
+    timer = setTimeout(()=>{ fired = true; haptic(11);
+      btn.classList.add("peeking"); showPeek(fi, day); }, 330);
   });
   btn.addEventListener("pointermove", e=>{
     // a scroll is not a hold; let go of the gesture rather than fighting it
@@ -9225,14 +9292,14 @@ function renderTrends(){
             const cm = costMonth(r.code, finMonth);
             const lines = Object.entries(cm.lines)
               .filter(([,v])=> +v > 0).sort((a2,b2)=> b2[1] - a2[1]);
-            const tbl = el("div","costsplit");
+            const tbl = el("div","costsplit" + (cm.actualLines ? " mixed" : ""));
             /* WHICH FIGURE IS A FACT AND WHICH IS AN ESTIMATE. A line the
                operator logged this month is what they actually paid; the rest
                are the standing model. Both are charged, so both are shown — but
                they are not the same kind of number and the row says so, because
                a half-logged line understates and only the operator can tell. */
             tbl.appendChild(el("div","cs-h", `Where the ${money(r.cost)} goes`
-              + (cm.actualLines ? ` · ${cm.actualLines} logged, ${lines.length - cm.actualLines} standing` : "")));
+              + (cm.actualLines ? ` · ${cm.actualLines} logged, ${lines.length - cm.actualLines} estimated` : "")));
             lines.forEach(([k,v])=>{
               const ln = el("div","cs-r" + (cm.basis[k] === "actual" ? " act" : ""));
               const bar = el("i"); bar.style.width = (v / lines[0][1] * 100).toFixed(1) + "%";
@@ -9381,9 +9448,20 @@ function renderTrends(){
          says that; a caption repeating it is teaching a reader who has already
          looked. What the picture CANNOT say is why the base is flat, and that
          is six words. */
-      const cost0 = all.find(f=>f.totals);
+      /* "EVERY MONTH" WAS TRUE UNTIL THE LEDGER EXISTED. The base was flat
+         because every month charged the same standing model, and the caption
+         said so. A logged expense makes one month cost more or less than its
+         neighbours, and the base stops being flat — so the caption has to
+         check rather than assert. It is the same failure this file keeps
+         finding: a sentence that was measured once and then kept. */
+      const costs = all.filter(f=>f.totals).map(f=> f.totals.cost);
+      const flat = costs.length && costs.every(v => v === costs[0]);
+      const lo = Math.min(...costs), hi = Math.max(...costs);
       b.appendChild(Object.assign(el("div","railkey"), {innerHTML:
-        `<span><i class="k-cost"></i>costs · ${money(cost0 ? cost0.totals.cost : 0)} every month</span>`
+        `<span><i class="k-cost"></i>costs · ${
+          !costs.length ? "none read"
+          : flat ? money(costs[0]) + " every month"
+          : money(lo) + " to " + money(hi) + " · what you logged"}</span>`
       + `<span><i class="k-kept"></i>kept</span>`}));
     }
 
@@ -11927,14 +12005,14 @@ function openExpense(code, monthKey, after){
     row.append(nm, node); form.appendChild(row); return node;
   };
   const bSel = el("select");
-  bSel.style.cssText = "flex:0 0 160px;padding:9px 11px;font-size:12.5px";
+  bSel.style.cssText = "flex:0 0 170px";
   bSel.setAttribute("aria-label","Which building this expense is for");
   B.forEach(b=>{ const o = el("option", null, b.name); o.value = b.code;
     if(b.code === code) o.selected = true; bSel.appendChild(o); });
   mk("Building", bSel);
 
   const lSel = el("select");
-  lSel.style.cssText = "flex:0 0 160px;padding:9px 11px;font-size:12.5px";
+  lSel.style.cssText = "flex:0 0 170px";
   lSel.setAttribute("aria-label","Which cost line this belongs to");
   const fillLines = ()=>{
     const keep = lSel.value;
@@ -11950,13 +12028,13 @@ function openExpense(code, monthKey, after){
   const amt = el("input");
   amt.type = "tel"; amt.inputMode = "numeric"; amt.placeholder = "₹";
   amt.setAttribute("aria-label","What it cost");
-  amt.style.cssText = "flex:0 0 118px;text-align:right;padding:9px 11px";
+  amt.style.cssText = "flex:0 0 170px;text-align:right";
   mk("Amount", amt);
 
   const when = el("input");
   when.type = "date";
   when.setAttribute("aria-label","The day it was paid");
-  when.style.cssText = "flex:0 0 160px;padding:9px 11px;font-size:12.5px";
+  when.style.cssText = "flex:0 0 170px";
   /* Today, unless the operator is looking at another month — in which case the
      month on screen is the one they mean, and its last day is the safest guess
      for a bill they are entering after the fact. */
@@ -11965,11 +12043,32 @@ function openExpense(code, monthKey, after){
     ? monthKey + "-" + String(new Date(+monthKey.slice(0,4), +monthKey.slice(5,7), 0).getDate()).padStart(2,"0")
     : today;
   mk("Paid on", when);
+  /* The two answers that cover almost every receipt, as buttons, with the
+     picker left for the rest. Offered only when the month on screen contains
+     them — on a past month "Today" would silently file the expense outside the
+     month the operator is looking at, which is the one mistake this control
+     could make. */
+  const chips = el("div","daychips");
+  chips.style.justifyContent = "flex-end";
+  const opts = [["Today", dayISO(0)], ["Yesterday", dayISO(-1)]]
+    .filter(([,d])=> !monthKey || monthOf(d) === monthKey);
+  opts.forEach(([lab, d])=>{
+    const c = el("button", null, lab);
+    c.type = "button";
+    c.onclick = ()=>{ haptic(9); when.value = d; syncChips(); paint(); };
+    chips.appendChild(c);
+  });
+  function syncChips(){
+    [...chips.children].forEach((c,i)=> c.setAttribute("aria-pressed", when.value === opts[i][1]));
+  }
+  if(opts.length){ form.appendChild(chips); when.addEventListener("input", syncChips); }
 
   const note = el("input");
-  note.type = "text"; note.placeholder = "What it was for (optional)";
+  /* The label already says Note; a placeholder repeating it in more words only
+     had room to show two thirds of itself. */
+  note.type = "text"; note.placeholder = "Optional";
   note.setAttribute("aria-label","What the expense was for");
-  note.style.cssText = "flex:0 0 160px;padding:9px 11px;font-size:12.5px";
+  note.style.cssText = "flex:0 0 170px";
   mk("Note", note);
 
   const live = el("div");
@@ -11985,6 +12084,7 @@ function openExpense(code, monthKey, after){
   };
   [amt, when].forEach(n=> n.addEventListener("input", paint));
   [bSel, lSel].forEach(n=> n.addEventListener("change", paint));
+  if(opts.length) syncChips();
   paint();
   form.appendChild(live);
 

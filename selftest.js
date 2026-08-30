@@ -1331,6 +1331,32 @@ export async function run(filter) {
     } finally { Date.now = realNow; expenses.length = 0; expenses.push(...keep); expSave(); }
   });
 
+  /* A long press on a room tile is how the timeline opens. On touch the
+     browser's own long-press ran first and selected the word "BOOKED", so the
+     peek either never came or came up under a selection highlight. */
+  await test("a long press on a room is a gesture, not a text selection", async () => {
+    await settle();
+    document.querySelectorAll(".tabbar button")[0].click();
+    await until(() => document.querySelector(".tile"), "the room grid");
+    const t = document.querySelector(".tile");
+    const cs = getComputedStyle(t);
+    const sel = cs.userSelect || cs.webkitUserSelect;
+    eq(sel, "none", "user-select on a room tile");
+    /* every button, not just this one — they are all gestures */
+    const bad = [...document.querySelectorAll("button")].filter(b=>{
+      const c = getComputedStyle(b);
+      return (c.userSelect || c.webkitUserSelect) !== "none";
+    });
+    eq(bad.length, 0, `${bad.length} selectable buttons, first "${bad[0] && bad[0].textContent.slice(0,20)}"`);
+    /* and an input must stay selectable — that is the one place it is the point */
+    const inp = document.querySelector("input");
+    if(inp){
+      const ic = getComputedStyle(inp);
+      ok((ic.userSelect || ic.webkitUserSelect) !== "none", "an input was made unselectable too");
+    }
+    return `${document.querySelectorAll("button").length} buttons, none selectable`;
+  });
+
   /* ══ the whole surface ══════════════════════════════════════════════════ */
 
   await test("no text falls below AA in either theme", async () => {
