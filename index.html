@@ -4034,9 +4034,18 @@ function todayBoard(){
 }
 
 
+/* A MEDIAN OF ONE IS NOT A MEDIAN. This reported "across 1 of your own bookings
+   the typical one arrives 59 days before check-in" — one booking, described as
+   typical, in the same footer that tells the operator what the app knows. Same
+   shape as the Money card averaging a rate out of three long stays: the
+   arithmetic was fine and the refusal was missing.
+
+   Eight, because that is roughly where a median stops moving by half its own
+   value when one more row lands. Below it the footer says there is not enough
+   yet, which is true and is the thing worth saying. */
 function leadTimes(){
   const rs = resv.filter(r => typeof r.bookedOn === "number" && r.start >= r.bookedOn);
-  if(!rs.length) return null;
+  if(rs.length < 8) return null;
   const days = rs.map(r => r.start - r.bookedOn).sort((a,b)=>a-b);
   return {n: days.length, median: days[Math.floor(days.length/2)],
           avg: days.reduce((a,b)=>a+b,0)/days.length};
@@ -8722,19 +8731,25 @@ function renderTrends(){
               + `outside this sheet, so <b>${money(r.net)} is a floor, not a figure</b>. Its cost line covers all `
               + `${r.flats} flats and its revenue covers fewer, and headroom rises with both nights and revenue — `
               + `so this row can only go up.`
-            /* Short, because the row above now SHOWS the occupancy, the
-               break-even and the headroom as three labelled numbers under its
-               own bar. Repeating them in a paragraph made the reader check the
-               sentence against the picture. What is left is the one thing the
-               picture cannot say: what the headroom MEANS. */
+            /* IN NIGHTS, WHICH IS WHAT THE OPERATOR SELLS. This said "keeps 42p
+               in the rupee" and "occupancy could fall 32 points", and both had
+               to be asked about. "p" is paise and "points" are the gap between
+               two percentages rather than a percentage of one — correct, and
+               neither is the unit anybody runs a building in.
+
+               Worse, "could fall" turned a measurement into a warning: nothing
+               here forecasts a fall, and framing the distance between two marks
+               as a risk makes a healthy building sound precarious. The same gap
+               read forwards is the profit, counted in nights. */
             : (r.unreachable
                 ? `<b>${esc(r.name)}</b> cannot cover ${money(r.cost)} at ${money(r.adr)} a night however full `
                   + `it gets. <b>The rate is the problem, not the fill.</b>`
-                : `<b>${esc(r.name)}</b> keeps ${Math.round(r.margin*100)}p in the rupee at ${money(r.adr)} a night. `
-                  + (r.head >= 0
-                      ? `<b>Occupancy could fall ${Math.round(r.head*100)} points — to ${Math.round(r.be*100)}% — `
-                        + `before it stops paying for itself.</b>`
-                      : `<b>It is ${Math.round(-r.head*100)} points short of paying for itself.</b>`));
+                : r.head >= 0
+                ? `<b>${esc(r.name)}</b> needs ${Math.ceil(r.beNights)} of its ${r.cap} nights to cover itself. `
+                  + `It sold ${r.billed}. <b>The ${r.billed - Math.ceil(r.beNights)} nights past that mark are `
+                  + `the ${money(r.net)} it kept.</b>`
+                : `<b>${esc(r.name)}</b> needs ${Math.ceil(r.beNights)} of its ${r.cap} nights to cover itself `
+                  + `and sold ${r.billed}. <b>It is ${Math.ceil(r.beNights) - r.billed} nights short.</b>`);
           inner.appendChild(line);
           /* WHERE THE MONEY GOES. The row could only ever say "₹4,62,000 out",
              which reads as one bill — and because rent is 55-68% of it, a
@@ -8803,11 +8818,11 @@ function renderTrends(){
 
       const best = complete[complete.length-1], worst = complete[0];
       said(c, complete.length >= 2
-        ? `Ranking by rupees only ranks your buildings by size. Ranked by <b>headroom</b> — how far past its own `
-          + `break-even each one is running — <span class="hi">${esc(best.name)}</span> is ${Math.round(best.head*100)} points clear `
-          + `and <span class="hi">${esc(worst.name)}</span> is ${Math.round(worst.head*100)}. That gap is the one worth acting on, `
-          + `and it is invisible in a column of profits.`
-        : `The mark under each bar is what that building has to sell to cover itself. Everything to the right of it is profit.`);
+        ? `Ranked by rupees, the biggest building wins for being big. Ranked by how far each one runs past its `
+          + `own break-even, <span class="hi">${esc(best.name)}</span> is the strongest — it covers itself in `
+          + `${Math.ceil(best.beNights)} of its ${best.cap} nights, where <span class="hi">${esc(worst.name)}</span> `
+          + `needs ${Math.ceil(worst.beNights)} of ${worst.cap}. That is the comparison a column of profits hides.`
+        : `The mark under each bar is what that building has to sell to cover itself. Everything past it is profit.`);
     }
 
     /* ── CARD 2 — the fifteen months, cost drawn as a constant base ────── */
@@ -8953,8 +8968,8 @@ function renderTrends(){
       line("Rolling twelve months", "every twelve-month window has a hole in it",
            null, firstFull ? "not until " + monName(firstFull) : "not yet");
       b.appendChild(rows);
-      said(c, `Percentages here are revenue. Profit has none on purpose — costs are flat, so profit moves `
-        + `by exactly the rupees revenue moved.`);
+      said(c, `These are revenue. There is no percentage on profit: costs are the same every month, so profit `
+        + `moves by exactly the rupees revenue moved.`);
     }
 
     }
@@ -8989,21 +9004,19 @@ function renderTrends(){
       {v: M.listed, label: Math.round(M.listed/100)/10 + "k", k:"Listed"},
     ], 0));
     const gap = adr >= M.listed
-      ? "you are holding your rate"
-      : `about <span class="hi">${Math.round((1 - adr/M.listed)*100)}%</span> off`;
+      ? "holding your rate"
+      : `discounting about <span class="hi">${Math.round((1 - adr/M.listed)*100)}%</span> off the card`;
     said(c, M.priced === 0 && !useBook
       ? `No amounts recorded yet, so there is nothing to average. Put a figure on a booking and this fills in.`
       : useBook
-      ? `Read from your workbook, not from the nine weeks ahead: only <b>${M.priced} of ${M.total}</b> forward `
-        + `bookings carry an amount, and those cover ${Math.round(M.nightShare*100)}% of the nights sold — too `
-        + `thin to average a rate from, and all of them long stays, which bill well under a nightly rate. `
-        + `<b>${money(revpar)}</b> is what each available night earned across the buildings your sheet prices. `
-        + `The gap between <b>achieved</b> and <b>listed</b> is what you are discounting — ${gap}. `
-        + `Put amounts on the bookings ahead and this switches to your own forward book.`
+      ? `Only <b>${M.priced} of your ${M.total}</b> bookings ahead carry an amount, and all of them are long `
+        + `stays — too thin to price a night from. So this reads your workbook: <b>${money(revpar)}</b> is what `
+        + `an available night earned in ${MON[+W.month.split("-")[1]-1]}. You are ${gap}. Put amounts on the `
+        + `bookings ahead and it switches to your own book.`
       : `Occupancy alone cannot tell you this: a full house at a poor rate and a half-empty one at a good rate `
         + `look the same on an occupancy chart. <b>${money(revpar)}</b> is what each of your ${M.sellable.toLocaleString("en-IN")} `
         + `sellable nights earns on average. The gap between <b>achieved</b> and <b>listed</b> is what you are actually `
-        + `discounting — ${gap}.`
+        + `discounting — you are ${gap}.`
         + (M.coverage < 0.95 ? ` Based on the <b>${M.priced} of ${M.total}</b> bookings that carry an amount.` : ""));
   }
 
@@ -9057,10 +9070,9 @@ function renderTrends(){
                   + `and only until they hand the keys back. ` : "")
         + `<b>${money(O.soon)}</b> arrives this week.`
       : O.here
-      ? `Nothing has walked out unpaid yet. But <b>${money(O.here)}</b> of the balance is with guests `
-        + `<b>standing in the flats tonight</b>`
-        + (O.going ? `, and <b>${money(O.going)}</b> of it walks out within two days` : "")
-        + ` — collect it at the door, because after that it becomes the kind that quietly never arrives.`
+      ? `Nothing has walked out unpaid. <b>${money(O.here)}</b> is with guests in the flats tonight`
+        + (O.going ? `, and <b>${money(O.going)}</b> of it leaves within two days` : "")
+        + ` — collect at the door, because after that it is the kind that quietly never arrives.`
       : `Nothing has walked out unpaid. The balance is with guests still to arrive, which is the easy kind to collect.`);
   }
 
@@ -9282,7 +9294,8 @@ function renderTrends(){
     b.appendChild(hbars(m.rows.map(r=>({k:r.k, pct:r.n/Math.max(1,m.total),
       right:Math.round(r.n/Math.max(1,m.total)*100)+"%"})), null));
     const direct = m.rows.filter(r=>/direct|walk|repeat/i.test(r.k)).reduce((a,r)=>a+r.n,0);
-    said(c, `<b>${Math.round(direct/Math.max(1,m.total)*100)}%</b> come to you directly — by phone, walk-in or a returning guest — and carry no platform commission. That share is the single number most worth growing, and it is the one the listing sites never show you.`);
+    said(c, `<b>${Math.round(direct/Math.max(1,m.total)*100)}%</b> come to you directly — phone, walk-in or a `
+      + `returning guest — and pay no platform commission.`);
   }
 
   /* 7 — turnaround load */
@@ -9354,8 +9367,13 @@ function renderTrends(){
   }
   foot.style.cssText = "margin:20px 2px 0;font-size:12px;line-height:1.6;color:var(--txt-3)";
   foot.innerHTML = lead
-    ? `Every booking you enter records the day you took it, so lead time is now measurable: across ${lead.n} of your own bookings the typical one arrives <b style="color:var(--txt-2)">${lead.median} days</b> before check-in.`
-    : `<b style="color:var(--txt-2)">There is no history here yet.</b> Everything above reads the forward book — today through ${fmtL(DAYS-1)} — because that is all the app truly knows. Each booking you enter from now records the day you took it, so lead time and week-on-week pace become real once it has been used for a while. Nothing on these cards is estimated or borrowed from elsewhere.`;
+    ? `Across ${lead.n} bookings you entered yourself, the typical one arrives <b style="color:var(--txt-2)">${lead.median} days</b> before check-in.`
+    /* "Nothing on these cards is estimated or borrowed from elsewhere" stopped
+       being true the moment the rate card started reading the workbook when the
+       forward book is too thin to price a night. A footer that reassures the
+       reader about a property the screen no longer has is worse than no footer. */
+    : `These read the nine weeks ahead — today through ${fmtL(DAYS-1)}. The rate at the top is the exception `
+      + `and says so. Lead time needs a few more bookings of your own before it means anything.`;
   s.appendChild(foot);
 }
 
