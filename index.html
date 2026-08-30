@@ -1008,6 +1008,11 @@ button{background:none;border:0;padding:0;cursor:pointer}
    A border is not clipped by the box it belongs to. */
 .day.mstart.seam{border-left:2px dashed var(--txt-2)}
 .day.mstart.seam .dd{color:var(--txt)}
+/* .day.mstart .dd and .day.today .dd are both (0,3,0) and mstart is written
+   later, so on the twelve days a year that today IS a 1st, today's own accent
+   lost to the month label's colour. Light theme never had it — its today rule
+   is (0,5,0) and wins — so this is the dark half only. */
+.day.today.mstart .dd, .day.today.mstart.seam .dd{color:var(--now)}
 /* "1 Sep" has to hold one line in a 35px inner width, or it wraps onto the
    free count underneath it — which is what it did: the month sat on top of the
    number the cell exists to show. */
@@ -7823,10 +7828,27 @@ function renderMonth(){
   const nowLab = el("b", null, "");
   now.appendChild(nowLab);
   const sayMonth = ()=>{
+    /* MEASURED AGAINST THE GRID, NOT THE SCREEN. offsetTop is taken from the
+       nearest POSITIONED ancestor, and neither .calscroll nor .cal is
+       positioned — so every cell's offsetTop carried the height of everything
+       above the trough (the picker head, this label, the weekday bar: 118px)
+       while scrollTop is 0-based. The label ran 118px — two rows — behind the
+       grid, and the LAST month in the horizon was never named at all, because
+       its flip threshold sat past the end of the scroll range.
+
+       Measured over the full scroll range at 375x812: wrong for 170px of 373,
+       and the only two strings it ever showed were August and September, with
+       October never appearing. Subtracting grid.offsetTop takes it to 0.
+
+       This is the same coordinate mistake the reveal-scroll below was already
+       fixed for, and it matters more since the full-width month divider went:
+       at the merged seam this label and a 2px dashed rule are the only things
+       marking the month change. */
+    const base = grid.offsetTop;
     const top = trough.scrollTop;
     let first = null;
     for(const c of grid.querySelectorAll(".day[data-d]")){
-      if(c.offsetTop + c.offsetHeight > top + 2){ first = c; break; }
+      if(c.offsetTop - base + c.offsetHeight > top + 2){ first = c; break; }
     }
     /* Before the first layout every offsetTop is 0, so nothing satisfies the
        test above and the label stayed empty until the next frame — at which
