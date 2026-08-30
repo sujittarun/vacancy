@@ -1242,6 +1242,95 @@ export async function run(filter) {
     return `${money(before)} moved when an amount was typed, and moved back`;
   });
 
+  /* ══ the dated ledger ═══════════════════════════════════════════════════ */
+
+  /* Every cost in this app was a STANDING figure — the same every month, which
+     is what their Costing sheet is. A plumber paid once had nowhere to go but
+     the standing Maintenance line, which would then charge that amount every
+     month forever. */
+  await test("a logged expense lands in its own month and replaces the standing line", async () => {
+    const keep = expenses.slice();
+    try {
+      expenses.length = 0; expSave();
+      const K = FIN[FIN.length-1][0], PREV = FIN[FIN.length-2][0];
+      const std = costFor("TT")["Maintenance"];
+      ok(std > 0, "TreeTops has no standing Maintenance line to test against");
+      const before = finRows(K).rows.find(r => r.code === "TT").cost;
+      const prevBefore = finRows(PREV).rows.find(r => r.code === "TT").cost;
+      expenses.push({id:"test-led-1", code:"TT", line:"Maintenance", amount: std + 27000,
+                     on: K + "-12", note:"fixture"});
+      expSave();
+      const after = finRows(K).rows.find(r => r.code === "TT").cost;
+      /* REPLACES, never adds — adding would charge the standing estimate and
+         the real invoice for the same work. */
+      eq(after - before, 27000, "the month's cost moved by more than the difference — double counted");
+      eq(costMonth("TT", K).basis["Maintenance"], "actual", "basis of a logged line");
+      eq(finRows(PREV).rows.find(r => r.code === "TT").cost, prevBefore,
+        "an expense dated in one month changed another month");
+      /* and a line nobody logged is still the standing figure */
+      eq(costMonth("TT", K).basis["Rent"], "standing", "basis of a line with no entry");
+      expenses.length = 0; expSave();
+      eq(finRows(K).rows.find(r => r.code === "TT").cost, before, "cost after the entry was removed");
+      return `${money(std)} standing became ${money(std + 27000)} logged, in ${K} alone`;
+    } finally { expenses.length = 0; expenses.push(...keep); expSave(); }
+  });
+
+  /* The operator asked whether a repair logged against a flat feeds the
+     accounts. It did not: upkeepStats summed the invoices and the Profit tab
+     charged a standing Maintenance budget that never saw them. */
+  await test("a repair closed against a flat reaches the month's costs by itself", async () => {
+    const keepE = expenses.slice(), keepI = issues.slice();
+    try {
+      expenses.length = 0; expSave();
+      const fi = flats.findIndex(f => f.code === "MP");
+      ok(fi >= 0, "no Madhapur flat to hang a repair on");
+      const K = dayISO(0).slice(0, 7);
+      const std = costFor("MP")["Maintenance"];
+      const before = finRows(K).rows.find(r => r.code === "MP").cost;
+      issues.push({id:"test-iss-1", fi, fault:"Geyser", fixed:0, cost: std + 4500});
+      finBust();
+      const after = finRows(K).rows.find(r => r.code === "MP").cost;
+      eq(after - before, 4500, "the repair invoice did not reach the month's costs");
+      const led = ledgerFor(K).filter(r => r.kind === "repair");
+      eq(led.length, 1, "repair rows in the ledger");
+      eq(led[0].line, "Maintenance", "which line a repair is charged to");
+      ok(/Geyser/.test(led[0].note), `the ledger row does not name the fault: ${led[0].note}`);
+      /* The LOST NIGHTS must never enter the cost column — they are revenue
+         that never arrived, not cash that left, and charging both bills the
+         operator twice for one empty room. */
+      const lost = upkeepStats().lost;
+      ok(lost >= 0, "upkeep lost nights");
+      eq(after - before, 4500, "lost nights leaked into the cost column");
+      issues.length = 0; issues.push(...keepI); finBust();
+      eq(finRows(K).rows.find(r => r.code === "MP").cost, before, "cost after the repair was removed");
+      return `a ${money(std + 4500)} repair moved Madhapur by ${money(4500)}, and its nights did not`;
+    } finally {
+      expenses.length = 0; expenses.push(...keepE); expSave();
+      issues.length = 0; issues.push(...keepI); finBust();
+    }
+  });
+
+  /* An expense is a dated fact. Bookings are stored as offsets and shifted on
+     load — "three days out" stays three days out — but an invoice paid on the
+     12th is still the 12th tomorrow. */
+  await test("an expense does not drift when the clock rolls over", async () => {
+    const keep = expenses.slice();
+    const realNow = Date.now;
+    try {
+      expenses.length = 0;
+      expenses.push({id:"test-drift", code:"TT", line:"Maintenance", amount: 5000,
+                     on:"2026-07-12"});
+      expSave();
+      eq(ledgerFor("2026-07").length, 1, "the entry before the clock moves");
+      const t = new Date(); t.setDate(t.getDate() + 40);
+      Date.now = () => t.getTime();
+      eq(expenses[0].on, "2026-07-12", "the stored date after 40 days");
+      eq(ledgerFor("2026-07").length, 1, "the entry is still in July after 40 days");
+      eq(ledgerFor("2026-08").length, 0, "it must not have slid into another month");
+      return "still 12 Jul, forty days later";
+    } finally { Date.now = realNow; expenses.length = 0; expenses.push(...keep); expSave(); }
+  });
+
   /* ══ the whole surface ══════════════════════════════════════════════════ */
 
   await test("no text falls below AA in either theme", async () => {

@@ -896,6 +896,43 @@ ink on the ground gains four levels.
 The general form: when two things you care about move together under the
 control you reached for first, the control is wrong, not the goal.
 
+## A standing model has no room for a plumber
+
+Every cost in this app was a figure from the Costing sheet: the same rent, the
+same salaries, the same ₹15,000 of Maintenance, every month. That is genuinely
+what that sheet is, and for rent and salaries it is exactly right.
+
+It has nowhere to put "I paid a plumber ₹8,000 today". The only surface that
+would take the number was the standing Maintenance line — which would then
+charge ₹8,000 in every month for the rest of time. So one-off spending had no
+home at all, and worse: a repair the operator *had* logged, against a specific
+flat, with an invoice on it, reached the Upkeep card and stopped there. The
+Profit tab charged a budget that never saw it. Two numbers about the same money,
+and the one that fed the accounts was the estimate.
+
+**An expense is a dated fact, so it is stored as a date.** Bookings are stored
+as offsets and shifted on load, deliberately — "three days out" should stay
+three days out. An invoice is the opposite: paid on the 12th, still the 12th
+tomorrow. Same reasoning as `BOOK_ON`, and the regression test moves the clock
+forty days to prove it.
+
+**The resolution rule is replace, not add.** A line you logged for a month is
+charged at what you logged; a line you did not is charged at the standing
+figure. Adding would bill the operator for the estimate *and* the real invoice
+covering the same work. The cost of the rule is that a half-logged line
+understates, so it is never applied silently: the entry sheet says which
+standing figure it is about to replace and for which month, and the per-building
+breakdown marks each line — `1 logged, 10 standing` — with the logged ones in
+the app's own ink and a solid bar rather than the muted mix. Both are charged
+identically; only one is a fact.
+
+**The lost nights stay out of it.** `outageCost` returns an invoice and the
+nights the flat could not sell. The invoice is cash that left and belongs in the
+cost column. The nights are revenue that never arrived — they are already
+missing from the revenue line, and charging them again would bill the operator
+twice for one empty room. The Upkeep card is right to show both; the P&L may
+only have one.
+
 ## Prohibitions
 
 - No paper, ruling, stamps, or any ledger device. That world is discarded.
