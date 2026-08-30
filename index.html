@@ -1033,13 +1033,8 @@ button{background:none;border:0;padding:0;cursor:pointer}
    the dates got shorter. */
 .pick{
   display:flex;align-items:center;gap:10px;margin:0 0 12px;
-  border-bottom:1px solid var(--line);padding:0 0 10px 1px;
+  border-bottom:1px solid var(--line);padding-bottom:10px;
 }
-/* That 1px is not a nudge, it is a clip. CHECK-IN sits at x=0 of a .card.bare,
-   which is overflow:hidden, and an uppercase 9px label with .08em tracking
-   carries its C a hair left of its own box — so the glyph was shaved and the
-   operator read "HECK-IN". One pixel of inset, and the underline below follows
-   it because it is positioned against the same box. */
 .pick .pfs{display:flex;align-items:stretch;flex:1 1 auto;min-width:0}
 .pick .pf{
   flex:1;min-width:0;text-align:left;padding:1px 0 7px;background:none;border:0;
@@ -2841,6 +2836,18 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
   background:none;
   border:0;
   box-shadow:none;
+  /* AND NO CORNERS, AND NO CLIP. .card carries border-radius:var(--r-lg) with
+     overflow:hidden, which is right for a card you can see — the fill stops at
+     the curve. A BARE card has no fill, no border and no shadow, so there is
+     nothing for the curve to describe — but the clip survived, and an invisible
+     box went on shaving its content to an 18px arc.
+
+     Measured: CHECK-IN sits 1px in and 1px down from the card's top-left, where
+     the corner has eaten 12.08px. Eleven pixels of the C, cut by a rounded
+     corner nobody can see. A 1px inset was tried first and did nothing, which
+     is what sent me looking for the real edge. */
+  border-radius:0;
+  overflow:visible;
   -webkit-backdrop-filter:none; backdrop-filter:none;
 }
 
