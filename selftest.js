@@ -1486,6 +1486,46 @@ export async function run(filter) {
     } finally { if(had == null) delete r.phone; else r.phone = had; }
   });
 
+  /* freeSpan(fi, FROM, TO) takes an END DAY. The building chips and section
+     headers passed the NIGHT COUNT, so for any night but tonight the range ran
+     backwards, freeRange returned vacuously true, and every flat counted free —
+     38 of 38 where 18 were. Tonight was right by accident (d + n === n at
+     d = 0), which is why it survived being looked at. */
+  await test("the building counts agree with the tiles on every night", async () => {
+    await settle();
+    document.querySelectorAll(".tabbar button")[0].click();
+    await until(() => document.querySelector(".roomfilt button"), "the building filter");
+    /* the invariant, measured directly: what the chips count must be what
+       freeSpan says for the SAME span the tiles are drawn for */
+    for(const d of [0, 1, 3, 7]){
+      for(const n of [1, 3]){
+        const byCode = {};
+        flats.forEach((f, fi)=>{
+          byCode[f.code] = (byCode[f.code] || 0) + (freeSpan(fi, d, d + n) ? 1 : 0);
+        });
+        const all = flats.reduce((a,f,fi)=> a + (freeSpan(fi, d, d + n) ? 1 : 0), 0);
+        eq(Object.values(byCode).reduce((a,v)=> a + v, 0), all,
+          `night ${d}, ${n}n: the buildings do not sum to the portfolio`);
+        /* and it must not be the vacuous answer */
+        ok(!(d > 0 && all === NF && countFreeFor(d, n) !== NF),
+          `night ${d}, ${n}n: every one of ${NF} flats counted free — the span is running backwards`);
+        eq(all, countFreeFor(d, n),
+          `night ${d}, ${n}n: the filter count disagrees with the app's own free count`);
+      }
+    }
+    /* and through the real DOM, on a night that is not tonight */
+    setPickedNight(3);
+    renderRooms && renderRooms();
+    await until(() => document.querySelector(".roomfilt button"), "the filter after moving the night");
+    const chips = [...document.querySelectorAll(".roomfilt button")];
+    const num = b => +(b.textContent.match(/(\d+)\s*$/) || [0,0])[1];
+    const all = num(chips[0]);
+    ok(all < NF, `the All chip says ${all} of ${NF} free on a future night — vacuously true again`);
+    eq(chips.slice(1).reduce((a,b)=> a + num(b), 0), all, "the chips do not sum to All");
+    setPickedNight(0);
+    return `four nights x two spans, chips and tiles agree`;
+  });
+
   /* ══ the whole surface ══════════════════════════════════════════════════ */
 
   await test("no text falls below AA in either theme", async () => {

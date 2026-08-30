@@ -7702,8 +7702,14 @@ function renderRooms(){
     } else {
       tiles.style.display = "";
       const B = buildingsOf();
+      /* freeSpan(fi, FROM, TO) takes an END DAY, not a night count. Passing `n`
+         made the third argument 1 or 3 regardless of which night was picked, so
+         for any d > 0 the range ran backwards, freeRange returned vacuously
+         true, and EVERY flat counted as free: 38 of 38 on a night where 18 were
+         really free. Tonight was right by accident, d + n === n at d = 0, which
+         is exactly why it survived being looked at. */
       const freeIn = code => flats.reduce((a,fl,fi)=>
-        a + (fl.code === code ? (freeSpan(fi, d, n) ? 1 : 0) : 0), 0);
+        a + (fl.code === code ? (freeSpan(fi, d, d + n) ? 1 : 0) : 0), 0);
 
       /* A filter that can strand you shows only what it can reach. If the
          picked building has nothing free for this stay the chip still says so
@@ -7735,7 +7741,7 @@ function renderRooms(){
            header would be saying it twice. */
         if(!roomFilt){
           const h = el("div","bsec-h");
-          const free = mine.reduce((a,x)=> a + (freeSpan(x.fi, d, n) ? 1 : 0), 0);
+          const free = mine.reduce((a,x)=> a + (freeSpan(x.fi, d, d + n) ? 1 : 0), 0);
           const cnt = el("s", null, free ? `${free} of ${mine.length} free` : `all ${mine.length} booked`);
           if(!free) cnt.className = "none";
           h.append(el("b", null, b.short || b.name), cnt);
