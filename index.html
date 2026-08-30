@@ -3705,7 +3705,80 @@ function saveInventory(){
   )); }catch(e){}
 }
 
-let flats = loadInventory() || defaultInventory();
+/* ── WHEN A FLAT ID RETIRES ──────────────────────────────────────────────────
+   save() keys every stored row by the flat's TEXT id, and load() reads them
+   back through `flatIndex[r.id] !== undefined` — which silently DROPS any row
+   whose flat no longer exists. That filter was the entire migration story, and
+   it was fine while ids never changed.
+
+   Then the Lotus Pond merge retired twelve of them. Every device that had used
+   the app before it held bookings on LP-101 … LP-403; on the next load those
+   rows failed the lookup and were thrown away. Not renumbered, not quarantined,
+   not mentioned — deleted, on the operator's own phone, by an update.
+
+   So a retired id is now MAPPED rather than dropped. The three bedrooms of a
+   floor were always one apartment, so all three point at the merged unit.    */
+const FLAT_RENAMES = (()=>{
+  const m = {};
+  for(const fl of ["1","2","3","4"])
+    for(const n of ["01","02","03"]) m["LP-" + fl + n] = "LP-" + fl;
+  return m;
+})();
+const liveFlatId = id => {
+  const to = FLAT_RENAMES[id];
+  /* Only follow the rename if the target actually exists. An operator who
+     deleted LP-3 in the inventory editor must not have rows resurrected onto a
+     flat they retired. */
+  return (to !== undefined && flatIndex[to] !== undefined) ? to : id;
+};
+/* Three rows that were one let become one row. Without this the trio arrives as
+   three identical stays stacked on one flat, which is a triple booking the app
+   would then refuse to move or cancel cleanly. Keeps the row carrying the most
+   information — the amount lives on exactly one of the three. */
+function collapseMerged(rows){
+  const seen = new Map(), out = [];
+  rows.forEach(r=>{
+    if(!FLAT_RENAMES[r._wasId]) { out.push(r); return; }
+    const k = r.fi + "|" + r.start + "|" + r.end + "|" + String(r.guest || "").trim().toLowerCase();
+    const had = seen.get(k);
+    if(!had){ seen.set(k, r); out.push(r); return; }
+    had.amount = had.amount || r.amount;
+    had.phone  = had.phone  || r.phone;
+    had.pax    = had.pax    || r.pax;
+    if((r.pays || []).length && !(had.pays || []).length) had.pays = r.pays;
+  });
+  return out;
+}
+
+/* A STORED INVENTORY MUST NOT FREEZE A DEVICE ON A RETIRED SHAPE. The stored
+   list wins outright and is never reconciled with the shipped seed, so any
+   phone that had ever opened the inventory editor kept its 46 flats forever —
+   the Lotus Pond merge simply never arrived, and that device went on showing
+   sixteen Lotus Pond rooms while the app's own title said thirty-eight.
+
+   The operator's inventory is still theirs: rates, additions and deletions all
+   survive. Only the retired ids are rewritten, and only when their replacement
+   is in the seed — which is the one change they cannot have meant to keep. */
+function migrateInventory(rows){
+  if(!rows || !rows.length) return rows;
+  const seedIds = new Set(INVENTORY.map(r => r[0]));
+  const out = [], made = new Set();
+  let changed = false;
+  rows.forEach(f=>{
+    const to = FLAT_RENAMES[f.id];
+    if(to === undefined || !seedIds.has(to)){ out.push(f); return; }
+    changed = true;
+    if(made.has(to)) return;                     // the trio becomes one unit
+    made.add(to);
+    const seed = INVENTORY.find(r => r[0] === to);
+    out.push({...f, id: to, type: seed[3],
+              /* their own rate is kept if they had edited one, since the three
+                 bedrooms were priced as the apartment anyway */
+              rate: f.rate || seed[4]});
+  });
+  return changed ? out : rows;
+}
+let flats = migrateInventory(loadInventory()) || defaultInventory();
 let NF = flats.length;
 let flatIndex = Object.fromEntries(flats.map((f,i)=>[f.id,i]));
 
@@ -5442,23 +5515,30 @@ function load(){
     const savedOn = new Date(d.savedOn + "T00:00:00");
     savedOn.setHours(0,0,0,0);
     const shift = Math.round((savedOn - today) / 86400000);
-    resv = d.rows
-      .filter(r => flatIndex[r.id] !== undefined)
-      .map(r => ({ fi:flatIndex[r.id], start:r.start+shift, end:r.end+shift,
+    let dropped = 0;
+    resv = collapseMerged(d.rows
+      .map(r => ({...r, _wasId: r.id, id: liveFlatId(r.id)}))
+      .filter(r => { const ok = flatIndex[r.id] !== undefined; if(!ok) dropped++; return ok; })
+      .map(r => ({ _wasId: r._wasId, fi:flatIndex[r.id], start:r.start+shift, end:r.end+shift,
                    nights:r.end-r.start, guest:r.guest, src:r.src, manual:r.manual,
                    kind:r.kind, reason:r.reason, note:r.note,
                    fault:r.fault, fixer:r.fixer, fixer_phone:r.fixer_phone, cost:r.cost,
                    phone:r.phone, pax:r.pax, amount:r.amount,
                    pays: (r.pays || []).map(p => ({...p, on: (p.on || 0) + shift})),
-                   bookedOn: typeof r.bookedOn === "number" ? r.bookedOn + shift : undefined }))
+                   bookedOn: typeof r.bookedOn === "number" ? r.bookedOn + shift : undefined })))
       // Blocks linger a week past their end so the app can still ask whether the
       // flat came back into service — and a block that recorded a FAULT is kept
       // far longer, because it is the only evidence that this is the third time
       // the same AC has failed. Throwing it away after a week would delete the
       // feature that reads it.
       .filter(keepOnLoad);
-  issues = (d.issues || []).filter(x => flatIndex[x.id2] !== undefined)
-    .map(x => ({...x, fi: flatIndex[x.id2], on: (x.on || 0) + shift,
+    /* A row that still cannot be placed is a real loss and must not be silent.
+       It is the only sign the operator would ever get that an update took
+       something from them. */
+    if(dropped) telError("bookings dropped on load: flat id not in inventory",
+                         {stack: "dropped=" + dropped + " flats=" + NF});
+  issues = (d.issues || []).filter(x => flatIndex[liveFlatId(x.id2)] !== undefined)
+    .map(x => ({...x, fi: flatIndex[liveFlatId(x.id2)], on: (x.on || 0) + shift,
                 fixed: x.fixed == null ? null : x.fixed + shift}));
     return true;
   }catch(e){ return false; }
@@ -5825,8 +5905,10 @@ function cacheLoad(){
   NF = flats.length;
   flatIndex = Object.fromEntries(flats.map((f,i)=>[f.id, i]));
   resv = (d.rows || [])
+    /* the cloud cache is loaded by the same rule and loses rows the same way */
+    .map(r => ({...r, _wasId: r.id, id: liveFlatId(r.id)}))
     .filter(r => flatIndex[r.id] !== undefined)
-    .map(r => ({ sid:r.sid, fi:flatIndex[r.id], start:r.start + shift, end:r.end + shift,
+    .map(r => ({ _wasId:r._wasId, sid:r.sid, fi:flatIndex[r.id], start:r.start + shift, end:r.end + shift,
                  nights:r.end - r.start, guest:r.guest, src:r.src, manual:true,
                  kind:r.kind, reason:r.reason, note:r.note,
                  fault:r.fault, fixer:r.fixer, fixer_phone:r.fixer_phone, cost:r.cost,
@@ -5834,8 +5916,9 @@ function cacheLoad(){
                  pays: (r.pays || []).map(p => ({...p, on: (p.on || 0) + shift})),
                  bookedOn: typeof r.bookedOn === "number" ? r.bookedOn + shift : undefined }))
     .filter(keepOnLoad);
-  issues = (d.issues || []).filter(x => flatIndex[x.id2] !== undefined)
-    .map(x => ({...x, fi: flatIndex[x.id2], on: (x.on || 0) + shift,
+  resv = collapseMerged(resv);
+  issues = (d.issues || []).filter(x => flatIndex[liveFlatId(x.id2)] !== undefined)
+    .map(x => ({...x, fi: flatIndex[liveFlatId(x.id2)], on: (x.on || 0) + shift,
                 fixed: x.fixed == null ? null : x.fixed + shift}));
   usingDemo = false;
   recompute();

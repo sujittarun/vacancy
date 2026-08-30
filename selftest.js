@@ -1526,6 +1526,51 @@ export async function run(filter) {
     return `four nights x two spans, chips and tiles agree`;
   });
 
+  /* save() keys rows by the flat's TEXT id and load() read them back through
+     `flatIndex[r.id] !== undefined`, which DROPS any row whose flat no longer
+     exists. That was the whole migration story, and it was fine until the Lotus
+     Pond merge retired twelve ids — at which point every device that had used
+     the app before it lost its Lotus Pond bookings on the next load. Deleted,
+     silently, by an update. */
+  await test("a booking on a retired flat id survives the update", async () => {
+    const KEY = STORE, INV = "vacancy.inventory.v2";
+    const bBook = localStorage.getItem(KEY), bInv = localStorage.getItem(INV);
+    const keepR = resv.slice(), keepF = flats.slice(), keepNF = NF;
+    try {
+      const iso = new Date(); iso.setHours(0,0,0,0);
+      const stamp = iso.getFullYear() + "-" + String(iso.getMonth()+1).padStart(2,"0")
+                  + "-" + String(iso.getDate()).padStart(2,"0");
+      /* the three rows a pre-merge device holds for ONE let of the 3rd floor */
+      localStorage.setItem(KEY, JSON.stringify({savedOn: stamp, rows: [
+        {id:"LP-301", start:5, end:8, guest:"Fixture Rao", src:"Direct", amount:18000, manual:true},
+        {id:"LP-302", start:5, end:8, guest:"Fixture Rao", src:"Direct", manual:true},
+        {id:"LP-303", start:5, end:8, guest:"Fixture Rao", src:"Direct", manual:true},
+        {id:"M2",     start:1, end:3, guest:"Fixture Control", src:"Direct", amount:12000, manual:true},
+      ]}));
+      ok(load(), "the fixture book did not load at all");
+      recompute();
+      const rows = resv.filter(r => /^Fixture /.test(r.guest || ""));
+      const rao = rows.filter(r => r.guest === "Fixture Rao");
+      /* not dropped … */
+      eq(rao.length, 1, "rows kept for a let stored across three retired ids");
+      eq(flats[rao[0].fi].id, "LP-3", "which flat the retired ids resolved to");
+      /* … and the money on the one row that carried it is not lost */
+      eq(rao[0].amount, 18000, "the amount survived the collapse");
+      /* a flat that did not change is untouched */
+      const ctl = rows.find(r => r.guest === "Fixture Control");
+      ok(ctl && flats[ctl.fi].id === "M2", "the control booking moved or vanished");
+      /* and the destination actually reads as booked — the reported symptom */
+      ok(occ[rao[0].fi][5], "LP-3 still reads free on a night it is let");
+      return `three rows on retired ids became one let on LP-3, ${money(18000)} intact`;
+    } finally {
+      if(bBook == null) localStorage.removeItem(KEY); else localStorage.setItem(KEY, bBook);
+      if(bInv  == null) localStorage.removeItem(INV);  else localStorage.setItem(INV, bInv);
+      resv = keepR; flats = keepF; NF = keepNF;
+      flatIndex = Object.fromEntries(flats.map((f,i)=>[f.id,i]));
+      recompute();
+    }
+  });
+
   /* ══ the whole surface ══════════════════════════════════════════════════ */
 
   await test("no text falls below AA in either theme", async () => {
