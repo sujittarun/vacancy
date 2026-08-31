@@ -21,7 +21,13 @@ s = open(SRC).read()
 # ── the flats ──────────────────────────────────────────────────────────────
 FL_OLD = re.compile(r'^  \["LP-([1-4])0([123])", "LP", \1, "3 BHK",\s+6000\],\n', re.M)
 old_flats = FL_OLD.findall(s)
-assert len(old_flats) == 12, f"expected 12 trio rooms, found {len(old_flats)}"
+# RE-RUNNABLE. import-book.py rewrites BOOK from the sheet — which still keeps a
+# column per bedroom — but never touches INVENTORY, so after a re-import the
+# flats are already merged and only the book needs it again. Twelve rooms means
+# a first run; zero means the inventory half is already done.
+already_merged = len(old_flats) == 0 and '["LP-1",' in s
+assert len(old_flats) == 12 or already_merged, \
+    f"expected 12 trio rooms or an already-merged inventory, found {len(old_flats)}"
 
 # ── the book ───────────────────────────────────────────────────────────────
 m = re.search(r'const BOOK = \[\n(.*?)\n\];', s, re.S)
@@ -94,6 +100,14 @@ def fmt(r):
 s = s[:m.start(1)] + ",\n".join(fmt(r) for r in out_rows) + s[m.end(1):]
 
 # ── splice the flats ───────────────────────────────────────────────────────
+if already_merged:
+    open(SRC, "w").write(s)
+    print(json.dumps({"inventory": "already merged, left alone",
+                      "stays_before": sum(len(v) for v in trio_rows.values()),
+                      "stays_after": len(merged),
+                      "book_rows": f"{len(rows)} -> {len(out_rows)}",
+                      "per_floor": report}, indent=1))
+    raise SystemExit(0)
 NEW_FL = "".join(
     f'  ["LP-{fl}",   "LP", {fl}, "3 BHK",     6000],   // rooms {fl}01-{fl}03, let as one\n'
     for fl in "1234")
