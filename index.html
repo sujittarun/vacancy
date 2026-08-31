@@ -2214,6 +2214,15 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
 .toast b{color:var(--txt);font-weight:650}
 .toast.warn{border-color:color-mix(in srgb, var(--now) 55%, transparent)}
 .toast.bad{border-color:color-mix(in srgb, var(--hot) 55%, transparent)}
+.toast{position:relative;padding-right:40px;touch-action:pan-y}
+.toast .tmsg{min-width:0}
+.toast .tx{
+  position:absolute;top:6px;right:6px;width:30px;height:30px;
+  display:grid;place-items:center;padding:0;
+  background:none;border:none;border-radius:999px;
+  font-family:var(--ui);font-size:13px;line-height:1;color:var(--txt-2);
+}
+.toast .tx:active{background:color-mix(in srgb, var(--txt) 12%, transparent)}
 .toast .tclose{
   display:block;margin-top:9px;padding:0;background:none;border:none;
   font-family:var(--ui);font-size:12.5px;font-weight:650;color:var(--now);
@@ -6406,7 +6415,27 @@ function rollBack(op){
    between this phone accepting the entry and the write reaching the server.
    Say who took it. "Conflict" tells an operator nothing; a name and dates let
    them get back on the call and offer something else.                         */
+/* SIGNING IN CAN LOSE A LOT OF ROOMS AT ONCE. adoptLocalBook sends every row
+   the server has not got, and on a phone that was browsing the sample book
+   that is hundreds — each collision arriving here for its own toast and its
+   own "who holds it?" round trip. Two are worth reading; the rest are one
+   sentence. Same shape as unsentReport, for the same reason. */
+const LOST_SHOWN = 2;
+let lostSeen = 0, lostSum = null;
 async function lostTheRoom(op){
+  lostSeen++;
+  clearTimeout(lostSum);
+  lostSum = setTimeout(()=>{
+    const n = lostSeen - LOST_SHOWN;
+    if(n > 0)
+      toast("warn", `<b>${n} more room${n===1?" was":"s were"} already taken.</b> `
+        + `Those bookings clashed with stays already in the shared book, so they were `
+        + `not added. Nothing else on this phone was changed.`, null);
+    lostSeen = 0;
+  }, 1400);
+  /* Still rolled back — the row genuinely did not save. Only the telling is
+     collapsed, and the lookup behind it is skipped. */
+  if(lostSeen > LOST_SHOWN){ rollBack(op); return; }
   const mine  = resv.find(r => r.sid === op.id);
   const block = op.body && op.body.kind === "block";
   const flatUid = (op.body && op.body.flat_id) || (mine && flats[mine.fi] && flats[mine.fi].uid);
@@ -7089,25 +7118,85 @@ function paintAcct(){
 function toast(kind, html, fi, action){
   const host = document.getElementById("toasts");
   if(!host) return;
+  /* THE SAME SENTENCE TWICE IS NOISE, NOT EMPHASIS. A sync burst can raise one
+     message repeatedly; it says the same thing each time, so it is said once. */
+  for(const p of host.children) if(p.dataset.msg === html) return p;
+
   const t = el("div", "toast" + (kind ? " " + kind : ""));
-  t.innerHTML = html;
+  t.dataset.msg = html;
+  const body = el("div", "tmsg");
+  body.innerHTML = html;
+  t.append(body);
+
+  /* EVERY TOAST CAN BE PUT AWAY. They used to leave only on their own timer,
+     so a burst sat over the book for up to eleven seconds each with no way to
+     clear it — and the one gesture a phone user tries first, a sideways
+     swipe, did nothing at all. */
+  let gone = false;
+  const shut = slide =>{
+    if(gone) return; gone = true;
+    t.style.transition = "transform .24s var(--out), opacity .24s var(--out)";
+    if(slide) t.style.transform = "translateX(" + slide + "px)";
+    t.style.opacity = "0";
+    setTimeout(()=> t.remove(), 260);
+  };
+  const x = el("button", "tx", "\u2715");
+  x.setAttribute("aria-label", "Dismiss");
+  x.onclick = ev=>{ ev.stopPropagation(); haptic(8); shut(); };
+  t.append(x);
+
+  /* What a tap does, if anything — decided before the swipe handler, because
+     a swipe that also fires the tap would open a room the operator was only
+     trying to clear off the screen. */
+  let tap = null;
   if(action){
     const a = el("button", "tclose", action.label);
     a.onclick = ev=>{ ev.stopPropagation(); t.remove(); action.run(); };
-    t.append(a);
+    body.append(a);
   }else if(fi != null && flats[fi]){
-    t.append(el("span", "tclose", "See " + flats[fi].id + " →"));
-    t.onclick = ()=>{ t.remove(); openSheet(fi); };
+    body.append(el("span", "tclose", "See " + flats[fi].id + " \u2192"));
+    tap = ()=>{ t.remove(); openSheet(fi); };
   }else{
-    t.onclick = ()=> t.remove();
+    tap = ()=> shut();
   }
+
+  let x0 = null, dx = 0, moved = false;
+  t.addEventListener("pointerdown", ev=>{
+    if(ev.target.closest("button")) return;
+    x0 = ev.clientX; dx = 0; moved = false;
+    t.style.transition = "none";
+    try{ t.setPointerCapture(ev.pointerId); }catch(e){}
+  });
+  t.addEventListener("pointermove", ev=>{
+    if(x0 === null) return;
+    dx = ev.clientX - x0;
+    if(Math.abs(dx) > 6) moved = true;
+    t.style.transform = "translateX(" + dx + "px)";
+    t.style.opacity = String(Math.max(.25, 1 - Math.abs(dx) / 220));
+  });
+  const settle = ()=>{
+    if(x0 === null) return;
+    const far = Math.abs(dx) > 88;
+    x0 = null;
+    if(far) return shut(dx > 0 ? 420 : -420);
+    t.style.transition = "transform .22s var(--spring), opacity .22s var(--out)";
+    t.style.transform = ""; t.style.opacity = "";
+  };
+  t.addEventListener("pointerup", settle);
+  t.addEventListener("pointercancel", settle);
+  t.addEventListener("click", ev=>{
+    if(ev.target.closest("button")) return;
+    if(moved){ moved = false; return; }      // that was a swipe, not a tap
+    if(tap) tap();
+  });
+
   host.append(t);
   // long enough to read a sentence and act on it; a conflict and an undo both
   // need longer, because both are decisions rather than notifications
   const life = kind === "warn" ? 11000 : action ? 9000 : 7000;
-  setTimeout(()=>{ t.style.transition = "opacity .3s"; t.style.opacity = "0";
-                   setTimeout(()=>t.remove(), 320); }, life);
+  setTimeout(()=> shut(), life);
   while(host.children.length > 3) host.firstChild.remove();
+  return t;
 }
 
 /* ── undo ─────────────────────────────────────────────────────────────────────
