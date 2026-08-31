@@ -1776,9 +1776,51 @@ export async function run(filter) {
       recompute(); moneyStats(); owedStats(); finRows(FIN[FIN.length-1][0]);
       findPeople("ra"); exportRows(); appMonth(dayISO(0).slice(0,7));
       SCREENS.forEach(sc => sc.render());
-      eq(seen.length, 0, `a read went to the network: ${seen.slice(0,2).join(", ")}`);
+      /* The activity sheet is the ONE deliberate read in the app, it is opened
+         by a tap rather than by rendering, and it paints from memory before it
+         asks — all of which the next test asserts on its own. An earlier test
+         that opened it can still have its fetch land inside this window, which
+         is a scheduling artifact and not a screen touching the network. */
+      const blocking = seen.filter(u => !/\/app_events/.test(u));
+      eq(blocking.length, 0, `a read went to the network: ${blocking.slice(0,2).join(", ")}`);
       return "every stat, render and query served from memory";
     } finally { window.fetch = realFetch; MODE = wasMode; hostId = wasHost; }
+  });
+
+  /* The shared timeline is the only screen that has to ask a server anything,
+     because the whole point of it is the OTHER phone's work. That makes it the
+     one place the owner's "it must stay as fast as it is now" could quietly be
+     lost — so it paints what this phone knows first and folds the answer in
+     when it arrives, and this pins both halves of that. */
+  await test("the activity sheet paints before the network answers, and asks once", async () => {
+    const realFetch = window.fetch, realRest = window.rest;
+    const wasMode = MODE, wasHost = hostId, wasWho = typeof actWho !== "undefined" ? actWho : null;
+    const hits = [];
+    let release;
+    const held = new Promise(r => { release = r; });
+    try {
+      MODE = "live"; hostId = "h1";
+      actWho = {};                                  // membership already known
+      window.rest = async (m, p)=>{ hits.push(p); await held; return []; };
+      openActivity();
+      await wait(120);
+      /* the list is on screen while the server has not answered */
+      const rows = document.querySelectorAll(".sheet .actrow").length;
+      const head = (document.querySelector(".sheet .n") || {}).textContent || "";
+      ok(rows > 0 || /nothing yet|looking/.test((document.querySelector(".sheet .m")||{}).textContent||""),
+         "the sheet was blank while it waited for the server");
+      eq(head, "Everything that has happened", "the sheet did not open");
+      eq(hits.length, 1, `asked the server ${hits.length} times, want 1`);
+      ok(/app_events/.test(hits[0]), `asked for the wrong thing: ${hits[0]}`);
+      release([]);
+      await wait(120);
+      return `${rows} rows painted before the answer, 1 request`;
+    } finally {
+      release && release([]);
+      window.fetch = realFetch; window.rest = realRest;
+      MODE = wasMode; hostId = wasHost; actWho = wasWho;
+      closeSheet();
+    }
   });
 
   /* The fill already says booked — it is the whole point of the colour — so

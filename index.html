@@ -6794,9 +6794,13 @@ function addBooking(fi, start, nights, guest, src, extra){
   recompute(); save(); cacheSave();
   track("booking_added", {nights, priced: !!amount, src: row.src || null,
                           ahead: start > 0, live: MODE === "live"});
-  logAct("book", `Booked ${guest} into ${flatLabel(fi)} · ${fmt(start)}–${fmt(start+nights)}`
-    + ` · ${nights} night${nights>1?"s":""}` + (amount ? ` · ${money(amount)}` : " · no amount"),
-    {flat: flatLabel(fi), guest});
+  /* `quiet` is for the undo, which re-adds the row it just removed and then
+     logs the restore itself. Without it the timeline carried BOTH — a restore
+     and a booking nobody made, one under the other, for a single tap. */
+  if(!extra.quiet)
+    logAct("book", `Booked ${guest} into ${flatLabel(fi)} · ${fmt(start)}–${fmt(start+nights)}`
+      + ` · ${nights} night${nights>1?"s":""}` + (amount ? ` · ${money(amount)}` : " · no amount"),
+      {flat: flatLabel(fi), guest});
   return true;
 }
 
@@ -6966,10 +6970,12 @@ function addBlock(fi, start, nights, reason, note, extra){
   resv.push(row);
   usingDemo = false;
   recompute(); save(); cacheSave();
-  logAct("block", `${flatLabel(fi)} out of service · ${row.reason}`
-    + ` · ${fmt(start)}–${fmt(start+nights)}`
-    + (row.fault ? ` · ${row.fault}` : "") + (row.cost ? ` · ${money(row.cost)}` : ""),
-    {flat: flatLabel(fi)});
+  // same as addBooking: the undo speaks for itself, so it re-adds quietly
+  if(!extra.quiet)
+    logAct("block", `${flatLabel(fi)} out of service · ${row.reason}`
+      + ` · ${fmt(start)}–${fmt(start+nights)}`
+      + (row.fault ? ` · ${row.fault}` : "") + (row.cost ? ` · ${money(row.cost)}` : ""),
+      {flat: flatLabel(fi)});
   return true;
 }
 /* Push an existing block further out — "the technician did not come". Extends
@@ -7350,7 +7356,14 @@ function toast(kind, html, fi, action){
   host.append(t);
   // long enough to read a sentence and act on it; a conflict and an undo both
   // need longer, because both are decisions rather than notifications
-  const life = kind === "warn" ? 11000 : action ? 9000 : 7000;
+  /* AN UNDO IS NOT A NOTIFICATION. Nine seconds is right for something you
+     only have to read; it is wrong for the only route back to a booking that
+     has just been deleted. Cancelling closes the sheet, so the offer appears
+     over the room grid rather than where the operator was looking — and if
+     they glance up at the guest, or the phone is at their ear, the stay is
+     gone with nothing anywhere that can bring it back. Twenty seconds is still
+     a toast and not a dialog, and it can be dismissed the moment it is read. */
+  const life = kind === "warn" ? 11000 : action ? 20000 : 7000;
   setTimeout(()=> shut(), life);
   while(host.children.length > 3) host.firstChild.remove();
   return t;
@@ -7388,9 +7401,11 @@ function cancelWithUndo(r, fi){
       const restored = isBlock(copy)
         ? addBlock(copy.fi, Math.max(copy.start,0), copy.end - Math.max(copy.start,0),
                    copy.reason, copy.note,
-                   {fault:copy.fault, fixer:copy.fixer, phone:copy.fixer_phone, cost:copy.cost})
+                   {fault:copy.fault, fixer:copy.fixer, phone:copy.fixer_phone,
+                    cost:copy.cost, quiet:1})
         : addBooking(copy.fi, Math.max(copy.start,0), copy.end - Math.max(copy.start,0),
-                     copy.guest, copy.src, {phone:copy.phone, pax:copy.pax, amount:copy.amount});
+                     copy.guest, copy.src,
+                     {phone:copy.phone, pax:copy.pax, amount:copy.amount, quiet:1});
       if(!restored){ toast("bad", "<b>Could not put it back.</b> Nothing was changed.", fi); return; }
       const back = resv[resv.length - 1];
       /* And the true dates. Math.max(start,0) is right for the OVERLAP check —
@@ -7457,6 +7472,16 @@ function cancelWithUndo(r, fi){
       (copy.pays || []).forEach(p=> addPayment(back, p.amount, p.method, p.note));
       save(); cacheSave();
       haptic(14); refreshScreen();
+      /* AS A RESTORE, NOT A BOOKING. The undo path goes through addBooking, so
+         the timeline recorded "Booked Kavan into G02" directly under
+         "Cancelled Kavan in G02" — two entries that read as two unrelated
+         decisions, one of them a booking nobody made. Anybody auditing the log
+         would see a cancellation that was never reversed and a stay that
+         appeared from nowhere. The `restore` kind and its ↩ have existed since
+         the log was written and nothing ever logged one. */
+      logAct("restore", `Put ${who} back in ${flatLabel(fi)}`
+        + ` · ${spanWords(dayISO(copy.start), dayISO(copy.end))}`,
+        {flat: flatLabel(fi), guest: isBlock(copy) ? undefined : who});
       toast("", `<b>${esc(who)}</b> is back in ${esc(flats[fi].id)}.`, fi);
     }});
 }
