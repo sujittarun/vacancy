@@ -3533,13 +3533,14 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
            autocapitalize="off" autocorrect="off" spellcheck="false">
     <label for="gatePass">Password</label>
     <input id="gatePass" type="password" autocomplete="current-password">
-    <!-- Checked, because this is a work phone somebody carries between rooms
-         all day and the alternative is a password box in front of a guest.
-         Unchecked is for a borrowed or shared handset, where the session
-         should not outlive the browser. -->
+    <!-- Checked, because this is usually a work phone somebody carries between
+         rooms all day and the alternative is a password box in front of a
+         guest. "Device", not "phone": the same book is kept from a desk when
+         the month is being priced. Unchecked is for a borrowed or shared one,
+         where the session should not outlive the browser. -->
     <label class="keepme" for="gateKeep">
       <input id="gateKeep" type="checkbox" checked>
-      <span>Keep me signed in on this phone</span>
+      <span>Keep me signed in on this device</span>
     </label>
     <button class="go" id="gateGo" type="submit">Sign in</button>
   </form>
