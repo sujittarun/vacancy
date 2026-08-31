@@ -5650,7 +5650,14 @@ function load(){
 
    So while this is false the book lives on the phone alone: no account, no
    server, nothing to expose. Sync is a switch to flip, not a rewrite.        */
-const CLOUD_ENABLED = false;
+/* ON. Two accounts exist and both are attached to Crescent Stays; the schema,
+   the RLS and the twelve migrations are live; the first sign-in adopts rather
+   than replaces; a rejected write keeps the row instead of deleting it; the
+   queue survives a sign-out; a stay's id is derived from the stay so two
+   phones converge instead of duplicating. Every one of those is asserted in
+   selftest.js — see "the cloud cannot eat the book" and "two phones, one
+   book". Reads stay local: nothing on the render path touches the network. */
+const CLOUD_ENABLED = true;
 
 const SUPA_URL = "https://hwbquljbvanlgggemchg.supabase.co";
 /* Publishable by design, and safe in a file anyone can read: it grants nothing
@@ -5804,7 +5811,7 @@ const APP_VERSION = "2026-08-30";           // bumped by hand with each deploy
 
    The activity log — Data → "Everything you have done" — is unaffected and
    keeps working, because it never left the phone in the first place. */
-const TELEMETRY_ON = false;
+const TELEMETRY_ON = true;
 const TEL_KEY = "vacancy.device.v1";
 let telSession = null, telQueue = [], telTimer = null, telOff = false;
 

@@ -1827,10 +1827,13 @@ export async function run(filter) {
      whole app, not just the sign-in screen: with the flags off NOTHING may
      leave the phone, on any path, including the one that was quietly posting
      two 401s per launch. */
-  await test("with the cloud off, the app never talks to a server", async () => {
-    eq(CLOUD_ENABLED, false, "CLOUD_ENABLED");
-    eq(TELEMETRY_ON, false, "TELEMETRY_ON");
-    eq(MODE, "sample", "MODE with the cloud off");
+  /* The cloud is on now, but a phone that has not signed in must still behave
+     exactly as it did before: reads from memory, nothing on the wire. Sync is
+     something you opt into by signing in, not something that starts happening
+     to you. */
+  await test("a signed-out phone still never talks to a server for its data", async () => {
+    eq(MODE, "sample", "MODE before anyone signs in");
+    ok(!session, "a session exists before sign-in");
     const real = window.fetch, seen = [];
     try {
       window.fetch = (...a)=>{ seen.push(String(a[0])); return real(...a); };
@@ -1847,8 +1850,13 @@ export async function run(filter) {
       cancelBooking(resv.find(r => r.guest === "No Network Fixture"));
       SCREENS.forEach(sc => sc.render());
       await wait(120);
+      /* telemetry is allowed out — it is anonymous, carries no guest data and is
+         the thing the owner asked for. The operator's BOOK is what must not
+         travel until he signs in. */
       const off = seen.filter(u => !/^(blob:|data:)/.test(u) && !/localhost|127\.0\.0\.1/.test(u));
-      eq(off.length, 0, `the app called out to: ${off.slice(0,3).join(", ")}`);
+      const bookLeaked = off.filter(u => /\/(stays|payments|flats|buildings|issues|expenses|cost_lines|revenue_months)/.test(u));
+      eq(bookLeaked.length, 0, `the book went out while signed out: ${bookLeaked.slice(0,2).join(", ")}`);
+      eq(queue.length, 0, `${queue.length} writes queued while signed out`);
       /* and the sign-in gate must not be reachable */
       const gate = document.getElementById("gate");
       ok(!gate || !gate.classList.contains("on"), "the sign-in gate is showing");
