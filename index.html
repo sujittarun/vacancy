@@ -7731,17 +7731,19 @@ const ACT_ICON = {
    a fault nobody has closed, and a move the app would not make. */
 const ACT_WARN = {refused:1, fault:1};
 
-/* WHO DID IT. Two people share this book, so the distinction that matters is
-   "me" and "the other one" — and the role is the only label the client can
-   actually read, because emails live in auth.users where PostgREST cannot
-   reach them. */
+/* WHO DID IT. The book is run by two brothers who share the manager role, so
+   the role is exactly the wrong label: it is identical for the two people who
+   most need telling apart. display_name carries the name; role is only the
+   fallback, so somebody added without one is still labelled rather than
+   anonymous. Emails are not an option — they live in auth.users, where
+   PostgREST cannot reach them. */
 let actWho = null;
 async function whoMap(){
   if(actWho) return actWho;
   const m = {};
   try{
-    (await rest("GET", "/memberships?select=user_id,role") || [])
-      .forEach(r => { m[r.user_id] = r.role; });
+    (await rest("GET", "/memberships?select=user_id,role,display_name") || [])
+      .forEach(r => { m[r.user_id] = r.display_name || r.role; });
     actWho = m;
   }catch(e){ /* offline: everything falls back to "someone else" */ }
   return m;
