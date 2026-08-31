@@ -2149,10 +2149,17 @@ export async function run(filter) {
       /* the two guards that do not need a server */
       const err = document.getElementById("gateErr"), form = document.getElementById("gateForm");
       const fire = ()=> form.dispatchEvent(new Event("submit", {bubbles:true, cancelable:true}));
-      document.getElementById("gateEmail").value = "short";
-      document.getElementById("gatePass").value  = "short";
+      document.getElementById("gateEmail").value = "abcde";
+      document.getElementById("gatePass").value  = "abcde";
       fire(); await wait(60);
-      ok(/8 characters/.test(err.textContent), `short password accepted: "${err.textContent}"`);
+      ok(/6 characters/.test(err.textContent), `a 5-character password was accepted: "${err.textContent}"`);
+      /* and the boundary itself must pass the length gate — a rule that also
+         rejects the shortest legal password is the same bug in the other
+         direction, and it would only surface on a live token */
+      document.getElementById("gateEmail").value = "abcdef";
+      document.getElementById("gatePass").value  = "zzzzzz";
+      fire(); await wait(60);
+      ok(!/characters/.test(err.textContent), `6 characters was rejected on length: "${err.textContent}"`);
       document.getElementById("gateEmail").value = "longenough1";
       document.getElementById("gatePass").value  = "different11";
       fire(); await wait(60);

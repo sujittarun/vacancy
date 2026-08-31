@@ -7821,7 +7821,10 @@ function openReset(token){
   form.onsubmit = async ev=>{
     ev.preventDefault();
     const a = email.value, b = pass.value;
-    if(a.length < 8){ err.textContent = "Use at least 8 characters."; return; }
+    /* 6 matches the project's own password_min_length; if the client asked for
+       more than the server enforces, the extra strictness would be invisible
+       policy that no setting explains. */
+    if(a.length < 6){ err.textContent = "Use at least 6 characters."; return; }
     if(a !== b){ err.textContent = "Those two do not match."; return; }
     go.disabled = true; go.textContent = "Setting…";
     try{
