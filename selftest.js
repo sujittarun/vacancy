@@ -2059,6 +2059,55 @@ export async function run(filter) {
     }
   });
 
+  /* ══ two staff, one room ════════════════════════════════════════════════ */
+
+  /* The double-booking case an operator actually meets is not two guests — it
+     is ONE enquiry entered twice, because the caller rang while a colleague was
+     already writing it down. Those must collapse. Two different guests for the
+     same nights is a genuine conflict and must not. */
+  await test("the same enquiry entered twice collapses; two guests do not", async () => {
+    const keepR = resv.slice();
+    try {
+      const fi = flats.map((f,i)=>i).find(i => freeSpan(i, 3, 6));
+      ok(fi != null, "no room free for the fixture");
+      ok(addBooking(fi, 3, 3, "Priya Fixture", "Direct", {amount: 15000}), "fixture refused");
+      const a = resv.find(r => r.guest === "Priya Fixture");
+      /* the other phone's copy of the same enquiry — same room, nights, guest;
+         a different amount typed, because two people rarely agree on that */
+      const twin = {...a, sid: undefined, amount: 16000, note: "typed by the other staff"};
+      eq(stayKey(twin), stayKey(a), "the same enquiry twice produced two different rows");
+      /* a genuinely different guest for the same nights must stay distinct, so
+         the exclusion constraint can do its job */
+      const rival = {...a, sid: undefined, guest: "Rahul Fixture"};
+      ok(stayKey(rival) !== stayKey(a), "two different guests collapsed into one booking");
+      return "one enquiry converges, two guests conflict";
+    } finally {
+      const p = resv.find(r => r.guest === "Priya Fixture");
+      if(p) cancelBooking(p);
+      resv = keepR; recompute();
+    }
+  });
+
+  /* Losing the race is not the operator's fault and "conflict" is not an answer
+     he can read out — by the time the server says no he has already told
+     somebody the room is theirs. */
+  await test("losing a room offers the next best one, ranked the way it would be offered", async () => {
+    const r = bookings().find(x => x.start > 0 && x.nights <= 3 && !x.openEnd);
+    ok(r, "no forward booking to model the loss on");
+    const want = flats[r.fi];
+    const free = flats.map((f,i)=>i).filter(i => i !== r.fi && freeSpan(i, r.start, r.end));
+    ok(free.length, "nothing else is free for those nights, so there is nothing to offer");
+    const score = i => (flats[i].code === want.code ? 2 : 0) + (flats[i].type === want.type ? 1 : 0);
+    free.sort((x,y)=> score(y) - score(x));
+    const best = free[0];
+    /* the ranking must prefer the swap a guest does not feel */
+    free.forEach(i => ok(score(best) >= score(i), "a worse room outranked the best one"));
+    if(free.some(i => score(i) === 3))
+      eq(score(best), 3, "a same-building same-size room existed and was not offered first");
+    return `${free.length} alternatives, best is ${flats[best].id} (${flats[best].code === want.code ? "same block" : "across town"}, `
+         + `${flats[best].type === want.type ? "same size" : flats[best].type})`;
+  });
+
   /* ══ the whole surface ══════════════════════════════════════════════════ */
 
   await test("no text falls below AA in either theme", async () => {

@@ -6287,6 +6287,9 @@ async function flush(){
   paintAcct();
 }
 const MIN = {Prefer:"return=minimal"};
+/* Expenses and costs are keyed by BUILDING, and the app holds a building only
+   as a code on each flat. This is the one place that translation lives. */
+const bidOf = code => { const f = flats.find(x => x.code === code && x.bid); return f ? f.bid : null; };
 function runOp(op){
   switch(op.k){
     case "stay+": return rest("POST",  "/stays", {...op.body, id:op.id, host_id:hostId}, MIN);
@@ -6303,6 +6306,22 @@ function runOp(op){
     case "flat-": return rest("DELETE","/flats?id=eq." + op.id, undefined, MIN);
     case "wipeIds": return rest("DELETE",
       "/stays?id=in.(" + (op.body.ids || []).join(",") + ")", undefined, MIN);
+    /* THE MONEY TABLES. Bookings travelled; the figures on the Business tab did
+       not — expenses, the standing cost model and the revenue typed for a
+       building the sheets do not price all lived on one phone. "We both see the
+       same book" was true of the calendar and false of every number.
+       Costs and revenue are upserts on their natural key rather than inserts,
+       because editing a cost line is the normal case and it must not accumulate
+       a new row each time. */
+    case "exp+":  return rest("POST",  "/expenses", {...op.body, id:op.id, host_id:hostId}, MIN);
+    case "exp-":  return rest("DELETE","/expenses?id=eq." + op.id, undefined, MIN);
+    case "cost~": return rest("POST",  "/cost_lines", {...op.body, host_id:hostId},
+                    {Prefer:"return=minimal,resolution=merge-duplicates"});
+    case "cost-": return rest("DELETE","/cost_lines?host_id=eq." + hostId
+                    + "&building_id=eq." + op.body.building_id
+                    + "&line=eq." + encodeURIComponent(op.body.line), undefined, MIN);
+    case "rev~":  return rest("POST",  "/revenue_months", {...op.body, host_id:hostId},
+                    {Prefer:"return=minimal,resolution=merge-duplicates"});
   }
   return Promise.resolve();
 }
@@ -6392,11 +6411,46 @@ async function lostTheRoom(op){
     }
   }catch(err){ /* offline again — the headline still stands without the name */ }
 
+  /* Ranked the way an operator would offer it: the same block and the same
+     size is a swap the guest does not feel; a different building is a
+     different journey and comes last. */
+  let alt = null;
+  try{
+    const a2 = dayOff(a), b2 = dayOff(b);
+    const want = mine && flats[mine.fi];
+    const free = flats.map((f,i)=>i).filter(i => i !== (mine && mine.fi) && freeSpan(i, a2, b2));
+    const score = i =>
+      (want && flats[i].code === want.code ? 2 : 0) + (want && flats[i].type === want.type ? 1 : 0);
+    free.sort((x,y)=> score(y) - score(x));
+    alt = free.length ? free[0] : null;
+  }catch(err){ alt = null; }
+
   toast("warn",
     "<b>" + esc(code) + " was taken.</b> "
     + (who ? who + " — entered on another phone. " : "Those nights went while you were typing. ")
-    + (block ? "The block was not saved." : "Your booking" + (label ? " for " + esc(label) : "") + " was not saved."),
-    mine ? mine.fi : null);
+    + (block ? "The block was not saved." : "Your booking" + (label ? " for " + esc(label) : "") + " was not saved.")
+    + (alt ? " <b>" + esc(flats[alt].id) + "</b> is free for the same nights." : ""),
+    mine ? mine.fi : null,
+    /* THE GUEST IS STILL ON THE PHONE. Losing the race is not the operator's
+       fault and "conflict" is not an answer he can read out — by the time the
+       server says no he has already told somebody the room is theirs. The
+       constraint is the right authority and it must stay the authority, but
+       the useful half of this message is the room he can offer INSTEAD, in one
+       tap, before the call ends. Same building and same size first, because
+       that is the swap a guest accepts without noticing. */
+    alt != null && !block ? {label: "Put them in " + flats[alt].id, run:()=>{
+      const a2 = dayOff(a), b2 = dayOff(b);
+      if(!freeSpan(alt, a2, b2)){
+        toast("bad", "<b>" + esc(flats[alt].id) + " has gone too.</b> Try the room grid.", alt);
+        return;
+      }
+      addBooking(alt, Math.max(a2,0), b2 - Math.max(a2,0), label || "Guest",
+                 (mine && mine.src) || "Direct",
+                 {amount: mine && mine.amount, phone: mine && mine.phone, pax: mine && mine.pax});
+      haptic(16); refreshScreen();
+      toast("", "<b>" + esc(label || "The booking") + " is in " + esc(flats[alt].id) + ".</b> "
+              + esc(spanWords(a, b)) + ".", alt);
+    }} : null);
   haptic([12, 60, 12]);
 }
 /* "12–15 Aug", with the month said once, and the end date read as the morning
@@ -13167,10 +13221,15 @@ function openExpense(code, monthKey, after){
   go.onclick = ()=>{
     const v = Math.round(+amt.value || 0);
     if(!(v > 0) || !when.value) return;
-    expenses.push({id: "e" + Date.now() + Math.round(Math.random()*1e4),
+    const eid = uuid();
+    expenses.push({id: eid,
                    code: bSel.value, line: lSel.value, amount: v,
                    on: when.value, note: note.value.trim() || undefined});
     expSave();
+    if(MODE === "live") enqueue({k:"exp+", id:eid, body:{
+      building_id: bidOf(bSel.value), line: lSel.value, amount: v,
+      paid_on: when.value, note: note.value.trim() || null,
+      created_by: session && session.uid }});
     track("expense_logged", {code: bSel.value, line: lSel.value, month: monthOf(when.value)});
     logAct("expense", `Logged ${money(v)} · ${lSel.value} · `
       + `${(B.find(z=>z.code===bSel.value)||{}).name || bSel.value} · paid ${when.value}`);
@@ -13235,6 +13294,7 @@ function openLedger(monthKey){
         const i = expenses.findIndex(z=> z.id === r.id);
         if(i < 0) return;
         expenses.splice(i, 1); expSave(); haptic(14);
+        if(MODE === "live") enqueue({k:"exp-", id:r.id});
         refreshScreen(); openLedger(monthKey);
       };
       e2.append(del);
@@ -13403,6 +13463,14 @@ function openCosts(r){
     Object.keys(inputs).forEach(k=>{ const v = +inputs[k].value; if(v > 0) next[k] = Math.round(v); });
     if(!Object.keys(next).length) delete costUser[r.code]; else costUser[r.code] = next;
     jset(COST_STORE, costUser);
+    if(MODE === "live"){
+      const bid = bidOf(r.code);
+      /* every line as it now stands, plus a delete for any the operator cleared */
+      Object.keys(next).forEach(k => enqueue({k:"cost~", id:r.code+"|"+k, body:{
+        building_id: bid, line: k, amount: next[k], kind: kindOf(r.code, k) }}));
+      Object.keys(cur).forEach(k => { if(next[k] == null)
+        enqueue({k:"cost-", id:r.code+"|"+k, body:{building_id: bid, line: k}}); });
+    }
     logAct("costs", `Changed what ${r.name} costs · ${money(costTotal(r.code) || 0)} a month`);
     /* Only what DIFFERS from the default is stored, so improving the defaults
        later still reaches every operator who never disagreed with them. */
@@ -13420,6 +13488,8 @@ function openCosts(r){
       if(v > 0) m[r.code] = v; else delete m[r.code];
       if(!Object.keys(m).length) delete finUser[finMonth];
       jset(FINU_STORE, finUser);
+      if(MODE === "live" && v > 0) enqueue({k:"rev~", id:finMonth+"|"+r.code, body:{
+        building_id: bidOf(r.code), month: finMonth, amount: v }});
       finBust();
     }
     haptic(18); closeSheet(); refreshScreen();
