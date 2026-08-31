@@ -5657,7 +5657,21 @@ function load(){
    phones converge instead of duplicating. Every one of those is asserted in
    selftest.js — see "the cloud cannot eat the book" and "two phones, one
    book". Reads stay local: nothing on the render path touches the network. */
-const CLOUD_ENABLED = true;
+/* HELD. Turned on, then straight back off within the minute, because the
+   database is not empty and what is in it is wrong: 45 flats created 9 Aug
+   carrying the PRE-MERGE Lotus Pond room ids (LP-101 … LP-403, and no studios),
+   and 461 stays from 15 Aug — an adoption from an era before the merge, before
+   the re-imports, and before any of this month's work.
+
+   Signing in against that does not merge, it corrupts. cloudPull() would
+   replace the live 38-flat inventory with those 45; the operator's own Lotus
+   Pond bookings, which live on LP-1..LP-4, would find no matching flat code and
+   be DROPPED by the reconcile filter rather than pushed; and the merge itself
+   would be silently undone on whichever phone signed in.
+
+   The stale rows have to go before this can be true again. That is a deletion
+   of somebody's data and it is not mine to make unasked. */
+const CLOUD_ENABLED = false;
 
 const SUPA_URL = "https://hwbquljbvanlgggemchg.supabase.co";
 /* Publishable by design, and safe in a file anyone can read: it grants nothing
