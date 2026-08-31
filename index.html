@@ -1486,8 +1486,57 @@ button{background:none;border:0;padding:0;cursor:pointer;
   opacity:0;pointer-events:none;
   /* the fade is animated; the sideways tracking is NOT — a value indicator that
      eases toward the finger is a value indicator that lies about where it is */
-  transition:opacity .14s var(--out)}
+  transition:opacity .14s var(--out), box-shadow .2s var(--out),
+             background-color .2s var(--out)}
 .strip-say.reading .strip-call{opacity:1}
+
+/* ── AT REST IT STILL SAYS SOMETHING ─────────────────────────────────────────
+   The slot was reserved so that reading a night could not move the sheet, and
+   then left empty until a finger arrived. On a phone no finger is resting on
+   the bar, so this was 76px of nothing above every room — the emptiest thing
+   on the busiest screen, and the first thing the eye lands on after the room's
+   own name.
+
+   It now opens on tonight. Same slot, same card, same code path: the resting
+   state IS a reading, of day 0, which is the night anybody opening a room is
+   asking about anyway. Dragging replaces it and releasing returns to it, so
+   the space is never blank and never jumps.
+
+   Resting is deliberately one step quieter than reading — a step down in
+   material, no lift, no playhead — so that putting a finger on the bar still
+   feels like it did something. */
+.strip-say.rest .strip-call{
+  opacity:1;
+  background-color:var(--g2);
+  box-shadow:var(--lift-1), var(--g-inner);
+}
+.strip-say.reading .strip-call{
+  background-color:var(--g3);
+  box-shadow:var(--lift-2), var(--g-inner);
+}
+/* The resting card names the night rather than dating it, so "Tonight" reads
+   as a state and "Fri 5 Sep" reads as a reading. */
+.strip-say.rest .strip-read b{color:var(--txt)}
+.strip-say.rest .sc-hint{display:inline}
+.sc-hint{display:none;font-size:10.5px;font-weight:600;color:var(--txt-3);
+  letter-spacing:.04em;text-transform:uppercase;margin-left:9px;white-space:nowrap}
+
+/* The mini strip arrives a bar at a time, ONCE, on the same `fresh` one-shot the
+   bars below already use. Hanging it on `.rest` instead re-ran it on every
+   repaint of the card — which is every scrub release — and a page with an
+   animation permanently in flight never reports itself settled, so the
+   contrast audit refused to believe its own numbers. An entrance that plays on
+   every entrance is not an entrance. */
+@keyframes miniIn{from{transform:scaleY(.3);opacity:0}}
+.strip-say.fresh .strip-mini i{animation:miniIn .18s var(--out) backwards}
+.strip-say.fresh .strip-mini i:nth-child(1){animation-delay:0ms}
+.strip-say.fresh .strip-mini i:nth-child(2){animation-delay:12ms}
+.strip-say.fresh .strip-mini i:nth-child(3){animation-delay:24ms}
+.strip-say.fresh .strip-mini i:nth-child(4){animation-delay:36ms}
+.strip-say.fresh .strip-mini i:nth-child(5){animation-delay:48ms}
+.strip-say.fresh .strip-mini i:nth-child(6){animation-delay:60ms}
+.strip-say.fresh .strip-mini i:nth-child(7){animation-delay:72ms}
+@media (prefers-reduced-motion:reduce){ .strip-say.fresh .strip-mini i{animation:none} }
 .strip-read{display:flex;flex-direction:column;gap:5px;min-width:0}
 .sc-top{display:flex;align-items:center;justify-content:space-between;gap:14px}
 .strip-read b{font-size:12.5px;font-weight:680;color:var(--txt);white-space:nowrap;
@@ -12308,15 +12357,37 @@ function attachStripScrub(wrap, strip, head, say, call, mini, readD, readW, fi){
     // a tick only when the night belongs to something else — not 63 times a sweep
     if(r !== was){ was = r; haptic(5); }
   };
+  /* WHAT THE SLOT SAYS WHEN NOBODY IS TOUCHING IT. Tonight — because that is
+     the question a room is opened to answer, and because a reserved space that
+     shows nothing is worse than no space at all. It reuses the reading's own
+     parts rather than inventing a second layout, so the two can never drift:
+     the same date line, the same sentence, the same seven bars. What it does
+     NOT do is light up the strip or move the playhead — resting is a summary,
+     not a cursor, and pretending otherwise would say a night is being read
+     when no one is reading it. */
+  const rest = ()=>{
+    at = -1;
+    clearSpan();
+    readD.textContent = "Tonight";
+    readW.textContent = nightStory(fi, 0);
+    paintMini(0);
+    call.style.transform = "translateX(0px)";
+    say.classList.remove("reading");
+    say.classList.add("rest");
+  };
   const start = x => { live = true; at = -1; was = null;
+    say.classList.remove("rest");
     wrap.classList.add("reading"); say.classList.add("reading"); show(dayAt(x)); };
   const stop = () => {
     if(!live) return;
     live = false;
     clearSpan();
     at = -1;
-    wrap.classList.remove("reading"); say.classList.remove("reading");
+    wrap.classList.remove("reading");
     rowsIn().forEach(row => row.classList.remove("lit"));
+    /* Back to tonight rather than to nothing. The card never blinks out, so
+       the sheet never grows a hole where a sentence just was. */
+    rest();
   };
 
   /* There is no vertical tripwire and no direction lock any more, because with
@@ -12346,6 +12417,12 @@ function attachStripScrub(wrap, strip, head, say, call, mini, readD, readW, fi){
   // capture routes both of these back here, so no window listeners accumulate
   // as sheets open and close
   ["pointerup","pointercancel"].forEach(ev => wrap.addEventListener(ev, stop));
+
+  /* Opened, not blank. The bars have to exist before this runs — paintMini
+     reads them — which is why it is the last thing the wiring does. */
+  say.classList.add("fresh");
+  setTimeout(()=> say.classList.remove("fresh"), 420);   // plays once, like the bars
+  rest();
 }
 
 /* Money rides in the booking's own row rather than on a line beneath it. A
