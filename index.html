@@ -1343,7 +1343,6 @@ button{background:none;border:0;padding:0;cursor:pointer;
   60%{box-shadow:0 0 0 9px transparent}}
 @media (prefers-reduced-motion:reduce){.field.hear button.mic{animation:none}}
 
-.copybar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .copybtn{display:inline-flex;align-items:center;gap:6px;padding:9px 13px;border-radius:var(--r-xs);
   background:var(--surface-2);border:1px solid var(--line);font-size:12.5px;font-weight:600;
   color:var(--txt-2);transition:transform .38s var(--spring), color .2s, background .2s}
@@ -1360,11 +1359,23 @@ button{background:none;border:0;padding:0;cursor:pointer;
   text-transform:uppercase;letter-spacing:.08em;margin-right:1px}
 .chips.recent button{background:none;border-color:var(--line);color:var(--txt-3);font-weight:520}
 
-.answer{font-size:22px;font-weight:600;letter-spacing:-.028em;line-height:1.32;margin:0}
-.answer b{font-weight:700}
-.answer .y{color:var(--free)}
-.answer .n{color:var(--hot)}
-.heard{display:flex;gap:6px;flex-wrap:wrap;margin-top:13px}
+/* ── the answer ──────────────────────────────────────────────────────────────
+   22px and weight 600 for the WHOLE sentence meant "free for that night," was
+   shouting as loudly as the number of rooms, and two and a half lines of it
+   pushed the rooms it is about off the bottom of the screen. The sentence is
+   read aloud, so it has to be legible; it is not read CAREFULLY, so it does
+   not have to be large. Smaller and lighter for the grammar, full strength for
+   the two things being looked for. */
+.answer{font-size:17.5px;font-weight:500;letter-spacing:-.014em;line-height:1.42;
+  margin:0;color:var(--txt-2);text-wrap:balance}
+.answer b{font-weight:680;color:var(--txt)}
+/* the count answers the question, so it takes the question's own colour */
+.answer .y{color:var(--free);font-weight:720}
+.answer .n{color:var(--hot);font-weight:720}
+/* the date qualifies it, so it takes weight rather than a second colour —
+   two colours here would read as two verdicts */
+.answer .when{color:var(--txt);font-weight:660;white-space:nowrap}
+.heard{display:flex;gap:6px;flex-wrap:wrap;margin-top:11px}
 
 /* ══════════════════════ room sheet ══════════════════════ */
 .scrim{position:absolute;inset:0;z-index:50;background:var(--scrim);
@@ -11781,8 +11792,8 @@ function parseQuery(q){
      nights) came back "Yes — 5 rooms free for all 9 nights", and the two
      "heard" pills contradicted each other on screen: the range said 25 Oct, the
      night count said 9. The operator says yes down the phone for a stay the app
-     never looked at, and Copy for WhatsApp sends the caller a shortened range
-     as the answer to their question. The refusal branch already exists for a
+     never looked at, and the caller is given a shortened range as the answer
+     to their question. The refusal branch already exists for a
      start past the horizon; only the tail was silent. */
   const asked = n;
   n = Math.max(1, Math.min(n, DAYS - start));
@@ -11838,9 +11849,14 @@ function renderAsk(focus){
      A great many enquiries do not arrive as a phone call at all, they arrive as
      a WhatsApp message — "Hi, do you have a 2bhk from 15th to 18th for 4
      people?". Retyping that into a search box is absurd when the parser already
-     reads exactly that shape. Copy the message, tap Paste, get the answer, then
-     Copy for WhatsApp sends the reply straight back. The round trip is the
-     feature; the clipboard is just where the question already is.            */
+     reads exactly that shape. Copy the message, tap Paste, get the answer.
+     The clipboard is just where the question already is.
+
+     The reply used to go back the same way, off a "Copy for WhatsApp" button
+     under the answer. It went because the answer already said everything the
+     button copied — the count, the nights and the date were on screen twice,
+     once as a sentence and once as a label beside a button, and the rooms
+     themselves are listed underneath to be read out.                        */
   const SVG_PASTE = '<svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor"'
     + ' stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'
     + '<rect x="4.6" y="3.4" width="10.8" height="13.2" rx="2.2"/>'
@@ -12038,21 +12054,31 @@ function renderAsk(focus){
     if(p.bldg) pool = pool.filter(x=>x.f.code===p.bldg);
     const free = pool.filter(x=>freeRange(x.i,a,b));
     const when = p.n===1 ? fmtL(a) : `${fmtL(a)} → ${fmtL(b)}`;
+    /* THE SENTENCE CARRIES TWO FACTS AND A LOT OF GRAMMAR. "Yes — 11 rooms
+       free for that night, Mon 31 Aug" is read aloud to somebody on a phone,
+       and the two things the operator's eye has to find in it are the COUNT
+       and the DATE. Only the count was ever marked; the date sat at the same
+       weight as "free for that night", so the one word that decides whether
+       the answer is even about the right day was the least findable thing in
+       the sentence. Marked separately from the count and differently: the
+       count carries the yes/no colour, the date carries weight. Two emphases
+       that never compete for the same meaning. */
+    const whenB = `<b class="when">${when}</b>`;
     const nightsTxt = p.n===1 ? "that night" : p.n===2 ? "both nights" : `all ${p.n} nights`;
 
     ansWrap.textContent = "";
     const ans = el("p","answer");
     ans.innerHTML = p.beyond
-      ? `That's past <b class="n">${fmtL(DAYS-1)}</b> — the furthest this book goes. Showing ${when} instead.`
+      ? `That's past <b class="n">${fmtL(DAYS-1)}</b> — the furthest this book goes. Showing ${whenB} instead.`
       : p.flat != null
       ? (free.length
-          ? `<b class="y">${esc(flats[p.flat].id)}</b> is free for ${nightsTxt}, ${when}.`
+          ? `<b class="y">${esc(flats[p.flat].id)}</b> is free for ${nightsTxt}, ${whenB}.`
           : (()=>{ const b2 = resv.find(r => r.fi===p.flat && r.start < a+p.n && r.end > a);
-              return `<b class="n">${esc(flats[p.flat].id)}</b> is not free ${when}`
+              return `<b class="n">${esc(flats[p.flat].id)}</b> is not free ${whenB}`
                 + (b2 ? ` — ${esc(isBlock(b2) ? (b2.reason || "out of service") : b2.guest)} until ${fmt(b2.end)}.` : "."); })())
       : free.length
-      ? `Yes — <b class="y">${free.length} room${free.length>1?"s":""}</b> free for ${nightsTxt}, ${when}.`
-      : `<b class="n">Nothing</b> covers ${nightsTxt}, ${when}.`;
+      ? `Yes — <b class="y">${free.length} room${free.length>1?"s":""}</b> free for ${nightsTxt}, ${whenB}.`
+      : `<b class="n">Nothing</b> covers ${nightsTxt}, ${whenB}.`;
     /* Say it BEFORE the answer, not after. A caller who asked for 15 nights is
        being answered about 9, and the operator has to know that before reading
        the "Yes" out loud. */
@@ -12072,25 +12098,6 @@ function renderAsk(focus){
       heard.append(el("span","pill", bz ? bz.name : p.bldg)); }
     ansWrap.append(ans, heard);
 
-    if(free.length){
-      const bar = el("div","copybar");
-      const cp = el("button","copybtn");
-      cp.innerHTML = '<svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><rect x="6.6" y="6.6" width="10.4" height="10.4" rx="2.4"/><path d="M13.4 3.4H4.6a1.2 1.2 0 0 0-1.2 1.2v8.8"/></svg><span>Copy for WhatsApp</span>';
-      cp.onclick = async ()=>{
-        const lines = free.map(x=>`${x.f.id} (${x.f.type}, ${x.f.bshort})`).join("\n");
-        const text = p.n===1
-          ? `Free on ${fmtL(a)} — ${free.length} room${free.length>1?"s":""}:\n${lines}`
-          : `Free ${fmtL(a)} → ${fmtL(b)} (${p.n} nights) — ${free.length} room${free.length>1?"s":""}:\n${lines}`;
-        const ok = await copyText(text);
-        haptic(12);
-        cp.querySelector("span").textContent = ok ? "Copied" : "Press and hold to copy";
-        cp.classList.toggle("done", ok);
-        setTimeout(()=>{ cp.querySelector("span").textContent = "Copy for WhatsApp";
-                         cp.classList.remove("done"); }, 1800);
-      };
-      bar.append(cp, el("span","lbl", `${free.length} room${free.length>1?"s":""} · ${p.n} night${p.n>1?"s":""}`));
-      ansWrap.append(bar);
-    }
 
     listWrap.textContent = "";
     const h = el("div","sect");
