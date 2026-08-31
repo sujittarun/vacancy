@@ -7035,6 +7035,13 @@ function armConfirm(btn, opts){
   };
   return disarm;
 }
+/* THE RECOVERY TOKEN MUST BE READ BEFORE ANYTHING ELSE TOUCHES THE HASH.
+   The deep-link handler near the bottom reads location.hash to pick a screen
+   and switchTo() then writes the screen name back into it — so by the time the
+   gate ran, "#access_token=…&type=recovery" had already become "#rooms" and the
+   link looked broken for the second time. Captured here, at the first line of
+   the script that runs, and parsed later. */
+const BOOT_HASH = String(location.hash || "");
 const el = (t,c,x)=>{const n=document.createElement(t); if(c)n.className=c; if(x!=null)n.textContent=x; return n;};
 const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const ordinalSuffix = n => (n % 100 >= 11 && n % 100 <= 13) ? "th"
@@ -7751,6 +7758,88 @@ function openGate(){
                    else if(!e.value) e.focus(); }, 260);
 }
 function closeGate(){ document.getElementById("gate").classList.remove("on"); }
+
+/* ── SETTING A NEW PASSWORD ──────────────────────────────────────────────────
+   The Supabase dashboard offers only "send recovery email", and that email
+   lands on this app carrying its token in the URL fragment — which nothing here
+   read, so the link appeared to do nothing and neither person could ever change
+   their password. A two-person app with no way back in is one forgotten
+   password away from being unusable.
+
+   Supabase sends {SITE_URL}#access_token=…&type=recovery. That token is a real
+   session, good for one thing: PUT /auth/v1/user with a new password. So the
+   gate becomes a set-a-password form when it sees one.
+
+   The token is stripped from the URL the moment it is read. A recovery link
+   sitting in browser history — or pasted into a chat to ask why it did not
+   work — is a live credential for as long as it lasts. */
+/* Takes the fragment rather than reading it, so the boot path can hand it
+   BOOT_HASH — captured before anything rewrites it — and a test can hand it a
+   fixture. A function that reads a global at call time cannot be tested at
+   call time, which is how the first version of this shipped untested. */
+function recoveryToken(hash){
+  const h = String(hash == null ? BOOT_HASH : hash).replace(/^#/, "");
+  if(!h || h.indexOf("access_token=") < 0) return null;
+  const q = new URLSearchParams(h);
+  const tok = q.get("access_token");
+  if(!tok || q.get("type") !== "recovery") return null;
+  /* out of the address bar, out of history, before anything else happens */
+  try{ history.replaceState(null, "", location.pathname + location.search); }
+  catch(e){ location.hash = ""; }
+  return tok;
+}
+
+function openReset(token){
+  const g = document.getElementById("gate");
+  const form = document.getElementById("gateForm");
+  const err  = document.getElementById("gateErr");
+  err.textContent = "";
+  /* Reuse the gate rather than build a second screen: it is the same moment in
+     the same place, and one of the two fields is even the same field. */
+  g.querySelector(".lede").textContent =
+    "Choose a new password. You are signed in already — this only sets the password "
+    + "you will use next time.";
+  const email = document.getElementById("gateEmail");
+  email.closest("label") || null;
+  email.type = "password";
+  email.setAttribute("autocomplete", "new-password");
+  email.value = "";
+  email.placeholder = "";
+  const lab = form.querySelector('label[for="gateEmail"]');
+  if(lab) lab.textContent = "New password";
+  const lab2 = form.querySelector('label[for="gatePass"]');
+  if(lab2) lab2.textContent = "Type it again";
+  const pass = document.getElementById("gatePass");
+  pass.value = ""; pass.setAttribute("autocomplete", "new-password");
+  const go = document.getElementById("gateGo");
+  go.textContent = "Set the password";
+  const skip = document.getElementById("gateSkip");
+  if(skip) skip.hidden = true;
+  g.classList.add("on");
+  setTimeout(()=> email.focus(), 260);
+
+  form.onsubmit = async ev=>{
+    ev.preventDefault();
+    const a = email.value, b = pass.value;
+    if(a.length < 8){ err.textContent = "Use at least 8 characters."; return; }
+    if(a !== b){ err.textContent = "Those two do not match."; return; }
+    go.disabled = true; go.textContent = "Setting…";
+    try{
+      /* the recovery token IS the authorisation; no old password is involved */
+      await api("/auth/v1/user", {method:"PUT", auth:false, body:{password:a},
+        headers:{Authorization:"Bearer " + token}});
+      go.textContent = "Done";
+      err.textContent = "";
+      toast("", "<b>Password set.</b> Sign in with it now.", null);
+      setTimeout(()=> location.replace(location.pathname), 900);
+    }catch(e){
+      go.disabled = false; go.textContent = "Set the password";
+      err.textContent = (e && /expired|invalid/i.test(e.message || ""))
+        ? "That link has expired. Send yourself another recovery email."
+        : "Could not set it: " + (e && e.message || "unknown");
+    }
+  };
+}
 
 async function copyText(t){
   try{ await navigator.clipboard.writeText(t); return true; }
@@ -14991,7 +15080,11 @@ paintAcct();
 /* Sign-in is the front door. A phone that has never signed in, and whose owner
    has never said "just looking", meets it first — so nobody works a whole
    afternoon in invented bookings without knowing there is a real book. */
-if(CLOUD_ENABLED && MODE !== "live" && !jget(BROWSE_KEY)) openGate();
+/* A recovery link beats everything else: the person clicking it cannot sign in,
+   which is the whole reason they are here. */
+const RECOVER = CLOUD_ENABLED ? recoveryToken() : null;
+if(RECOVER) openReset(RECOVER);
+else if(CLOUD_ENABLED && MODE !== "live" && !jget(BROWSE_KEY)) openGate();
 if(MODE === "live"){
   // the cache already painted; correct it from the server, and if the session
   // has expired for good, fall back to the sample book rather than a dead app

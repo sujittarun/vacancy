@@ -2116,6 +2116,65 @@ export async function run(filter) {
          + `${flats[best].type === want.type ? "same size" : flats[best].type})`;
   });
 
+  /* The Supabase dashboard offers only "send recovery email", and that email
+     lands here with its token in the URL fragment — which nothing read, so the
+     link did nothing and neither person could ever change their password. */
+  await test("a recovery link opens a set-a-password screen and swallows its token", async () => {
+    const g = document.getElementById("gate");
+    const lab1 = document.querySelector('label[for="gateEmail"]');
+    const was = {lede: g.querySelector(".lede").textContent, lab: lab1.textContent,
+                 type: document.getElementById("gateEmail").type,
+                 go: document.getElementById("gateGo").textContent,
+                 skip: document.getElementById("gateSkip").hidden,
+                 onsubmit: document.getElementById("gateForm").onsubmit};
+    const href = location.href;
+    try {
+      /* the shape Supabase actually sends */
+      history.replaceState(null, "", location.pathname + "#access_token=T_FIXTURE&type=recovery");
+      const tok = recoveryToken("#access_token=T_FIXTURE&refresh_token=r&type=recovery");
+      eq(tok, "T_FIXTURE", "the token was not read out of the fragment");
+      /* and it must not survive in the address bar — a recovery link in history
+         is a live credential */
+      ok(location.href.indexOf("T_FIXTURE") < 0, "the token is still in the URL");
+      /* a fragment without type=recovery is somebody deep-linking, not resetting */
+      ok(!recoveryToken("#rooms"), "a plain deep link was read as a recovery token");
+      ok(!recoveryToken("#access_token=X"), "a token with no type=recovery was accepted");
+
+      openReset(tok);
+      eq(document.getElementById("gateEmail").type, "password", "the first field is not a password field");
+      eq(lab1.textContent, "New password", "the first field is still labelled Email");
+      ok(document.getElementById("gateSkip").hidden, "'browse' is still offered mid-reset");
+      ok(/password/i.test(document.getElementById("gateGo").textContent), "the button still says Sign in");
+
+      /* the two guards that do not need a server */
+      const err = document.getElementById("gateErr"), form = document.getElementById("gateForm");
+      const fire = ()=> form.dispatchEvent(new Event("submit", {bubbles:true, cancelable:true}));
+      document.getElementById("gateEmail").value = "short";
+      document.getElementById("gatePass").value  = "short";
+      fire(); await wait(60);
+      ok(/8 characters/.test(err.textContent), `short password accepted: "${err.textContent}"`);
+      document.getElementById("gateEmail").value = "longenough1";
+      document.getElementById("gatePass").value  = "different11";
+      fire(); await wait(60);
+      ok(/do not match/.test(err.textContent), `mismatch accepted: "${err.textContent}"`);
+      return "token read once, stripped, and the form guards both hold";
+    } finally {
+      /* put the gate back the way an ordinary sign-in needs it */
+      g.querySelector(".lede").textContent = was.lede;
+      lab1.textContent = was.lab;
+      const e2 = document.getElementById("gateEmail");
+      e2.type = was.type; e2.value = ""; e2.setAttribute("autocomplete","username");
+      document.getElementById("gatePass").value = "";
+      document.getElementById("gateGo").textContent = was.go;
+      document.getElementById("gateGo").disabled = false;
+      document.getElementById("gateSkip").hidden = was.skip;
+      document.getElementById("gateForm").onsubmit = was.onsubmit;
+      document.getElementById("gateErr").textContent = "";
+      g.classList.remove("on");
+      history.replaceState(null, "", href);
+    }
+  });
+
   /* ══ the whole surface ══════════════════════════════════════════════════ */
 
   await test("no text falls below AA in either theme", async () => {
