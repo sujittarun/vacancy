@@ -137,6 +137,14 @@ export async function run(filter) {
 
   /* ══ data loss ══════════════════════════════════════════════════════════ */
 
+  /* THE UNDO, not whichever button is nearest the top of the document. Every
+     toast now carries a ✕, so `.toast button` finds the dismiss control of
+     whatever toast a previous test left on screen and quietly clicks that
+     instead — the cancellation stands, the row never comes back, and the
+     failure reads as a storage bug. Ask for the button by what it says. */
+  const undoButton = () =>
+    [...document.querySelectorAll(".toast button")].find(b => b.textContent.trim() === "Undo");
+
   await test("a guest who leaves owing survives the next day's rollover", async () => {
     const KEY = STORE;   // the app's own key, not a copy of it — see the v2 bump
     const backup = localStorage.getItem(KEY);
@@ -185,7 +193,7 @@ export async function run(filter) {
     ok(past, "seed has no stay ending past DAYS — this test can no longer see the bug it guards");
     const { fi, guest } = past, n0 = resv.length, end0 = past.end, start0 = past.start;
     cancelWithUndo(past, fi);
-    const btn = document.querySelector(".toast button");
+    const btn = undoButton();
     ok(btn, "no Undo button on the cancellation toast");
     btn.click();
     await wait(60);
@@ -232,7 +240,7 @@ export async function run(filter) {
     ok(plat, "no unpaid platform booking to test with");
     const { fi, guest, start, amount } = plat, id = flats[fi].id, owed0 = owedStats().total;
     cancelWithUndo(plat, fi);
-    document.querySelector(".toast button").click();
+    undoButton().click();
     await wait(60);
     const back = resv.find(r => r.fi === fi && r.guest === guest && r.start === start);
     eq((back.pays || []).length, 0, "payments in memory after undo");
@@ -256,7 +264,7 @@ export async function run(filter) {
     ok(g, "seed has no in-house guest who arrived before today");
     const { fi, guest, start, end } = g, id = flats[fi].id;
     cancelWithUndo(g, fi);
-    document.querySelector(".toast button").click();
+    undoButton().click();
     await wait(80);
     const stored = JSON.parse(localStorage.getItem(KEY)).rows
       .filter(r => r.id === id && r.guest === guest && r.end === end);
