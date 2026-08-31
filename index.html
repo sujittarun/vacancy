@@ -5724,12 +5724,22 @@ let activity = jget(LOG_STORE) || [];
    auditable: which flat and which guest. Never a rate, never a note. */
 function logAct(kind, line, ref){
   try{
-    activity.unshift({on: new Date().toISOString(), k: kind,
-                      s: String(line).slice(0, 160),
-                      f: (ref && ref.flat) || undefined,
-                      g: (ref && ref.guest) ? String(ref.guest).slice(0, 40) : undefined});
+    const e = {on: new Date().toISOString(), k: kind,
+               s: String(line).slice(0, 160),
+               f: (ref && ref.flat) || undefined,
+               g: (ref && ref.guest) ? String(ref.guest).slice(0, 40) : undefined,
+               i: uuid()};
+    activity.unshift(e);
     if(activity.length > LOG_CAP) activity.length = LOG_CAP;
     jset(LOG_STORE, activity);
+    /* AND UP, so the other phone's work is visible on this one. Telemetry was
+       built to carry counts and never names, and that rule was right when
+       nothing at all left the phone. The shared book changed the premise:
+       stays already holds every guest's name and number, by the owner's own
+       decision, so the same name in an activity line puts nothing new on the
+       server — and without it the feed cannot answer "what did he do to that
+       booking?", which is the only question anyone opens it to ask. */
+    track("act", {k: e.k, s: e.s, f: e.f, g: e.g, aid: e.i});
   }catch(e){ /* a log that can break the app is worse than no log */ }
 }
 /* The flat id, not the index — an index stops meaning anything the moment the
@@ -7720,23 +7730,93 @@ const ACT_ICON = {
 /* Amber is attention, and both of these are things that want a second look:
    a fault nobody has closed, and a move the app would not make. */
 const ACT_WARN = {refused:1, fault:1};
+
+/* WHO DID IT. Two people share this book, so the distinction that matters is
+   "me" and "the other one" — and the role is the only label the client can
+   actually read, because emails live in auth.users where PostgREST cannot
+   reach them. */
+let actWho = null;
+async function whoMap(){
+  if(actWho) return actWho;
+  const m = {};
+  try{
+    (await rest("GET", "/memberships?select=user_id,role") || [])
+      .forEach(r => { m[r.user_id] = r.role; });
+    actWho = m;
+  }catch(e){ /* offline: everything falls back to "someone else" */ }
+  return m;
+}
+const whoLabel = (uid, map) =>
+  !uid ? "" : (session && uid === session.uid) ? "You"
+  : map[uid] ? map[uid][0].toUpperCase() + map[uid].slice(1)
+  : "Someone else";
+
+/* The same actions, from every phone signed in to this host. Only rows that
+   carry a sentence are read back — app_open and screen_view exist to work out
+   why something broke, not to report what somebody did. */
+async function pullActivity(){
+  if(MODE !== "live" || !hostId) return [];
+  const map = await whoMap();
+  const rows = await rest("GET",
+    "/app_events?select=props,user_id,created_at&name=eq.act"
+    + "&host_id=eq." + hostId + "&order=created_at.desc&limit=" + LOG_CAP);
+  return (rows || []).map(r=>({
+    on: r.created_at, k: (r.props && r.props.k) || "",
+    s:  (r.props && r.props.s) || "", f: r.props && r.props.f,
+    g:  r.props && r.props.g,        i: r.props && r.props.aid,
+    who: whoLabel(r.user_id, map),
+  })).filter(e => e.s);
+}
+
+/* Local first, so the sheet is instant; the server folded in when it answers.
+   An entry this phone wrote is already here in full, so its own copy coming
+   back down is dropped on the id logAct minted for it. */
+function mergeActivity(server){
+  const seen = new Set(activity.map(a => a.i).filter(Boolean));
+  return activity.map(a => ({...a, who: a.who || "You"}))
+    .concat((server || []).filter(e => !e.i || !seen.has(e.i)))
+    .sort((a, b) => (a.on < b.on ? 1 : a.on > b.on ? -1 : 0))
+    .slice(0, LOG_CAP);
+}
 function openActivity(){
   sheetWipe();
-  const t = el("div");
-  t.innerHTML = `<div class="n">Everything you have done</div>`
-    + `<div class="m">${activity.length ? activity.length + " on this phone" : "nothing yet"}`
-    + `${activity.length >= LOG_CAP ? " · the last " + LOG_CAP : ""}</div>`;
+  const head = el("div");
   const x = el("button", null, "‹"); x.setAttribute("aria-label","Back to your data");
   x.onclick = ()=> openDataSheet();
-  sheetH.append(t, x);
+  sheetH.append(head, x);
+  const list = el("div");
+  sheetB.append(list);
+  sheet.classList.add("on"); scrim.classList.add("on");
 
-  if(!activity.length){
+  /* Painted at once from what this phone knows, then again when the server
+     answers. Waiting on the network to show a list we already hold would make
+     the sheet feel broken for the second it takes. */
+  paintActivity(head, list, mergeActivity([]), MODE === "live" ? "looking" : "local");
+  if(MODE === "live") pullActivity()
+    .then(rows => paintActivity(head, list, mergeActivity(rows), "shared"))
+    .catch(()  => paintActivity(head, list, mergeActivity([]), "offline"));
+}
+
+function paintActivity(head, list, rows, state){
+  const others = rows.filter(a => a.who && a.who !== "You").length;
+  head.innerHTML = `<div class="n">Everything that has happened</div>`
+    + `<div class="m">${
+        !rows.length ? (state === "looking" ? "looking…" : "nothing yet")
+        : rows.length + (state === "shared"
+            ? (others ? " · " + others + " from another phone" : " · this phone only, so far")
+            : state === "looking" ? " on this phone · looking…"
+            : state === "offline" ? " on this phone · could not reach the server"
+            : " on this phone")
+      }${rows.length >= LOG_CAP ? " · the last " + LOG_CAP : ""}</div>`;
+  list.innerHTML = "";
+
+  if(!rows.length){
+    if(state === "looking") return;
     const e = el("div","blocked");
     e.style.margin = "14px 20px";
     e.innerHTML = `<b>Nothing recorded yet.</b> Every booking, cancellation, move, payment, `
-      + `repair and expense you enter from now on appears here, with the time it happened.`;
-    sheetB.append(e);
-    sheet.classList.add("on"); scrim.classList.add("on");
+      + `repair and expense — from either phone — appears here, with the time it happened.`;
+    list.append(e);
     return;
   }
 
@@ -7755,7 +7835,7 @@ function openActivity(){
   const clock = d => String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0");
 
   let last = null, card = null;
-  activity.forEach(a=>{
+  rows.forEach(a=>{
     const d = when(a.on);
     if(isNaN(d)) return;
     const k = dayKey(d);
@@ -7764,20 +7844,24 @@ function openActivity(){
       const h = el("div","sect");
       h.style.cssText = "margin:14px 20px 6px";
       h.append(el("span","lbl", dayName(d)));
-      sheetB.append(h);
+      list.append(h);
       card = el("div","card"); card.style.cssText = "margin:0 20px";
-      sheetB.append(card);
+      list.append(card);
     }
     const row = el("div","row bk actrow");
     const m = el("div","meta");
+    /* Only somebody else is named. "You" on every one of your own lines is
+       noise, and the whole point of the line is spotting the ones that are
+       not yours. */
+    const by = a.who && a.who !== "You" ? a.who : "";
     m.innerHTML = `<b>${esc(a.s)}</b>`
-      + (a.g || a.f ? `<em>${[a.g, a.f].filter(Boolean).map(esc).join(" · ")}</em>` : "");
+      + (a.g || a.f || by
+          ? `<em>${[by, a.g, a.f].filter(Boolean).map(esc).join(" · ")}</em>` : "");
     const e2 = el("div","rowend");
     e2.append(el("span","acttime", clock(d)));
     row.append(el("div","actk" + (ACT_WARN[a.k] ? " warn" : ""), ACT_ICON[a.k] || "·"), m, e2);
     card.append(row);
   });
-  sheet.classList.add("on"); scrim.classList.add("on");
 }
 
 function openDataSheet(){
@@ -7802,8 +7886,9 @@ function openDataSheet(){
      it been doing" belongs. */
   const hist = el("button","costsbtn");
   hist.style.cssText = "margin:14px 20px 0;width:calc(100% - 40px)";
-  hist.innerHTML = `<span>Everything you have done</span><em>${
-    activity.length ? activity.length + " recorded" : "nothing yet"}</em>`;
+  hist.innerHTML = `<span>Everything that has happened</span><em>${
+    MODE === "live" ? "both phones"
+    : activity.length ? activity.length + " recorded" : "nothing yet"}</em>`;
   hist.onclick = ()=>{ haptic(10); openActivity(); };
   sheetB.append(hist);
 
