@@ -694,7 +694,7 @@ button{background:none;border:0;padding:0;cursor:pointer;
 
    The right edge fades rather than being cut off by the card, because the row
    scrolls and a hard clip hides that fact. */
-.roomfilt{display:flex;gap:5px;overflow-x:auto;scrollbar-width:none;
+.roomfilt{display:flex;gap:5px;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none;
   margin:0 -20px;padding:1px 20px 3px;
   -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 34px),transparent 100%);
   mask-image:linear-gradient(90deg,#000 calc(100% - 34px),transparent 100%)}
@@ -1349,9 +1349,28 @@ button{background:none;border:0;padding:0;cursor:pointer;
 .copybtn:active{transform:scale(.95)}
 .copybtn.done{background:var(--free);color:var(--free-ink);border-color:transparent}
 
-.chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}
-.chips button{padding:8px 12px;border-radius:var(--r-xs);background:var(--surface-2);border:1px solid var(--line);
-  font-size:12.5px;font-weight:500;color:var(--txt-2);transition:transform .38s var(--spring), color .18s}
+/* ── the standing suggestions ────────────────────────────────────────────────
+   Five chips at 12.5px came to 448px against 348px of room, so they wrapped to
+   two rows and pushed the answer — the thing actually being read out — a whole
+   row further down every time. Smaller, tighter, and on one line.
+
+   nowrap with a contained scroll rather than a hard single line: all five fit
+   without scrolling on an ordinary phone, and the narrowest handsets scroll a
+   little instead of silently clipping the last chip. overscroll-behavior is
+   the part that matters — without it a sideways drag that runs out of chips
+   chains to whatever scrolls behind, which is how a filter row ends up
+   changing the tab under your thumb. */
+.chips{display:flex;gap:5px;flex-wrap:nowrap;margin-top:11px;
+  overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none;
+  margin-left:-20px;margin-right:-20px;padding:1px 20px 2px;
+  /* the same fade the room filter uses, so a chip that does not fit reads as
+     more-to-the-right rather than as a chip cut in half */
+  -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 26px),transparent 100%);
+  mask-image:linear-gradient(90deg,#000 calc(100% - 26px),transparent 100%)}
+.chips::-webkit-scrollbar{display:none}
+.chips button{flex:0 0 auto;padding:6px 8px;border-radius:var(--r-xs);
+  background:var(--surface-2);border:1px solid var(--line);white-space:nowrap;
+  font-size:11px;font-weight:500;color:var(--txt-2);transition:transform .38s var(--spring), color .18s}
 .chips button:active{transform:scale(.94);color:var(--txt)}
 /* what was asked here before — quieter than the standing suggestions */
 .chips.recent{margin-top:9px;align-items:center}
@@ -11527,7 +11546,10 @@ function renderTrends(){
 /* Questions, not syntax. The old chips were a cheat-sheet for the parser —
    "15-18", "3 bhk banjara" — which teaches the language but answers nothing.
    These are the things actually asked down a phone, and each is one tap. */
-const SUGGEST = ["tonight","tomorrow","this weekend","3 nights","next week"];
+/* "weekend", not "this weekend": the parser resolves both to the same two
+   nights from the same date, and the two dropped words are what made five
+   chips wrap onto a second row. */
+const SUGGEST = ["tonight","tomorrow","weekend","3 nights","next week"];
 let lastQuery = "tonight";
 /* What is literally in the box, as opposed to what was asked of the data.
    The Ask screen re-renders on every refreshScreen() — which is to say after
@@ -12996,7 +13018,20 @@ function openSheet(fi, day){
             ? `<b>${esc(busy.guest)}</b> is in · no end date recorded`
             : `<b>${esc(busy.guest)}</b> is in until ${esc(fmt(busy.end))}`)
       : `Not free for those nights`;
-    act.append(why);
+    /* ONLY WHEN IT SAYS SOMETHING THE SHEET HAS NOT. Since the readout above
+       opens on tonight — "Nirvaan · night 15 of 45" — and Coming up lists the
+       same stay with its end date and source, this band was the third telling
+       of one fact, stacked between them.
+
+       It is NOT always redundant, which is why this is a condition and not a
+       deletion. The readout speaks for TONIGHT only: with 3 nights selected,
+       or a night further out, the blocker it names may not be the one standing
+       in the way, and "Not free for those nights" — the no-single-blocker case
+       — is a sentence nothing else on the screen says at all. Blocks are safe
+       to fold in because addBlock puts the reason in `guest`, so an outage
+       appears in Coming up under its own name. */
+    const alreadyOnScreen = !!busy && bN === 1 && bDay === 0;
+    if(!alreadyOnScreen) act.append(why);
     if(nxt){
       // a dead end is a wasted screen — offer the nearest thing that can be sold
       const b = el("button","bigAct", `Book from ${fmt(nxt.from)}`);
