@@ -2000,6 +2000,65 @@ export async function run(filter) {
     }
   });
 
+  /* ══ two phones, one book ═══════════════════════════════════════════════ */
+
+  /* A stay's id was minted at push time, so the same booking seeded into two
+     phones got two primary keys and arrived as two rows. The exclusion
+     constraint does not save you — it tests OVERLAP, so an identical copy is
+     refused as a stranger and an edited copy sails through as a second
+     booking. Neither converges. The id is derived from the stay now. */
+  await test("the same booking gets the same id on any phone", async () => {
+    const r = bookings().find(x => x.guest && !x.openEnd);
+    ok(r, "no booking to key");
+    const a = stayKey(r);
+    /* the same stay, described by a different object — what the other phone has */
+    const twin = {...r, sid: undefined, amount: (r.amount || 0) + 5000, note: "edited elsewhere"};
+    eq(stayKey(twin), a, "an edited copy of the same stay got a different id");
+    /* and things that genuinely ARE different bookings must not collide */
+    eq(stayKey({...r, start: r.start + 1}) === a, false, "a different arrival shares the id");
+    eq(stayKey({...r, guest: r.guest + " Jr"}) === a, false, "a different guest shares the id");
+    const other = flats.findIndex((f,i) => i !== r.fi);
+    eq(stayKey({...r, fi: other}) === a, false, "a different flat shares the id");
+    /* well-formed enough for a uuid column */
+    ok(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(a),
+      `not a valid uuid: ${a}`);
+    /* deterministic across calls */
+    eq(stayKey(r), a, "the same object keyed twice gave two answers");
+    /* no collisions across the whole book */
+    const keys = new Set(bookings().map(stayKey));
+    eq(keys.size, bookings().length, `${bookings().length - keys.size} bookings collided on one id`);
+    return `${keys.size} bookings, ${keys.size} distinct ids, stable under edits`;
+  });
+
+  /* Adoption fired only when the server came back completely empty, so a push
+     that died halfway could never be finished and a SECOND phone was told
+     there was nothing to do and dropped from the shared record. */
+  await test("a second phone's bookings are not silently dropped", async () => {
+    const keepR = resv.slice(), keepMode = MODE, keepHost = hostId, keepQ = queue.slice();
+    try {
+      MODE = "live"; hostId = "h1";
+      /* the server already holds most of the book … */
+      const all = resv.slice();
+      const serverHas = all.slice(0, all.length - 3).map(r => ({...r, sid: stayKey(r)}));
+      const onlyHere  = all.slice(all.length - 3);
+      resv = serverHas;                                   // what a pull leaves behind
+      queue = [];
+      const missing = reconcile(onlyHere);
+      /* … and the three it has never seen are found and kept on screen */
+      eq(missing.length, 3, `${missing.length} rows identified as missing, expected 3`);
+      eq(resv.length, all.length, "the merge lost or duplicated rows");
+      missing.forEach(r => ok(r.sid, "a missing row was not given an id"));
+      /* running it again must be a no-op — this is what makes it resumable */
+      const second = reconcile(onlyHere);
+      eq(second.length, 0, `re-running reconcile queued ${second.length} more rows — it is not idempotent`);
+      eq(resv.length, all.length, "a second reconcile duplicated rows");
+      return `3 unseen rows adopted, and a re-run is a no-op`;
+    } finally {
+      resv = keepR; MODE = keepMode; hostId = keepHost; queue = keepQ;
+      jset(QUEUE_KEY, queue); recompute();
+    }
+  });
+
   /* ══ the whole surface ══════════════════════════════════════════════════ */
 
   await test("no text falls below AA in either theme", async () => {

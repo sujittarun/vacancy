@@ -5905,6 +5905,54 @@ addEventListener("unhandledrejection", ev=>{
 });
 
 /* ── signing in and out ────────────────────────────────────────────────────── */
+/* ── TWO PHONES MUST AGREE ON WHAT A BOOKING IS ──────────────────────────────
+   A stay's id was minted at PUSH time — `r.sid = uuid()` — so the same booking,
+   seeded identically into two phones from the same hardcoded book, got two
+   different primary keys and arrived as two different rows. The exclusion
+   constraint does not save you: it tests whether two stays OVERLAP the same
+   flat, so an identical copy is refused as a stranger while an edited copy
+   sails through as a second booking. Neither outcome converges.
+
+   So the id is derived from what the booking IS, not from when it was sent.
+   Both phones compute the same id for the same stay, the second push comes
+   back 23505, and rejected() already treats that as "a retry that had already
+   landed". Convergence falls out of the key rather than out of a protocol.
+
+   Not a real UUIDv5 — that needs SHA-1 and an async digest, and this has to run
+   inline while building 700 rows. Four independently-seeded FNV-1a passes give
+   128 bits, formatted as a valid v5-shaped uuid so Postgres accepts it. At this
+   scale (a few thousand stays over the life of a property) the collision odds
+   are far below the odds of the rest of this file being wrong. */
+function stableId(parts){
+  const str = parts.map(x => String(x == null ? "" : x)).join("\u0000");
+  const lanes = [0x811c9dc5, 0x01000193, 0x9e3779b9, 0x85ebca6b];
+  for(let L = 0; L < 4; L++){
+    let h = lanes[L] >>> 0;
+    for(let i = 0; i < str.length; i++){
+      h ^= str.charCodeAt(i) + L;
+      h = Math.imul(h, 0x01000193) >>> 0;
+      h = (h ^ (h >>> 15)) >>> 0;
+    }
+    lanes[L] = h >>> 0;
+  }
+  const hex = lanes.map(h => h.toString(16).padStart(8, "0")).join("");
+  return hex.slice(0,8) + "-" + hex.slice(8,12) + "-5" + hex.slice(13,16)
+       + "-a" + hex.slice(17,20) + "-" + hex.slice(20,32);
+}
+/* WHAT MAKES A BOOKING ITSELF: the property, the flat, the nights and who is in
+   it. Not the amount and not the note — those are things an operator edits, and
+   editing a booking must not turn it into a different booking. Dates are sent
+   as absolute ISO so two phones opened on different days still agree. */
+function stayKey(r){
+  const f = flats[r.fi];
+  return stableId(["stay", hostId || "local", (f && f.id) || "?",
+                   dayISO(r.start), dayISO(r.end),
+                   isBlock(r) ? "block:" + (r.reason || "") : nameKey(r.guest)]);
+}
+function payKey(r, pay){
+  return stableId(["pay", stayKey(r), pay.amount, pay.method, dayISO(pay.on || 0)]);
+}
+
 /* ── THE FIRST SIGN-IN IS THE DANGEROUS ONE ──────────────────────────────────
    This used to be: authenticate, cloudPull(), jdel(STORE). cloudPull replaces
    flats and resv wholesale with whatever the server has, and jdel throws the
@@ -5925,20 +5973,21 @@ addEventListener("unhandledrejection", ev=>{
    `usingDemo` is exactly that flag. Anything the operator has touched stays on
    the phone as well as on the server, because a sync that can leave you with
    neither copy is worse than no sync. */
-async function adoptLocalBook(){
+async function adoptLocalBook(localRows){
   /* Buildings and flats first: a stay references a flat uuid, so the flats have
      to exist (or at least be queued ahead of it) before the stays go. */
   syncInventory([]);
-  const mine = resv.filter(r => !r.sid);
-  mine.forEach(r=>{
-    r.sid = uuid();
+  const isUuid = v => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v || "");
+  let sent = 0;
+  (localRows || []).forEach(r=>{
     const f = flats[r.fi];
     if(!f) return;
+    /* Derived, not minted — so the other phone's copy of this same booking
+       computes the same id and the second push collapses into a duplicate
+       rather than becoming a second row. */
+    r.sid = stayKey(r);
+    sent++;
     enqueue({k:"stay+", id:r.sid, body:{
-      /* "booking", not "stay" — the column is `check (kind in ('booking','block'))`
-         and every other enqueue in this file already says booking. Sending
-         "stay" would have had the server reject all 708 rows, one by one,
-         while the app reported the adoption as done. */
       flat_id: f.uid, kind: isBlock(r) ? "block" : "booking",
       starts_on: dayISO(r.start), ends_on: dayISO(r.end),
       guest_name: isBlock(r) ? null : (r.guest || null),
@@ -5947,15 +5996,14 @@ async function adoptLocalBook(){
       reason: r.reason || null, note: r.note || null,
       fault: r.fault || null, fixer: r.fixer || null,
       fixer_phone: r.fixer_phone || null, cost: r.cost || null,
-      booked_on: dayISO(typeof r.bookedOn === "number" ? r.bookedOn : 0),
+      /* the booking's own date, not today — stamping today on 700 historical
+         rows fabricates a lead time for every one of them */
+      booked_on: dayISO(typeof r.bookedOn === "number" ? r.bookedOn : r.start),
       created_by: session && session.uid }});
-    const isUuid = v => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v || "");
     (r.pays || []).forEach(pay=>{
-      /* The seeded book mints payment ids as "b" + a counter — "b4", "b17" —
-         because until now they never left the phone. payments.id is a uuid, so
-         every one of them would be rejected on arrival. Give it a real id here
-         AND on the local row, so the two agree afterwards. */
-      if(!isUuid(pay.id)) pay.id = uuid();
+      /* The seeded book mints payment ids as "b" + a counter, and payments.id
+         is a uuid. Derive those too, so a re-run is idempotent. */
+      if(!isUuid(pay.id)) pay.id = payKey(r, pay);
       enqueue({k:"pay+", id: pay.id, body:{
         stay_id: r.sid, amount: pay.amount, method: pay.method,
         received_on: dayISO(pay.on || 0), note: pay.note || null,
@@ -5965,13 +6013,38 @@ async function adoptLocalBook(){
   issues.filter(x => !x.sent).forEach(x=>{
     const f = flats[x.fi]; if(!f) return;
     x.sent = 1;
-    enqueue({k:"iss+", id: x.id || uuid(), body:{
+    if(!isUuid(x.id)) x.id = stableId(["iss", f.id, x.fault || "", dayISO(x.on || 0)]);
+    enqueue({k:"iss+", id: x.id, body:{
       flat_id: f.uid, fault: x.fault || null, note: x.note || null,
       urgency: x.urgency || null, reported_on: dayISO(x.on || 0) }});
   });
-  logAct("sync", `Signed in — sent ${mine.length} booking${mine.length===1?"":"s"} `
-    + `and ${flats.length} flats up to the shared book`);
-  return mine.length;
+  if(sent) logAct("sync", `Sent ${sent} booking${sent===1?"":"s"} up to the shared book`);
+  return sent;
+}
+
+/* ── RECONCILE, DO NOT ADOPT ONCE ────────────────────────────────────────────
+   Adoption used to fire only when the server came back completely empty, which
+   made it a one-shot: a push that died halfway could never be finished, and a
+   SECOND phone — whose book the server had never seen — was told there was
+   nothing to do and silently dropped from the shared record.
+
+   Because a stay's id is now derived from the stay, the question "is this
+   booking already up there" has an answer, and reconciliation is just a diff.
+   It runs on every sign-in, it is idempotent, and it is safe to interrupt. */
+function reconcile(localRows){
+  const onServer = new Set(resv.map(r => r.sid).filter(Boolean));
+  const missing = [];
+  localRows.forEach(r=>{
+    const key = stayKey(r);
+    if(onServer.has(key)) return;             // the server already has this one
+    r.sid = key;
+    missing.push(r);
+  });
+  /* MERGE, never replace. The server's rows are already in resv from the pull;
+     these are the ones only this phone knows about, and they stay on screen
+     while they make their way up. */
+  if(missing.length){ resv = resv.concat(missing); recompute(); }
+  return missing;
 }
 
 async function signIn(email, password){
@@ -5989,16 +6062,26 @@ async function signIn(email, password){
 
   await cloudPull();
 
-  const serverHasNothing = !resv.length && !flats.length;
-  if(serverHasNothing && hadLocal.length){
-    resv = hadLocal; flats = hadFlats; issues = hadIssues;
-    NF = flats.length;
+  /* No inventory on the server at all means nobody has ever set this property
+     up, so this phone's flats become it. Otherwise the server's inventory wins
+     and the local rows are matched onto it by flat code. */
+  if(!flats.length && hadFlats.length){
+    flats = hadFlats; NF = flats.length;
     flatIndex = Object.fromEntries(flats.map((f,i)=>[f.id, i]));
-    recompute();
-    await adoptLocalBook();
-    /* The book is now queued for the server AND still on the phone. It stays on
-       the phone until it has actually landed — see the queue, which persists
-       and retries. */
+  }
+  /* Re-point the held rows at whatever the inventory now is, by flat CODE —
+     the uuids differ per device but the code is the operator's own name for
+     the room and is the same on both. */
+  const placed = hadLocal.filter(r=>{
+    const id = hadFlats[r.fi] && hadFlats[r.fi].id;
+    const fi = id != null ? flatIndex[id] : undefined;
+    if(fi === undefined) return false;
+    r.fi = fi; return true;
+  });
+  const missing = reconcile(placed);
+  if(missing.length){
+    issues = issues.length ? issues : hadIssues;
+    await adoptLocalBook(missing);
   } else if(wasDemo){
     /* Only the untouched sample is safe to discard. Anything he has edited is
        kept as well as synced. */
