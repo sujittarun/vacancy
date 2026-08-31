@@ -140,6 +140,26 @@ export async function run(filter) {
   await test("a guest who leaves owing survives the next day's rollover", async () => {
     const KEY = STORE;   // the app's own key, not a copy of it — see the v2 bump
     const backup = localStorage.getItem(KEY);
+    /* BUILT, NOT FOUND. This looked for a guest who had already left owing and
+       asserted the rollover kept them — which held while the shipped book
+       happened to contain one. It does not any more, and the test then failed
+       for having no fixture rather than for the grace window being broken. The
+       money half (nothing erased) still passed throughout.
+       Same rule as everywhere else in this file: build the case you are
+       testing, then you are testing it. */
+    let built = null;
+    if(!bookings().some(r => r.end < 0 && dueFrom(r) > 0)){
+      /* addBooking() refuses a negative start by design — you cannot take a
+         booking for a night that has gone — so a stay that ALREADY DEPARTED has
+         to be laid into the book directly, the way load() does it. */
+      const fi = flats.map((f,i)=>i).find(i => freeSpan(i, -3, -1));
+      ok(fi != null, "no flat free for a past stay, so the fixture cannot be built");
+      resv.push({fi, start:-3, end:-1, nights:2, guest:"Rollover Fixture",
+                 src:"Direct", manual:true, amount:9000, pays:[], bookedOn:-5});
+      recompute();
+      built = resv.find(r => r.guest === "Rollover Fixture");
+      ok(built && dueFrom(built) > 0, "the fixture is not actually owing");
+    }
     const owedBefore = owedStats().total;
     save();
     const d = JSON.parse(localStorage.getItem(KEY));
@@ -150,7 +170,11 @@ export async function run(filter) {
     load(); recompute();
     const owedAfter = owedStats().total;
     const kept = bookings().filter(r => r.end < 0 && dueFrom(r) > 0).length;
-    localStorage.setItem(KEY, backup); load(); recompute();
+    if(backup != null) localStorage.setItem(KEY, backup); else localStorage.removeItem(KEY);
+    load(); recompute();
+    const still = resv.find(r => r.guest === "Rollover Fixture");
+    if(still) resv.splice(resv.indexOf(still), 1);
+    recompute();
     eq(owedBefore - owedAfter, 0, "rupees erased by one rollover");
     ok(kept > 0, "no departed-unpaid bookings were kept at all — the grace window is not working");
     return `₹0 erased, ${kept} unpaid departures kept`;
@@ -1894,6 +1918,85 @@ export async function run(filter) {
       eq(MODE, keepMode, "MODE leaked out of the wipe test");
       if(backup != null) localStorage.setItem(STORE, backup);
       load(); recompute();
+    }
+  });
+
+  /* ══ the cloud cannot eat the book ══════════════════════════════════════ */
+
+  /* rejected() called rollBack() for ANY error that was not a duplicate, a room
+     race or an auth failure — which lumps "somebody took the nights" together
+     with "this client sent a malformed row". Measured with the old adoption
+     bug: 708 bookings spliced out of the live book, one red toast each. */
+  await test("a server refusing a row does not delete it from the phone", async () => {
+    const keepR = resv.slice(), keepMode = MODE;
+    try {
+      const fi = flats.map((f,i)=>i).find(i => freeSpan(i, 0, 2));
+      ok(addBooking(fi, 0, 1, "Reject Fixture", "Direct", {amount: 5000}), "fixture refused");
+      const r = resv.find(x => x.guest === "Reject Fixture");
+      r.sid = "sid-fixture";
+      const before = bookings().length;
+      /* every client-fault class the server can answer with */
+      for(const e of [{code:"23514", message:"violates check constraint"},
+                      {code:"22P02", message:"invalid input syntax for uuid"},
+                      {code:"23503", message:"violates foreign key"},
+                      {status:400,  message:"Bad Request"}]){
+        await rejected({k:"stay+", id:"sid-fixture"}, e);
+        eq(bookings().length, before, `a ${e.code || e.status} deleted the booking`);
+        ok(resv.some(x => x.guest === "Reject Fixture"), `${e.code || e.status} removed the row`);
+      }
+      ok(resv.find(x => x.guest === "Reject Fixture").unsent, "the row is not marked unsent");
+      /* a genuine lost race still rolls back — that one IS the operator's loss */
+      return "check, uuid, fk and 4xx all keep the row and mark it unsent";
+    } finally {
+      const p = resv.find(x => x.guest === "Reject Fixture");
+      if(p) resv.splice(resv.indexOf(p), 1);
+      MODE = keepMode; resv = keepR; recompute();
+    }
+  });
+
+  /* A live session that dies mid-adoption can leave MODE "sample" holding an
+     emptied book, and the next save() wrote that over the only copy. */
+  await test("save() refuses to overwrite a real book with an empty one", async () => {
+    const backup = localStorage.getItem(STORE), keepR = resv.slice();
+    try {
+      save();
+      const storedBefore = JSON.parse(localStorage.getItem(STORE)).rows.length;
+      ok(storedBefore > 10, "the fixture store is too small to be meaningful");
+      resv = [];                       // what a collapsed live session looks like
+      save();
+      const after = JSON.parse(localStorage.getItem(STORE)).rows.length;
+      eq(after, storedBefore, `the stored book shrank from ${storedBefore} to ${after}`);
+      /* And the deliberate path is still open. Asserted through the flag rather
+         than by calling clearAll(), because clearAll() empties the REAL book and
+         a test that guts the fixture for every test after it is worse than the
+         bug it guards — which is what the first version of this did. */
+      allowShrink = true;
+      try { save(); } finally { allowShrink = false; }
+      eq(JSON.parse(localStorage.getItem(STORE)).rows.length, 0,
+        "an emptying save was refused even when it was asked for");
+      return `${storedBefore} rows survived an accidental empty save; a deliberate one still lands`;
+    } finally {
+      resv = keepR;
+      if(backup != null) localStorage.setItem(STORE, backup);
+      load(); recompute();
+    }
+  });
+
+  /* Signing out — including the silent one a single expired token triggers —
+     emptied the pending writes and deleted them from disk. */
+  await test("signing out keeps the writes that have not been sent", async () => {
+    const keepQ = queue.slice(), keepMode = MODE, keepSess = session, keepHost = hostId;
+    try {
+      queue = [{k:"stay+", id:"q1", body:{}}, {k:"pay+", id:"q2", body:{}}];
+      jset(QUEUE_KEY, queue);
+      signOut(true);
+      eq(queue.length, 2, "the pending queue was emptied in memory");
+      const onDisk = jget(QUEUE_KEY) || [];
+      eq(onDisk.length, 2, "the pending queue was deleted from disk");
+      return "two pending writes survived a silent sign-out";
+    } finally {
+      queue = keepQ; jset(QUEUE_KEY, queue);
+      MODE = keepMode; session = keepSess; hostId = keepHost;
     }
   });
 

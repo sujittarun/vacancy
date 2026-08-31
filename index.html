@@ -5515,8 +5515,23 @@ const STORE = "vacancy.bookings.v2";
 try{ localStorage.removeItem("vacancy.bookings.v1"); }catch(e){}
 const isoDay = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 
+let allowShrink = false;             // set only by clearAll(), which is deliberate
 function save(){
   if(MODE === "live") return;        // signed in, cacheSave() holds the book instead
+  /* A FAILED SIGN-IN MUST NOT OVERWRITE THE ONLY COPY. If a live session dies
+     mid-adoption the app can fall back to MODE "sample" holding an emptied
+     book, and the very next save() writes that emptiness over the operator's
+     stored book — the one place his work still existed. Refuse to shrink the
+     store to nothing unless somebody asked for it. */
+  try{
+    if(!allowShrink && !resv.length){
+      const had = JSON.parse(localStorage.getItem(STORE) || "null");
+      if(had && Array.isArray(had.rows) && had.rows.length){
+        console.warn("save: refused to overwrite", had.rows.length, "stored rows with an empty book");
+        return;
+      }
+    }
+  }catch(e){}
   try{
     localStorage.setItem(STORE, JSON.stringify({
       savedOn: isoDay(today),
@@ -6003,8 +6018,21 @@ async function loadHost(){
 }
 function signOut(silent){
   const tok = session && session.access_token;
+  /* THE QUEUE IS NOT THE SESSION'S TO THROW AWAY. Signing out — including the
+     automatic silent one a single expired token triggers — used to empty the
+     pending writes and delete them from disk. Those are bookings the operator
+     made and the app told him were saved; a token expiring in his pocket is not
+     a reason to discard them. They are host-scoped when they are sent, so they
+     keep until the next sign-in and go then. */
+  const pending = queue.length;
   session = null; hostId = null; hostName = ""; MODE = "sample";
-  queue = []; jdel(QUEUE_KEY); jdel(SESSION_KEY); jdel(CLOUD_KEY);
+  jdel(SESSION_KEY); jdel(CLOUD_KEY);
+  if(pending){
+    /* kept in memory AND on disk, exactly as they were */
+    jset(QUEUE_KEY, queue);
+    if(!silent) toast("warn", `<b>${pending} change${pending===1?"":"s"} not sent yet.</b> `
+      + `They are still here and will go up next time you sign in.`, null);
+  }
   if(tok) fetch(SUPA_URL + "/auth/v1/logout", {method:"POST",
     headers:{apikey:SUPA_KEY, Authorization:"Bearer " + tok}}).catch(()=>{});
   if(!silent){
@@ -6028,6 +6056,10 @@ function signOut(silent){
 
 /* ── reading the book ──────────────────────────────────────────────────────── */
 async function cloudPull(){
+  /* The same race from the other side: anything that calls a pull while the
+     queue still holds writes would paint the server's older book over rows
+     this phone has not managed to send yet. */
+  if(queue.length || inflight){ needPull = true; return; }
   if(!hostId) await loadHost();
   const from = dayISO(-8), to = dayISO(DAYS);
   const [bs, fl, st, pm, iss] = await Promise.all([
@@ -6198,10 +6230,47 @@ async function rejected(op, e){
     toast("bad", "<b>Signed out.</b> Sign in again to save this.", null);
     signOut(true); paintAcct(); openGate(); return;
   }
-  // Anything else is a bug rather than a race, and losing it silently would be
-  // the one unforgivable outcome — so it is both reported and recorded.
+  /* A SERVER THAT REFUSES A ROW IS NOT PERMISSION TO DELETE IT. rollBack()
+     spliced the booking out of resv for ANY error that was not a duplicate,
+     a room race or an auth failure — which lumps "somebody else took the
+     nights" together with "this client sent a malformed row". They are
+     opposite situations. The first means the operator no longer has the room.
+     The second means the app has a bug, and erasing his booking because our
+     own payload was wrong is the worst available response.
+
+     Measured: with adoption sending an illegal `kind`, this path deleted 708
+     bookings from the live book one at a time, each with its own red toast.
+     The write failing is survivable; the reaction to it was not.
+
+     So a client-side fault — a check violation, a bad uuid, a missing foreign
+     key, or anything else we cannot name — keeps the row and marks it unsent. */
+  const clientFault = e.code === "23514" || e.code === "22P02" || e.code === "23503"
+                   || (e.status >= 400 && e.status < 500);
+  if(clientFault){
+    const r = resv.find(x => x.sid === op.id);
+    if(r) r.unsent = 1;
+    unsentReport(e);
+    needPull = false;                    // a pull would paint over what we kept
+    recompute(); cacheSave();
+    return;
+  }
   rollBack(op);
   toast("bad", "<b>Not saved.</b> " + esc(e.message) + " Nothing was changed on the server.", null);
+}
+/* ONE REPORT, NOT ONE PER ROW. 708 rejections produced 708 toasts stacked over
+   an emptying screen, which is noise where a single sentence was needed. */
+let unsentAt = 0, unsentFirst = "";
+function unsentReport(e){
+  if(!unsentFirst) unsentFirst = (e && e.message) || "the server refused it";
+  clearTimeout(unsentAt);
+  unsentAt = setTimeout(()=>{
+    const n = resv.filter(r => r.unsent).length;
+    if(!n) return;
+    toast("warn", `<b>${n} booking${n===1?"":"s"} could not be sent up.</b> `
+      + `${esc(unsentFirst)} They are still on this phone — nothing has been lost. `
+      + `Export the book before signing out.`, null);
+    unsentFirst = "";
+  }, 900);
 }
 function rollBack(op){
   if(op.k === "stay+"){
@@ -6262,7 +6331,13 @@ function spanWords(a, b){
    is usable in the time it takes to unlock the phone.                         */
 let usingDemo = false;
 if(MODE === "live"){
-  if(!cacheLoad()) recompute();
+  /* A sign-in that authenticated and then failed its first pull leaves a
+     session on disk and no cloud cache, and this branch used to paint nothing
+     — an empty book, labelled Live, forever, while the operator's real book sat
+     untouched in localStorage one function call away. load() rebases dates and
+     is safe in either mode. */
+  if(!cacheLoad() && !load()) seedRealBook();
+  recompute();
 }else{
   usingDemo = !load();
   if(usingDemo) seedRealBook();
@@ -6718,6 +6793,8 @@ function cancelBooking(r){
     + (r.amount ? ` · ${money(r.amount)}` : ""), {flat: flatLabel(r.fi), guest: r.guest});
 }
 function clearAll(){
+  allowShrink = true;                // the one place emptying the book is the point
+  setTimeout(()=>{ allowShrink = false; }, 0);
   /* BOUNDED TO WHAT THIS DEVICE HOLDS. This enqueued a bare {k:"wipe"}, which
      issued DELETE /stays?host_id=eq.<host> — every stay belonging to the whole
      property, not just the ones on this phone. Harmless while the app is
@@ -7577,15 +7654,22 @@ function roomTile(fi, day, stay){
   const who = takenTonight && !blocked
     ? resv.find(r => !isBlock(r) && r.fi === fi && day >= r.start && day < r.end)
     : null;
-  const named = !!(who && who.guest && who.guest.trim());
+  /* THE CLASS MUST FOLLOW THE BRANCH THAT WROTE THE TEXT. `named` only said a
+     guest EXISTS tonight, not that the guest is what this tile ended up
+     printing — so a room that is both occupied and turning over printed
+     "Turnaround" while wearing the name styling: mixed case, no tracking, and
+     the fade mask, applied to a status word. Two tiles on the shipped book. */
+  const showName = !open && !blocked && !turn && !partial
+                && !!(who && who.guest && who.guest.trim());
+  const named = showName;
   const note = open
     ? freeWords(fi, day, true)
     : blocked ? (resv.find(r=>isBlock(r) && r.fi===fi && day>=r.start && day<r.end)?.reason || "Blocked")
     : turn ? "Turnaround"
     : partial ? `Free ${partial} of ${nights}`
-    : named ? who.guest.trim()
+    : showName ? who.guest.trim()
     : "Booked";
-  b.append(el("b",null,fl.id), el("s", named ? "who" : null, note));
+  b.append(el("b",null,fl.id), el("s", showName ? "who" : null, note));
   if(open && run === 1) b.appendChild(el("i","flag"));   // orphan night
   /* the spoken label says what the printed one says — "Free 2+n" announced as
      "free for 2 nights" understates a flat that is free to the end of the book,
@@ -14727,7 +14811,12 @@ armMidnight();
 addEventListener("visibilitychange", ()=>{
   if(document.visibilityState === "visible"){
     rolloverCheck();
-    if(MODE === "live"){ flush(); cloudPull().then(refreshScreen).catch(()=>{}); }
+    /* SEND BEFORE YOU FETCH. These ran in the same tick, so a booking made
+       offline was still in the queue when cloudPull() replaced resv with the
+       server's copy — which did not have it yet. The booking vanished from the
+       phone that made it while sitting in a queue that would have delivered it.
+       Awaiting the flush costs nothing and removes the race. */
+    if(MODE === "live") flush().then(cloudPull).then(refreshScreen).catch(()=>{});
   }
 });
 
