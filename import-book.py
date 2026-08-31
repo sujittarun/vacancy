@@ -233,6 +233,21 @@ for r in runs:
 books  = [r for r in runs if r["src"] != "block"]
 blocks = [r for r in runs if r["src"] == "block"]
 
+# ── the same parse, for a second reader ──────────────────────────────────────
+# merge-book.py compares this book against the one on the server every morning.
+# It must read the sheet through THIS code and no other: two parsers over a
+# spreadsheet whose rules are all habits — a night counter that is not money, a
+# channel glued to a name, a tenancy with no check-out — would be two different
+# books, and the merge would spend its life reconciling its own disagreement
+# with the importer rather than the operator's with the app.
+if "--dump" in sys.argv:
+    out = sys.argv[sys.argv.index("--dump") + 1]
+    with open(out, "w") as fh:
+        json.dump({"today": TODAY.isoformat(), "first": FIRST, "last": LAST,
+                   "runs": runs}, fh, indent=1, default=str)
+    print(f"{len(books)} stays + {len(blocks)} blocks -> {out}")
+    raise SystemExit(0)
+
 # ── the proof ────────────────────────────────────────────────────────────────
 # Occupancy rebuilt from the stays, against occupancy counted off the sheet.
 # Every habit that broke this import broke it in a way that still RENDERED — a
