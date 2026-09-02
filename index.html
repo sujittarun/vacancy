@@ -1775,6 +1775,40 @@ button{background:none;border:0;padding:0;cursor:pointer;
 .cs-r.est i{
   background:repeating-linear-gradient(135deg,
     color-mix(in srgb,var(--free) 52%,var(--surface-2)) 0 4px, transparent 4px 8px)}
+/* ── a building that unfolds into its flat types ────────────────────────────
+   A disclosure, not a second screen: the type rows drop out beneath the
+   building's own row, indented and a size down, so the building figure stays
+   in view while its parts are read against it. The fold animates on
+   grid-template-rows, 0fr → 1fr, so the height is the content's own and
+   nothing is measured in JS; the rows inside arrive a few frames apart. */
+.cs-g{border-bottom:1px solid var(--line)}
+.cs-g:last-child{border-bottom:0}
+.cs-r.disc{width:100%;grid-template-columns:auto 1fr auto auto;padding:8px 0;
+  background:none;border:0;text-align:left;font-family:var(--ui);cursor:pointer;
+  border-radius:var(--r-xs);transition:background .18s}
+.cs-r.disc:active{background:var(--surface-2)}
+.cs-r.disc .chev{font-style:normal;font-size:16px;line-height:1;color:var(--txt-3);
+  display:inline-block;width:12px;text-align:center;
+  transition:transform .28s var(--spring), color .18s}
+.cs-r.disc[aria-expanded="true"] .chev{transform:rotate(90deg);color:var(--txt-2)}
+.cs-r.disc[aria-expanded="true"] b{color:var(--txt);font-weight:600}
+.cs-sub{display:grid;grid-template-rows:0fr;transition:grid-template-rows .32s var(--out)}
+.cs-sub.open{grid-template-rows:1fr}
+.cs-subin{overflow:hidden;min-height:0;padding-bottom:2px}
+.cs-r.t{padding:4px 0 4px 14px;font-size:11px;
+  opacity:0;transform:translateY(-3px);transition:opacity .22s var(--out), transform .22s var(--out)}
+.cs-sub.open .cs-r.t{opacity:1;transform:none}
+.cs-sub.open .cs-r.t:nth-child(2){transition-delay:.04s}
+.cs-sub.open .cs-r.t:nth-child(3){transition-delay:.08s}
+.cs-sub.open .cs-r.t:nth-child(4){transition-delay:.12s}
+.cs-r.t b{color:var(--txt-3);font-weight:500}
+.cs-r.t i{height:4px;background:color-mix(in srgb, var(--free) 38%, var(--surface-2))}
+.cs-r.t s{color:var(--txt-2);font-weight:600}
+/* a type whose rate cannot be stated says how much of it is priced instead —
+   a thing to go and finish, not a dash */
+.cs-r.t s.cs-tag{font-size:10px;font-weight:600;color:var(--txt-3);letter-spacing:.02em}
+@media (prefers-reduced-motion:reduce){ .cs-sub,.cs-r.disc .chev,.cs-r.t{transition:none} }
+
 /* one rate, fifteen months, in its own sheet */
 .raterail{display:flex;align-items:flex-end;gap:4px;height:140px;margin:14px 0 0}
 .rcol{flex:1 1 0;min-width:0;height:100%;display:flex;flex-direction:column;
@@ -9908,6 +9942,47 @@ function appMonth(monthKey){
   });
   return per;
 }
+/* ONE BUILDING, SPLIT BY WHAT IT IS MADE OF. Every building here mixes types —
+   Madhapur is four 3 BHKs and one 1 BHK, Lotus Pond is 3 BHKs and studios,
+   Telecom Nagar runs to four kinds — and a building-level rate averages a
+   studio night with a 3 BHK night as though they were the same product. They
+   are not, and the question the owner actually asks is "which of them moved".
+
+   Nights are a census and are read from the book for ANY month, so occupancy
+   splits cleanly everywhere. Money is a sample: the rate for a type comes off
+   the nights that carry a figure, and is only stated once those cover 80% of
+   the nights it sold — the same gate the month itself has to pass. Below that
+   the row still shows its occupancy and says how much of it is priced, which
+   is a thing the operator can go and fix; a dash on its own is not. */
+function typeRows(code, monthKey){
+  const [y, mo] = monthKey.split("-").map(Number);
+  const days = new Date(y, mo, 0).getDate();
+  const d0 = Math.round((new Date(y, mo-1, 1) - dateAt(0)) / 86400000);
+  const d1 = Math.round((new Date(y, mo, 0)   - dateAt(0)) / 86400000) + 1;
+  const by = {};
+  flats.forEach((f, i)=>{
+    if(f.code !== code) return;
+    const g = by[f.type] = by[f.type] || {type:f.type, flats:0, nights:0, pricedNights:0, revenue:0};
+    g.flats++;
+  });
+  bookings().forEach(r=>{
+    const f = flats[r.fi]; if(!f || f.code !== code) return;
+    const a = Math.max(r.start, d0), b = Math.min(r.end, d1);
+    if(b <= a) return;
+    const n = b - a, g = by[f.type]; if(!g) return;
+    g.nights += n;
+    if(r.amount && r.nights){ g.revenue += r.amount * (n / r.nights); g.pricedNights += n; }
+  });
+  return Object.values(by).map(g=>{
+    g.cap = g.flats * days;
+    g.occ = g.cap ? g.nights / g.cap : 0;
+    g.cover = g.nights ? g.pricedNights / g.nights : 0;
+    g.canState = g.cover >= 0.8;
+    g.adr = g.pricedNights ? g.revenue / g.pricedNights : 0;
+    g.revpar = g.cap ? g.revenue / g.cap : 0;
+    return g;
+  }).sort((a, b2)=> b2.flats - a.flats || a.type.localeCompare(b2.type));
+}
 /* Every month the app's book touches that the workbook has no sheet for, up to
    and including the one running now. Nothing beyond it: a future month has
    a full month's cost and a handful of nights, and the difference is not a
@@ -13635,6 +13710,7 @@ function openRate(key, monthKey){
     if(prevY) say.push(`<b>${R.fmt(prevY.v)}</b> the same month last year`);
     readout.innerHTML = say.length ? say.join(" · ") : "no earlier month to compare with";
     [...rail.children].forEach(c=> c.classList.toggle("on", c.dataset.k === p.key));
+    perPaint(p.key);                   // the building list follows the month
   };
   series.forEach(p=>{
     const cell = el("button","rcol" + (p.key === cur.key ? " on" : ""));
@@ -13647,19 +13723,64 @@ function openRate(key, monthKey){
   });
   box.append(rail, readout);
 
-  /* the same series, per building, because a portfolio average hides which one
-     moved — the whole argument of the card this was opened from */
+  /* the same series, per building — and, one tap deeper, per TYPE inside the
+     building. A portfolio average hides which building moved; a building
+     average hides which of its flats did, and every building here is a mix.
+     Repainted with the month, because the list used to be built once for the
+     month the sheet opened on and then sat still while the rail above it
+     changed — a heading naming one month over figures from another. */
+  const open = new Set();                        // buildings currently unfolded
   const per = el("div"); per.style.cssText = "margin-top:18px";
-  per.appendChild(el("div","lbl","BY BUILDING · " + monName(cur.key).toUpperCase()));
-  const rows = finRows(cur.key).rows.filter(r=> r.state !== "absent")
-    .sort((a,b2)=> R.get(b2) - R.get(a));
-  const hi = Math.max(...rows.map(R.get), 1);
-  rows.forEach(r=>{
-    const ln = el("div","cs-r");
-    const bar = el("i"); bar.style.width = (R.get(r) / hi * 100).toFixed(1) + "%";
-    ln.append(el("b",null,r.name), bar, el("s",null,R.fmt(R.get(r))));
-    per.appendChild(ln);
-  });
+  const perHead = el("div","sheet-s"); perHead.style.cssText = "padding:0 0 4px";
+  const perLbl = el("span","lbl"), perHint = el("span","lbl","tap one for its flat types");
+  perHead.append(perLbl, perHint);
+  const perList = el("div");
+  per.append(perHead, perList);
+  const perPaint = k =>{
+    perLbl.textContent = "BY BUILDING · " + monName(k).toUpperCase();
+    perList.textContent = "";
+    const rows = finRows(k).rows.filter(r=> r.state !== "absent")
+      .sort((a,b2)=> R.get(b2) - R.get(a));
+    const hi = Math.max(...rows.map(R.get), 1);
+    rows.forEach(r=>{
+      const types = typeRows(r.code, k);
+      const wrap = el("div","cs-g");
+      const ln = el("button","cs-r disc");
+      ln.setAttribute("aria-expanded", open.has(r.code) ? "true" : "false");
+      ln.setAttribute("aria-label",
+        `${r.name}, ${R.fmt(R.get(r))} — ${types.length} flat type${types.length>1?"s":""}`);
+      const bar = el("i"); bar.style.width = (R.get(r) / hi * 100).toFixed(1) + "%";
+      ln.append(el("b",null,r.name), bar, el("s",null,R.fmt(R.get(r))), el("em","chev","›"));
+      /* The fold. Each type is scaled against the building's OWN best, so a
+         studio is read against the 3 BHK beside it, not against another
+         building's figure. Occupancy is always stated — nights are a census.
+         A rate is stated only when the type's priced nights cover 80% of the
+         nights it sold; below that the row says how much IS priced, which is
+         something the operator can go and finish. */
+      const sub = el("div","cs-sub" + (open.has(r.code) ? " open" : ""));
+      const inner = el("div","cs-subin");
+      const thi = Math.max(...types.map(t=> R.get(t)), 1);
+      types.forEach(t=>{
+        const tr = el("div","cs-r t");
+        const stated = key === "occ" || t.canState;
+        const tb = el("i"); tb.style.width = (stated ? R.get(t) / thi * 100 : 0).toFixed(1) + "%";
+        const right = stated ? el("s",null,R.fmt(R.get(t)))
+          : el("s","cs-tag", t.nights ? `${Math.round(t.cover*100)}% priced` : "no nights");
+        tr.append(el("b",null, `${t.type} · ${t.flats}`), tb, right);
+        inner.appendChild(tr);
+      });
+      sub.appendChild(inner);
+      ln.onclick = ()=>{
+        haptic(7);
+        const now = !open.has(r.code);
+        now ? open.add(r.code) : open.delete(r.code);
+        ln.setAttribute("aria-expanded", String(now));
+        sub.classList.toggle("open", now);
+      };
+      wrap.append(ln, sub);
+      perList.appendChild(wrap);
+    });
+  };
   box.appendChild(per);
 
   const note = el("p");
