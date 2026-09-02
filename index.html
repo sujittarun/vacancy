@@ -3952,6 +3952,16 @@ const SYMPTOMS = {
   "Pest control":    ["cockroaches","ants","mosquitoes","rodents"],
 };
 const REPEAT_WINDOW = 120;   // days a same-fault return still counts as "again"
+/* HOW FAR BACK THE PHONE HOLDS THE BOOK. It used to keep a stay only while it
+   was in house, ahead, or still owed money, and pull nothing that ended more
+   than eight days ago — right for a phone that only had to answer "is it free
+   tonight", and wrong the moment the Profit tab began reading finished months
+   off the book: 635 of the 713 stays on the server ended before that window,
+   so a type split under a building the workbook says sold 92% printed 0%.
+   Fifteen months and change, which is the depth of the monthly sheets. A
+   thousand rows is nothing to hold; it is the loops that matter, and every
+   loop over the book already runs by date. */
+const HOLD_BACK = 470;
 const HELD_WINDOW   = 30;    // a fix that fails this fast is the fixer's to answer for
 const URGENCY = ["whenever","soon","urgent"];
 /* Declared up here with the other boot-time constants: the demo seeder runs
@@ -5809,12 +5819,12 @@ function save(){
    this and would be in its temporal dead zone at boot. */
 const stillOwed = r => (r.amount || 0) -
   (r.pays || []).reduce((s,p)=> s + (p.amount || 0), 0);
-const keepOnLoad = r =>
-  r.start < DAYS && (
-    r.kind === "block"
-      ? (r.end >= -7 || (r.fault && r.end >= -REPEAT_WINDOW))
-      : (r.end >= 0 || (stillOwed(r) > 0 && r.end >= -REPEAT_WINDOW))
-  );
+/* Kept as far back as HOLD_BACK, booking or block. The old rule — in house,
+   ahead, or still owed — was the phone deciding a finished stay was of no
+   further interest, which stopped being true when finished months started
+   being read off the book. The boards that only want recent outages still
+   filter by date themselves. */
+const keepOnLoad = r => r.start < DAYS && r.end >= -HOLD_BACK;
 
 function load(){
   try{
@@ -6464,7 +6474,9 @@ async function cloudPull(){
      this phone has not managed to send yet. */
   if(queue.length || inflight){ needPull = true; return; }
   if(!hostId) await loadHost();
-  const from = dayISO(-8), to = dayISO(DAYS);
+  /* HOLD_BACK, not eight days: the Profit tab reads finished months off this
+     book, and an eight-day window left it 89% empty on a live phone. */
+  const from = dayISO(-HOLD_BACK), to = dayISO(DAYS);
   const [bs, fl, st, pm, iss] = await Promise.all([
     rest("GET", "/buildings?select=id,code,name,short_name,sort_order&order=sort_order.asc,code.asc"),
     rest("GET", "/flats?select=id,building_id,code,floor,unit_type,nightly_rate&active=is.true&order=code.asc"),
@@ -10055,7 +10067,7 @@ function appMonths(){
   const now = key(0), out = [];
   const seen = new Set();
   bookings().forEach(r=>{
-    for(let d = Math.max(r.start, -400); d < Math.min(r.end, DAYS); d++){
+    for(let d = Math.max(r.start, -HOLD_BACK); d < Math.min(r.end, DAYS); d++){
       const k = key(d);
       if(seen.has(k) || have.has(k) || k > now) continue;
       seen.add(k); out.push(k);
@@ -11207,7 +11219,8 @@ function renderTrends(){
         r2.append(L, pill, el("em","chev","›"));
         if(live){
           r2.setAttribute("aria-label", `${label}, ${what} — open the comparison`);
-          r2.onclick = ()=>{ haptic(9); openCompare({title:label, aLabel:A.label, bLabel:B.label, A, B}); };
+          r2.onclick = ()=>{ haptic(9);
+            openCompare({title:label, aLabel:A.label, bLabel:B.label, aKeys:A.keys, bKeys:B.keys}); };
         }
         rows.appendChild(r2);
       };
@@ -13766,10 +13779,16 @@ function openMove(mv, askDay, onFreed, opts){
 function memCovers(code, monthKey){
   const F = finRows(monthKey);
   const row = F.rows && F.rows.find(r => r.code === code);
-  if(!row || row.state === "absent") return true;      // nothing to disagree with
-  if(F.source === "app") return true;                    // the book IS the source
+  if(!row || row.state === "absent" || F.source === "app") return {ok:true};
   const mem = typeRows(code, monthKey).reduce((s,t)=> s + t.nights, 0);
-  return row.book ? mem >= row.book * 0.9 : true;
+  if(!row.book || mem >= row.book * 0.9) return {ok:true, mem, book:row.book};
+  /* Two different absences, and they deserve different sentences: a month
+     older than the phone keeps, and a month inside what it keeps whose stays
+     were simply never entered — the imported book starts on 28 May 2026, so
+     Jul 2025 is the second kind however wide the window is. */
+  const [y, mo] = monthKey.split("-").map(Number);
+  const endOff = Math.round((new Date(y, mo, 0) - dateAt(0)) / 86400000);
+  return {ok:false, mem, book:row.book, why: endOff < -HOLD_BACK ? "window" : "missing"};
 }
 
 /* ONE PERIOD, WHATEVER ITS LENGTH — a month, a quarter, the same quarter a year
@@ -13779,27 +13798,42 @@ function memCovers(code, monthKey){
    Channel mix and length of stay come off the book, and only where the book
    still holds the month (memCovers), because a mix computed from the two
    stays that survived pruning is a confident chart of nothing. */
-function windowStats(ks){
+function windowStats(ks, codes){
   const months = ks.map(k=> finRows(k)).filter(f=> f.totals);
   if(months.length !== ks.length) return null;
-  const sum = f => months.reduce((s,m)=> s + (m.totals[f] || 0), 0);
-  const W = {keys: ks, nights: sum("nights"), cap: sum("cap"), revenue: sum("revenue"), cost: sum("cost")};
-  W.stateable = months.every(m=> m.totals.app ? !!m.totals.canState : true);
-  W.priced = months.reduce((s,m)=> s + (m.totals.app ? (m.totals.cover || 0) * m.totals.nights : m.totals.nights), 0);
+  /* Built from the building rows rather than the month totals, so the same
+     arithmetic serves the whole book and any subset of it. With no filter it
+     reconciles to the tiles exactly: a workbook month counts billed nights,
+     as its totals do; a month the app keeps counts the book's. */
+  const pick = r => r.state !== "absent" && (!codes || codes.has(r.code));
+  const W = {keys: ks, codes: codes ? [...codes] : null,
+             nights:0, cap:0, revenue:0, cost:0, priced:0, by:{}};
+  let stateable = true, any = false;
+  months.forEach(m=>{
+    const app = !!m.totals.app;
+    let n = 0, p = 0;
+    (m.rows || []).filter(pick).forEach(r=>{
+      any = true;
+      const nights = app ? (r.book || 0) : (r.billed || 0);
+      const pn = app ? (r.pricedNights || 0) : (r.billed || 0);
+      n += nights; p += pn;
+      W.nights += nights; W.cap += r.cap || 0; W.revenue += r.revenue || 0; W.cost += r.cost || 0;
+      const g = W.by[r.code] = W.by[r.code] || {code:r.code, name:r.name, nights:0, revenue:0, cap:0};
+      g.nights += nights; g.revenue += r.revenue || 0; g.cap += r.cap || 0;
+    });
+    W.priced += p;
+    if(app && !(n && p / n >= 0.8)) stateable = false;
+  });
+  if(!any) return null;
+  W.stateable = stateable;
   W.cover = W.nights ? W.priced / W.nights : 0;
   W.open = ks.some(k => k === dayISO(0).slice(0,7));
   W.occ = W.cap ? W.nights / W.cap : 0;
   W.adr = W.priced ? W.revenue / W.priced : 0;
   W.revpar = W.cap ? W.revenue / W.cap : 0;
   W.goppar = W.cap ? (W.revenue - W.cost) / W.cap : 0;
-  W.by = {};
-  months.forEach(m=> (m.rows || []).forEach(r=>{
-    if(r.state === "absent") return;
-    const g = W.by[r.code] = W.by[r.code] || {code:r.code, name:r.name, nights:0, revenue:0, cap:0};
-    g.nights += r.book || 0; g.revenue += r.revenue || 0; g.cap += r.cap || 0;
-  }));
   /* the book itself, where the book still holds the whole window */
-  W.held = ks.every(k => Object.keys(W.by).every(code => memCovers(code, k)));
+  W.held = ks.every(k => Object.keys(W.by).every(code => memCovers(code, k).ok));
   if(W.held){
     const span = ks.map(k=>{ const [y,mo] = k.split("-").map(Number);
       return [Math.round((new Date(y,mo-1,1) - dateAt(0)) / 86400000),
@@ -13807,6 +13841,7 @@ function windowStats(ks){
     const d0 = Math.min(...span.map(s=>s[0])), d1 = Math.max(...span.map(s=>s[1]));
     W.mix = {}; let stays = 0; const lens = [];
     bookings().forEach(r=>{
+      if(codes && !(flats[r.fi] && codes.has(flats[r.fi].code))) return;
       const a = Math.max(r.start, d0), b = Math.min(r.end, d1); if(b <= a) return;
       const src = r.src || "Direct";
       W.mix[src] = (W.mix[src] || 0) + (b - a); stays++;
@@ -13836,15 +13871,60 @@ function windowStats(ks){
 
    Money is stated only when both periods can state it. Nights and occupancy
    always are. */
+let cmpCodes = null;     // the building filter, kept while the operator moves between rows
 function openCompare(spec){
-  const {title, aLabel, bLabel, A, B} = spec;
+  const {title, aLabel, bLabel, aKeys, bKeys} = spec;
   const monName = k => MON[+k.split("-")[1]-1] + " " + k.split("-")[0];
   sheetWipe();
   const t = el("div");
-  t.innerHTML = `<div class="n">${esc(title)}</div><div class="m">${esc(aLabel)} → ${esc(bLabel)}</div>`;
+  const sub = el("div","m");
+  t.append(Object.assign(el("div","n"), {textContent: title}), sub);
   const x = el("button", null, "✕"); x.setAttribute("aria-label","Close"); x.onclick = closeSheet;
   sheetH.append(t, x);
-  const box = el("div"); box.style.cssText = "padding:16px 20px 0";
+  const wrap = el("div"); wrap.style.cssText = "padding:12px 20px 0";
+
+  /* ONE BUILDING, OR TWO. The card compares the whole book; the question
+     under it is usually about one address. The filter is the same chip row
+     the room grid uses, it takes more than one, and it is remembered while
+     the operator moves between comparisons, because "how did Madhapur do"
+     is one question asked five ways, not five questions. */
+  const all = windowStats(aKeys.concat(bKeys));
+  const B0 = buildingsOf();
+  const present = all ? Object.keys(all.by) : [];
+  const filt = el("div","roomfilt");
+  const chip = (label, code)=>{
+    const b = el("button", null, label);
+    const on = code == null ? !cmpCodes : !!(cmpCodes && cmpCodes.has(code));
+    b.setAttribute("aria-selected", on ? "true" : "false");
+    b.onclick = ()=>{
+      haptic(8);
+      if(code == null) cmpCodes = null;
+      else { cmpCodes = new Set(cmpCodes || []); cmpCodes.has(code) ? cmpCodes.delete(code) : cmpCodes.add(code);
+             if(!cmpCodes.size) cmpCodes = null; }
+      [...filt.children].forEach(c => c.setAttribute("aria-selected",
+        c === filt.firstChild ? String(!cmpCodes) : String(!!(cmpCodes && cmpCodes.has(c.dataset.code)))));
+      paint();
+    };
+    if(code != null) b.dataset.code = code;
+    return b;
+  };
+  filt.appendChild(chip("All buildings", null));
+  present.forEach(c=>{ const bz = B0.find(z=> z.code === c); filt.appendChild(chip(bz ? bz.name : c, c)); });
+  if(cmpCodes) cmpCodes = new Set([...cmpCodes].filter(c => present.includes(c))) ; if(cmpCodes && !cmpCodes.size) cmpCodes = null;
+  wrap.appendChild(filt);
+  const box = el("div"); box.style.cssText = "padding-top:12px";
+  wrap.appendChild(box);
+
+  const paint = ()=>{
+  box.textContent = "";
+  const A = windowStats(aKeys, cmpCodes), B = windowStats(bKeys, cmpCodes);
+  const who = cmpCodes ? [...cmpCodes].map(c => (B0.find(z=> z.code === c) || {name:c}).name).join(", ") : "all buildings";
+  sub.textContent = `${aLabel} → ${bLabel} · ${who}`;
+  if(!A || !B){
+    box.appendChild(Object.assign(el("p","ratesay"),
+      {innerHTML: `<b>Nothing to compare</b> — ${who} has no figures in ${!A ? esc(aLabel) : esc(bLabel)}.`}));
+    return;
+  }
 
   const money$ = A.stateable && B.stateable;
   const pc = (a, b) => b ? (a / b - 1) : null;
@@ -13962,7 +14042,10 @@ function openCompare(spec){
   bits.push(`Booking lead time — how far ahead guests book — will appear here once bookings are entered in the app; the imported book does not record when each one was made.`);
   note.innerHTML = bits.join(" ");
   box.appendChild(note);
-  sheetB.appendChild(box);
+  };                                   // end paint()
+
+  sheetB.appendChild(wrap);
+  paint();
   sheet.classList.add("on"); scrim.classList.add("on");
 }
 
@@ -14063,14 +14146,18 @@ function openRate(key, monthKey){
          something the operator can go and finish. */
       const sub = el("div","cs-sub" + (open.has(r.code) ? " open" : ""));
       const inner = el("div","cs-subin");
-      if(!memCovers(r.code, k)){
-        /* THE MONTH IS NOT ON THIS PHONE. load() clears a stay once it is over
-           and settled, so a finished month's split would be computed from
-           whatever few stays survived — which printed 0% under a building the
-           workbook says sold 92%. Said plainly instead. */
+      const mc = memCovers(r.code, k);
+      if(!mc.ok){
+        /* THE BOOK DOES NOT HOLD THIS MONTH, and it says which of the two
+           reasons. Beyond HOLD_BACK the phone does not keep it. Inside it, the
+           stays were never entered — the imported book starts on 28 May 2026,
+           so for anything earlier the sheet's count is the only record there
+           is. Either way the building's figure above is the sheet's and stands;
+           what cannot be drawn is the split under it. */
         const tr = el("div","cs-r t"); tr.style.gridTemplateColumns = "1fr";
-        tr.appendChild(el("b","cs-tag",
-          `${monName(k)}'s stays are no longer on this phone — they are cleared once settled. The building's figure above is from your monthly numbers and stands.`));
+        tr.appendChild(el("b","cs-tag", mc.why === "window"
+          ? `${monName(k)} is older than this phone keeps. The building's figure above is from your monthly numbers and stands; the split under it needs the stays.`
+          : `The book holds ${mc.mem} of the ${mc.book} nights your sheet counts for ${monName(k)} — those stays were never entered, so there is nothing to split. The building's figure above is from your monthly numbers and stands.`));
         tr.querySelector("b").style.cssText = "white-space:normal;line-height:1.45;font-weight:500;text-transform:none;letter-spacing:0";
         inner.appendChild(tr);
       } else {
