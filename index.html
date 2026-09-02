@@ -832,24 +832,30 @@ button{background:none;border:0;padding:0;cursor:pointer;
 .kpis .d{font-size:11px;font-weight:620;text-align:right;white-space:nowrap;color:var(--txt-2);
   padding:7px 0;border-top:1px solid var(--line)}
 .kpis .d.dim{color:var(--txt-3);font-weight:500;font-style:italic}
+/* Names that cannot collide. The first version of this block declared a
+   `.stack` for the channel-mix bar — and `.stack` is the layout primitive the
+   whole app is built from (line ~502: a column flexbox). The 8px height and
+   overflow:hidden meant for a bar landed on every stacked screen in the app,
+   and the Rooms grid rendered as three clipped strips on a live phone. A
+   class for a component carries the component's name. */
 /* signed bars: zero in the middle, up to the right, down to the left */
-.sbars{margin-top:6px}
-.sb{display:grid;grid-template-columns:auto 1fr auto;gap:9px;align-items:center;padding:4px 0;
+.sbarlist{margin-top:6px}
+.sbar{display:grid;grid-template-columns:auto 1fr auto;gap:9px;align-items:center;padding:4px 0;
   font-size:11.5px}
-.sb b{font-weight:500;color:var(--txt-2);white-space:nowrap}
-.sb s{text-decoration:none;font-weight:600;color:var(--txt);white-space:nowrap;
+.sbar b{font-weight:500;color:var(--txt-2);white-space:nowrap}
+.sbar s{text-decoration:none;font-weight:600;color:var(--txt);white-space:nowrap;
   font-variant-numeric:tabular-nums}
-.sb .bar{position:relative;height:6px;border-radius:3px;background:var(--surface-2)}
-.sb .bar::before{content:"";position:absolute;left:50%;top:-3px;bottom:-3px;width:1px;
+.sbar .bar{position:relative;height:6px;border-radius:3px;background:var(--surface-2)}
+.sbar .bar::before{content:"";position:absolute;left:50%;top:-3px;bottom:-3px;width:1px;
   background:var(--line-2)}
-.sb .bar i{position:absolute;top:0;height:100%;border-radius:3px;background:var(--free)}
-.sb .bar i.neg{background:var(--hot)}
+.sbar .bar i{position:absolute;top:0;height:100%;border-radius:3px;background:var(--free)}
+.sbar .bar i.neg{background:var(--hot)}
 /* channel mix: one stacked bar per period, three segments, one legend */
-.stack{display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--surface-2)}
-.stack i{display:block;height:100%}
-.m0{background:var(--free)}
-.m1{background:color-mix(in srgb,var(--free) 50%,var(--surface-2))}
-.m2{background:var(--held)}
+.mixbar{display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--surface-2)}
+.mixbar i{display:block;height:100%}
+.mx0{background:var(--free)}
+.mx1{background:color-mix(in srgb,var(--free) 50%,var(--surface-2))}
+.mx2{background:var(--held)}
 .cmpnote{margin:16px 0 22px;font-size:11.5px;line-height:1.55;color:var(--txt-3)}
 .cmpnote b{color:var(--txt-2);font-weight:600}
 
@@ -13997,7 +14003,7 @@ function openCompare(spec){
 
   /* signed bar: zero in the middle */
   const sbar = (label, v, max, fmt)=>{
-    const r = el("div","sb");
+    const r = el("div","sbar");
     const bar = el("div","bar"); const i = el("i" + "");
     const w = max ? Math.min(50, Math.abs(v) / max * 50) : 0;
     i.style.width = w.toFixed(1) + "%";
@@ -14013,7 +14019,7 @@ function openCompare(spec){
     const rate = (B.adr - A.adr) * B.priced;
     const sec = el("div"); sec.style.marginTop = "18px";
     sec.appendChild(el("div","lbl","WHERE THE CHANGE CAME FROM"));
-    const bars = el("div","sbars");
+    const bars = el("div","sbarlist");
     const mx = Math.max(Math.abs(vol), Math.abs(rate), 1);
     bars.append(sbar("More nights sold", vol, mx, money), sbar("Sold for more", rate, mx, money));
     sec.appendChild(bars);
@@ -14035,7 +14041,7 @@ function openCompare(spec){
       return {name: (b.name || a.name), v: money$ ? b.revenue - a.revenue : b.nights - a.nights};
     }).sort((p, q)=> Math.abs(q.v) - Math.abs(p.v));
     const mx = Math.max(...items.map(i=> Math.abs(i.v)), 1);
-    const bars = el("div","sbars");
+    const bars = el("div","sbarlist");
     items.forEach(i=> bars.appendChild(sbar(i.name, i.v, mx, money$ ? money : fmtN)));
     sec.appendChild(bars);
     box.appendChild(sec);
@@ -14049,16 +14055,16 @@ function openCompare(spec){
       const air = W.mix["Airbnb"] || 0, dir = W.mix["Direct"] || 0;
       return [air/tot, dir/tot, 1 - (air+dir)/tot]; };
     const stackRow = (label, W)=>{
-      const r = el("div","sb"); r.style.gridTemplateColumns = "auto 1fr auto";
-      const st = el("div","stack");
-      share(W).forEach((p, i)=>{ const seg = el("i","m"+i); seg.style.width = (p*100).toFixed(1) + "%"; st.appendChild(seg); });
+      const r = el("div","sbar"); r.style.gridTemplateColumns = "auto 1fr auto";
+      const st = el("div","mixbar");
+      share(W).forEach((p, i)=>{ const seg = el("i","mx"+i); seg.style.width = (p*100).toFixed(1) + "%"; st.appendChild(seg); });
       r.append(el("b", null, label), st, el("s", null, Math.round(share(W)[0]*100) + "% Airbnb"));
       return r;
     };
-    const bars = el("div","sbars"); bars.append(stackRow(aLabel, A), stackRow(bLabel, B));
+    const bars = el("div","sbarlist"); bars.append(stackRow(aLabel, A), stackRow(bLabel, B));
     sec.appendChild(bars);
     const key = el("div","railkey");
-    key.innerHTML = `<span><i class="m0"></i>Airbnb</span><span><i class="m1"></i>Direct</span><span><i class="m2"></i>other sites</span>`;
+    key.innerHTML = `<span><i class="mx0"></i>Airbnb</span><span><i class="mx1"></i>Direct</span><span><i class="mx2"></i>other sites</span>`;
     sec.appendChild(key);
     box.appendChild(sec);
   }
