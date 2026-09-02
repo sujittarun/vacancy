@@ -1878,6 +1878,9 @@ button{background:none;border:0;padding:0;cursor:pointer;
 .rcol.on{opacity:1;transform:translateY(-2px)}
 .rcol i{display:block;width:100%;border-radius:3px 3px 0 0;background:var(--free)}
 .rcol.on i{background:var(--free)}
+/* a month whose rate is read off too few priced nights wears the hatch the
+   rest of the app uses for "counted, not billed" */
+.rcol.thin i{background:repeating-linear-gradient(180deg, var(--free) 0 3px, transparent 3px 6px)}
 .rcol s{text-decoration:none;font-size:9.5px;color:var(--txt-3)}
 .ratesay{margin-top:12px;font-size:12px;line-height:1.5;color:var(--txt-2)}
 .ratesay b{color:var(--txt);font-weight:640}
@@ -10035,7 +10038,7 @@ function typeRows(code, monthKey){
   const by = {};
   flats.forEach((f, i)=>{
     if(f.code !== code) return;
-    const g = by[f.type] = by[f.type] || {type:f.type, flats:0, nights:0, pricedNights:0, revenue:0};
+    const g = by[f.type] = by[f.type] || {type:f.type, flats:0, nights:0, pricedNights:0, revenue:0, weight:0};
     g.flats++;
   });
   bookings().forEach(r=>{
@@ -10044,15 +10047,40 @@ function typeRows(code, monthKey){
     if(b <= a) return;
     const n = b - a, g = by[f.type]; if(!g) return;
     g.nights += n;
+    g.weight += n * (f.rate || 0);          // what those nights are worth at the rate card
     if(r.amount && r.nights){ g.revenue += r.amount * (n / r.nights); g.pricedNights += n; }
   });
-  return Object.values(by).map(g=>{
+  /* THE SHEET'S MONEY, SPLIT BY THE RATE CARD. The imported book carries no
+     amount on most stays — the workbook priced a building a month, not a
+     booking — so a type's rate could only ever be read off the few stays that
+     do, and the 1 BHK in Madhapur had three. What the app DOES hold is the
+     building's real revenue for the month and the rate card for every flat.
+     Allocating the real total across the types in proportion to rate × nights
+     is how a hotel with one revenue line and four room types has always
+     answered this; it reconciles to the building to the rupee, and it never
+     leaves a blank. A month the app keeps has no sheet line, so there the
+     rate card itself stands in, and is named as the rate card. */
+  const F = finRows(monthKey);
+  const row = F.rows && F.rows.find(r => r.code === code);
+  const sheetRev = row && row.state !== "absent" && F.source !== "app" ? row.revenue : null;
+  const list = Object.values(by);
+  const wsum = list.reduce((s,g)=> s + g.weight, 0) || list.reduce((s,g)=> s + g.nights, 0) || 1;
+  return list.map(g=>{
     g.cap = g.flats * days;
     g.occ = g.cap ? g.nights / g.cap : 0;
     g.cover = g.nights ? g.pricedNights / g.nights : 0;
     g.canState = g.cover >= 0.8;
     g.adr = g.pricedNights ? g.revenue / g.pricedNights : 0;
     g.revpar = g.cap ? g.revenue / g.cap : 0;
+    const share = (g.weight || g.nights) / wsum;
+    if(sheetRev != null && g.nights){
+      g.alloc = sheetRev * share;                 // this type's slice of the sheet's total
+      g.adrAlloc = g.alloc / g.nights;
+      g.revparAlloc = g.cap ? g.alloc / g.cap : 0;
+    } else if(g.nights && g.weight){
+      g.adrCard = g.weight / g.nights;            // the rate card, averaged over what sold
+      g.revparCard = g.cap ? g.weight / g.cap : 0;
+    }
     return g;
   }).sort((a, b2)=> b2.flats - a.flats || a.type.localeCompare(b2.type));
 }
@@ -14067,9 +14095,17 @@ function openRate(key, monthKey){
   x.onclick = closeSheet;
   sheetH.append(t, x);
 
-  const series = FIN.map(r=>{
-    const f = finRows(r[0]);
-    return {key:r[0], v: f.totals ? R.get(f.totals) : null, t: f.totals};
+  /* Every month the Profit tab knows, not only the workbook's: the rail
+     stopped at July while the tab was showing September, because it was built
+     from the sheets alone. A month the app keeps whose revenue is under the
+     80% gate still gets its bar — hatched, and named as thin — for the money
+     rates; occupancy is a census and is never thin. */
+  const series = FIN.map(r=>r[0]).concat(appMonths()).map(k=>{
+    const f = finRows(k);
+    const t = f.totals;
+    return {key:k, v: t ? R.get(t) : null, t,
+            thin: !!(t && t.app && key !== "occ" && !t.canState),
+            cover: t && t.app ? Math.round((t.cover || 0) * 100) : null};
   }).filter(p=> p.v != null);
   const top = R.max || Math.max(...series.map(p=>p.v)) * 1.08;
 
@@ -14095,16 +14131,18 @@ function openRate(key, monthKey){
     const say = [];
     if(prevM) say.push(`${R.fmt(prevM.v)} the month before`);
     if(prevY) say.push(`<b>${R.fmt(prevY.v)}</b> the same month last year`);
+    if(p.thin) say.unshift(`<b>from ${p.cover}% of its nights</b> — not yet a rate`);
     readout.innerHTML = say.length ? say.join(" · ") : "no earlier month to compare with";
     [...rail.children].forEach(c=> c.classList.toggle("on", c.dataset.k === p.key));
     perPaint(p.key);                   // the building list follows the month
   };
   series.forEach(p=>{
-    const cell = el("button","rcol" + (p.key === cur.key ? " on" : ""));
+    const cell = el("button","rcol" + (p.key === cur.key ? " on" : "") + (p.thin ? " thin" : ""));
     cell.dataset.k = p.key;
     const col = el("i"); col.style.height = Math.max(3, p.v / top * 118) + "px";
     cell.append(col, el("s", null, MON[+p.key.split("-")[1]-1][0]));
-    cell.setAttribute("aria-label", `${monName(p.key)}, ${R.fmt(p.v)}`);
+    cell.setAttribute("aria-label", `${monName(p.key)}, ${R.fmt(p.v)}`
+      + (p.thin ? ` — from ${p.cover}% of its nights, not yet a rate` : ""));
     cell.onclick = ()=>{ haptic(6); paint(p.key); };
     rail.appendChild(cell);
   });
@@ -14161,22 +14199,27 @@ function openRate(key, monthKey){
         tr.querySelector("b").style.cssText = "white-space:normal;line-height:1.45;font-weight:500;text-transform:none;letter-spacing:0";
         inner.appendChild(tr);
       } else {
-        const thi = Math.max(...types.map(t=> R.get(t)), 1);
-        types.forEach(t=>{
-          /* Three registers, not two. A rate off 80%+ of the nights is stated.
-             One off 30–80% is shown as an ESTIMATE — hatched bar, quiet ink,
-             and the coverage in the label — because "12% priced" alone read
-             as the answer rather than as the reason there was none. Under
-             30%, or under five priced nights, it is refused: a rate built on
-             three nights is a number, not a rate. */
-          const stated = key === "occ" || t.canState;
-          const est = !stated && t.cover >= 0.3 && t.pricedNights >= 5;
-          const tr = el("div","cs-r t" + (est ? " est" : ""));
-          const show = stated || est;
-          const tb = el("i"); tb.style.width = (show ? R.get(t) / thi * 100 : 0).toFixed(1) + "%";
-          const name = `${t.type} · ${t.flats}` + (stated ? "" : t.nights ? ` · ${Math.round(t.cover*100)}% priced` : "");
-          const right = show ? el("s",null,R.fmt(R.get(t)))
-            : el("s","cs-tag", t.nights ? "too few priced" : "no nights");
+        /* ALWAYS A NUMBER. Occupancy is a census. A rate is read off the
+           stays that carry an amount when 80%+ of the type's nights do;
+           otherwise it is the type's slice of the building's sheet revenue,
+           allocated by rate card × nights — hatched, and labelled "from your
+           sheet" — and for a month with no sheet line, the rate card itself,
+           labelled as such. "Too few priced" and "12% priced" were the app
+           relabelling a gap it could have filled from data it already held. */
+        const val = t =>{
+          if(key === "occ" || t.canState) return {v: R.get(t), how: ""};
+          if(t.alloc != null) return {v: key === "adr" ? t.adrAlloc : t.revparAlloc, how: "from your sheet"};
+          if(t.adrCard != null) return {v: key === "adr" ? t.adrCard : t.revparCard, how: "at rate card"};
+          return {v: null, how: ""};
+        };
+        const vals = types.map(val);
+        const thi = Math.max(...vals.map(x=> x.v || 0), 1);
+        types.forEach((t, i)=>{
+          const {v, how} = vals[i];
+          const tr = el("div","cs-r t" + (how ? " est" : ""));
+          const tb = el("i"); tb.style.width = (v != null ? v / thi * 100 : 0).toFixed(1) + "%";
+          const name = `${t.type} · ${t.flats}` + (how ? ` · ${how}` : "");
+          const right = v != null ? el("s",null,R.fmt(v)) : el("s","cs-tag","no nights");
           tr.append(el("b",null, name), tb, right);
           inner.appendChild(tr);
         });
