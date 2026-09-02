@@ -795,6 +795,63 @@ button{background:none;border:0;padding:0;cursor:pointer;
 .opp.hot b{color:var(--now)}
 .opp.zero b{color:var(--txt-3)}
 .opp.zero s{color:var(--txt-3)}
+/* The three rate tiles sat flush on the comparison card below them — zero gap —
+   and their second line ("285 of 900 nights") wrapped straight into the card's
+   top edge on a phone. A tile is also a button that opens fifteen months, and
+   nothing on it said so. */
+.opps{margin-bottom:12px}
+.opp{position:relative}
+.opp .go{position:absolute;top:9px;right:10px;font-style:normal;font-size:15px;line-height:1;
+  color:var(--txt-3)}
+
+/* ── a comparison row you can open ───────────────────────────────────────────
+   The rows under the tiles were inert text with a percentage on the end.
+   Each is now a route into the periods it names. */
+.row.bk.cmp{grid-template-columns:1fr auto auto;gap:8px;background:none;border:0;
+  border-bottom:1px solid var(--line);font-family:var(--ui);cursor:pointer}
+.row.bk.cmp:last-child{border-bottom:0}
+.row.bk.cmp .chev{font-style:normal;font-size:16px;line-height:1;color:var(--txt-3);
+  display:inline-block;width:10px;text-align:center}
+.row.bk.cmp.off{cursor:default}
+.row.bk.cmp.off .chev{visibility:hidden}
+.row.bk.cmp .paid.gated{color:var(--txt-3);font-weight:520}
+.row.bk.cmp .paid.gated i{font-style:normal;color:var(--txt-2);font-weight:620}
+
+/* ── the comparison sheet ────────────────────────────────────────────────────
+   A KPI table read across: the measure, the earlier period, the later one,
+   the change. Tabular figures so the columns are straight. */
+.kpis{display:grid;grid-template-columns:1fr auto auto auto;column-gap:12px;align-items:baseline;
+  font-size:12px;font-variant-numeric:tabular-nums}
+.kpis .h{font-size:10px;font-weight:650;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--txt-3);padding:0 0 6px;text-align:right}
+.kpis .h:first-child{text-align:left}
+.kpis .k{color:var(--txt-2);padding:7px 0;border-top:1px solid var(--line)}
+.kpis .v{font-weight:600;color:var(--txt);white-space:nowrap;text-align:right;padding:7px 0;
+  border-top:1px solid var(--line)}
+.kpis .v.dim{color:var(--txt-3);font-weight:500}
+.kpis .d{font-size:11px;font-weight:620;text-align:right;white-space:nowrap;color:var(--txt-2);
+  padding:7px 0;border-top:1px solid var(--line)}
+.kpis .d.dim{color:var(--txt-3);font-weight:500;font-style:italic}
+/* signed bars: zero in the middle, up to the right, down to the left */
+.sbars{margin-top:6px}
+.sb{display:grid;grid-template-columns:auto 1fr auto;gap:9px;align-items:center;padding:4px 0;
+  font-size:11.5px}
+.sb b{font-weight:500;color:var(--txt-2);white-space:nowrap}
+.sb s{text-decoration:none;font-weight:600;color:var(--txt);white-space:nowrap;
+  font-variant-numeric:tabular-nums}
+.sb .bar{position:relative;height:6px;border-radius:3px;background:var(--surface-2)}
+.sb .bar::before{content:"";position:absolute;left:50%;top:-3px;bottom:-3px;width:1px;
+  background:var(--line-2)}
+.sb .bar i{position:absolute;top:0;height:100%;border-radius:3px;background:var(--free)}
+.sb .bar i.neg{background:var(--hot)}
+/* channel mix: one stacked bar per period, three segments, one legend */
+.stack{display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--surface-2)}
+.stack i{display:block;height:100%}
+.m0{background:var(--free)}
+.m1{background:color-mix(in srgb,var(--free) 50%,var(--surface-2))}
+.m2{background:var(--held)}
+.cmpnote{margin:16px 0 22px;font-size:11.5px;line-height:1.55;color:var(--txt-3)}
+.cmpnote b{color:var(--txt-2);font-weight:600}
 
 /* When there is genuinely nothing to act on, one quiet line beats an empty
    card. It still confirms the check happened — silence alone is ambiguous. */
@@ -1803,6 +1860,10 @@ button{background:none;border:0;padding:0;cursor:pointer;
 .cs-sub.open .cs-r.t:nth-child(4){transition-delay:.12s}
 .cs-r.t b{color:var(--txt-3);font-weight:500}
 .cs-r.t i{height:4px;background:color-mix(in srgb, var(--free) 38%, var(--surface-2))}
+/* an estimate wears the hatch the rest of the app uses for "counted, not billed" */
+.cs-r.t.est i{background:repeating-linear-gradient(135deg,
+  color-mix(in srgb,var(--free) 38%,var(--surface-2)) 0 4px, transparent 4px 8px)}
+.cs-r.t.est s{color:var(--txt-3);font-weight:560}
 .cs-r.t s{color:var(--txt-2);font-weight:600}
 /* a type whose rate cannot be stated says how much of it is priced instead —
    a thing to go and finish, not a dash */
@@ -11075,7 +11136,7 @@ function renderTrends(){
     /* ── CARD 3 — the three rates, and what changed ────────────────────── */
     {
       const {c,b} = card("The three rates, and what changed",
-        `${monName(finMonth)} · the buildings your sheet prices`);
+        `${monName(finMonth)} · nights, rate and revenue`);
       const T = F.totals;
       const at = keys.indexOf(finMonth);
       const back = (k, n)=>{ const [y,m] = k.split("-").map(Number);
@@ -11089,7 +11150,13 @@ function renderTrends(){
         const q0 = Math.floor((m-1)/3)*3 + 1;
         return Array.from({length:3}, (_,i)=>{ let mm=q0+i, yy=y; return `${yy}-${String(mm).padStart(2,"0")}`; }); };
       const qSum = ks => { const parts = ks.map(tot);
-        if(parts.some(p=>!p)) return null;
+        /* A quarter with the running month in it is not a quarter yet. Once
+           the app started keeping months of its own, Jul–Sep read as complete
+           on 2 September — two months and two days of what is on the book,
+           set against a whole quarter a year ago — and the rows compared it
+           as though it had happened. Named or not, that is a calendar
+           dressed as a decline. */
+        if(parts.some(p=>!p) || ks.indexOf(dayISO(0).slice(0,7)) >= 0) return null;
         return {revenue: parts.reduce((s,p)=>s+p.revenue,0), nights: parts.reduce((s,p)=>s+p.nights,0),
                 cap: parts.reduce((s,p)=>s+p.cap,0), cost: parts.reduce((s,p)=>s+p.cost,0)}; };
       const qName = ks => MON[+ks[0].split("-")[1]-1] + "–" + MON[+ks[2].split("-")[1]-1]
@@ -11101,7 +11168,7 @@ function renderTrends(){
       const opps = el("div","opps");
       const tile = (key, v, lab)=>{
         const d = el("button","opp tap");
-        d.append(el("b",null,v), el("s",null,lab));
+        d.append(el("b",null,v), el("s",null,lab), el("em","go","›"));
         d.setAttribute("aria-label", `${lab}, ${v} — see fifteen months`);
         d.onclick = ()=>{ haptic(9); openRate(key, finMonth); };
         opps.appendChild(d);
@@ -11115,18 +11182,41 @@ function renderTrends(){
 
       const rows = el("div","card");
       const pcx = (a, b2)=> b2 ? (a/b2 - 1) : null;
-      const line = (label, what, pctv, detail)=>{
-        const r2 = el("div","row bk");
-        const L = el("div","meta"); L.innerHTML = `<b>${label}</b><em>${what}</em>`;
-        const pill = el("span","paid clear",
-          pctv == null ? detail
-          : (pctv >= 0 ? "▲ " : "▼ ") + Math.abs(pctv*100).toFixed(1) + "%");
-        r2.append(L, pill); rows.appendChild(r2);
+      const arrow = v => (v >= 0 ? "▲ " : "▼ ") + Math.abs(v*100).toFixed(1) + "%";
+      /* a period, only from months this screen knows, carrying its own name */
+      const win = (ks, lbl)=>{
+        if(!ks.every(k=> keys.indexOf(k) >= 0)) return null;
+        const W = windowStats(ks); if(W) W.label = lbl; return W;
       };
-      const prevM = tot(back(finMonth,1));
-      line("Month on month",
-           prevM ? `${monName(back(finMonth,1))} → ${monName(finMonth)}` : "the month before was not read",
-           prevM && T ? pcx(T.revenue, prevM.revenue) : null, "no comparison");
+      /* MONEY ONLY WHEN BOTH ENDS CAN STATE IT. These rows printed a revenue
+         change between two months the app itself refuses to state revenue for
+         — August at 21% priced against September at 4% read "▼ 94.5%", which
+         is a data-entry gap wearing the costume of a collapse. The gate the
+         month has to pass, the comparison now has to pass twice. When it does
+         not, the row still moves: nights are a census, so the nights change is
+         shown and named as such. Each row opens the full comparison. */
+      const line = (label, what, A, B, detail)=>{
+        const live = !!(A && B);
+        const r2 = el(live ? "button" : "div", "row bk cmp" + (live ? "" : " off"));
+        const L = el("div","meta"); L.innerHTML = `<b>${label}</b><em>${what}</em>`;
+        let pill;
+        if(!live) pill = el("span","paid clear", detail);
+        else if(A.stateable && B.stateable) pill = el("span","paid clear", arrow(pcx(B.revenue, A.revenue)));
+        else { pill = el("span","paid clear gated");
+               pill.innerHTML = `<i>${arrow(pcx(B.nights, A.nights))}</i> nights`; }
+        r2.append(L, pill, el("em","chev","›"));
+        if(live){
+          r2.setAttribute("aria-label", `${label}, ${what} — open the comparison`);
+          r2.onclick = ()=>{ haptic(9); openCompare({title:label, aLabel:A.label, bLabel:B.label, A, B}); };
+        }
+        rows.appendChild(r2);
+      };
+      const pmK = back(finMonth,1), prevM = tot(pmK);
+      { const A = prevM && T ? win([pmK], monName(pmK)) : null;
+        const B = A ? win([finMonth], monName(finMonth)) : null;
+        line("Month on month",
+             prevM ? `${monName(pmK)} → ${monName(finMonth)}` : "the month before was not read",
+             A, B, "no comparison"); }
       /* Walk back to the most recent quarter all three of whose months were
          read. July sits in an open quarter, and comparing a one-month quarter
          with a three-month one is how a panel reports a 68% collapse that is
@@ -11136,17 +11226,23 @@ function renderTrends(){
       while(!qSum(anchorQ) && guard++ < 8) anchorQ = qOf(back(anchorQ[0], 1));
       const thisQ = qSum(anchorQ);
       const prevKs = qOf(back(anchorQ[0], 1)), prevQ = qSum(prevKs);
-      line("Quarter on quarter",
-           thisQ && prevQ ? `${qName(anchorQ)} vs ${qName(prevKs)}` : "needs two complete quarters",
-           thisQ && prevQ ? pcx(thisQ.revenue, prevQ.revenue) : null, "not complete");
+      { const A = thisQ && prevQ ? win(prevKs, qName(prevKs)) : null;
+        const B = A ? win(anchorQ, qName(anchorQ)) : null;
+        line("Quarter on quarter",
+             thisQ && prevQ ? `${qName(anchorQ)} vs ${qName(prevKs)}` : "needs two complete quarters",
+             A, B, "not complete"); }
       const yrKs = anchorQ.map(k=> back(k,12)), yrQ = qSum(yrKs);
-      line("Same quarter last year",
-           thisQ && yrQ ? `${qName(anchorQ)} vs ${qName(yrKs)}` : "first year on record",
-           thisQ && yrQ ? pcx(thisQ.revenue, yrQ.revenue) : null, "no comparison");
-      const yrM = tot(back(finMonth,12));
-      line("Same month last year",
-           yrM ? `${monName(back(finMonth,12))} → ${monName(finMonth)}` : "first year on record",
-           yrM && T ? pcx(T.revenue, yrM.revenue) : null, "no comparison");
+      { const A = thisQ && yrQ ? win(yrKs, qName(yrKs)) : null;
+        const B = A ? win(anchorQ, qName(anchorQ)) : null;
+        line("Same quarter last year",
+             thisQ && yrQ ? `${qName(anchorQ)} vs ${qName(yrKs)}` : "first year on record",
+             A, B, "no comparison"); }
+      const yK = back(finMonth,12), yrM = tot(yK);
+      { const A = yrM && T ? win([yK], monName(yK)) : null;
+        const B = A ? win([finMonth], monName(finMonth)) : null;
+        line("Same month last year",
+             yrM ? `${monName(yK)} → ${monName(finMonth)}` : "first year on record",
+             A, B, "no comparison"); }
       /* Refused, always, with the date it becomes possible: every 12-month
          window inside this range contains the month the gate threw out. */
       const firstFull = (()=>{ const bad = FIN_DROP.map(d=>d[0]).filter(k=> k >= FIN[0][0]);
@@ -11154,10 +11250,8 @@ function renderTrends(){
         const [y,m] = bad[bad.length-1].split("-").map(Number);
         let yy = y+1, mm = m; return `${yy}-${String(mm).padStart(2,"0")}`; })();
       line("Rolling twelve months", "every twelve-month window has a hole in it",
-           null, firstFull ? "not until " + monName(firstFull) : "not yet");
+           null, null, firstFull ? "not until " + monName(firstFull) : "not yet");
       b.appendChild(rows);
-      said(c, `These are revenue. There is no percentage on profit: costs are the same every month, so profit `
-        + `moves by exactly the rupees revenue moved.`);
     }
 
     }
@@ -13662,6 +13756,216 @@ function openMove(mv, askDay, onFreed, opts){
    rupee rate — a bar chart that starts at its own minimum exaggerates every
    wobble into a story — and from zero to a hundred for a percentage, because
    that is the range the quantity actually has. */
+/* DOES THIS PHONE STILL HOLD THAT MONTH? load() keeps a stay only while it is
+   in-house, ahead, or still owed money, so a completed month's stays are gone
+   from memory even though the workbook remembers how many nights it sold.
+   Anything read off the book for such a month — a type split, a channel mix,
+   a length of stay — would be arithmetic on an emptied room. The workbook's
+   own count is the reference: if the book in memory holds fewer than nine in
+   ten of the nights the sheet says a building sold, the month is not here. */
+function memCovers(code, monthKey){
+  const F = finRows(monthKey);
+  const row = F.rows && F.rows.find(r => r.code === code);
+  if(!row || row.state === "absent") return true;      // nothing to disagree with
+  if(F.source === "app") return true;                    // the book IS the source
+  const mem = typeRows(code, monthKey).reduce((s,t)=> s + t.nights, 0);
+  return row.book ? mem >= row.book * 0.9 : true;
+}
+
+/* ONE PERIOD, WHATEVER ITS LENGTH — a month, a quarter, the same quarter a year
+   ago. Money comes from finRows: the workbook's own figure for a read month,
+   the book's priced nights for a month the app is keeping — and is stated only
+   when every month inside the window can state it. Nights are a census.
+   Channel mix and length of stay come off the book, and only where the book
+   still holds the month (memCovers), because a mix computed from the two
+   stays that survived pruning is a confident chart of nothing. */
+function windowStats(ks){
+  const months = ks.map(k=> finRows(k)).filter(f=> f.totals);
+  if(months.length !== ks.length) return null;
+  const sum = f => months.reduce((s,m)=> s + (m.totals[f] || 0), 0);
+  const W = {keys: ks, nights: sum("nights"), cap: sum("cap"), revenue: sum("revenue"), cost: sum("cost")};
+  W.stateable = months.every(m=> m.totals.app ? !!m.totals.canState : true);
+  W.priced = months.reduce((s,m)=> s + (m.totals.app ? (m.totals.cover || 0) * m.totals.nights : m.totals.nights), 0);
+  W.cover = W.nights ? W.priced / W.nights : 0;
+  W.open = ks.some(k => k === dayISO(0).slice(0,7));
+  W.occ = W.cap ? W.nights / W.cap : 0;
+  W.adr = W.priced ? W.revenue / W.priced : 0;
+  W.revpar = W.cap ? W.revenue / W.cap : 0;
+  W.goppar = W.cap ? (W.revenue - W.cost) / W.cap : 0;
+  W.by = {};
+  months.forEach(m=> (m.rows || []).forEach(r=>{
+    if(r.state === "absent") return;
+    const g = W.by[r.code] = W.by[r.code] || {code:r.code, name:r.name, nights:0, revenue:0, cap:0};
+    g.nights += r.book || 0; g.revenue += r.revenue || 0; g.cap += r.cap || 0;
+  }));
+  /* the book itself, where the book still holds the whole window */
+  W.held = ks.every(k => Object.keys(W.by).every(code => memCovers(code, k)));
+  if(W.held){
+    const span = ks.map(k=>{ const [y,mo] = k.split("-").map(Number);
+      return [Math.round((new Date(y,mo-1,1) - dateAt(0)) / 86400000),
+              Math.round((new Date(y,mo,0)   - dateAt(0)) / 86400000) + 1]; });
+    const d0 = Math.min(...span.map(s=>s[0])), d1 = Math.max(...span.map(s=>s[1]));
+    W.mix = {}; let stays = 0; const lens = [];
+    bookings().forEach(r=>{
+      const a = Math.max(r.start, d0), b = Math.min(r.end, d1); if(b <= a) return;
+      const src = r.src || "Direct";
+      W.mix[src] = (W.mix[src] || 0) + (b - a); stays++;
+      /* the MEDIAN stay, and only stays with a recorded end. A mean of what is
+         on the book for a month two days old is the 176-night tenancies and
+         almost nothing else — it read 39 nights against August's 7.7, which
+         is a sample, not a change in how long guests stay. */
+      if(!r.openEnd) lens.push(r.nights);
+    });
+    lens.sort((p, q)=> p - q);
+    W.stays = stays;
+    W.alos = lens.length ? (lens.length % 2 ? lens[(lens.length-1)/2]
+                                            : (lens[lens.length/2-1] + lens[lens.length/2]) / 2) : 0;
+  }
+  return W;
+}
+
+/* ── ONE COMPARISON, OPENED ──────────────────────────────────────────────────
+   The row on the card says one number: revenue, up or down. This is what a
+   revenue manager reads underneath it. The measures every hotel group tracks
+   — nights, occupancy, ADR, RevPAR, profit per available night — read across
+   from the earlier period to the later one; then the change split into the
+   part that came from selling MORE nights and the part that came from selling
+   them for MORE (the rate/volume bridge — B.rev − A.rev is exactly
+   (ΔpricedNights × A.adr) + (Δadr × B.pricedNights), no residual); then which
+   building carried it; then how the nights arrived and how long they stayed.
+
+   Money is stated only when both periods can state it. Nights and occupancy
+   always are. */
+function openCompare(spec){
+  const {title, aLabel, bLabel, A, B} = spec;
+  const monName = k => MON[+k.split("-")[1]-1] + " " + k.split("-")[0];
+  sheetWipe();
+  const t = el("div");
+  t.innerHTML = `<div class="n">${esc(title)}</div><div class="m">${esc(aLabel)} → ${esc(bLabel)}</div>`;
+  const x = el("button", null, "✕"); x.setAttribute("aria-label","Close"); x.onclick = closeSheet;
+  sheetH.append(t, x);
+  const box = el("div"); box.style.cssText = "padding:16px 20px 0";
+
+  const money$ = A.stateable && B.stateable;
+  const pc = (a, b) => b ? (a / b - 1) : null;
+  const arrow = v => v == null ? "—" : (v >= 0 ? "▲ " : "▼ ") + Math.abs(v * 100).toFixed(1) + "%";
+  const headline = el("div","headline");
+  const lead = money$ ? pc(B.revenue, A.revenue) : pc(B.nights, A.nights);
+  headline.append(el("b", null, arrow(lead)),
+                  el("s", null, money$ ? "revenue" : "nights sold"));
+  box.appendChild(headline);
+  if(!money$){
+    const why = el("p","ratesay");
+    const thin = [A, B].filter(W=> !W.stateable)
+      .map((W, i)=> `${W === A ? aLabel : bLabel} is ${Math.round(W.cover*100)}% priced`);
+    why.innerHTML = `<b>Revenue is not compared</b> — ${thin.join(", ")}. `
+      + `Nights are counted from the book itself, so they are.`;
+    box.appendChild(why);
+  }
+
+  /* the table */
+  const K = el("div","kpis"); K.style.marginTop = "14px";
+  [["", ""], [aLabel, "h"], [bLabel, "h"], ["change", "h"]].forEach(([txt, cls], i)=>
+    K.appendChild(el("div", "h" + (i === 0 ? "" : ""), txt)));
+  const fmtN = v => Math.round(v).toLocaleString("en-IN");
+  const fmtP = v => Math.round(v * 100) + "%";
+  const row = (label, a, b, fmt, ok)=>{
+    K.appendChild(el("div","k", label));
+    K.appendChild(el("div","v" + (ok ? "" : " dim"), ok ? fmt(a) : "—"));
+    K.appendChild(el("div","v" + (ok ? "" : " dim"), ok ? fmt(b) : "—"));
+    K.appendChild(el("div","d" + (ok ? "" : " dim"), ok ? arrow(pc(b, a)) : "not priced"));
+  };
+  row("Nights sold",      A.nights, B.nights, fmtN, true);
+  row("Occupancy",        A.occ,    B.occ,    fmtP, true);
+  row("Revenue",          A.revenue, B.revenue, money, money$);
+  row("Average room rate", A.adr,   B.adr,    money, money$);
+  row("Per available night", A.revpar, B.revpar, money, money$);
+  row("Profit per available night", A.goppar, B.goppar, money, money$);
+  if(A.held && B.held){
+    row("Length of stay",  A.alos, B.alos, v => v.toFixed(1) + " n", true);
+    row("Stays",           A.stays, B.stays, fmtN, true);
+  }
+  box.appendChild(K);
+
+  /* signed bar: zero in the middle */
+  const sbar = (label, v, max, fmt)=>{
+    const r = el("div","sb");
+    const bar = el("div","bar"); const i = el("i" + "");
+    const w = max ? Math.min(50, Math.abs(v) / max * 50) : 0;
+    i.style.width = w.toFixed(1) + "%";
+    if(v >= 0) i.style.left = "50%"; else { i.style.right = "50%"; i.classList.add("neg"); }
+    bar.appendChild(i);
+    r.append(el("b", null, label), bar, el("s", null, (v >= 0 ? "+" : "−") + fmt(Math.abs(v))));
+    return r;
+  };
+
+  /* the bridge */
+  if(money$){
+    const vol = (B.priced - A.priced) * A.adr;
+    const rate = (B.adr - A.adr) * B.priced;
+    const sec = el("div"); sec.style.marginTop = "18px";
+    sec.appendChild(el("div","lbl","WHERE THE CHANGE CAME FROM"));
+    const bars = el("div","sbars");
+    const mx = Math.max(Math.abs(vol), Math.abs(rate), 1);
+    bars.append(sbar("More nights sold", vol, mx, money), sbar("Sold for more", rate, mx, money));
+    sec.appendChild(bars);
+    const s = el("p","ratesay");
+    s.innerHTML = Math.abs(vol) >= Math.abs(rate)
+      ? `Mostly <b>volume</b>: ${fmtN(Math.abs(B.priced - A.priced))} ${B.priced >= A.priced ? "more" : "fewer"} priced nights at the earlier rate.`
+      : `Mostly <b>rate</b>: ${money(Math.abs(B.adr - A.adr))} ${B.adr >= A.adr ? "more" : "less"} a night across the later period's nights.`;
+    sec.appendChild(s);
+    box.appendChild(sec);
+  }
+
+  /* which building carried it */
+  {
+    const sec = el("div"); sec.style.marginTop = "18px";
+    sec.appendChild(el("div","lbl", money$ ? "BY BUILDING · REVENUE" : "BY BUILDING · NIGHTS"));
+    const codes = new Set([...Object.keys(A.by), ...Object.keys(B.by)]);
+    const items = [...codes].map(c=>{
+      const a = A.by[c] || {nights:0, revenue:0, name:c}, b = B.by[c] || {nights:0, revenue:0, name:c};
+      return {name: (b.name || a.name), v: money$ ? b.revenue - a.revenue : b.nights - a.nights};
+    }).sort((p, q)=> Math.abs(q.v) - Math.abs(p.v));
+    const mx = Math.max(...items.map(i=> Math.abs(i.v)), 1);
+    const bars = el("div","sbars");
+    items.forEach(i=> bars.appendChild(sbar(i.name, i.v, mx, money$ ? money : fmtN)));
+    sec.appendChild(bars);
+    box.appendChild(sec);
+  }
+
+  /* how the nights arrived */
+  if(A.held && B.held && (A.stays || B.stays)){
+    const sec = el("div"); sec.style.marginTop = "18px";
+    sec.appendChild(el("div","lbl","HOW THE NIGHTS ARRIVED"));
+    const share = W =>{ const tot = Object.values(W.mix).reduce((s,v)=> s+v, 0) || 1;
+      const air = W.mix["Airbnb"] || 0, dir = W.mix["Direct"] || 0;
+      return [air/tot, dir/tot, 1 - (air+dir)/tot]; };
+    const stackRow = (label, W)=>{
+      const r = el("div","sb"); r.style.gridTemplateColumns = "auto 1fr auto";
+      const st = el("div","stack");
+      share(W).forEach((p, i)=>{ const seg = el("i","m"+i); seg.style.width = (p*100).toFixed(1) + "%"; st.appendChild(seg); });
+      r.append(el("b", null, label), st, el("s", null, Math.round(share(W)[0]*100) + "% Airbnb"));
+      return r;
+    };
+    const bars = el("div","sbars"); bars.append(stackRow(aLabel, A), stackRow(bLabel, B));
+    sec.appendChild(bars);
+    const key = el("div","railkey");
+    key.innerHTML = `<span><i class="m0"></i>Airbnb</span><span><i class="m1"></i>Direct</span><span><i class="m2"></i>other sites</span>`;
+    sec.appendChild(key);
+    box.appendChild(sec);
+  }
+
+  const note = el("p","cmpnote");
+  const bits = [];
+  if(B.open) bits.push(`<b>${esc(bLabel)} is still running</b> — its nights are what is on the book for the whole month, including the days not yet reached, so the comparison is to what is booked, not to what was earned.`);
+  if(!(A.held && B.held)) bits.push(`Channel mix and length of stay are read off the stays themselves, and this phone no longer holds every stay from ${!A.held ? esc(aLabel) : esc(bLabel)} — completed, settled stays are cleared from it. The counts above come from your monthly figures and are not affected.`);
+  bits.push(`Booking lead time — how far ahead guests book — will appear here once bookings are entered in the app; the imported book does not record when each one was made.`);
+  note.innerHTML = bits.join(" ");
+  box.appendChild(note);
+  sheetB.appendChild(box);
+  sheet.classList.add("on"); scrim.classList.add("on");
+}
+
 const RATES = {
   occ:    {name:"Occupied",         unit:"%",  sub:"nights sold of nights available",
            get:t => t.occ * 100,    fmt:v => Math.round(v) + "%",  max:100},
@@ -13759,16 +14063,37 @@ function openRate(key, monthKey){
          something the operator can go and finish. */
       const sub = el("div","cs-sub" + (open.has(r.code) ? " open" : ""));
       const inner = el("div","cs-subin");
-      const thi = Math.max(...types.map(t=> R.get(t)), 1);
-      types.forEach(t=>{
-        const tr = el("div","cs-r t");
-        const stated = key === "occ" || t.canState;
-        const tb = el("i"); tb.style.width = (stated ? R.get(t) / thi * 100 : 0).toFixed(1) + "%";
-        const right = stated ? el("s",null,R.fmt(R.get(t)))
-          : el("s","cs-tag", t.nights ? `${Math.round(t.cover*100)}% priced` : "no nights");
-        tr.append(el("b",null, `${t.type} · ${t.flats}`), tb, right);
+      if(!memCovers(r.code, k)){
+        /* THE MONTH IS NOT ON THIS PHONE. load() clears a stay once it is over
+           and settled, so a finished month's split would be computed from
+           whatever few stays survived — which printed 0% under a building the
+           workbook says sold 92%. Said plainly instead. */
+        const tr = el("div","cs-r t"); tr.style.gridTemplateColumns = "1fr";
+        tr.appendChild(el("b","cs-tag",
+          `${monName(k)}'s stays are no longer on this phone — they are cleared once settled. The building's figure above is from your monthly numbers and stands.`));
+        tr.querySelector("b").style.cssText = "white-space:normal;line-height:1.45;font-weight:500;text-transform:none;letter-spacing:0";
         inner.appendChild(tr);
-      });
+      } else {
+        const thi = Math.max(...types.map(t=> R.get(t)), 1);
+        types.forEach(t=>{
+          /* Three registers, not two. A rate off 80%+ of the nights is stated.
+             One off 30–80% is shown as an ESTIMATE — hatched bar, quiet ink,
+             and the coverage in the label — because "12% priced" alone read
+             as the answer rather than as the reason there was none. Under
+             30%, or under five priced nights, it is refused: a rate built on
+             three nights is a number, not a rate. */
+          const stated = key === "occ" || t.canState;
+          const est = !stated && t.cover >= 0.3 && t.pricedNights >= 5;
+          const tr = el("div","cs-r t" + (est ? " est" : ""));
+          const show = stated || est;
+          const tb = el("i"); tb.style.width = (show ? R.get(t) / thi * 100 : 0).toFixed(1) + "%";
+          const name = `${t.type} · ${t.flats}` + (stated ? "" : t.nights ? ` · ${Math.round(t.cover*100)}% priced` : "");
+          const right = show ? el("s",null,R.fmt(R.get(t)))
+            : el("s","cs-tag", t.nights ? "too few priced" : "no nights");
+          tr.append(el("b",null, name), tb, right);
+          inner.appendChild(tr);
+        });
+      }
       sub.appendChild(inner);
       ln.onclick = ()=>{
         haptic(7);
