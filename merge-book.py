@@ -208,6 +208,21 @@ for r in missing:
         "source": None if r["block"] else r["src"],
         "amount": r["amount"] or None,
     })
+# ── the shared log hears about it ────────────────────────────────────────────
+# The app's timeline is the answer to "what happened to the book today", and a
+# merge from the sheet is exactly that. Written the way the app writes its own
+# lines — same event name, same props — with no user and a device of "sheet",
+# which the timeline renders as "From the sheet".
+def said(kind, line, flat, guest=None):
+    try:
+        rest("/app_events", "POST", [{
+            "host_id": HOST, "user_id": None, "session_id": None,
+            "name": "act", "app_version": "merge-book",
+            "props": {"k": kind, "s": line[:160], "f": flat,
+                      **({"g": guest[:40]} if guest else {}), "device": "sheet"}}])
+    except urllib.error.HTTPError:
+        pass                                   # the log is a courtesy, never a gate
+
 # The exclusion constraint is the authority on whether these nights are free.
 # One row at a time so a single refusal cannot take the whole batch with it,
 # and so a refusal can be reported against the stay it belongs to.
@@ -215,6 +230,9 @@ ok = 0
 for row in rows:
     try:
         rest("/stays", "POST", [row]); ok += 1
+        code = by_code.get(row["flat_id"], row["flat_id"])
+        said("book", f"Booked {row['guest_name'] or 'a block'} into {code} · {row['starts_on']}→{row['ends_on']} · from the sheet",
+             code, row["guest_name"])
     except urllib.error.HTTPError as e:
         body = e.read().decode()[:120]
         code = by_code.get(row["flat_id"], row["flat_id"])
@@ -252,6 +270,8 @@ if "--apply-moved" in sys.argv:
         try:
             rest(f"/stays?id=eq.{s['id']}", "PATCH", patch)
             done += 1
+            said("move", f"{r['guest']} in {r['flat']} now {patch.get('starts_on', s['starts_on'])}→{patch.get('ends_on', s['ends_on'])} · from the sheet",
+                 r["flat"], r["guest"])
             print(f"  ✓ moved {r['flat']:7} {r['guest'][:22]:22} {s['starts_on']}→{s['ends_on']}  ⇒  "
                   f"{patch.get('starts_on', s['starts_on'])}→{patch.get('ends_on', s['ends_on'])}")
         except urllib.error.HTTPError as e:

@@ -6183,7 +6183,12 @@ async function telStart(){
    round trips on a phone is a stutter the operator can feel. */
 function track(name, props){
   if(!telOn()) return;
+  /* WHO, EXPLICITLY. user_id has no default on the table and this never sent
+     one, so every event from every phone arrived anonymous whoever was signed
+     in — and a shared activity log with nobody's name on anything is a list
+     of things that happened to a book. */
   telQueue.push({ session_id: telSession, host_id: hostId || null,
+                  user_id: (session && session.uid) || null,
                   name: String(name).slice(0,60),
                   props: Object.assign({device: telDevice()}, props || {}),
                   app_version: APP_VERSION });
@@ -8165,11 +8170,19 @@ async function pullActivity(){
   const rows = await rest("GET",
     "/app_events?select=props,user_id,created_at&name=eq.act"
     + "&host_id=eq." + hostId + "&order=created_at.desc&limit=" + LOG_CAP);
+  /* A row with no user on it is still somebody's. Every event carries the
+     install id of the phone that sent it, so a row that is not this phone's
+     is at least "another phone" — which is the fact the log exists to show,
+     and the one that was being lost when nameless rows rendered exactly like
+     the operator's own. Rows from the sheet merge say so by name. */
+  const here = telDevice();
+  const fallback = p => !p ? "" : p.device === "sheet" ? "From the sheet"
+                     : p.device && p.device !== here ? "Another phone" : "";
   return (rows || []).map(r=>({
     on: r.created_at, k: (r.props && r.props.k) || "",
     s:  (r.props && r.props.s) || "", f: r.props && r.props.f,
     g:  r.props && r.props.g,        i: r.props && r.props.aid,
-    who: whoLabel(r.user_id, map),
+    who: r.user_id ? whoLabel(r.user_id, map) : fallback(r.props),
   })).filter(e => e.s);
 }
 
