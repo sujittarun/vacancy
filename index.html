@@ -12635,17 +12635,48 @@ function tidyPhone(raw){
   let d = String(raw == null ? "" : raw).replace(/\D/g, "");
   if(d.length > 10 && d.startsWith("91")) d = d.slice(2);   // +91, 0091, 91
   while(d.length > 10 && d.startsWith("0")) d = d.slice(1); // 0 98765 43210
-  if(d.length > 10) d = d.slice(-10);                       // anything else, keep the last ten
+  /* Last ten, not first: the overflow that actually happens is text pasted
+     WITH the number — "Flat 402 9876543210" — and the number is at the end.
+     Typed overflow never reaches here; the field refuses an eleventh digit. */
+  if(d.length > 10) d = d.slice(-10);
   return d;
 }
 /* Attach to a field: it tidies on input and on paste, and holds the caret at
    the end rather than throwing it to the front on every keystroke — which is
    what a naive value rewrite does and why so many phone fields are miserable. */
 function phoneField(inp){
-  inp.maxLength = 10;
-  const fix = ()=>{
+  /* NO maxLength — that was the bug. maxLength is enforced by the browser's
+     editing pipeline BEFORE any script sees the text, so a paste of
+     "+91 98765 43210" (fifteen characters) was cut to its first ten,
+     "+91 98765 ", and the tidier was handed seven digits with the country
+     code welded on: 9198765. The field looked like it refused the number.
+     The test never caught it because it "pasted" by assigning .value, which
+     maxLength does not constrain — the same blind spot as the toast swipe:
+     synthetic input skips the layer real input dies in. The ten-digit cap
+     lives in tidyPhone; the field's one job is to let the whole paste in. */
+  inp.addEventListener("beforeinput", e=>{
+    /* typing an eleventh digit is refused, which is what maxLength used to
+       feel like from the keyboard. A paste arrives as insertFromPaste and
+       sails past this on purpose — it must reach the tidier whole. */
+    if(e.inputType === "insertText" && e.data && /\d/.test(e.data)
+       && inp.selectionStart === inp.selectionEnd
+       && tidyPhone(inp.value).length >= 10) e.preventDefault();
+  });
+  const fix = (ev)=>{
     const was = inp.value, atEnd = inp.selectionStart === was.length;
-    const now = tidyPhone(was);
+    let now = tidyPhone(was);
+    /* An eleventh TYPED digit is refused — kept out, not let in at the cost
+       of the first digit, which is what the paste rule's "keep the last ten"
+       would do. This cannot live only in beforeinput: beforeinput raised by
+       the editing pipeline (dictation, some keyboards) is not cancelable, so
+       preventDefault there is a no-op — measured, the digit went through.
+       Here always runs. The condition is deliberately narrow: exactly one
+       digit over, and the tidier already resorted to last-ten — a pasted
+       "+91…" or "Flat 402 …" never matches it. */
+    if(ev && ev.inputType === "insertText"){
+      const d = was.replace(/\D/g, "");
+      if(d.length === 11 && now === d.slice(-10)) now = d.slice(0, 10);
+    }
     if(now === was) return;
     inp.value = now;
     if(atEnd){ try{ inp.setSelectionRange(now.length, now.length); }catch(e){} }

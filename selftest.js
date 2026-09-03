@@ -1666,21 +1666,49 @@ export async function run(filter) {
       ["+91-98765-43210", "9876543210"], ["00919876543210",  "9876543210"],
       ["98765 43210",     "9876543210"], ["9876543210",      "9876543210"],
       ["(+91) 98765-43210","9876543210"],
+      /* number pasted with its context — the digits before it must lose */
+      ["Flat 402 9876543210", "9876543210"],
     ];
     cases.forEach(([raw, want]) => eq(tidyPhone(raw), want, `tidyPhone(${JSON.stringify(raw)})`));
-    /* and through a real field, on the input event a paste fires */
+
+    /* THROUGH THE REAL EDITING PIPELINE, not through .value. The first
+       version of this test assigned .value and asserted maxLength === 10 —
+       and maxLength is applied by the browser BEFORE script sees the text,
+       so it truncated every real paste of "+91 98765 43210" to "+91 98765 "
+       while the test, whose assignment maxLength does not constrain, stayed
+       green. The test asserted the bug. execCommand("insertText") goes
+       through the same pipeline a paste does, so a returned truncation would
+       be caught here. */
     const i = document.createElement("input");
     phoneField(i);
-    eq(i.maxLength, 10, "the field's maxLength");
-    i.value = "+91 98765 43210";
-    i.dispatchEvent(new Event("input", {bubbles:true}));
-    eq(i.value, "9876543210", "the value after an input event");
-    /* a half-typed number must not be mangled while it is being typed */
-    i.value = "98765"; i.dispatchEvent(new Event("input", {bubbles:true}));
-    eq(i.value, "98765", "a partial number was rewritten mid-typing");
+    ok(i.maxLength < 0 || i.maxLength > 15,
+       `maxLength is back (${i.maxLength}) — it truncates pastes before script runs`);
+    document.body.appendChild(i);
+    try {
+      i.focus();
+      const piped = document.execCommand("insertText", false, "+91 98765 43210");
+      if (piped) {
+        await wait(30);
+        eq(i.value, "9876543210", "a paste through the editing pipeline");
+        /* an eleventh TYPED digit is refused, the way maxLength used to feel */
+        i.setSelectionRange(10, 10);
+        document.execCommand("insertText", false, "5");
+        await wait(30);
+        eq(i.value, "9876543210", "an eleventh typed digit was accepted");
+      } else {
+        /* pipeline not available here (hidden pane, no edit focus) — the
+           .value path below still guards the tidier itself */
+        i.value = "+91 98765 43210";
+        i.dispatchEvent(new Event("input", {bubbles:true}));
+        eq(i.value, "9876543210", "the value after an input event");
+      }
+      /* a half-typed number must not be mangled while it is being typed */
+      i.value = "98765"; i.dispatchEvent(new Event("input", {bubbles:true}));
+      eq(i.value, "98765", "a partial number was rewritten mid-typing");
+    } finally { i.remove(); }
     /* and the lookup key agrees with what is stored, or search breaks */
     eq(digits10(tidyPhone("+91 98765 43210")), "9876543210", "digits10 of a tidied number");
-    return `${cases.length} shapes, one stored number`;
+    return `${cases.length} shapes, one stored number, pasted through the pipeline`;
   });
 
   /* "Everything you have done" has to mean everything — repairs, collections,
