@@ -8062,6 +8062,19 @@ function openAccount(){
         : `<b>Everything is saved.</b> The same book is on every phone signed in to ${esc(hostName || "this property")}.`;
   sheetB.append(state);
 
+  /* THE TIMELINE HAS TO BE REACHABLE FROM HERE. It was put on the Data sheet,
+     which is what this pill opens when there is no server — and signed in,
+     this pill opens THIS sheet instead, so on a live phone there was no route
+     to "Everything that has happened" at all. The owner opened the app, could
+     not find the log, and was right. First thing on the sheet, because
+     "what happened today" is the question a signed-in operator taps the
+     pill to ask. */
+  const hist = el("button","costsbtn");
+  hist.style.cssText = "margin:14px 20px 0;width:calc(100% - 40px)";
+  hist.innerHTML = `<span>Everything that has happened</span><em>${live ? "every phone" : "this phone"}</em>`;
+  hist.onclick = ()=>{ haptic(10); openActivity(); };
+  sheetB.appendChild(hist);
+
   const row = el("div", "dataTools");
   row.style.cssText = "padding:14px 20px 0";
 
@@ -8199,8 +8212,10 @@ function mergeActivity(server){
 function openActivity(){
   sheetWipe();
   const head = el("div");
-  const x = el("button", null, "‹"); x.setAttribute("aria-label","Back to your data");
-  x.onclick = ()=> openDataSheet();
+  const x = el("button", null, "‹"); x.setAttribute("aria-label","Back");
+  // back to whichever sheet the operator came from: the account sheet when
+  // signed in, the Data sheet when there is no server
+  x.onclick = ()=> (CLOUD_ENABLED ? openAccount() : openDataSheet());
   sheetH.append(head, x);
   const list = el("div");
   sheetB.append(list);
