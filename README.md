@@ -479,9 +479,10 @@ It is a **board, not a list** — grouped by the response each thing needs, so a
 never looks like a discount idea and extra items thicken a figure rather than adding a row:
 
 **Needs a decision** — a flat due back from maintenance. **Back in service** ends the block
-today. **Still out** opens a slider: drag to say how many more days, and it shows the date
-it comes back. The slider is **capped at the nights actually free**, so a block can never be
-dragged over a guest.
+today. A block that has already ended is asked about for a week — unless a guest has since
+checked in, in which case the book has answered and nothing is asked. **Still out** opens a
+slider: drag to say how many more days, and it shows the date it comes back. The slider is
+**capped at the nights actually free**, so a block can never be dragged over a guest.
 
 **To do** — work that must happen, counted rather than enumerated. *Clean 2 flats tomorrow.*
 

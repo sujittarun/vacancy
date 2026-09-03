@@ -4353,6 +4353,17 @@ function blockNudges(){
        the bill with it. A future outage is a plan; it belongs on the calendar,
        not on the list of things needing a decision today. */
     if(r.start > 0){ /* has not begun — nothing to decide yet */ }
+    /* ANSWERED BY THE BOOK. The window reaches seven days back so a flat
+       nobody put back is not forgotten — but a block ends on its own, and the
+       flat is on sale from `due`. When a guest has since checked in, the book
+       has already said the flat is back, and asking "Is TT-402 back in
+       service?" about a flat somebody slept in last night reads as the flat
+       being out. It also offered "Still out", which extendBlock would then
+       refuse night by night against that guest. The sheet's one-night "Block"
+       on TT-402 sat on the board for a week with a guest in the next morning.
+       A stay that has begun, in this flat, reaching past the block's end: the
+       book knows, and the board has nothing to ask. */
+    else if(due <= 0 && bookings().some(b => b.fi === r.fi && b.start <= 0 && b.end > due)){}
     else if(due >= -7 && due <= 2){
       out.push({r, kind:"due", due,
         when: due < 0 ? `came back ${-due} day${-due>1?"s":""} ago`
