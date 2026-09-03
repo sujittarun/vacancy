@@ -110,7 +110,8 @@ for r in runs:
     if end <= FROM: continue                      # finished before the window
     sheet.append({"flat": r["flat"], "a": day(r["start"]), "b": day(end),
                   "guest": r["guest"], "src": r["src"], "amount": r["amount"],
-                  "block": r["src"] == "block", "open": bool(r["cut"] & 2)})
+                  "block": r["src"] == "block", "open": bool(r["cut"] & 2),
+                  "cut": r["cut"]})      # nonzero: a date here is the window's edge
 
 # ── the server ───────────────────────────────────────────────────────────────
 flats = {f["code"]: f["id"] for f in
@@ -176,15 +177,17 @@ show("APP-ONLY — entered in the app, still to be typed into the sheet:", app_o
      lambda s: f"{s['flat']:8} {s['starts_on']} → {s['ends_on']}  {w(s)[:28]}")
 
 # ── writing, and only ever adding ────────────────────────────────────────────
-if "--apply" not in sys.argv:
-    print("\nreport only. Re-run with --apply to insert the missing stays.")
-    print("Nothing in 'moved', 'clash' or 'app-only' is ever written by this script.")
+if "--apply" not in sys.argv and "--apply-moved" not in sys.argv:
+    print("\nreport only. Re-run with --apply to insert the missing stays,")
+    print("and/or --apply-moved to give a same-guest stay the sheet's dates.")
+    print("Nothing in 'clash' or 'app-only' is ever written by this script.")
     raise SystemExit(0)
 
-if not missing:
-    print("\nnothing to insert."); raise SystemExit(0)
-
 rows = []
+if "--apply" not in sys.argv:
+    missing = []                       # --apply-moved alone: inserts are off
+elif not missing:
+    print("\nnothing to insert.")
 for r in missing:
     fid = flats.get(r["flat"])
     if not fid:
@@ -216,4 +219,42 @@ for row in rows:
         body = e.read().decode()[:120]
         code = by_code.get(row["flat_id"], row["flat_id"])
         print(f"  ! refused {code} {row['starts_on']}→{row['ends_on']}: {body}")
-print(f"\ninserted {ok} of {len(rows)}. Nothing was deleted or overwritten.")
+if rows: print(f"\ninserted {ok} of {len(rows)}. Nothing was deleted or overwritten.")
+
+# ── --apply-moved: the sheet's dates for a stay both books agree exists ───────
+# Opt-in, and a change to the contract above, so it is written down. While the
+# spreadsheet is the operators' primary record, a stay they extend or shorten
+# THERE is a decision the app has to follow — otherwise the app sells nights
+# the sheet has as occupied, or holds nights the sheet has freed. "Moved" was
+# reported rather than applied because the two cases could not be told apart;
+# the owner has since said which book leads. So, for the same guest in the
+# same flat: the row keeps its id (payments hang off it) and takes the sheet's
+# dates. Two guards stay: a stay the import window cut is skipped, because its
+# sheet dates are the window's edges and not anybody's decision; and the
+# exclusion constraint still refuses any range that runs into another guest,
+# which is reported and left alone. Clashes — different people — are never
+# touched here.
+if "--apply-moved" in sys.argv:
+    done = 0
+    for r, s in moved:
+        # Only the side the window did not cut is a date anybody chose. A
+        # tenancy cut at both ends is skipped whole; one cut at the start but
+        # ending inside the window (Swathi, LP-204: the sheet now has her
+        # leaving 2 Sep, the app still holds the flat to 1 Oct) has its END
+        # applied and its start left alone.
+        cut = r.get("cut") or 0
+        patch = {}
+        if not (cut & 1) and r["a"] != s["starts_on"]: patch["starts_on"] = r["a"]
+        if not (cut & 2) and r["b"] != s["ends_on"]:   patch["ends_on"]   = r["b"]
+        if not patch:
+            print(f"  ~ kept  {r['flat']:7} {r['guest'][:22]:22} sheet dates are the import window's edge, not a change")
+            continue
+        try:
+            rest(f"/stays?id=eq.{s['id']}", "PATCH", patch)
+            done += 1
+            print(f"  ✓ moved {r['flat']:7} {r['guest'][:22]:22} {s['starts_on']}→{s['ends_on']}  ⇒  "
+                  f"{patch.get('starts_on', s['starts_on'])}→{patch.get('ends_on', s['ends_on'])}")
+        except urllib.error.HTTPError as e:
+            body = e.read().decode()[:100]
+            print(f"  ! kept  {r['flat']:7} {r['guest'][:22]:22} the sheet's dates run into another guest: {body}")
+    print(f"\nmoved {done} of {len(moved)} to the sheet's dates. Ids kept; nothing deleted.")

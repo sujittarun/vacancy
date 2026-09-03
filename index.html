@@ -795,6 +795,10 @@ button{background:none;border:0;padding:0;cursor:pointer;
 .opp.hot b{color:var(--now)}
 .opp.zero b{color:var(--txt-3)}
 .opp.zero s{color:var(--txt-3)}
+/* a rate read off too few priced nights: the figure steps back, the subtitle
+   says what it is made of, in the amber the app uses for "look again" */
+.opp.thin b{color:var(--txt-3)}
+.opp.thin s{color:var(--now-ink);font-weight:600}
 /* The three rate tiles sat flush on the comparison card below them — zero gap —
    and their second line ("285 of 900 nights") wrapped straight into the card's
    top edge on a phone. A tile is also a button that opens fifteen months, and
@@ -6486,12 +6490,20 @@ async function cloudPull(){
   /* HOLD_BACK, not eight days: the Profit tab reads finished months off this
      book, and an eight-day window left it 89% empty on a live phone. */
   const from = dayISO(-HOLD_BACK), to = dayISO(DAYS);
-  const [bs, fl, st, pm, iss] = await Promise.all([
+  /* THE MONEY COMES DOWN TOO. Expenses, the cost model and typed revenue were
+     pushed and never pulled, so each phone kept its own ledger and only sent
+     it: an expense logged on one phone, or written to the table from the
+     sheet, never appeared on the other. "We both see the same book" was true
+     of the calendar and false of every rupee behind it. */
+  const [bs, fl, st, pm, iss, ex, cl, rm] = await Promise.all([
     rest("GET", "/buildings?select=id,code,name,short_name,sort_order&order=sort_order.asc,code.asc"),
     rest("GET", "/flats?select=id,building_id,code,floor,unit_type,nightly_rate&active=is.true&order=code.asc"),
     rest("GET", "/stays?select=*&ends_on=gt." + from + "&starts_on=lt." + to),
     rest("GET", "/payments?select=id,stay_id,amount,method,received_on,note&order=received_on.asc"),
     rest("GET", "/issues?select=*&order=reported_on.asc"),
+    rest("GET", "/expenses?select=id,building_id,line,amount,paid_on,note&paid_on=gt." + from + "&order=paid_on.asc"),
+    rest("GET", "/cost_lines?select=building_id,line,amount,kind"),
+    rest("GET", "/revenue_months?select=building_id,month,amount"),
   ]);
   const paysBy = {};
   (pm || []).forEach(p => (paysBy[p.stay_id] = paysBy[p.stay_id] || []).push(
@@ -6538,6 +6550,27 @@ async function cloudPull(){
             fixer:x.fixer || undefined, fixer_phone:x.fixer_phone || undefined,
             cost: x.cost != null ? Number(x.cost) : undefined};
   }).filter(Boolean);
+
+  /* The three money tables. The server's copy simply replaces this phone's:
+     the guard at the top of this function never lets a pull run while a
+     write is still queued, so by the time we are here everything this phone
+     typed has already landed and is in what came back. That is the same
+     rule the stays follow, and it is why a pull cannot lose a local entry. */
+  const codeOfBid = Object.fromEntries((bs || []).map(b=>[b.id, b.code]));
+  expenses = (ex || []).map(e => ({
+    id: e.id, code: codeOfBid[e.building_id] || "??", line: e.line,
+    amount: Number(e.amount), on: e.paid_on, note: e.note || undefined }));
+  jset(EXP_STORE, expenses);
+  costUser = {};
+  (cl || []).forEach(c => { const code = codeOfBid[c.building_id]; if(!code) return;
+    (costUser[code] = costUser[code] || {})[c.line] = Number(c.amount); });
+  jset(COST_STORE, costUser);
+  finUser = {};
+  (rm || []).forEach(r => { const code = codeOfBid[r.building_id]; if(!code) return;
+    (finUser[r.month] = finUser[r.month] || {})[code] = Number(r.amount); });
+  jset(FINU_STORE, finUser);
+  finBust();
+
   usingDemo = false;
   recompute(); cacheSave();
 }
@@ -10905,8 +10938,13 @@ function renderTrends(){
           row.appendChild(p);
         }
         const cap2 = el("div","cap2");
+        /* "₹22,000 in" under a building that is 4% priced reads as income. It
+           is what has been TYPED so far, off a twentieth of the nights, and
+           the caption says exactly that; the cost is a fact and stays one. */
         cap2.textContent = r.state === "absent"
           ? `${r.flats} flats · ${r.book} nights sold in ${MON[+finMonth.split("-")[1]-1]} · no revenue line and no cost line`
+          : thin
+          ? `${money(r.revenue)} typed so far, on ${Math.round(r.cover*100)}% of the nights · ${money(r.cost)} to run`
           : `${money(r.revenue)} in · ${money(r.cost)} to run`
             + (r.state==="floor" ? ` · covers ${r.billed} of ${r.book} nights sold` : "");
         row.appendChild(cap2);
@@ -11212,8 +11250,8 @@ function renderTrends(){
          never "what is it" but "which way is it going" — and the trend was
          only ever available as one blended revenue line on the card above. */
       const opps = el("div","opps");
-      const tile = (key, v, lab)=>{
-        const d = el("button","opp tap");
+      const tile = (key, v, lab, thin)=>{
+        const d = el("button","opp tap" + (thin ? " thin" : ""));
         d.append(el("b",null,v), el("s",null,lab), el("em","go","›"));
         d.setAttribute("aria-label", `${lab}, ${v} — see fifteen months`);
         d.onclick = ()=>{ haptic(9); openRate(key, finMonth); };
@@ -11221,8 +11259,15 @@ function renderTrends(){
       };
       if(T){
         tile("occ",    Math.round(T.occ*100) + "%", `${T.nights} of ${T.cap} nights`);
-        tile("adr",    money(T.adr),    "average room rate");
-        tile("revpar", money(T.revpar), "per available night");
+        /* A month the app keeps that is under the 80% gate printed ₹3,994 a
+           night and ₹661 per available night in full ink — figures off a
+           fifth of the nights, next to an occupancy that is exact. The rate
+           tiles for such a month go quiet and say what they are made of;
+           the sheet behind them opens the same way it always did. */
+        const thin = !!(T.app && !T.canState);
+        const why  = thin ? `from ${Math.round((T.cover || 0) * 100)}% of nights` : null;
+        tile("adr",    money(T.adr),    why || "average room rate", thin);
+        tile("revpar", money(T.revpar), why || "per available night", thin);
       }
       b.appendChild(opps);
 
