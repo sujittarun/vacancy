@@ -2287,6 +2287,199 @@ export async function run(filter) {
     }
   });
 
+  /* ══ changing a stay ════════════════════════════════════════════════════ */
+
+  /* The operators' own report: a guest books five nights, is in the flat, and
+     wants two more — and nothing on the room sheet could do it. Move refused
+     an in-house guest and the ✕ would have cost the row its payments. */
+  await test("a guest who is in the flat can be kept longer, and the dates change is recorded", async () => {
+    const keep = activity.slice(), stored = localStorage.getItem(STORE);
+    try {
+      const fi = flats.map((f,i)=>i).find(i => freeSpan(i, -2, 8));
+      ok(fi != null, "no flat free for the fixture");
+      resv.push({fi, start:-2, end:2, nights:4, guest:"Extend Fixture", src:"Direct",
+                 manual:true, amount:8000, pays:[], bookedOn:-3});
+      recompute();
+      const r = resv.find(x => x.guest === "Extend Fixture");
+      openSheet(fi, 0);
+      await until(() => document.querySelector(".roomRoutes.stay button"), "the change-dates route");
+      const route = document.querySelector(".roomRoutes.stay button");
+      ok(/Extend Fixture/.test(route.textContent), "the route does not name the guest");
+      ok(/in until/.test(route.textContent), `the route does not say they are in: ${route.textContent}`);
+      const glyph = [...document.querySelectorAll(".rowdt")]
+        .find(b => /Extend Fixture/.test(b.getAttribute("aria-label") || ""));
+      ok(glyph, "the guest's own row has no dates glyph");
+      route.click();
+      await until(() => document.querySelector(".stepWide.locked"), "the editor, with the arrival locked");
+      const go = document.querySelector(".bkgo");
+      ok(go.disabled, "Save is live before anything has changed");
+      ok(/Nothing changed/.test(go.textContent), `resting label: ${go.textContent}`);
+      const more = document.querySelector('.step button[aria-label="A night more"]');
+      more.click(); more.click();
+      eq(document.querySelector(".step b").textContent, "6", "nights after two taps");
+      eq(r.end, 2, "the row changed before Save was tapped");
+      ok(/Keep Extend Fixture until/.test(go.textContent), `Save says "${go.textContent}"`);
+      ok(/2 nights more/.test(document.querySelector(".bkstate").textContent),
+        `the state line: ${document.querySelector(".bkstate").textContent}`);
+      /* two more nights on the deal's own terms — ₹8,000 for four is ₹2,000 a
+         night, so ₹12,000 is offered, not the flat's rack rate */
+      eq(document.querySelector(".bkamt input").value, "12000", "the total offered for two more nights");
+      /* and what that total means for the money: nothing taken yet, so all of it is due */
+      const ms = [...document.querySelectorAll(".bkstate")].pop();
+      ok(/₹12,000 due · nothing paid yet/.test(ms.textContent), `the money line: ${ms.textContent}`);
+      /* a payment on the stay is never touched by a change to the total */
+      addPayment(r, 5000, "UPI");
+      document.querySelector(".bkamt input").dispatchEvent(new Event("input"));
+      ok(/₹5,000 paid · ₹7,000 still due/.test(ms.textContent), `the money line after a payment: ${ms.textContent}`);
+      go.click();
+      await until(() => !document.querySelector(".bkgo"), "the editor to close");
+      eq(r.end, 4, "the new end");
+      eq(r.nights, 6, "the new nights");
+      eq(r.amount, 12000, "the new total");
+      eq(paidOn(r), 5000, "the payment survived the change");
+      eq(dueFrom(r), 7000, "what is owed after the change");
+      eq(occ[fi][3], 1, "the third night is not held after the extension");
+      const a = activity[0];
+      eq(a.k, "dates", "the newest activity kind");
+      ok(/now leaves .* not .*2 nights more/.test(a.s), `the line: ${a.s}`);
+      eq(a.g, "Extend Fixture", "the guest on the entry");
+      /* the row on the sheet says the new end */
+      const row = [...document.querySelectorAll(".sheet .row.bk .meta")]
+        .find(m => /Extend Fixture/.test(m.textContent));
+      ok(row && /6n/.test(row.textContent), `the sheet row does not show six nights: ${row && row.textContent}`);
+      const btn = undoButton();
+      ok(btn, "no Undo on the toast");
+      btn.click();
+      await wait(60);
+      eq(r.end, 2, "end after undo");
+      eq(r.amount, 8000, "total after undo");
+      return "route + glyph, +2 nights, ₹12,000 offered, logged, undone";
+    } finally {
+      const r = resv.find(x => x.guest === "Extend Fixture");
+      if (r) resv.splice(resv.indexOf(r), 1);
+      recompute();
+      /* the STORED book as well as the one in memory: changeStay saved the
+         fixture, and the harness restores memory only, so a run left a
+         fixture in localStorage that the next run then found first */
+      if (stored != null) localStorage.setItem(STORE, stored);
+      activity.length = 0; keep.forEach(a => activity.push(a)); jset(LOG_STORE, activity);
+    }
+  });
+
+  await test("the dates editor stops at the next guest and refuses an arrival that lands on one", async () => {
+    const stored = localStorage.getItem(STORE);
+    try {
+    const fi = flats.map((f,i)=>i).find(i => freeSpan(i, 0, 12));
+    ok(fi != null, "no flat with twelve free nights");
+    ok(addBooking(fi, 2, 3, "Edit Fixture", "Direct", {quiet:1}), "fixture refused");   // 2 → 5
+    const r = resv[resv.length - 1];                   // the row just added, not a namesake
+    ok(addBooking(fi, 7, 2, "Wall Fixture", "Direct", {quiet:1}), "wall refused");      // 7 → 9
+    eq(r.guest, "Edit Fixture", "the fixture row");
+    openStayDates(r, ()=>{});
+    await until(() => document.querySelector(".bkgo"), "the editor");
+    ok(!document.querySelector(".stepWide.locked"), "a future arrival is locked");
+    ok(document.querySelector(".roomRoutes.stay button"), "no move route for a guest not yet in");
+    const more = document.querySelector('.step button[aria-label="A night more"]');
+    more.click(); more.click();                        // five nights → ends on 7, the wall
+    eq(document.querySelector(".step b").textContent, "5", "nights at the wall");
+    ok(more.disabled, "+ is still live at the wall");
+    ok(/the night after is taken/.test(document.querySelector(".bkstate").textContent),
+      `the state does not name the wall: ${document.querySelector(".bkstate").textContent}`);
+    const later = document.querySelector('.stepWide button[aria-label="A day later"]');
+    later.click(); later.click(); later.click();       // 5 → 10, straight over the wall
+    const st = document.querySelector(".bkstate");
+    ok(st.classList.contains("bad"), "a collision is not marked bad");
+    ok(/Wall Fixture holds/.test(st.textContent), `the state does not say who holds it: ${st.textContent}`);
+    ok(document.querySelector(".bkgo").disabled, "Save is live on a collision");
+    eq(changeStay(r, 5, 5), false, "changeStay accepted an overlap");
+    eq(r.start, 2, "start after the refusal");
+    eq(r.end, 5, "end after the refusal");
+    const earlier = document.querySelector('.stepWide button[aria-label="A day earlier"]');
+    earlier.click(); earlier.click(); earlier.click(); earlier.click();   // → arrives 1, five nights → 6
+    ok(!document.querySelector(".bkgo").disabled, "Save is dead on a change that fits");
+    document.querySelector(".bkgo").click();
+    await wait(60);
+    eq(r.start, 1, "the new arrival");
+    eq(r.end, 6, "the new end");
+    eq(occ[fi][1], 1, "the new first night is not held");
+    eq(occ[fi][6], 0, "night 6 is held by nobody but shows taken");
+    document.querySelectorAll(".toast").forEach(x => x.remove());   // the Undo toast, not left for a later test
+    return "capped at the wall, collision named, then 1 → 6 saved";
+    } finally {
+      if (stored != null) localStorage.setItem(STORE, stored);
+    }
+  });
+
+  /* The exclusion constraint is the authority, and it fires on an UPDATE as
+     readily as an INSERT. The phone has already applied the change by the time
+     the server says no; what it must not do is keep the refused dates until
+     the next pull, or offer to "put them in" another flat — that is a second
+     copy of a guest who is already in the book. */
+  await test("a dates change the server refuses puts the old dates back and says what stands", async () => {
+    const keep = activity.slice(), stored = localStorage.getItem(STORE);
+    document.querySelectorAll(".toast").forEach(x => x.remove());
+    try {
+      const fi = flats.map((f,i)=>i).find(i => freeSpan(i, 0, 8));
+      ok(fi != null, "no flat free for the fixture");
+      ok(addBooking(fi, 1, 3, "Race Fixture", "Direct", {quiet:1}), "fixture refused");   // 1 → 4
+      const r = resv[resv.length - 1];                 // the row just added, not a namesake
+      eq(r.fi, fi, "the fixture is not in the flat it was booked into");
+      r.sid = "race-fixture-sid";
+      r.end = 6; r.nights = 5; recompute();                  // the phone already extended it
+      const op = {k:"stay~", id:r.sid, body:{ends_on: dayISO(6)},
+                  was:{starts_on: dayISO(1), ends_on: dayISO(4), amount:null}};
+      await lostTheChange(op);
+      eq(r.end, 4, "end after the refusal");
+      eq(r.nights, 3, "nights after the refusal");
+      eq(occ[fi][5], 0, "night 5 is still held after the refusal");
+      const t = [...document.querySelectorAll(".toast")].find(x => /not free for those nights/.test(x.textContent));
+      ok(t, "no refusal toast");
+      /* the flat in the headline is the guest's own — a uid lookup with no uid
+         to look up named G01 for a stay in another building */
+      ok(t.textContent.startsWith(flats[fi].id + " is not free"),
+        `the toast names the wrong flat: ${t.textContent.slice(0, 40)}`);
+      ok(/Race Fixture still leaves/.test(t.textContent), `the toast does not say what stands: ${t.textContent}`);
+      ok(!/Put them in/.test(t.textContent), "the toast offers a second copy of the guest");
+      eq(activity[0].k, "refused", "the refusal is not logged");
+      ok(/Could not change Race Fixture/.test(activity[0].s), `the line: ${activity[0].s}`);
+      t.remove();                       // not left for a later test to find
+      return "old dates back, night 5 free again, toast says what stands";
+    } finally {
+      if (stored != null) localStorage.setItem(STORE, stored);
+      activity.length = 0; keep.forEach(a => activity.push(a)); jset(LOG_STORE, activity);
+      document.querySelectorAll(".toast").forEach(x => x.remove());
+    }
+  });
+
+  /* The operators' second report: the cards led with the free count and
+     carried the date small, and a guest names a date, not a count. */
+  await test("the night cards and the month grid lead with the date, not the count", async () => {
+    const fs = e => parseFloat(getComputedStyle(e).fontSize);
+    switchTo(SCREENS.findIndex(s => s.id === "rooms"));
+    await until(() => document.querySelector(".night .d em"), "the night cards");
+    const em = document.querySelector(".night .d em"), n = document.querySelector(".night .n");
+    const emPx = fs(em), nPx = fs(n);            // read now — switching screens rebuilds these nodes
+    ok(emPx >= 2 * nPx, `night card: date ${emPx}px against count ${nPx}px`);
+    ok(/free|full/.test(n.textContent), `the count carries no unit: "${n.textContent}"`);
+    const dLab = document.querySelector(".night .d");
+    ok(dLab.firstElementChild === em, "the date is not the first thing on the card");
+    switchTo(SCREENS.findIndex(s => s.id === "month"));
+    await until(() => document.querySelector(".cal .day[data-d] .dd"), "the month grid");
+    const dd = document.querySelector(".cal .day[data-d] .dd"), fn = document.querySelector(".cal .day[data-d] .fn");
+    const ddPx = fs(dd), fnPx = fs(fn);
+    ok(ddPx >= 1.5 * fnPx, `month cell: date ${ddPx}px against count ${fnPx}px`);
+    const tag = document.querySelector(".day.mstart .dd i");
+    ok(tag && /^[A-Z][a-z]{2}$/.test(tag.textContent), "the 1st does not carry its month");
+    /* the tag fits its cell and does not run into the number beside it */
+    const cell = tag.closest(".day").getBoundingClientRect(), tb = tag.getBoundingClientRect();
+    ok(tb.right <= cell.right + 0.5 && tb.left >= cell.left - 0.5, "the month tag runs outside its cell");
+    const rg = document.createRange(); rg.selectNodeContents(tag.parentElement.firstChild);
+    const nb = rg.getBoundingClientRect();
+    ok(nb.right <= tb.left + 0.5, `the month tag overlaps the date (number ends ${nb.right.toFixed(1)}, tag starts ${tb.left.toFixed(1)})`);
+    switchTo(SCREENS.findIndex(s => s.id === "rooms"));
+    return `night ${emPx}/${nPx}px · month ${ddPx}/${fnPx}px · "1 ${tag.textContent}" fits`;
+  });
+
   /* ══ the whole surface ══════════════════════════════════════════════════ */
 
   await test("no text falls below AA in either theme", async () => {

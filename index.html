@@ -652,12 +652,19 @@ button{background:none;border:0;padding:0;cursor:pointer;
   border-radius:var(--r-md);padding:10px 10px 11px;display:flex;flex-direction:column;gap:9px;
   transition:transform .38s var(--spring)}
 .night:active{transform:scale(.95)}
-.night .d{display:flex;align-items:baseline;justify-content:space-between;gap:4px;
+/* THE DATE LEADS. The card led with the free count at 25px and carried its
+   date at 11.5px — the right order for "how empty is the fortnight" and the
+   wrong one for what happens here: a guest names a date down the phone, and
+   the thumb has to find it. The operators said so. The date is now the figure,
+   the weekday sits at its baseline, and the count drops to a line of text; the
+   bar underneath still says how full the night is at a glance. */
+.night .d{display:flex;align-items:baseline;gap:5px;
   font-size:10.5px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--txt-3)}
-.night .d em{font-style:normal;font-size:11.5px;font-weight:650;letter-spacing:-.01em;
-  text-transform:none;color:var(--txt-2);flex:0 0 auto}
+.night .d em{font-style:normal;font-size:25px;font-weight:680;letter-spacing:-.035em;line-height:1;
+  text-transform:none;color:var(--txt);flex:0 0 auto}
 .night.today .d em{color:var(--now)}
-.night .n{font-size:25px;font-weight:680;letter-spacing:-.035em;line-height:1}
+.night .n{font-size:12px;font-weight:560;letter-spacing:-.005em;line-height:1;color:var(--txt-2)}
+.night .n b{font-weight:700;color:var(--txt)}
 .night .t{height:3px;border-radius:2px;background:var(--surface-3);overflow:hidden}
 .night .t i{display:block;height:100%;background:var(--free);border-radius:2px}
 .night.today{border-color:color-mix(in srgb,var(--now) 55%,transparent);
@@ -745,7 +752,7 @@ button{background:none;border:0;padding:0;cursor:pointer;
 .mcap em{font-style:normal;color:var(--now)}
 
 /* a date running emptier than its own weekday usually does */
-.day.soft .fn{color:var(--now)}
+.day.soft .fn{color:var(--now-ink)}
 .day.soft .gg i{background:var(--now)}
 .day.soft::after{content:"";position:absolute;top:6px;right:6px;width:5px;height:5px;
   border-radius:50%;background:var(--now)}
@@ -1166,8 +1173,17 @@ button{background:none;border:0;padding:0;cursor:pointer;
    The light theme's own pad rule happened to clear it; dark never did, which is
    why it only showed up in one theme. Cleared here, so one rule covers both. */
 .day.pad{background:transparent;border-color:transparent;box-shadow:none;pointer-events:none}
-.day .dd{font-size:10px;font-weight:600;color:var(--txt-3);line-height:1}
-.day .fn{font-size:clamp(16px,4.8vw,21px);font-weight:680;letter-spacing:-.035em;line-height:1}
+/* the same swap as the night cards: the date is what gets looked for */
+.day .dd{font-size:clamp(16px,4.8vw,21px);font-weight:680;letter-spacing:-.035em;line-height:1;color:var(--txt)}
+/* The month, on the 1st, as a small tag at the number's baseline. "1 Sep" on
+   one line at the date's new size does not fit a 28px cell — measured, a tag
+   pinned to the corner sat on top of the numeral — so the 1st sets its number
+   left and its month right, 7px, and the pair fills the width. The number is
+   the thing being looked for; the month is the qualifier. */
+.day.mstart .dd{display:flex;align-items:baseline;justify-content:space-between;gap:2px}
+.day .dd i{font-style:normal;font-size:7px;font-weight:650;letter-spacing:.03em;
+  text-transform:uppercase;color:var(--txt-2);line-height:1;flex:0 0 auto}
+.day .fn{font-size:10.5px;font-weight:600;color:var(--txt-3);line-height:1}
 .day .gg{position:absolute;left:6px;right:6px;bottom:6px;height:3px;border-radius:2px;
   background:var(--surface-3);overflow:hidden}
 .day .gg i{display:block;height:100%;background:var(--free);border-radius:2px}
@@ -1201,7 +1217,7 @@ button{background:none;border:0;padding:0;cursor:pointer;
 /* "1 Sep" has to hold one line in a 35px inner width, or it wraps onto the
    free count underneath it — which is what it did: the month sat on top of the
    number the cell exists to show. */
-.day.mstart .dd{color:var(--txt-2);white-space:nowrap;font-size:9px;letter-spacing:-.01em}
+.day.mstart .dd{white-space:nowrap}   /* and see the tag rule above */
 .day.sel{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink), var(--shadow-sm)}
 
 /* ── THE PICKER HEAD ────────────────────────────────────────────────────────
@@ -1350,12 +1366,14 @@ button{background:none;border:0;padding:0;cursor:pointer;
   content:"";position:absolute;inset:0;z-index:-1;
   background:var(--free);border-radius:var(--r-sm);
 }
-/* the date on the band, lifted off --txt-3. Measured on the dark band it came
-   out at 3.63:1 against a 4.5 floor — a 10px label on a fill that is lighter
-   than the cell it replaced. --txt-2 is the token that clears it in both. */
-.day.rng .dd{color:var(--txt-2)}
-.day.rngA .dd, .day.rngB .dd{color:color-mix(in srgb,var(--free-ink) 62%,transparent)}
-.day.rngA .fn, .day.rngB .fn{color:var(--free-ink)}
+/* the small figure on the band, lifted off --txt-3. Measured on the dark band
+   it came out at 3.63:1 against a 4.5 floor — a 10px label on a fill that is
+   lighter than the cell it replaced. --txt-2 is the token that clears it in
+   both. (It was the date when the date was the small figure; it is the count
+   now, and the date at 21px clears on its own.) */
+.day.rng .fn{color:var(--txt-2)}
+.day.rngA .fn, .day.rngB .fn{color:color-mix(in srgb,var(--free-ink) 62%,transparent)}
+.day.rngA .dd, .day.rngB .dd{color:var(--free-ink)}
 .day.rngA .gg, .day.rngB .gg{background:color-mix(in srgb,var(--free-ink) 18%,transparent)}
 .day.rngA .gg i, .day.rngB .gg i{background:var(--free-ink)}
 .day.rng .fn, .day.rngA .fn, .day.rngB .fn{transition:none}
@@ -2214,6 +2232,14 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
 .stepWide button[disabled]{opacity:.3}
 .stepWide b{flex:1;text-align:center;font-size:14px;font-weight:620;letter-spacing:-.015em;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* the arrival, once it has happened, is stated where the stepper would be */
+.stepWide.locked{justify-content:center;background:transparent}
+.stepWide.locked b{color:var(--txt-2);font-weight:560}
+/* a route in a guest's name — the same pane as the two repair routes, one
+   size up, because it carries a name rather than a verb */
+.roomRoutes.stay button{font-size:13px;color:var(--txt);padding:9px 12px}
+.roomRoutes.stay button b{font-weight:620;letter-spacing:-.015em}
+.roomRoutes.stay button s{font-size:11px}
 /* the running consequence of the two steppers above it */
 .bkstate{font-size:12.5px;line-height:1.45;color:var(--txt-3);padding:0 2px;margin-top:-2px}
 .bkstate.bad{color:var(--hot)}
@@ -3596,8 +3622,10 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 :root[data-theme="light"] .night.today:not(.sel){border-color:var(--now-ink)}
 :root[data-theme="light"] .night.today .d{color:var(--now-ink)}
 :root[data-theme="light"] .day.today:not(.sel){border-color:var(--now-ink)}
-:root[data-theme="light"] .night.today .d em,:root[data-theme="light"] .day.today .dd{
-  background:var(--now);color:var(--txt);border-radius:5px;padding:1px 5px;margin:-1px -2px}
+/* The pill is gone. At 11.5px an amber date needed a ground under it to clear
+   AA; at 25px it needs only the ink, and a lozenge around a 25px numeral reads
+   as a badge, not a date. */
+:root[data-theme="light"] .night.today .d em,:root[data-theme="light"] .day.today .dd{color:var(--now-ink)}
 
 /* ── the accent, split by role ───────────────────────────────────────────────
    --now is the fill; --now-ink is every accented word, hairline and thin bar. */
@@ -6724,7 +6752,7 @@ function runOp(op){
 }
 async function rejected(op, e){
   if(e.code === "23505") return;                    // a retry that had already landed
-  if(e.code === "23P01"){ await lostTheRoom(op); return; }
+  if(e.code === "23P01"){ await (op.k === "stay~" ? lostTheChange(op) : lostTheRoom(op)); return; }
   /* A 401 ON ONE WRITE IS NOT A SIGN-OUT. This threw the session away and put
      the password box on screen the moment any single request came back
      unauthorised — and the ordinary cause of that is an access token that
@@ -6892,6 +6920,58 @@ async function lostTheRoom(op){
       toast("", "<b>" + esc(label || "The booking") + " is in " + esc(flats[alt].id) + ".</b> "
               + esc(spanWords(a, b)) + ".", alt);
     }} : null);
+  haptic([12, 60, 12]);
+}
+/* The same race, for a CHANGE to a stay that already exists — longer,
+   shorter, or moved to another flat. lostTheRoom's answer is wrong here twice
+   over: it would leave the refused dates on this phone until the next pull,
+   and it would offer to "put them in" another flat, which for a guest who is
+   already in the book is a second copy of them. The row goes back to what the
+   server still holds, from the `was` the op carried up, and the toast says
+   what stands. */
+async function lostTheChange(op){
+  const mine = resv.find(r => r.sid === op.id);
+  const was = op.was || {};
+  if(mine){
+    if(was.starts_on) mine.start = dayOff(was.starts_on);
+    if(was.ends_on)   mine.end   = dayOff(was.ends_on);
+    if("amount" in was) mine.amount = was.amount == null ? undefined : Number(was.amount);
+    if(was.flat_id){ const fi = flats.findIndex(f => f.uid === was.flat_id); if(fi >= 0) mine.fi = fi; }
+    mine.nights = mine.end - mine.start;
+  }
+  needPull = true;
+  recompute(); save(); cacheSave();
+  try{ refreshScreen(); }catch(e){}
+  /* The flat that was NOT free: the destination for a move, the guest's own
+     for a date change. Looked up by uid only when the op names one — a find
+     on an undefined uid matches the first flat in the book, which is how the
+     sample-mode probe reported G01 for a stay in TT-102. */
+  const toUid = op.body && op.body.flat_id;
+  const flatUid = toUid || (mine && flats[mine.fi] && flats[mine.fi].uid);
+  const code = toUid ? ((flats.find(f => f.uid && f.uid === toUid) || {}).id || "That room")
+             : mine ? flats[mine.fi].id : "That room";
+  const a = (op.body && op.body.starts_on) || (mine && dayISO(mine.start));
+  const b = (op.body && op.body.ends_on)   || (mine && dayISO(mine.end));
+  let who = "";
+  try{
+    const rows = await rest("GET", "/stays?select=guest_name,kind,reason,starts_on,ends_on"
+      + "&flat_id=eq." + flatUid + "&starts_on=lt." + b + "&ends_on=gt." + a + "&id=neq." + op.id);
+    if(rows && rows.length){
+      const w = rows[0];
+      const name = w.kind === "block" ? (w.reason || "Out of service") : (w.guest_name || "A guest");
+      who = name + " holds " + spanWords(w.starts_on, w.ends_on);
+    }
+  }catch(err){ /* offline again — the headline still stands without the name */ }
+  const guest = mine ? (mine.guest || "The guest") : "The guest";
+  const stands = !mine ? ""
+    : was.flat_id ? `${guest} stays in ${flats[mine.fi].id}.`
+    : `${guest} still ${mine.end <= 0 ? "leaves today" : "leaves " + fmt(mine.end)}`
+      + (op.body && op.body.starts_on ? `, arriving ${fmt(mine.start)}` : "") + ".";
+  logAct("refused", `Could not change ${guest} in ${code} — ${who || "those nights are taken"}`,
+    {flat: code, guest: mine && mine.guest});
+  toast("warn", `<b>${esc(code)} is not free for those nights.</b> `
+    + (who ? esc(who) + " — entered on another phone. " : "They went while you were typing. ")
+    + `The change was not saved. ${esc(stands)}`, mine ? mine.fi : null);
   haptic([12, 60, 12]);
 }
 /* "12–15 Aug", with the month said once, and the end date read as the morning
@@ -7334,7 +7414,8 @@ function moveBooking(r, toFi){
   const wasFi = r.fi;
   r.fi = toFi;
   if(MODE === "live" && r.sid)
-    enqueue({k:"stay~", id:r.sid, body:{flat_id: flats[toFi].uid}});
+    enqueue({k:"stay~", id:r.sid, body:{flat_id: flats[toFi].uid},
+             was:{flat_id: flats[wasFi].uid}});     // see lostTheChange
   recompute(); save(); cacheSave();
   /* Ids as well as indexes: an index is meaningless in a log once the inventory
      changes shape underneath it, which is exactly the failure being hunted. */
@@ -7346,6 +7427,72 @@ function moveBooking(r, toFi){
                       /* did it actually take, measured after the fact */
                       stuck: occ[toFi] ? !!occ[toFi][Math.max(r.start,0)] : null});
   return {from: wasFi, to: toFi};
+}
+
+/* ── the guest is staying on ──────────────────────────────────────────────────
+   Two more nights, or two fewer, for a stay that already exists. Most often
+   that is a guest who is IN the flat — which was the one case nothing on the
+   room sheet could touch: Move refuses in-house guests ("they do not pack"),
+   and the ✕ would have cost the stay its id, its payments and its place in
+   the book, to be typed in again from scratch. So the operators had no way to
+   say "he is keeping it till Friday", and said so.
+
+   The dates change; the row, its id and its money stay. Arrival is a fact once
+   it has happened, so it is only movable before then. The stay's own nights
+   never count as taken — a guest cannot be in his own way.                  */
+function freeExcept(fi, a, b, r){
+  for(let d = Math.max(a, 0); d < Math.min(b, DAYS); d++)
+    if(occ[fi][d] && !(d >= r.start && d < r.end)) return false;
+  return true;
+}
+function changeStay(r, start, nights, extra){
+  if(isBlock(r) || r.openEnd) return false;
+  extra = extra || {};
+  const inHouse = r.start <= 0;
+  if(inHouse) start = r.start;                          // arrival has happened
+  else if(!(start >= 0 && start < DAYS)) return false;
+  const end = start + (nights|0);
+  /* An in-house guest can leave as early as TODAY — "they checked out this
+     morning" is what frees tonight — but never before a night already slept,
+     and a guest who arrived today keeps tonight. */
+  if(end < Math.max(start + 1, 0)) return false;
+  const amtGiven = extra.amount !== undefined;
+  const amount = amtGiven ? (toAmount(extra.amount) || undefined) : r.amount;
+  if(start === r.start && end === r.end && (amount || 0) === (r.amount || 0)) return false;
+  if(!freeExcept(r.fi, start, end, r)) return false;
+  const was = {start: r.start, end: r.end, amount: r.amount};
+  r.start = start; r.end = end; r.nights = end - start;
+  if(amtGiven) r.amount = amount;
+  recompute(); save(); cacheSave();
+  if(MODE === "live" && r.sid){
+    const body = {};
+    if(start !== was.start) body.starts_on = dayISO(start);
+    if(end !== was.end)     body.ends_on   = dayISO(end);
+    if(amtGiven && (amount || 0) !== (was.amount || 0)) body.amount = amount || null;
+    /* `was` rides with the op, so a refusal can put the row back exactly —
+       the server still holds these — see lostTheChange. */
+    enqueue({k:"stay~", id:r.sid, body,
+             was:{starts_on: dayISO(was.start), ends_on: dayISO(was.end),
+                  amount: was.amount == null ? null : was.amount}});
+  }
+  const d = end - was.end, who = r.guest || "A guest", where = flatLabel(r.fi);
+  const more = d > 0 ? `${d} night${d>1?"s":""} more` : d < 0 ? `${-d} night${d<-1?"s":""} fewer` : "";
+  let line;
+  if(start !== was.start && end !== was.end)
+    line = `${who} in ${where} now ${fmt(start)}–${fmt(end)}, was ${fmt(was.start)}–${fmt(was.end)}`;
+  else if(start !== was.start)
+    line = `${who} in ${where} now arrives ${fmt(start)}, not ${fmt(was.start)}`;
+  else if(end !== was.end)
+    line = `${who} in ${where} now leaves ${end <= 0 ? "today" : fmt(end)}, not ${fmt(was.end)}`
+         + (more ? ` · ${more}` : "");
+  else
+    line = `${who} in ${where} · total now ${amount ? money(amount) : "blank"}`;
+  if((amount || 0) !== (was.amount || 0) && (start !== was.start || end !== was.end))
+    line += ` · ${amount ? money(amount) : "no amount"}`;
+  if(!extra.quiet) logAct("dates", line, {flat: where, guest: r.guest});
+  track("stay_changed", {delta: d, shifted: start !== was.start, inHouse,
+                         priced: !!amount, live: MODE === "live"});
+  return {was, start, end};
 }
 
 function cancelBooking(r){
@@ -8162,7 +8309,7 @@ function openAccount(){
    app admitting it does not know what it just recorded. Money is ₹ wherever
    money moved, in or out, because the sentence beside it says which. */
 const ACT_ICON = {
-  book:"+",      restore:"↩",   cancel:"✕",   move:"⇄",     refused:"⊘",
+  book:"+",      restore:"↩",   cancel:"✕",   move:"⇄",     refused:"⊘",   dates:"↔",
   paid:"₹",      unpaid:"−",    fault:"!",    fixed:"✓",    block:"⌂",
   expense:"₹",   costs:"₹",     revenue:"₹",  flats:"⌗",    export:"↓",
 };
@@ -8863,6 +9010,175 @@ function openGuestMove(b, backTo){
   sheetB.scrollTop = 0;
 }
 
+/* ── change a stay's dates ────────────────────────────────────────────────────
+   The booking form's two controls, on a stay that already exists. Arrival is
+   shown and not offered once the guest is in; nights step up as far as the
+   next guest and down as far as tonight. What gets read out over the phone is
+   the leaving date, so that is what the button says. The move — for a guest
+   not yet in — is a route from here rather than a second glyph on the row:
+   a booking row with money, a move and a cancel on it left the name it
+   exists to show about nine characters of room. */
+const SVG_DATES = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"'
+  + ' stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+  + '<rect x="3" y="4.5" width="14" height="12.5" rx="2"/><path d="M3 8.5h14M7 2.5v3.5M13 2.5v3.5"/>'
+  + '<path d="M7.5 13h5M10.5 11l2 2-2 2"/></svg>';
+
+function openStayDates(r, backTo){
+  const fi = r.fi, fl = flats[fi];
+  const inHouse = r.start <= 0;
+  sheetWipe();
+  const t = el("div");
+  t.innerHTML = `<div class="n">${esc(r.guest)}</div>`
+    + `<div class="m">${esc(fl.id)} · ${inHouse
+        ? (r.start === 0 ? "arrived today" : "in since " + esc(fmt(r.start))) + " · leaves " + esc(fmt(r.end))
+        : "arrives " + esc(fmt(r.start)) + " · " + r.nights + " night" + (r.nights > 1 ? "s" : "")}</div>`;
+  const x = el("button", null, "‹"); x.setAttribute("aria-label","Back to the room");
+  x.onclick = backTo;
+  sheetH.append(t, x);
+
+  let day = r.start, n = r.nights;
+  /* The deal's own night, not the rack rate: ₹12,000 for five nights is
+     ₹2,400 a night whatever the flat's card says, and two more nights on the
+     same terms is what a guest who is staying on has agreed to. Offered, not
+     imposed — the box is editable, and blank stays blank. */
+  const perNight = r.amount && r.nights > 0 ? Math.round(r.amount / r.nights) : 0;
+  const minEnd = Math.max(r.start + 1, 0);
+  const capFrom = d => { let k = 0;
+    while(k < 90 && d + k < DAYS && (!occ[fi][d + k] || (d + k >= r.start && d + k < r.end))) k++;
+    return k; };
+  const atEdge = d => d + capFrom(d) >= DAYS;
+
+  const form = el("div","bkform");
+  const prev = previewStrip(fi);
+
+  const whenCap = el("div","bkcap");
+  whenCap.append(el("span",null, inHouse ? "Arrived" : "Arriving"), el("span",null,"Nights"));
+  const whenRow = el("div","bkrow");
+  const dayBox = el("div","stepWide");
+  const dLess = el("button",null,"−"), dMore = el("button",null,"+"), dLab = el("b");
+  dLess.setAttribute("aria-label","A day earlier"); dMore.setAttribute("aria-label","A day later");
+  if(inHouse){ dLess.hidden = dMore.hidden = true; dayBox.classList.add("locked"); }
+  dayBox.append(dLess, dLab, dMore);
+  const nBox = el("div","step");
+  const nLess = el("button",null,"−"), nMore = el("button",null,"+"), nLab = el("b");
+  nLess.setAttribute("aria-label","A night fewer"); nMore.setAttribute("aria-label","A night more");
+  nBox.append(nLess, nLab, nMore);
+  whenRow.append(dayBox, nBox);
+  const state = el("div","bkstate");
+
+  const capRow = el("div","bkcap");
+  const capR = el("span");
+  capRow.append(el("span",null,"Total for the stay"), capR);
+  const amtWrap = el("div","bkamt");
+  amtWrap.appendChild(el("s", null, "₹"));
+  const amt = el("input");
+  amt.type = "text"; amt.inputMode = "numeric"; amt.placeholder = "Total";
+  amt.setAttribute("aria-label", `Total agreed for ${r.guest}'s whole stay`);
+  amt.value = r.amount ? String(r.amount) : "";
+  let touchedAmt = false;
+  amt.addEventListener("input", ()=>{ touchedAmt = true; paint(); });
+  amtWrap.appendChild(amt);
+  /* What the new total does to the money already in hand. The total is the
+     whole stay's, so it REPLACES the old one — payments are never touched —
+     and this line says the consequence out loud: what is paid, what is still
+     due, or, on a stay cut shorter than what was paid for, what is owed back. */
+  const moneyState = el("div","bkstate");
+
+  const go = el("button","bkgo","");
+
+  function paint(){
+    const cap = capFrom(day), edge = atEdge(day);
+    const maxN = edge ? Math.max(n, cap) + 60 : cap;
+    const minN = Math.max(1, minEnd - day);
+    n = Math.max(minN, n);
+    const end = day + n;
+    dLab.textContent = inHouse ? (r.start === 0 ? "Today" : fmtL(r.start))
+                               : (day === 0 ? "Tonight" : fmtL(day));
+    nLab.textContent = n;
+    dLess.disabled = day <= 0; dMore.disabled = day >= DAYS - 1;
+    nLess.disabled = n <= minN; nMore.disabled = n >= maxN;
+    const ok = freeExcept(fi, day, end, r);
+    const d = end - r.end, shifted = day !== r.start;
+    const more = d > 0 ? `${d} night${d>1?"s":""} more` : d < 0 ? `${-d} night${d<-1?"s":""} fewer` : "";
+    state.classList.toggle("bad", !ok);
+    if(!ok){
+      const busy = resv.find(x => x !== r && x.fi === fi && x.start < end && x.end > day);
+      state.textContent = busy
+        ? `${isBlock(busy) ? (busy.reason || "Out of service") : busy.guest} holds ${fmtL(Math.max(busy.start, day))}`
+        : `${fl.id} is not free for those nights`;
+    }else if(end <= 0){
+      state.textContent = `Leaves today · ${fl.id} is free tonight · ${more}`;
+    }else{
+      state.textContent = `Leaves ${fmt(end)}`
+        + (more ? ` · ${more}` : shifted ? "" : " · as booked")
+        + (cap > n ? ` · free for ${cap - n} more night${cap - n > 1 ? "s" : ""} after`
+           : edge ? " · free to the end of this book" : " · the night after is taken");
+    }
+    if(!touchedAmt && perNight) amt.value = String(Math.max(0, r.amount + perNight * d));
+    const newAmt = toAmount(amt.value);
+    capR.textContent = perNight
+      ? (newAmt !== (r.amount || 0) ? `was ${money(r.amount)} · ${money(perNight)} a night` : `${money(perNight)} a night`)
+      : (r.amount ? "" : "none recorded");
+    const paid = paidOn(r);
+    moneyState.textContent = !newAmt && !paid ? ""
+      : paid > newAmt ? `${money(paid)} paid · ${money(paid - newAmt)} to give back`
+      : paid ? `${money(paid)} paid · ${newAmt > paid ? money(newAmt - paid) + " still due" : "settled"}`
+      : `${money(newAmt)} due · nothing paid yet`;
+    moneyState.classList.toggle("bad", paid > newAmt);
+    prev.paint(Math.max(day, 0), Math.max(end, 0) - Math.max(day, 0));
+    const changed = shifted || d !== 0 || newAmt !== (r.amount || 0);
+    go.disabled = !ok || !changed;
+    go.textContent = !ok ? "Not free for those nights"
+      : !changed ? "Nothing changed"
+      : end <= 0 ? `${r.guest} leaves today`
+      : shifted && d !== 0 ? `${r.guest} · ${fmt(day)} → ${fmt(end)}`
+      : shifted ? `${r.guest} arrives ${fmt(day)} instead`
+      : d > 0 ? `Keep ${r.guest} until ${fmt(end)}`
+      : d < 0 ? `${r.guest} leaves ${fmt(end)}`
+      : "Save the new total";
+  }
+  dLess.onclick = ()=>{ day = Math.max(0, day - 1); haptic(5); paint(); };
+  dMore.onclick = ()=>{ day = Math.min(DAYS - 1, day + 1); haptic(5); paint(); };
+  nLess.onclick = ()=>{ n = n - 1; haptic(5); paint(); };
+  nMore.onclick = ()=>{ n = n + 1; haptic(5); paint(); };
+
+  const take = ()=>{
+    if(go.disabled) return;
+    const res = changeStay(r, day, n, {amount: amt.value});
+    if(!res){ haptic(30); go.textContent = "Just taken"; setTimeout(paint, 900); return; }
+    haptic(18);
+    const {was} = res;
+    backTo(); refreshScreen();
+    toast("", `<b>${esc(r.guest)} ${res.end <= 0 ? "leaves today" : "now leaves " + esc(fmt(res.end))}.</b> `
+      + `${esc(fl.id)} · ${esc(spanWords(dayISO(res.start), dayISO(res.end)))}.`, null,
+      {label:"Undo", run:()=>{
+        /* "" rather than undefined for a total that was blank, so the undo can
+           blank it again — undefined means "leave the amount alone". */
+        if(!changeStay(r, was.start, was.end - was.start, {amount: was.amount == null ? "" : was.amount})){
+          toast("warn", `<b>Could not put the old dates back.</b> Somebody has since taken those nights.`, fi);
+          return;
+        }
+        refreshScreen();
+      }});
+  };
+  go.onclick = take;
+
+  form.append(prev, whenCap, whenRow, state, capRow, amtWrap, moneyState, go);
+  if(!inHouse){
+    const routes = el("div","roomRoutes stay");
+    const mv = el("button");
+    mv.append(el("b", null, `Move ${r.guest} to another flat`),
+              el("s", null, "the same nights, a different room"));
+    mv.onclick = ()=>{ haptic(9); openGuestMove(r, ()=> openStayDates(r, backTo)); };
+    routes.appendChild(mv);
+    form.append(routes);
+  }
+  sheetB.append(form);
+  paint();
+  sheet.classList.add("on"); scrim.classList.add("on");
+  sheetB.scrollTop = 0;
+}
+
 /* ── the wall, and whether it can be moved ────────────────────────────────────
    An out-of-service run stops dead the day a guest arrives, and the app used to
    say so and stop there — which is a fact, not an answer. The same shuffle that
@@ -8951,10 +9267,11 @@ function renderRooms(){
     const c = el("button","night" + (d===0?" today":""));
     c.dataset.d = d;
     const lab = el("div","d");
-    // on the 1st the month replaces the weekday, so a month boundary never reads as a bare number
+    // the date first and the weekday at its baseline; on the 1st the month
+    // replaces the weekday, so a month boundary never reads as a bare number
+    lab.append(el("em",null, String(dt.getDate())));
     lab.append(el("span",null,
       d===0 ? "TDY" : dt.getDate()===1 ? MON[dt.getMonth()].toUpperCase() : DOW[dt.getDay()].toUpperCase()));
-    lab.append(el("em",null, String(dt.getDate())));
     c.append(lab, el("div","n","0"));
     const t = el("div","t"); t.appendChild(el("i"));
     c.appendChild(t);
@@ -9009,7 +9326,7 @@ function renderRooms(){
       const cd = +c.dataset.d, f = countFreeFor(cd, n);
       c.classList.toggle("sel", cd === d);
       c.classList.toggle("full", f === 0);
-      c.querySelector(".n").textContent = f;
+      c.querySelector(".n").innerHTML = f ? `<b>${f}</b> free` : "full";
       c.querySelector(".t i").style.width = (f/NF*100).toFixed(0)+"%";
       c.setAttribute("aria-label",
         `Arrive ${fmtL(cd)}, ${f} of ${NF} rooms free for ${n} night${n>1?"s":""}`);
@@ -9504,8 +9821,9 @@ function renderMonth(){
     const first = dt.getDate() === 1;
     if(first) c.classList.add("mstart");
     if(d === seamAt) c.classList.add("seam");
-    c.append(el("div","dd", first ? "1 " + MON[dt.getMonth()] : String(dt.getDate())),
-             el("div","fn",String(f)));
+    const dd = el("div","dd", String(dt.getDate()));
+    if(first) dd.appendChild(el("i", null, MON[dt.getMonth()]));
+    c.append(dd, el("div","fn",String(f)));
     const g = el("div","gg"); const i = el("i");
     i.style.width = (f/NF*100).toFixed(0)+"%";
     g.appendChild(i); c.appendChild(g);
@@ -13448,6 +13766,21 @@ function openSheet(fi, day){
       b.onclick = ()=>{ haptic(12); openBooking(fi, nxt.from, Math.min(nxt.nights, 3)); };
       act.append(b);
     }
+    /* The stay in the way is the one the operator is most likely here to
+       change — "he wants two more nights" is asked about the guest who is in,
+       and the room sheet is where the operator is looking when it is asked.
+       Given as a route in the guest's own name, under the sale and above the
+       two repair routes, so it is findable without competing with Book. */
+    if(busy && !isBlock(busy) && !busy.openEnd){
+      const chg = el("div","roomRoutes stay");
+      const c = el("button");
+      c.append(el("b", null, `Change ${busy.guest}'s dates`),
+               el("s", null, (busy.start <= 0 ? `in until ${fmt(busy.end)}` : `${fmt(busy.start)} → ${fmt(busy.end)}`)
+                             + " · keep them longer, or shorter"));
+      c.onclick = ()=>{ haptic(9); openStayDates(busy, ()=> openSheet(fi, day)); };
+      chg.appendChild(c);
+      act.append(chg);
+    }
   }
 
   const routes = el("div","roomRoutes");
@@ -13489,16 +13822,20 @@ function openSheet(fi, day){
     x2.setAttribute("aria-label", `Cancel ${r.guest}'s booking in ${fl.id}`);
     armConfirm(x2, {rest:"✕", armed:"Cancel?",
       run:()=>{ cancelWithUndo(r, fi); closeSheet(); refreshScreen(); }});
-    /* Small on purpose. Moving a guest is a real thing to want and a rare thing
-       to do, so it sits on the guest's own row at the size of a glyph — not a
-       pill, not a card, not a third route competing with Book. */
-    if(!isBlock(r) && r.start >= 0){
-      const mvb = el("button","rowx rowmv");
-      mvb.innerHTML = SVG_SWAP;
-      mvb.setAttribute("aria-label", `Move ${r.guest} to another flat`);
-      mvb.onclick = ev=>{ ev.stopPropagation(); haptic(9);
-        openGuestMove(r, ()=> openSheet(fi, day)); };
-      end.appendChild(mvb);
+    /* Small on purpose. Changing a stay is a real thing to want and a rare
+       thing to do, so it sits on the guest's own row at the size of a glyph —
+       not a pill, not a card, not a third route competing with Book. One
+       glyph, for every guest: the dates, and for a guest not yet in, the move
+       as a route inside. The ⇄ used to sit here for future guests only, which
+       is exactly the wrong half — the guest who is IN is the one whose stay
+       gets extended, and he had nothing. */
+    if(!isBlock(r) && !r.openEnd){
+      const ed = el("button","rowx rowmv rowdt");
+      ed.innerHTML = SVG_DATES;
+      ed.setAttribute("aria-label", `Change ${r.guest}'s dates` + (r.start > 0 ? ", or move them" : ""));
+      ed.onclick = ev=>{ ev.stopPropagation(); haptic(9);
+        openStayDates(r, ()=> openSheet(fi, day)); };
+      end.appendChild(ed);
     }
     end.appendChild(x2);
     row.append(m, end);
