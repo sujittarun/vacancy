@@ -288,6 +288,33 @@ export async function run(filter) {
     return "record kept, ₹4,500 and fixer intact, blocks nothing";
   });
 
+  /* The sheet's one-night "Block" on TT-402 ended on the 28th and a guest was
+     in that morning; six days later the board still asked "Is TT-402 back in
+     service?" — and the operator read that, reasonably, as the app saying the
+     flat was out. Built rather than found, because whether the seed holds a
+     block a guest followed is not the test's business. */
+  await test("a past block a guest has since followed is not asked about", async () => {
+    // nobody in it from five nights ago to tomorrow, or the book has an answer
+    // before the fixture asks the question
+    const fi = flats.findIndex((f, i) => !resv.some(r => r.fi === i && r.end > -5 && r.start < 2));
+    ok(fi >= 0, "no flat empty from five nights ago through tomorrow");
+    const n0 = resv.length;
+    const blk = { fi, start: -5, end: -4, nights: 1, kind: "block",
+                  reason: "Owner use", note: "Block", guest: "Out of service", src: "Block" };
+    resv.push(blk); recompute();
+    eq(blockNudges().some(x => x.r === blk), true, "a block that ended 4 days ago, nobody in since, is asked about");
+    const stay = { fi, start: -4, end: 1, nights: 5, guest: "Since", src: "Direct", pays: [] };
+    resv.push(stay); recompute();
+    eq(blockNudges().some(x => x.r === blk), false, "asked about a flat a guest has slept in since");
+    stay.start = 0; stay.nights = 1; recompute();
+    eq(blockNudges().some(x => x.r === blk), false, "a guest arriving this morning also answers it");
+    stay.start = 1; stay.end = 2; recompute();
+    eq(blockNudges().some(x => x.r === blk), true, "a stay that has not begun is treated as an answer");
+    resv.splice(resv.indexOf(stay), 1); resv.splice(resv.indexOf(blk), 1); recompute();
+    eq(resv.length, n0, "row count after the fixture was removed");
+    return "ended block · guest in since → no question; nobody since → still asked";
+  });
+
   await test("a day change triggers the rollover path", async () => {
     ok(typeof rolloverCheck === "function", "no rolloverCheck");
     eq(dayStamp(), bootDay, "dayStamp disagrees with bootDay on the same day");
