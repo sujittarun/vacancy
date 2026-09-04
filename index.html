@@ -4364,6 +4364,13 @@ function blockNudges(){
        A stay that has begun, in this flat, reaching past the block's end: the
        book knows, and the board has nothing to ask. */
     else if(due <= 0 && bookings().some(b => b.fi === r.fi && b.start <= 0 && b.end > due)){}
+    /* ANSWERED BY THE INVOICE. Nothing marks a block "answered" — the board
+       admits it by date alone — so answering the form about an ended block
+       recorded the fixer and the bill and then asked the same question again
+       at the next paint, for up to a week. An ended block that carries a
+       fixer or a cost has been closed out; a block still running with a
+       fixer merely lined up has not, which is why this is due <= 0 only. */
+    else if(due <= 0 && (r.fixer || r.cost)){}
     else if(due >= -7 && due <= 2){
       out.push({r, kind:"due", due,
         when: due < 0 ? `came back ${-due} day${-due>1?"s":""} ago`
@@ -10689,6 +10696,25 @@ function renderTrends(){
         yes.onclick = ev=>{
           ev.stopPropagation(); haptic(12);
           const r = dcd.block, fl2 = flats[r.fi];
+          /* A BARE BLOCK HAS NOBODY TO NAME. The close form refuses to save
+             until a fixer is named — "Say who fixed it first" — which is
+             right for a fault and absurd for a one-night "Block" from the
+             sheet that recorded no fault, no fixer and no bill: the only way
+             to put the flat back on sale was to invent a repair person. The
+             owner hit exactly this on TT-402 and was stuck for a week.
+             Nothing recorded, nothing to ask: it just comes back. */
+          if(!r.fault && !r.fixer && !r.cost){
+            /* Deleted, not closed out. A closed-out row exists to keep its
+               fault and its invoice; this one has neither — it says "Block"
+               and nothing else, and the sheet it came from still says it.
+               Keeping it would also re-ask the question forever, since an
+               empty record can never look answered. */
+            logAct("fixed", `${fl2.id} back on sale · the block recorded nothing, so nothing was kept`,
+                   {flat: fl2.id});
+            cancelBooking(r); refreshScreen();
+            toast("", `<b>${esc(fl2.id)} is back on sale.</b>`, r.fi);
+            return;
+          }
           openFixedForm({
             fi: r.fi, fault: r.fault || "",
             assigned: r.fixer || "", assignedPhone: r.fixer_phone || "",
