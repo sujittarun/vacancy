@@ -773,9 +773,28 @@ button{background:none;border:0;padding:0;cursor:pointer;
 .tcard h3{margin:0;font-size:15px;font-weight:650;letter-spacing:-.018em}
 .tcard .cap{margin:3px 0 12px;font-size:11.5px;color:var(--txt-3);letter-spacing:.01em}
 .tcard .body{flex:1;display:flex;flex-direction:column;justify-content:center}
+/* TWO PANELS MUST NOT SHARE AN EDGE. The body is a bare column with no gap, so
+   a card stacked straight onto another put two rounded borders on the same
+   line — measured, both at y=1177.4 to the pixel. It does not read as two
+   panels touching, it reads as one panel broken: the owner circled it and
+   called it an overlap, which is exactly what a 1px double rule looks like at
+   arm's length. The gap is between SIBLING cards only, so a card that is the
+   body's only child still sits where it always did. */
+.tcard .body > .card + .card{margin-top:10px}
 .tcard .body > .act:first-child{border-top:0}
 .tcard .said{margin:14px 0 0;font-size:12.5px;line-height:1.55;color:var(--txt-2)}
 .tcard .said b{color:var(--txt)}
+/* A BUSINESS ROW EXPLAINS ITSELF OR IT DOES NOT EARN ITS SECOND LINE. The
+   shared .row rule clips the sub-line to one line with an ellipsis, which is
+   right in the room sheet — a guest's name is the thing being hunted and the
+   dates behind it are a reminder. Here the sub-line IS the content: "collect
+   before they go · 2 bookings" arrived as "collect before they go · 2 boo…"
+   with the money and a chevron holding the rest of the width. */
+.tcard .row.bk .meta em,
+/* and in the sheets those rows open onto, for the same reason: "B401 · in
+   until 10 Sep · ₹1,07,625 agreed" is three facts and the ellipsis ate the
+   one carrying the money. */
+.moneylist .row.bk .meta em{white-space:normal;overflow:visible;text-overflow:clip}
 .tcard .said .hi{color:var(--now);font-weight:600}
 /* bars grow from nothing as their section arrives — transform only, no layout */
 .vbar .col i, .patrow .t i, .wrow .t i, .wrow .hr{transition:transform .42s var(--out)}
@@ -977,6 +996,14 @@ button{background:none;border:0;padding:0;cursor:pointer;
 .headline{display:flex;align-items:baseline;gap:10px;margin-bottom:14px}
 .headline b{font-size:clamp(30px,9.5vw,40px);font-weight:700;letter-spacing:-.04em;line-height:.9}
 .headline s{text-decoration:none;font-size:12.5px;color:var(--txt-2);line-height:1.4}
+/* A headline that opens what it is a sum of. No fill and no border: it is the
+   card's own first line, not a button laid on top of one — the chevron is what
+   says it is live, the same mark the tiles below it use. */
+.headline.tap{position:relative;width:100%;background:none;border:0;padding:0 22px 0 0;
+  text-align:left;transition:transform .38s var(--spring)}
+.headline.tap:active{transform:scale(.985);transition-duration:.085s}
+.headline.tap .go{position:absolute;top:2px;right:2px;font-style:normal;font-size:17px;
+  line-height:1;color:var(--txt-3)}
 
 /* vertical bar chart used by the booking curve and turnaround load */
 .vbars{display:flex;gap:5px;align-items:flex-end;height:132px}
@@ -1103,6 +1130,12 @@ button{background:none;border:0;padding:0;cursor:pointer;
   flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;
   -webkit-overflow-scrolling:touch;
 }
+/* The building filter on Month is fixed chrome between the count and the list,
+   not part of either — the list scrolls under it and the count above it never
+   moves. 31px, which it takes from the trough and earns back many times over
+   on the first filtered night. */
+.monthfilt{flex:0 0 auto;margin-top:4px;margin-bottom:0;padding-top:0;padding-bottom:2px}
+.monthfilt button{padding-top:4px;padding-bottom:4px}
 
 /* ── ONE CALENDAR, NOT THREE PAGES ─────────────────────────────────────────
    The book is 63 days — three months, eleven week-rows, about 700px. It was
@@ -1908,7 +1941,14 @@ button{background:none;border:0;padding:0;cursor:pointer;
 .rcol.on i{background:var(--free)}
 /* a month whose rate is read off too few priced nights wears the hatch the
    rest of the app uses for "counted, not billed" */
-.rcol.thin i{background:repeating-linear-gradient(180deg, var(--free) 0 3px, transparent 3px 6px)}
+/* ANCHORED TO ITS OWN BASELINE. The hatch is a 6px cycle measured from the top
+   of the bar, so where the height is not a multiple of six the last band is
+   the transparent one and the bar stops short of the axis — measured on a
+   16.9px August column, floating two pixels clear of the twelve beside it and
+   reading as a detached glyph rather than a short bar. The inset rule puts the
+   bottom edge back whatever the height works out to. */
+.rcol.thin i{background:repeating-linear-gradient(180deg, var(--free) 0 3px, transparent 3px 6px);
+  box-shadow:inset 0 -2px 0 var(--free)}
 .rcol s{text-decoration:none;font-size:9.5px;color:var(--txt-3)}
 .ratesay{margin-top:12px;font-size:12px;line-height:1.5;color:var(--txt-2)}
 .ratesay b{color:var(--txt);font-weight:640}
@@ -4662,6 +4702,37 @@ function todayBoard(){
           pill: money(dueFrom(r))})))});
   }
 
+  /* THE OTHER END OF THE STAY. The loop above catches a guest ARRIVING with a
+     balance; this catches one who is standing in the flat tonight and hands
+     the keys back within two days still owing. Both are money that stops
+     being collectable at a known hour, which is this board's whole rule —
+     after the door closes it is a phone call, and phone calls are how a
+     balance quietly never arrives.
+
+     Only the deadline slice belongs here. What is owed by everyone, in four
+     groups with the names behind each, is the Money tab's first card; putting
+     the whole of it on the board as well is the duplication the owner asked
+     not to have. */
+  {
+    const going = bookings().filter(r =>
+      r.start <= 0 && r.end > 0 && r.end <= NOW + 1 && dueFrom(r) > 0);
+    if(going.length){
+      const total = going.reduce((s2, r)=> s2 + dueFrom(r), 0);
+      todo.push({
+        /* "before 1 guest leave" — the plural was hung on the noun and the
+           verb was left behind. Both move together or neither does. */
+        label:`Collect ${money(total)} before `
+          + (going.length === 1 ? "a guest leaves" : `${going.length} guests leave`),
+        note:"in the flat now, checking out within two days",
+        open:()=>openFlatList(`${money(total)} to collect`,
+          "in the flat now, leaving within two days",
+          going.map(r=>({fi:r.fi, d:0,
+            meta:`<b>${esc(r.guest)}</b>${r.phone ? " · " + esc(r.phone) : ""}`
+               + `<em>${money(dueFrom(r))} of ${money(r.amount)} · leaves ${esc(fmt(r.end))}</em>`,
+            pill: money(dueFrom(r))})))});
+    }
+  }
+
   const days = [];
   for(let d=0; d<=NOW; d++){
     const free = flats.map((f,i)=>i).filter(i=>!occ[i][d]);
@@ -7050,6 +7121,27 @@ const inHand     = r => sum(r, p => p.method !== "Platform");    // actually rec
 const withPlatform = r => sum(r, p => p.method === "Platform");  // payout still to come
 const dueFrom    = r => Math.max(0, (r.amount || 0) - paidOn(r));
 const money = n => "₹" + Math.round(n).toLocaleString("en-IN");
+/* THE SAME FIGURE, AT A GLANCE. ₹1,98,500 is nine characters and a third of a
+   375px phone is about a hundred pixels: set at the tile's 27px it ran off the
+   card and took the tile beside it with it. Lakhs and crores because that is
+   how the figure gets said out loud here, and one decimal because two is
+   precision nobody reads at a glance — the exact rupee is always one tap away
+   in the sheet the tile opens. */
+const moneyShort = n =>{
+  const v = Math.abs(Math.round(n));
+  const sign = n < 0 ? "−" : "";
+  /* Precision by MAGNITUDE, not one rule for everything. ₹1,98,500 at one
+     decimal rounds to 2.0, JavaScript drops the trailing zero, and the tile
+     reads a flat "₹2L" — fifteen hundred rupees vanished and the figure
+     dressed as an exact one. Two decimals below ten, one below a hundred. */
+  const cut = (d, u)=>{ const x = v / d;
+    const dp = x < 10 ? 2 : x < 100 ? 1 : 0;
+    return sign + "₹" + (+x.toFixed(dp)) + u; };
+  if(v >= 1e7) return cut(1e7, "Cr");
+  if(v >= 1e5) return cut(1e5, "L");
+  if(v >= 1e4) return cut(1e3, "k");
+  return sign + "₹" + v.toLocaleString("en-IN");
+};
 
 function addPayment(r, amount, method, note){
   amount = toAmount(amount);
@@ -9481,6 +9573,11 @@ let monthOffset = 0, revealPanel = false;
 /* One selection, always: `sel.a` is the arrival, `sel.n` the nights. A single
    night is just n = 1. `pendingStart` is set after the first of two taps. */
 let sel = {a:0, n:1}, pendingStart = null;
+/* WHICH BUILDING THE ANSWER IS ABOUT. Held here rather than inside
+   renderMonth, which rebuilds on every tap of a date — a filter that reset
+   itself the moment you picked the nights you wanted it for would be worse
+   than none. Cleared on arrival at the tab, like the room grid's own. */
+let monthCode = null;
 /* THE CALENDAR EARNS ITS HEIGHT ONLY WHILE YOU ARE CHOOSING.
    The frame fixed the scrolling but split the screen the wrong way: the
    calendar held 224px and the answer — the thing the tab exists to produce —
@@ -10019,17 +10116,66 @@ function renderMonth(){
     hn.classList.toggle("none", free.length === 0);
     const bldgs = new Set(free.map(i=>flats[i].code)).size;
     /* no night count here: the control that sets it is one row up and says it */
+    /* The headline stays the WHOLE portfolio's answer whatever the filter is —
+       the chips below carry the per-building counts, and a headline that
+       changed with them would leave "3 free of 10" with nothing on screen
+       saying which ten. */
     ht.innerHTML = `free of ${NF}`
                  + (free.length ? ` · across ${bldgs} building${bldgs>1?"s":""}` : "");
 
+    /* WHICH BUILDING. The list is ordered by flat id, so on a night with 23
+       free across five buildings every TreeTops row comes first and "what is
+       free in Banjara Hills" is a scroll of four screens to find out. The
+       operators asked for the chip row the room grid already has, and it is
+       the same one: each chip carries its own count for the nights actually
+       picked, because a nought is an answer too.
+       It repaints the list rather than re-rendering the screen — a full
+       render rebuilds the calendar trough and would scroll it back to the
+       top, throwing away the fortnight the operator had just found. */
+    if(monthCode && !flats.some(f => f.code === monthCode)) monthCode = null;
+    const filt = el("div","roomfilt monthfilt");
     const panel = el("div","listtrough");
     const list = el("div","card");
-    if(!free.length){
-      list.appendChild(el("div","empty", n === 1
-        ? "Fully booked that night. Nothing left to sell."
-        : `No flat is free for all ${n} nights. Ask can suggest moving one guest to open one up.`));
+    const paintList = ()=>{
+      list.textContent = "";
+      const show = free.filter(i => !monthCode || flats[i].code === monthCode);
+      if(!free.length)
+        list.appendChild(el("div","empty", n === 1
+          ? "Fully booked that night. Nothing left to sell."
+          : `No flat is free for all ${n} nights. Ask can suggest moving one guest to open one up.`));
+      else if(!show.length){
+        const b2 = buildingsOf().find(x => x.code === monthCode);
+        list.appendChild(el("div","empty",
+          `Nothing free in ${b2 ? b2.name : "that building"} for ${n === 1 ? "that night" : `all ${n} nights`}`
+          + ` — tap All to see the other ${free.length}.`));
+      }
+      show.forEach(fi=> list.appendChild(roomRow(fi, a, null)));
+      panel.scrollTop = 0;
+    };
+    {
+      const B2 = buildingsOf();
+      const freeIn = code => free.reduce((acc, i)=> acc + (flats[i].code === code ? 1 : 0), 0);
+      const chip = (code, label, count)=>{
+        const b2 = el("button");
+        b2.dataset.code = code == null ? "" : code;
+        b2.append(el("span", null, label), el("i", count ? null : "none", String(count)));
+        b2.setAttribute("aria-selected", String(monthCode === code));
+        b2.setAttribute("aria-label", code
+          ? `Show only ${label}, ${count} free for these nights`
+          : `Show every building, ${count} free for these nights`);
+        b2.onclick = ()=>{
+          haptic(9); monthCode = code;
+          [...filt.children].forEach(z => z.setAttribute("aria-selected",
+            String((z.dataset.code || null) === monthCode)));
+          paintList();
+        };
+        filt.appendChild(b2);
+      };
+      chip(null, "All", free.length);
+      B2.forEach(b2=> chip(b2.code, b2.short || b2.name, freeIn(b2.code)));
     }
-    free.forEach(fi=> list.appendChild(roomRow(fi, a, null)));
+    s.appendChild(filt);
+    paintList();
     panel.append(list);
     s.appendChild(panel);
     if(revealPanel){
@@ -10652,6 +10798,47 @@ function finRowsCalc(monthKey){
   return out;
 }
 
+/* ── THE LEDGER, WHICH IS NOT A SAMPLE ───────────────────────────────────────
+   Every other money figure on this tab is measured off amounts typed against
+   bookings, and most bookings carry none — which is why a month's revenue has
+   to clear an 80% coverage gate before the app will say it out loud.
+
+   Payments are different in kind. A payment row exists because somebody took
+   money: summing them counts what happened rather than estimating it. So this
+   is the one money figure the app can always state, whatever the coverage,
+   and it is what the running month leads with.
+
+   Platform money is kept apart for the same reason the owed card keeps it
+   apart — the guest has paid, and the operator has not been paid.           */
+function monthSpan(monthKey){
+  const [y, mo] = monthKey.split("-").map(Number);
+  return [Math.round((new Date(y, mo-1, 1) - dateAt(0)) / 86400000),
+          Math.round((new Date(y, mo, 0)   - dateAt(0)) / 86400000) + 1];
+}
+function cashMonth(monthKey){
+  const [d0, d1] = monthSpan(monthKey);
+  const out = {key:monthKey, d0, d1, days:d1 - d0, inHand:0, platform:0, by:{}, rows:[]};
+  bookings().forEach(r => (r.pays || []).forEach(p =>{
+    if(!(p.on >= d0 && p.on < d1)) return;
+    if(p.method === "Platform") out.platform += p.amount; else out.inHand += p.amount;
+    out.by[p.method] = (out.by[p.method] || 0) + p.amount;
+    out.rows.push({r, p});
+  }));
+  out.rows.sort((a, b)=> b.p.on - a.p.on || (b.p.amount - a.p.amount));
+  out.total = out.inHand + out.platform;
+  out.n = out.rows.length;
+  /* how far through the month we are, so a part-month is never read as a whole
+     one — 0 for a month gone by, 1 for one still to come */
+  out.elapsed = Math.max(0, Math.min(out.days, -d0));
+  out.running = d0 <= 0 && d1 > 0;
+  return out;
+}
+/* What has actually been paid OUT this month: the dated ledger, not the
+   standing model. The model says what a month costs on average; these are the
+   bills somebody entered. Mixing them is how a five-day-old month reports a
+   catastrophic loss. */
+const monthSpend = monthKey => (expenses || []).filter(e => String(e.on || "").slice(0,7) === monthKey);
+
 function owedStats(){
   const bk = bookings().filter(r => r.amount && dueFrom(r) > 0);
   const gone  = bk.filter(r => r.end <= 0);
@@ -10670,6 +10857,11 @@ function owedStats(){
   const later = bk.filter(r => r.end > 0 && r.start > 7);
   const sum = a => a.reduce((s,r)=> s + dueFrom(r), 0);
   const out = {total: sum(bk), count: bk.length,
+          /* THE ROWS, not only their sums. Every figure on this card is a
+             list of people underneath, and until now the card was a wall the
+             operator could read and not act on: "₹1,98,500 across 2 bookings"
+             with no way to find out which two. */
+          all: bk, byBucket: {gone, here, soon, later},
           here: sum(here), hereN: here.length,
           /* of those, the ones whose door closes within two days */
           going: sum(here.filter(r => r.end <= 2)), goingN: here.filter(r => r.end <= 2).length,
@@ -10854,6 +11046,7 @@ function upkeepStats(){
 
 let pulseSeg = "now", pulseDir = 0;
 let finMonth = "";     // which month the Profit segment is showing
+let runWin  = 12;      // how far back the Money tab's run rate looks
 const PULSE_SEGS = ["now","money","profit","rooms","guests","upkeep"];
 
 /* Move between Pulse segments. Direction is remembered so the deck arrives from
@@ -11735,56 +11928,16 @@ function renderTrends(){
   /* 1 — the booking curve */
 
   /* ── MONEY ─────────────────────────────────────────────────────────────── */
-  if(seg === "money"){
-    const M = moneyStats();
-    /* THE SAME QUESTION HAS A REAL ANSWER, and it is not in the forward book.
-       When the priced sample cannot carry an extrapolation (see moneyStats),
-       the figure comes from the workbook — where fifteen closed months actually
-       measured a rate — and the card says which book it read. Two cards in one
-       app answering "what is a night worth" an order of magnitude apart is
-       worse than either answer alone. */
-    const W = FIN.length ? finRows(FIN[FIN.length-1][0]) : null;
-    const useBook = !M.usable && W && W.totals;
-    const src = useBook ? W.totals : M;
-    const revpar = useBook ? W.totals.revpar : M.revpar;
-    const adr    = useBook ? W.totals.adr    : M.adr;
-    const {c,b} = card("What a night is worth",
-      useBook ? `revenue per available night · ${MON[+W.month.split("-")[1]-1]} ${W.month.slice(0,4)}, from your workbook`
-              : "revenue per available night");
-    const head = el("div","headline");
-    head.append(el("b", null, money(revpar)));
-    head.append(el("s", null, `per available night · ${money(adr)} average when sold`));
-    b.appendChild(head);
-    /* The rate card must cover the same flats the achieved rate does, or the
-       "discount" is partly the difference between two portfolios. When the
-       figure comes from the workbook it covers the buildings the sheet prices —
-       30 of 38 flats — so the card average is taken over those same flats. */
-    const priceCodes = useBook ? new Set(W.rows.filter(r=>r.state!=="absent").map(r=>r.code)) : null;
-    const lot = priceCodes ? flats.filter(f=> priceCodes.has(f.code)) : flats;
-    const listed = lot.length ? lot.reduce((a,f)=> a + (f.rate||0), 0) / lot.length : M.listed;
-    b.appendChild(vbars([
-      {v: revpar,   label: Math.round(revpar/100)/10 + "k", k:"RevPAR"},
-      {v: adr,      label: Math.round(adr/100)/10 + "k",    k:"Achieved"},
-      {v: listed,   label: Math.round(listed/100)/10 + "k",   k:"Listed"},
-    ], 0));
-    const gap = adr >= listed
-      ? "holding your rate"
-      : `discounting about <span class="hi">${Math.round((1 - adr/listed)*100)}%</span> off the card`;
-    said(c, M.priced === 0 && !useBook
-      ? `No amounts recorded yet, so there is nothing to average. Put a figure on a booking and this fills in.`
-      : useBook
-      ? `Only <b>${M.shortPriced} of your ${M.shortN}</b> ordinary stays ahead carry an amount — too few to `
-        + `price a night from, and the long tenancies that do carry one bill at a different rate entirely. So `
-        + `this reads your workbook: <b>${money(revpar)}</b> is what an available night earned in `
-        + `${MON[+W.month.split("-")[1]-1]}. You are ${gap}. Put amounts on the bookings ahead and it switches `
-        + `to your own book.`
-      : `Occupancy alone cannot tell you this: a full house at a poor rate and a half-empty one at a good rate `
-        + `look the same on an occupancy chart. <b>${money(revpar)}</b> is what each of your ${M.sellable.toLocaleString("en-IN")} `
-        + `sellable nights earns on average. The gap between <b>achieved</b> and <b>listed</b> is what you are actually `
-        + `discounting — you are ${gap}.`
-        + (M.coverage < 0.95 ? ` Based on the <b>${M.priced} of ${M.total}</b> bookings that carry an amount.` : ""));
-  }
+  /* ── MONEY · 1 — WHO OWES YOU, AND WHO THEY ARE ─────────────────────────
+     First on the tab, because it is the only card here anybody can act on
+     this afternoon. It used to sit third, under a rate nobody asked for and
+     a run rate that is a month-end question — the owner said so, and asked
+     for it at the top or on the Now board.
 
+     Both, in the end, but split rather than duplicated: the Now board takes
+     the slice with a deadline on it (a guest leaving within two days still
+     owing), and this card keeps the whole of it, in four groups, each one
+     opening onto the people behind the figure. */
   if(seg === "money"){
     const O = owedStats();
     const {c,b} = card("What you are owed", "agreed but not in hand");
@@ -11794,20 +11947,24 @@ function renderTrends(){
     b.appendChild(head);
     const rows = el("div","card");
     /* These three ARE the headline, split three ways and nothing left over. */
-    [["Already left", O.gone, O.goneN, "has to be chased", "due"],
-     ["In the flat now", O.here, O.hereN,
+    /* EVERY ROW IS NOW A DOOR. Each of these is a list of people, and the
+       card used to be a wall: four true figures and no way to find out who
+       they were, on the one screen whose whole purpose is getting somebody
+       rung before the money stops being collectable. */
+    [["Already left", "gone", O.gone, O.goneN, "has to be chased", "due"],
+     ["In the flat now", "here", O.here, O.hereN,
       O.going ? `${O.goingN} check${O.goingN===1?"s":""} out within two days` : "collect before they go",
       O.going ? "due" : "clear"],
-     ["Arriving within a week", O.soon, O.soonN, "collect at the door", "clear"],
-     ["Arriving later", O.later, O.laterN, "not collectable yet", "clear"]]
-      .forEach(([k, v, n, why, tone])=>{
+     ["Arriving within a week", "soon", O.soon, O.soonN, "collect at the door", "clear"],
+     ["Arriving later", "later", O.later, O.laterN, "not collectable yet", "clear"]]
+      .forEach(([k, bucket, v, n, why, tone])=>{
         if(!v) return;
-        const r = el("div","row bk");
+        const r = el("button","row bk cmp");
         const m = el("div","meta");
         m.innerHTML = `<b>${esc(k)}</b><em>${esc(why)}${n != null ? ` · ${n} booking${n===1?"":"s"}` : ""}</em>`;
-        const e = el("div","rowend");
-        e.append(el("span", "paid " + tone, money(v)));
-        r.append(m, e);
+        r.append(m, el("span", "paid " + tone, money(v)), el("em","chev","›"));
+        r.setAttribute("aria-label", `${k}, ${money(v)} across ${n} booking${n===1?"":"s"} — see who`);
+        r.onclick = ()=>{ haptic(9); openOwed(bucket); };
         rows.appendChild(r);
       });
     if(!O.total && !O.platform) rows.appendChild(el("div","empty","Nothing outstanding — every booking is settled."));
@@ -11829,17 +11986,174 @@ function renderTrends(){
       p.appendChild(r);
       b.appendChild(p);
     }
-    said(c, O.gone > 0
-      ? `<b>${money(O.gone)}</b> is owed by guests who have already gone, which is the money that quietly never arrives. `
-        + (O.here ? `<b>${money(O.here)}</b> is with guests in the flats tonight — the easiest in the book to collect, `
-                  + `and only until they hand the keys back. ` : "")
-        + `<b>${money(O.soon)}</b> arrives this week.`
-      : O.here
-      ? `Nothing <b>with a figure on it</b> has walked out unpaid. <b>${money(O.here)}</b> is with guests in the flats tonight`
-        + (O.going ? `, and <b>${money(O.going)}</b> of it leaves within two days` : "")
-        + ` — collect at the door, because after that it is the kind that quietly never arrives.`
-      : `Nothing with a figure on it has walked out unpaid. The balance is with guests still to arrive, `
-        + `which is the easy kind to collect.`);
+    /* One line, not a paragraph. The rows above already say who owes what and
+       open onto the names; a five-sentence explanation of them was the tab
+       explaining its own table. */
+    if(O.total){
+      const p = el("p","ratesay");
+      p.innerHTML = O.gone
+        ? `<b>${money(O.gone)}</b> of it has already walked out of the door.`
+        : O.going
+        ? `<b>${money(O.going)}</b> of it leaves within two days.`
+        : `Nothing with a figure on it has walked out unpaid.`;
+      c.appendChild(p);
+      const all = el("button","costsbtn");
+      all.append(el("span", null, "Everyone who owes"),
+                 el("em", null, `${O.count} booking${O.count===1?"":"s"} ›`));
+      all.onclick = ()=>{ haptic(10); openOwed("all"); };
+      c.appendChild(all);
+    }
+  }
+
+  /* ── MONEY · 2 — THE MONTH RUNNING NOW ──────────────────────────────────
+     What replaced "What a night is worth". That card answered a question
+     nobody on this tab was asking — a rate per available night, read out of
+     the workbook because the app's own book could not carry it — and spent
+     eleven lines of prose explaining why the number in 40px type was not the
+     number the app would normally use. The operators said it made no sense to
+     them, and they were right: a RevPAR belongs on Profit, where the rate
+     tiles already carry it against fifteen months of history.
+
+     What they asked for instead is the money. This month, in the only figure
+     that is never a sample — what has actually been taken. */
+  if(seg === "money"){
+    const cur = dayISO(0).slice(0,7);
+    const C = cashMonth(cur);
+    const T = finRows(cur).totals;
+    const spent = monthSpend(cur).reduce((a, e)=> a + (+e.amount || 0), 0);
+    const spentN = monthSpend(cur).length;
+    const dt = dateAt(0);
+    const monName = k => MON[+k.split("-")[1]-1] + " " + k.split("-")[0];
+    const {c, b} = card(monName(cur),
+      `day ${dt.getDate()} of ${C.days} · what has actually moved`);
+    /* THREE TILES AND NOTHING ELSE. The first draft led with a headline for
+       the money in hand and then repeated it as a tile, and carried a fourth
+       figure — owed — that the card directly above now states in full. Both
+       were the same fault: the tab saying one thing twice. What is left is
+       the month's ledger, three facts wide, each one a door.
+
+       Every figure here is a COUNT, not a sample. Taken and spent are rows
+       somebody entered; nights are a census. That is why this card can state
+       money on a month whose revenue the app still refuses to average. */
+    const opps = el("div","opps");
+    const tile = (v, lab, sub, run, tone)=>{
+      const d = el("button","opp tap" + (tone ? " " + tone : ""));
+      d.append(el("b", null, v), el("s", null, lab + (sub ? " · " + sub : "")), el("em","go","›"));
+      d.setAttribute("aria-label", `${lab}, ${v}${sub ? ", " + sub : ""}`);
+      d.onclick = ()=>{ haptic(9); run(); };
+      opps.appendChild(d);
+    };
+    tile(moneyShort(C.inHand), "taken",
+         C.n ? `${C.n} payment${C.n===1?"":"s"}` : "none yet",
+         ()=> openCash(cur), C.inHand ? null : "zero");
+    tile(moneyShort(spent), "spent",
+         spentN ? `${spentN} entr${spentN===1?"y":"ies"}` : "none logged",
+         ()=> openSpend(cur), spent ? null : "zero");
+    tile(T ? T.nights.toLocaleString("en-IN") : "0", "nights",
+         T ? `${Math.round(T.occ*100)}% full` : "none on the book",
+         ()=>{ finMonth = cur; pulseSeg = "profit"; haptic(9); renderTrends(); }, T ? null : "zero");
+    b.appendChild(opps);
+
+    /* Only what the three tiles do not already say. */
+    if(C.platform){
+      const line = el("p","ratesay");
+      line.innerHTML = `<b>${money(C.platform)}</b> more was paid to a platform this month `
+        + `and has not been paid out.`;
+      c.appendChild(line);
+    }
+  }
+
+  /* ── MONEY · 3 — WHAT A MONTH BRINGS IN ─────────────────────────────────
+     The run rate, over a window the operator picks. Asked for in exactly
+     those words: how much a month, over the last six, the last year, the
+     last two.                                                              */
+  if(seg === "money"){
+    const W = moneyRun(runWin);
+    const monName = k => MON[+k.split("-")[1]-1] + " " + k.split("-")[0];
+    const {c, b} = card("What a month brings in", "revenue by month · tap a bar");
+
+    const sg = el("div","seg");
+    const ind = el("span","seg-ind");
+    sg.appendChild(ind);
+    RUN_WINDOWS.forEach(([n, label], i)=>{
+      const bb = el("button", null, label);
+      bb.setAttribute("aria-pressed", String(n === runWin));
+      bb.onclick = ()=>{ if(n === runWin) return; runWin = n; haptic(9); renderTrends(); };
+      sg.appendChild(bb);
+    });
+    ind.style.width = `calc((100% - 6px)/${RUN_WINDOWS.length})`;
+    ind.style.transform = `translateX(${RUN_WINDOWS.findIndex(x=>x[0]===runWin)*100}%)`;
+    b.appendChild(sg);
+
+    if(!W.counted.length){
+      b.appendChild(el("div","empty",
+        "No complete month has a revenue figure yet. This fills in as amounts go on the bookings."));
+    } else {
+      const head = el("div","headline");
+      head.style.marginTop = "14px";
+      head.append(el("b", null, moneyShort(W.avg)));
+      head.append(el("s", null, `a month across ${W.counted.length} `
+        + `month${W.counted.length===1?"":"s"} · ${moneyShort(W.avg*12)} a year at this rate`));
+      b.appendChild(head);
+
+      const top = Math.max(...W.win.map(m=>m.revenue), 1) * 1.06;
+      const rail = el("div","raterail");
+      rail.setAttribute("role","img");
+      rail.setAttribute("aria-label",
+        `Revenue by month, ${W.win.length} months, ${money(W.avg)} a month on average`);
+      const say = el("div","ratesay");
+      const go = el("div"); go.style.cssText = "margin-top:10px";
+      /* Every third month is labelled once the window passes a year — at 24
+         bars a column is under ten pixels wide and twelve initials in a row
+         is a smear, not an axis. */
+      const every = W.win.length > 14 ? 3 : 1;
+      const paint = k =>{
+        const m = W.win.find(z => z.key === k) || W.counted[W.counted.length-1];
+        const i = W.win.indexOf(m), prev = i > 0 ? W.win[i-1] : null;
+        const [yy, mm] = m.key.split("-").map(Number);
+        const yr = W.all.find(z => z.key === `${yy-1}-${String(mm).padStart(2,"0")}`);
+        const pcx = (a2, b2)=> b2 ? (a2/b2 - 1) : null;
+        const arrow = v => (v >= 0 ? "▲ " : "▼ ") + Math.abs(v*100).toFixed(1) + "%";
+        const parts = [`<b>${money(m.revenue)}</b> in ${monName(m.key)}`,
+                       `${m.nights.toLocaleString("en-IN")} nights`,
+                       `${Math.round(m.occ*100)}% full`];
+        if(!m.firm) parts.push(`<b>from ${Math.round(m.cover*100)}% of its nights</b> — left out of the average`);
+        else if(yr && yr.firm) parts.push(`${arrow(pcx(m.revenue, yr.revenue))} on ${monName(yr.key)}`);
+        say.innerHTML = parts.join(" · ");
+        [...rail.children].forEach(z => z.classList.toggle("on", z.dataset.k === m.key));
+        go.textContent = "";
+        if(prev && prev.firm && m.firm){
+          const btn = el("button","costsbtn");
+          btn.append(el("span", null, `${monName(prev.key)} → ${monName(m.key)}`),
+                     el("em", null, "the full comparison ›"));
+          btn.onclick = ()=>{ haptic(10);
+            openCompare({title:"Month on month", aLabel:monName(prev.key), bLabel:monName(m.key),
+                         aKeys:[prev.key], bKeys:[m.key]}); };
+          go.appendChild(btn);
+        }
+      };
+      const last = W.win[W.win.length-1];
+      W.win.forEach((m, i)=>{
+        const cell = el("button","rcol" + (m === last ? " on" : "") + (m.firm ? "" : " thin"));
+        cell.dataset.k = m.key;
+        const col = el("i");
+        col.style.height = Math.max(3, m.revenue / top * 112) + "px";
+        const lbl = (W.win.length - 1 - i) % every === 0 ? MON[+m.key.split("-")[1]-1][0] : "";
+        cell.append(col, el("s", null, lbl));
+        cell.setAttribute("aria-label", `${monName(m.key)}, ${money(m.revenue)}`
+          + (m.firm ? "" : `, from ${Math.round(m.cover*100)} per cent of its nights`));
+        cell.onclick = ()=>{ haptic(6); paint(m.key); };
+        rail.appendChild(cell);
+      });
+      b.append(rail, say, go);
+      paint(last.key);
+      if(W.thin){
+        const note = el("p","ratesay");
+        note.innerHTML = `${W.thin} month${W.thin===1?" is":"s are"} hatched and left out — `
+          + `too few of its nights carry an amount to call it revenue.`;
+        c.appendChild(note);
+      }
+    }
   }
 
   /* ── GUESTS ────────────────────────────────────────────────────────────── */
@@ -12146,9 +12460,8 @@ function renderTrends(){
     /* "Direct" is also where the importer puts a cell that named no channel, so
        this share is "direct, or never written down". Reporting it as a choice
        the guest made is a claim the book does not carry. */
-    said(c, `<b>${Math.round(direct/Math.max(1,m.total)*100)}%</b> carry no platform — phone, walk-in, a `
-      + `returning guest, or a booking whose channel was never written down. Those are the ones paying no `
-      + `commission, and recording the channel as you take them is the only way to tell them apart.`);
+    said(c, `<b>${Math.round(direct/Math.max(1,m.total)*100)}%</b> carry no platform, so they pay no `
+      + `commission — phone, walk-in, a returning guest, or a channel nobody wrote down.`);
   }
 
   /* 7 — turnaround load */
@@ -12232,9 +12545,13 @@ function renderTrends(){
     /* "Nothing on these cards is estimated or borrowed from elsewhere" stopped
        being true the moment the rate card started reading the workbook when the
        forward book is too thin to price a night. A footer that reassures the
-       reader about a property the screen no longer has is worse than no footer. */
-    : `These read the nine weeks ahead — today through ${fmtL(DAYS-1)}. The rate at the top is the exception `
-      + `and says so. Lead time needs a few more bookings of your own before it means anything.`;
+       reader about a property the screen no longer has is worse than no footer.
+       Which is exactly what happened next: this said "the rate at the top is
+       the exception" for a card that has since been taken off the tab. A
+       footer naming a card is a footer that goes stale silently, so this one
+       names none. */
+    : `These read the nine weeks ahead — today through ${fmtL(DAYS-1)}. `
+      + `Lead time needs a few more bookings of your own before it means anything.`;
   s.appendChild(foot);
 }
 
@@ -14371,6 +14688,38 @@ function windowStats(ks, codes){
   return W;
 }
 
+/* ── WHAT A MONTH BRINGS IN ──────────────────────────────────────────────────
+   Every month the app can put a revenue figure against, most recent last, and
+   the average of the ones that figure can be trusted. Two exclusions, both of
+   which the rest of this file already makes and both of which matter more
+   here than anywhere else, because an average is where a bad month hides:
+
+     the RUNNING month   five days of September is not a month. Card 1 is
+                         where the month in progress belongs; putting its
+                         part-figure in a row of whole ones draws a collapse
+                         that is a calendar.
+     a THIN month        a month the app keeps whose revenue comes off a fifth
+                         of its nights is not a revenue figure yet. Its bar is
+                         drawn — hatched, so it reads as counted-not-billed —
+                         and it is left out of the average, which says so.  */
+function moneyRun(months){
+  const cur = dayISO(0).slice(0,7);
+  const all = FIN.map(r=>r[0]).concat(appMonths()).filter(k => k < cur).map(k=>{
+    const t = finRows(k).totals;
+    if(!t) return null;
+    return {key:k, revenue:t.revenue, nights:t.nights, cap:t.cap, occ:t.occ,
+            cost:t.cost, adr:t.adr, app:!!t.app,
+            cover: t.app ? (t.cover || 0) : 1,
+            firm: !(t.app && !t.canState)};
+  }).filter(Boolean);
+  const win = all.slice(Math.max(0, all.length - months));
+  const counted = win.filter(m => m.firm);
+  const avg = counted.length ? counted.reduce((a, m)=> a + m.revenue, 0) / counted.length : 0;
+  const cost = counted.length ? counted.reduce((a, m)=> a + m.cost, 0) / counted.length : 0;
+  return {all, win, counted, avg, cost, months, thin: win.length - counted.length};
+}
+const RUN_WINDOWS = [[6,"6 months"],[12,"1 year"],[24,"2 years"]];
+
 /* ── ONE COMPARISON, OPENED ──────────────────────────────────────────────────
    The row on the card says one number: revenue, up or down. This is what a
    revenue manager reads underneath it. The measures every hotel group tracks
@@ -14383,6 +14732,185 @@ function windowStats(ks, codes){
 
    Money is stated only when both periods can state it. Nights and occupancy
    always are. */
+/* ── WHO OWES IT ─────────────────────────────────────────────────────────────
+   The card said "₹1,98,500 across 2 bookings" and stopped there, which is a
+   wall: the operator can read it and cannot act on it. Every figure on that
+   card is a list of people, and this is the list — sorted biggest first,
+   because that is the order they get rung.
+
+   A row does the thing the row is for: it opens the payment form with the
+   balance already filled in. The number, where the book has one, dials.     */
+const OWED_BUCKETS = [
+  ["all",   "Everyone",     "every unpaid booking"],
+  ["gone",  "Already left", "the money that quietly never arrives"],
+  ["here",  "In the flat",  "collect before they hand the keys back"],
+  ["soon",  "This week",    "collect at the door"],
+  ["later", "Later",        "not collectable yet"],
+];
+function openOwed(bucket){
+  const O = owedStats();
+  const paint = (which)=>{
+    const list = which === "all" ? O.all : (O.byBucket[which] || []);
+    const total = list.reduce((a, r)=> a + dueFrom(r), 0);
+    const meta = OWED_BUCKETS.find(x => x[0] === which) || OWED_BUCKETS[0];
+    sheetWipe();
+    const t = el("div");
+    t.innerHTML = `<div class="n">${esc(money(total))} owed</div>`
+      + `<div class="m">${esc(meta[1].toLowerCase())} · ${list.length} booking${list.length===1?"":"s"}`
+      + ` · ${esc(meta[2])}</div>`;
+    const x = el("button", null, "✕"); x.setAttribute("aria-label","Close"); x.onclick = closeSheet;
+    sheetH.append(t, x);
+
+    const wrap = el("div"); wrap.style.cssText = "padding:12px 20px 0";
+    const filt = el("div","roomfilt");
+    OWED_BUCKETS.forEach(([k, label])=>{
+      const n = (k === "all" ? O.all : (O.byBucket[k] || [])).length;
+      const bb = el("button");
+      bb.append(el("span", null, label), el("i", n ? null : "none", String(n)));
+      bb.setAttribute("aria-selected", String(k === which));
+      bb.setAttribute("aria-label", `${label}, ${n} booking${n===1?"":"s"}`);
+      bb.onclick = ()=>{ haptic(8); paint(k); };
+      filt.appendChild(bb);
+    });
+    wrap.appendChild(filt);
+    sheetB.append(wrap);
+
+    const card = el("div","card moneylist"); card.style.cssText = "margin:12px 20px 0";
+    if(!list.length){
+      card.appendChild(el("div","empty", which === "all"
+        ? "Nothing outstanding — every booking with a figure on it is settled."
+        : "Nobody in this group owes anything."));
+    }
+    list.slice().sort((a, b2)=> dueFrom(b2) - dueFrom(a)).forEach(r=>{
+      const row = el("div","row bk");
+      const m = el("div","meta");
+      /* WHEN, in the words that say what to do about it. "left 2 Sep" is a
+         chase; "in until 9 Sep" is a knock on a door. */
+      const when = r.end <= 0 ? `left ${fmt(r.end)}`
+                 : r.start <= 0 ? `in until ${fmt(r.end)}`
+                 : `arrives ${fmt(r.start)}`;
+      m.innerHTML = `<b>${esc(r.guest || "A guest")}</b>`
+        + `<em>${esc(flatLabel(r.fi))} · ${esc(when)}`
+        + (r.amount ? ` · ${esc(money(r.amount))} agreed` : "") + `</em>`;
+      const end = el("div","rowend");
+      const pay = el("button","paid due", money(dueFrom(r)));
+      pay.setAttribute("aria-label", `Record a payment from ${r.guest} — ${money(dueFrom(r))} still due`);
+      pay.onclick = ()=>{ haptic(10); openPayment(r, r.fi, Math.max(r.start, 0)); };
+      end.appendChild(pay);
+      if(r.phone){
+        const call = el("a","rowx");
+        call.href = "tel:" + String(r.phone).replace(/[^\d+]/g, "");
+        call.textContent = "☎";
+        call.setAttribute("aria-label", "Call " + (r.guest || "the guest"));
+        end.appendChild(call);
+      }
+      row.append(m, end);
+      card.appendChild(row);
+    });
+    sheetB.appendChild(card);
+    if(O.platform && which === "all"){
+      const p = el("p","ratesay"); p.style.cssText = "margin:12px 20px 0";
+      p.innerHTML = `<b>${esc(money(O.platform))}</b> more is sitting with a platform — `
+        + `the guest has paid, and it is not part of the figure above.`;
+      sheetB.appendChild(p);
+    }
+    sheetB.scrollTop = 0;
+  };
+  paint(bucket && (bucket === "all" || O.byBucket[bucket]) ? bucket : "all");
+  sheet.classList.add("on"); scrim.classList.add("on");
+}
+
+/* Every payment taken in one month, newest first. The headline figure on the
+   running month is a sum of these rows, so this is simply that sum opened. */
+function openCash(monthKey){
+  const C = cashMonth(monthKey);
+  const monName = k => MON[+k.split("-")[1]-1] + " " + k.split("-")[0];
+  sheetWipe();
+  const t = el("div");
+  t.innerHTML = `<div class="n">${esc(money(C.inHand))} in hand</div>`
+    + `<div class="m">${esc(monName(monthKey))} · ${C.n} payment${C.n===1?"":"s"}`
+    + (C.platform ? ` · ${esc(money(C.platform))} to come from platforms` : "") + `</div>`;
+  const x = el("button", null, "✕"); x.setAttribute("aria-label","Close"); x.onclick = closeSheet;
+  sheetH.append(t, x);
+  const byM = Object.keys(C.by).sort((a, b2)=> C.by[b2] - C.by[a]);
+  if(byM.length){
+    const bars = el("div"); bars.style.cssText = "padding:14px 20px 0";
+    const top = Math.max(...byM.map(k => C.by[k]), 1);
+    byM.forEach(k=>{
+      const row = el("div","patrow");
+      row.append(el("div","k", k));
+      const tr = el("div","t"); const i = el("i");
+      i.style.setProperty("--v", Math.max(.02, C.by[k] / top).toFixed(3));
+      tr.appendChild(i);
+      row.append(tr, el("div","v", money(C.by[k])));
+      bars.appendChild(row);
+    });
+    sheetB.appendChild(bars);
+  }
+  const card = el("div","card moneylist"); card.style.cssText = "margin:14px 20px 0";
+  if(!C.rows.length)
+    card.appendChild(el("div","empty",
+      `No payment has been recorded in ${monName(monthKey)} yet. Amounts agreed still show under what you are owed.`));
+  C.rows.forEach(({r, p})=>{
+    const row = el("div","row bk");
+    const m = el("div","meta");
+    m.innerHTML = `<b>${esc(r.guest || "A guest")}</b>`
+      + `<em>${esc(flatLabel(r.fi))} · ${esc(p.method)} · ${esc(p.on === 0 ? "today" : fmt(p.on))}`
+      + (dueFrom(r) > 0 ? ` · ${esc(money(dueFrom(r)))} still due` : "") + `</em>`;
+    const end = el("div","rowend");
+    end.appendChild(el("span", "paid " + (p.method === "Platform" ? "plat" : "clear"), money(p.amount)));
+    row.append(m, end);
+    card.appendChild(row);
+  });
+  sheetB.appendChild(card);
+  sheet.classList.add("on"); scrim.classList.add("on");
+  sheetB.scrollTop = 0;
+}
+
+/* The other half of the ledger: what was paid OUT this month, by building and
+   by line. The tile used to route to Upkeep, which is repairs — a subset —
+   so a month whose spending was all rent and salaries sent the operator to a
+   screen with nothing on it. This is the list the tile's own figure is a sum
+   of, and the way to add to it. */
+function openSpend(monthKey){
+  const rows = monthSpend(monthKey).slice()
+    .sort((a, b2)=> String(b2.on).localeCompare(String(a.on)) || b2.amount - a.amount);
+  const total = rows.reduce((a, e)=> a + (+e.amount || 0), 0);
+  const monName = k => MON[+k.split("-")[1]-1] + " " + k.split("-")[0];
+  const B = buildingsOf();
+  sheetWipe();
+  const t = el("div");
+  t.innerHTML = `<div class="n">${esc(money(total))} spent</div>`
+    + `<div class="m">${esc(monName(monthKey))} · ${rows.length} entr${rows.length===1?"y":"ies"} logged`
+    + ` · one-offs, not the standing model</div>`;
+  const x = el("button", null, "✕"); x.setAttribute("aria-label","Close"); x.onclick = closeSheet;
+  sheetH.append(t, x);
+  const card = el("div","card moneylist"); card.style.cssText = "margin:14px 20px 0";
+  if(!rows.length)
+    card.appendChild(el("div","empty",
+      `Nothing logged in ${monName(monthKey)}. What each building costs to run every month is on the `
+      + `Profit tab; this is for the bills that only happen once.`));
+  rows.forEach(e=>{
+    const row = el("div","row bk");
+    const b2 = B.find(z => z.code === e.code);
+    const m = el("div","meta");
+    m.innerHTML = `<b>${esc(e.line || "Expense")}</b>`
+      + `<em>${esc(b2 ? b2.name : e.code)} · paid ${esc(e.on)}`
+      + (e.note ? ` · ${esc(e.note)}` : "") + `</em>`;
+    const end = el("div","rowend");
+    end.appendChild(el("span","paid clear", money(e.amount)));
+    row.append(m, end);
+    card.appendChild(row);
+  });
+  sheetB.appendChild(card);
+  const add = el("button","costsbtn"); add.style.cssText = "margin:14px 20px 0;width:calc(100% - 40px)";
+  add.append(el("span", null, "Log an expense"), el("em", null, "a one-off, on its own day ›"));
+  add.onclick = ()=>{ haptic(10); openExpense(null, monthKey, ()=> openSpend(monthKey)); };
+  sheetB.appendChild(add);
+  sheet.classList.add("on"); scrim.classList.add("on");
+  sheetB.scrollTop = 0;
+}
+
 let cmpCodes = null;     // the building filter, kept while the operator moves between rows
 function openCompare(spec){
   const {title, aLabel, bLabel, aKeys, bKeys} = spec;
@@ -16285,6 +16813,8 @@ function switchTo(i, focusInput){
   // a tab you are ARRIVING at starts clean; a refresh of the one you are on
   // does not (see askText)
   if(i !== curScreen && SCREENS[i].id === "ask") askText = "";
+  // and the Month building filter, which is a way of looking rather than a setting
+  if(i !== curScreen && SCREENS[i].id === "month") monthCode = null;
   curScreen = i;
   SCREENS.forEach((sc,j)=>{
     document.getElementById("scr-"+sc.id).classList.toggle("on", j===i);

@@ -1214,8 +1214,13 @@ export async function run(filter) {
   await test("the room grid is cut by building and the counts reconcile", async () => {
     await settle();
     document.querySelectorAll(".tabbar button")[0].click();          // Rooms
-    await until(() => document.querySelectorAll(".roomfilt button").length, "the building filter");
-    const chips = [...document.querySelectorAll(".roomfilt button")];
+    /* SCOPED TO THE SCREEN IT IS ABOUT. Both Rooms and Month live in the
+       document at once — only one carries .on — and Month now has a building
+       filter of its own, so a bare ".roomfilt button" collects both screens'
+       chips and the counts came out as 89 against an All of 21. The chip row
+       is a shared component; the assertion is about one screen's copy of it. */
+    await until(() => document.querySelectorAll("#scr-rooms .roomfilt button").length, "the building filter");
+    const chips = [...document.querySelectorAll("#scr-rooms .roomfilt button")];
     const num = b => +(b.textContent.match(/(\d+)\s*$/) || [0,0])[1];
     const all = num(chips[0]);
     eq(chips.slice(1).reduce((a,b)=> a + num(b), 0), all,
@@ -1553,7 +1558,7 @@ export async function run(filter) {
   await test("the building counts agree with the tiles on every night", async () => {
     await settle();
     document.querySelectorAll(".tabbar button")[0].click();
-    await until(() => document.querySelector(".roomfilt button"), "the building filter");
+    await until(() => document.querySelector("#scr-rooms .roomfilt button"), "the building filter");
     /* the invariant, measured directly: what the chips count must be what
        freeSpan says for the SAME span the tiles are drawn for */
     for(const d of [0, 1, 3, 7]){
@@ -1575,8 +1580,8 @@ export async function run(filter) {
     /* and through the real DOM, on a night that is not tonight */
     setPickedNight(3);
     renderRooms && renderRooms();
-    await until(() => document.querySelector(".roomfilt button"), "the filter after moving the night");
-    const chips = [...document.querySelectorAll(".roomfilt button")];
+    await until(() => document.querySelector("#scr-rooms .roomfilt button"), "the filter after moving the night");
+    const chips = [...document.querySelectorAll("#scr-rooms .roomfilt button")];
     const num = b => +(b.textContent.match(/(\d+)\s*$/) || [0,0])[1];
     const all = num(chips[0]);
     ok(all < NF, `the All chip says ${all} of ${NF} free on a future night — vacuously true again`);
@@ -2478,6 +2483,321 @@ export async function run(filter) {
     ok(nb.right <= tb.left + 0.5, `the month tag overlaps the date (number ends ${nb.right.toFixed(1)}, tag starts ${tb.left.toFixed(1)})`);
     switchTo(SCREENS.findIndex(s => s.id === "rooms"));
     return `night ${emPx}/${nPx}px · month ${ddPx}/${fnPx}px · "1 ${tag.textContent}" fits`;
+  });
+
+  /* ══ the Month building filter ══════════════════════════════════════════ */
+
+  /* "Give me an option to filter the location so that I don't have to scroll
+     to see what rooms are available." Forty-one free flats ordered by flat id
+     is four screens, and every TreeTops row comes before the first Madhapur
+     one. */
+  await test("the Month list can be narrowed to one building, and the filter survives picking dates", async () => {
+    const keep = {a: sel.a, n: sel.n, code: monthCode};
+    try {
+      monthCode = null; sel = {a: 0, n: 1}; pendingStart = null;
+      switchTo(SCREENS.findIndex(s => s.id === "month"));
+      await until(() => document.querySelector(".monthfilt button"), "the filter row");
+      const chips = () => [...document.querySelectorAll(".monthfilt button")];
+      eq(chips()[0].textContent.replace(/\d+$/, ""), "All", "the first chip");
+      /* the chip counts are the answer per building, and they add up to the
+         answer for the portfolio — a filter whose counts did not reconcile
+         with the headline would be a second opinion, not a filter */
+      const all = +chips()[0].querySelector("i").textContent;
+      const parts = chips().slice(1).reduce((s2, c) => s2 + +c.querySelector("i").textContent, 0);
+      eq(parts, all, "the building counts do not add up to the All count");
+      eq(all, document.querySelectorAll(".listtrough .row").length, "rows shown against the All count");
+
+      /* pick the building with the most free, so the assertion is not about an
+         empty list by accident */
+      const pick = chips().slice(1).reduce((b, c) =>
+        +c.querySelector("i").textContent > +b.querySelector("i").textContent ? c : b);
+      const want = +pick.querySelector("i").textContent;
+      const name = pick.querySelector("span").textContent;
+      pick.click();
+      await wait(60);
+      const rows = [...document.querySelectorAll(".listtrough .row")];
+      eq(rows.length, want, `rows shown for ${name}`);
+      ok(rows.every(r => r.textContent.includes(name)), `a row from another building is still listed`);
+      /* the headline stays the whole portfolio's answer — the chips carry the
+         per-building counts, and a headline that moved with them would leave
+         "3 free of 10" with nothing on screen saying which ten */
+      ok(document.querySelector(".hud .n").textContent === String(all),
+        "the headline followed the filter instead of staying the portfolio's answer");
+
+      /* THE FILTER MUST SURVIVE THE DATES. renderMonth rebuilds on every tap of
+         a date, so a filter held inside it would reset the moment the operator
+         picked the nights they wanted it for. */
+      const cells = [...document.querySelectorAll(".cal .day[data-d]")];
+      cells[4].click(); await wait(50);
+      cells[7].click(); await wait(120);
+      eq(sel.n, 3, "the range that was picked");
+      const still = [...document.querySelectorAll(".monthfilt button")]
+        .find(c => c.getAttribute("aria-selected") === "true");
+      ok(still && still.querySelector("span").textContent === name,
+        "the building filter was lost when the dates changed");
+
+      /* and it is a way of LOOKING, not a setting: leaving the tab clears it */
+      switchTo(SCREENS.findIndex(s => s.id === "rooms"));
+      await wait(40);
+      switchTo(SCREENS.findIndex(s => s.id === "month"));
+      await wait(80);
+      eq(monthCode, null, "the filter outlived the tab");
+      return `${all} free = ${parts} across ${chips().length - 1} chips · ${name} kept across a date change`;
+    } finally {
+      monthCode = keep.code; sel = {a: keep.a, n: keep.n}; pendingStart = null;
+    }
+  });
+
+  /* ══ the Money tab ══════════════════════════════════════════════════════ */
+
+  /* A figure abbreviated for a tile must still be the figure. */
+  await test("a shortened amount never rounds into a different number", async () => {
+    eq(moneyShort(198500), "₹1.99L", "lakhs keep two decimals below ten");
+    eq(moneyShort(3436582), "₹34.4L", "tens of lakhs keep one");
+    eq(moneyShort(41238982), "₹4.12Cr", "crores keep two below ten");
+    eq(moneyShort(57750), "₹57.8k", "tens of thousands");
+    eq(moneyShort(9800), "₹9,800", "under ten thousand is written out in full");
+    eq(moneyShort(0), "₹0", "nothing");
+    /* the bug this guards: one decimal turned 1.985 into 2.0, JavaScript threw
+       away the trailing zero, and ₹1,98,500 was shown as a flat "₹2L" */
+    ok(!/^₹2L$/.test(moneyShort(198500)), "₹1,98,500 is being shown as ₹2L");
+    return "1.99L / 34.4L / 4.12Cr / 57.8k, none rounded into another figure";
+  });
+
+  /* The running month leads with money that was actually taken, because that
+     is the one money figure in the app that is a count and not a sample. */
+  await test("the month's money in hand counts payments dated in that month, and only those", async () => {
+    const cur = dayISO(0).slice(0, 7);
+    /* addBooking and addPayment both save(). The harness restores `resv` in
+       memory and not the store, so without this the fixture survives into
+       localStorage and the next load() brings it back. */
+    const stored = localStorage.getItem(STORE);
+    const before = cashMonth(cur);
+    const fi = flats.map((f, i) => i).find(i => freeSpan(i, 0, 2));
+    ok(fi != null, "no flat free for the fixture");
+    ok(addBooking(fi, 0, 1, "Cash Fixture", "Direct", {amount: 9000, quiet: 1}), "fixture refused");
+    const r = resv[resv.length - 1];
+    addPayment(r, 4000, "UPI");                       // dated today, so inside this month
+    const after = cashMonth(cur);
+    eq(after.inHand - before.inHand, 4000, "a payment taken today did not land in this month");
+    eq(after.n - before.n, 1, "the payment count");
+    eq(after.by.UPI - (before.by.UPI || 0), 4000, "the payment did not land under its method");
+    /* a payment dated outside the month is not this month's money, however
+       recently it was typed */
+    r.pays[r.pays.length - 1].on = after.d0 - 1;
+    const moved = cashMonth(cur);
+    eq(moved.inHand, before.inHand, "a payment dated before the month is still counted in it");
+    /* platform money is the guest's payment, not the operator's — kept apart
+       for the same reason the owed card keeps it apart */
+    r.pays[r.pays.length - 1].on = 0;
+    r.pays[r.pays.length - 1].method = "Platform";
+    const plat = cashMonth(cur);
+    eq(plat.inHand, before.inHand, "platform money was counted as in hand");
+    eq(plat.platform - before.platform, 4000, "platform money was not counted at all");
+    resv.splice(resv.indexOf(r), 1); recompute();
+    if (stored != null) localStorage.setItem(STORE, stored);
+    return "₹4,000 in, dated out again, then counted as a platform payout";
+  });
+
+  /* The run rate is an average, and an average is where a bad month hides. */
+  await test("the run rate leaves out the running month and any month too thin to price", async () => {
+    const cur = dayISO(0).slice(0, 7);
+    const W = moneyRun(24);
+    ok(W.all.length, "no months at all");
+    ok(!W.all.some(m => m.key >= cur), "the running month is in the series");
+    ok(W.counted.every(m => m.firm), "a thin month is inside the average");
+    /* the average is the counted months and nothing else */
+    const byHand = W.counted.reduce((a, m) => a + m.revenue, 0) / W.counted.length;
+    ok(Math.abs(W.avg - byHand) < 1, `the average does not match its own months: ${W.avg} vs ${byHand}`);
+    eq(W.thin, W.win.length - W.counted.length, "the hatched count");
+    /* a shorter window is a subset of a longer one, ending at the same month */
+    const S = moneyRun(6);
+    ok(S.win.length <= 6, `the 6-month window holds ${S.win.length} months`);
+    eq(S.win[S.win.length - 1].key, W.win[W.win.length - 1].key, "the windows end on different months");
+    return `${W.win.length} months drawn, ${W.counted.length} averaged, ${W.thin} hatched`;
+  });
+
+  /* The whole complaint about this card: four true figures and no way to find
+     out who they were. */
+  await test("every owed figure opens onto the people behind it", async () => {
+    const stored = localStorage.getItem(STORE);
+    const fi = flats.map((f, i) => i).find(i => freeSpan(i, 1, 4));
+    ok(fi != null, "no flat free for the fixture");
+    ok(addBooking(fi, 1, 2, "Owed Fixture", "Direct",
+                  {amount: 12000, phone: "9876500011", quiet: 1}), "fixture refused");
+    const r = resv[resv.length - 1];
+    try {
+      const O = owedStats();
+      /* the buckets partition the rows, not just the rupees */
+      const bucketed = ["gone", "here", "soon", "later"]
+        .reduce((a, k) => a + O.byBucket[k].length, 0);
+      eq(bucketed, O.all.length, "the buckets do not partition the bookings");
+      ok(O.byBucket.soon.indexOf(r) >= 0, "a guest arriving tomorrow is not in the week's bucket");
+
+      openOwed("all");
+      await until(() => document.querySelector(".sheet .moneylist .row"), "the owed sheet");
+      const rows = [...document.querySelectorAll(".sheet .moneylist .row")];
+      eq(rows.length, O.all.length, "rows against bookings owing");
+      const mine = rows.find(x => /Owed Fixture/.test(x.textContent));
+      ok(mine, "the fixture is not listed");
+      ok(/arrives/.test(mine.textContent), `the row does not say when: ${mine.textContent}`);
+      ok(mine.textContent.includes(money(12000)), "the row does not carry what is due");
+      ok(mine.querySelector('a[href^="tel:"]'), "a booking with a number has no way to ring it");
+      /* biggest first — that is the order they get rung */
+      const dues = rows.map(x => +x.querySelector(".paid").textContent.replace(/[^\d]/g, ""));
+      ok(dues.every((v, i) => i === 0 || dues[i - 1] >= v), `not sorted by what is owed: ${dues}`);
+      /* and the chips move between buckets without leaving the sheet */
+      const chip = [...document.querySelectorAll(".sheet .roomfilt button")]
+        .find(c => /This week/.test(c.textContent));
+      ok(chip, "no bucket chips");
+      chip.click();
+      await wait(80);
+      const only = [...document.querySelectorAll(".sheet .moneylist .row")];
+      eq(only.length, O.byBucket.soon.length, "rows after switching to this week");
+      /* the amount due is the control that records a payment against it */
+      const pay = only[0].querySelector("button.paid");
+      ok(pay, "the amount owed is not a way to record a payment");
+      pay.click();
+      await until(() => document.querySelector(".sheet .bkgo"), "the payment form");
+      ok(/due/.test(document.querySelector(".sheet .n").textContent), "the payment form did not open on the balance");
+      return `${O.all.length} owing, bucketed and sorted, each one a call and a payment`;
+    } finally {
+      closeSheet();
+      const still = resv.indexOf(r);
+      if (still >= 0) resv.splice(still, 1);
+      recompute();
+      if (stored != null) localStorage.setItem(STORE, stored);
+    }
+  });
+
+  /* The card the operators said made no sense to them is gone, and nothing
+     that referred to it is left pointing at a hole. */
+  await test("the Money tab leads with the month and says nothing about a card it no longer has", async () => {
+    const was = pulseSeg;
+    try {
+      pulseSeg = "money";
+      switchTo(SCREENS.findIndex(s => s.id === "trends"));
+      await until(() => document.querySelector("#scr-trends .tcard h3"), "the Money cards");
+      const titles = [...document.querySelectorAll("#scr-trends .tcard h3")].map(h => h.textContent);
+      ok(!titles.includes("What a night is worth"), "the rate card is still on the Money tab");
+      const cur = dayISO(0).slice(0, 7);
+      /* OWED LEADS. It is the only card here anybody can act on this
+         afternoon; the run rate is a month-end question and the month's
+         ledger is a summary. */
+      eq(titles[0], "What you are owed", `the tab leads with "${titles[0]}"`);
+      eq(titles[1], MON[+cur.split("-")[1] - 1] + " " + cur.split("-")[0],
+        `the running month is not second: "${titles[1]}"`);
+      ok(titles.includes("What a month brings in"), "no run-rate card");
+      const foot = document.querySelector("#scr-trends").textContent;
+      ok(!/rate at the top/.test(foot), "the footer still describes the card that was removed");
+      /* and it is said ONCE. The month card used to carry an owed tile as
+         well, directly under the card that states it in full. */
+      const monthCard = [...document.querySelectorAll("#scr-trends .tcard")]
+        .find(c => c.querySelector("h3").textContent === titles[1]);
+      const tiles = [...monthCard.querySelectorAll(".opp")];
+      eq(tiles.length, 3, "tiles on the month card");
+      ok(!tiles.some(t => /owed/.test(t.textContent)), "the month card repeats what is owed");
+      ok(tiles.every(t => t.tagName === "BUTTON"), "a tile is not a control");
+      eq(tiles.map(t => t.querySelector("s").textContent.split(" ·")[0]).join(","), "taken,spent,nights",
+        "the month's three facts");
+      /* nothing runs off a 375px phone */
+      const wide = [...document.querySelectorAll("#scr-trends .deck *")]
+        .filter(e => { const b = e.getBoundingClientRect(); return b.width && b.right > window.innerWidth + 0.5; });
+      eq(wide.length, 0, `${wide.length} elements overflow the screen: ${wide.slice(0,3).map(e=>e.className)}`);
+      return `${titles.length} cards, leading with ${titles[0]}, three tiles, nothing overflowing`;
+    } finally { pulseSeg = was; }
+  });
+
+  /* Two panels stacked in a card body shared a border line to the pixel, and
+     at arm's length that does not read as two panels touching — it reads as
+     one panel broken. The owner circled it twice. A gap is cheap; finding
+     this by eye on six segments is not, so it is measured. */
+  await test("no two panels on the Business tab share an edge, and nothing spills out of its card", async () => {
+    const was = pulseSeg;
+    try {
+      const bad = [];
+      for (const seg of ["now", "money", "profit", "rooms", "guests", "upkeep"]) {
+        pulseSeg = seg;
+        switchTo(SCREENS.findIndex(s => s.id === "trends"));
+        await until(() => document.querySelector("#scr-trends .tcard"), `the ${seg} cards`);
+        /* .tcard starts at opacity 0 and translateY(12px) until the screen is
+           marked seen — measured against that, every rect is 12px out. */
+        document.getElementById("scr-trends").classList.add("seen");
+        freeze(() => {
+          const boxes = [...document.querySelectorAll(
+            "#scr-trends .tcard, #scr-trends .tcard .card, #scr-trends .costsbtn, #scr-trends .opp")];
+          for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
+            const a = boxes[i], b = boxes[j];
+            if (a.contains(b) || b.contains(a)) continue;
+            const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+            if (!ra.height || !rb.height) continue;
+            const gap = rb.top - ra.bottom;
+            const across = Math.min(ra.right, rb.right) - Math.max(ra.left, rb.left);
+            if (across > 4 && gap < 2)
+              bad.push(`${seg}: ${(a.className || "").slice(0, 18)} / ${(b.className || "").slice(0, 18)} at ${gap.toFixed(1)}px`);
+          }
+          document.querySelectorAll("#scr-trends .tcard").forEach(c => {
+            const rc = c.getBoundingClientRect();
+            c.querySelectorAll("*").forEach(e => {
+              const r = e.getBoundingClientRect();
+              if (r.height && r.bottom > rc.bottom + 1)
+                bad.push(`${seg}: ${(e.className || e.tagName).toString().slice(0, 18)} spills ${(r.bottom - rc.bottom).toFixed(1)}px`);
+            });
+          });
+        });
+      }
+      eq(bad.length, 0, `panels touching or spilling — ${bad.slice(0, 4).join(" · ")}`);
+      return "six segments measured, no shared edges, nothing outside its card";
+    } finally { pulseSeg = was; }
+  });
+
+  /* The owner asked for what he is owed at the top of Money, or on the Now
+     board, and asked not to be shown the same thing twice. It is split: the
+     board takes the slice with a deadline on it, Money keeps the whole. */
+  await test("money that stops being collectable when a guest walks out reaches the Now board", async () => {
+    const was = pulseSeg, stored = localStorage.getItem(STORE);
+    const fi = flats.map((f, i) => i).find(i => freeSpan(i, 0, 2));
+    ok(fi != null, "no flat free for the fixture");
+    /* in the flat tonight, out tomorrow, part paid — the exact case */
+    resv.push({fi, start: -2, end: 1, nights: 3, guest: "Leaving Fixture", src: "Direct",
+               manual: true, amount: 21000, phone: "9876500022",
+               pays: [{id: "lf1", amount: 6000, method: "Cash", on: -2}], bookedOn: -4});
+    recompute();
+    try {
+      eq(dueFrom(resv[resv.length - 1]), 15000, "what the fixture owes");
+      pulseSeg = "now";
+      switchTo(SCREENS.findIndex(s => s.id === "trends"));
+      await until(() => document.querySelector("#scr-trends .tcard"), "the Now board");
+      const btn = [...document.querySelectorAll("#scr-trends button")]
+        .find(b => /before a guest leaves/.test(b.textContent));
+      ok(btn, "the board does not raise money that leaves with the guest");
+      /* the plural moves with the noun: "before 1 guest leave" shipped once */
+      ok(!/guest leave\b/.test(btn.textContent), `bad grammar: ${btn.textContent.slice(0, 60)}`);
+      ok(/₹15,000/.test(btn.textContent), `the board does not name the figure: ${btn.textContent.slice(0, 60)}`);
+      btn.click();
+      await until(() => document.querySelector(".sheet.on .row"), "the list of who to collect from");
+      const txt = document.querySelector(".sheet").textContent;
+      ok(/Leaving Fixture/.test(txt), "the list does not name the guest");
+      ok(/9876500022/.test(txt), "the list does not carry the number to ring");
+      ok(/leaves/.test(txt), "the list does not say when the door closes");
+      /* a guest leaving further out is NOT on the board — the board is things
+         that expire, not everything owed */
+      closeSheet();
+      resv[resv.length - 1].end = 9; recompute();
+      switchTo(SCREENS.findIndex(s => s.id === "trends"));
+      await until(() => document.querySelector("#scr-trends .tcard"), "the board again");
+      ok(![...document.querySelectorAll("#scr-trends button")]
+        .some(b => /before a guest leaves/.test(b.textContent)),
+        "a guest leaving in nine days is being raised as expiring today");
+      return "₹15,000 raised with a day left, named and dialable, gone when the date moves out";
+    } finally {
+      closeSheet();
+      const i = resv.findIndex(r => r.guest === "Leaving Fixture");
+      if (i >= 0) resv.splice(i, 1);
+      recompute();
+      if (stored != null) localStorage.setItem(STORE, stored);
+      pulseSeg = was;
+    }
   });
 
   /* ══ the whole surface ══════════════════════════════════════════════════ */
