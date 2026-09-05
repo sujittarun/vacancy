@@ -2897,6 +2897,65 @@ export async function run(filter) {
     }
   });
 
+  /* The operators had twelve guests who left in August, paid at the door and
+     were never written down. Recording each one landed on the room sheet,
+     three screens from the list, and dated the money today — September's
+     figure for August's cash. */
+  await test("a payment recorded from the owed list returns to the list, dated to the day the guest left", async () => {
+    const keep = activity.slice(), stored = localStorage.getItem(STORE);
+    const fi = flats.map((f, i) => i).find(i => freeSpan(i, -12, -8));
+    ok(fi != null, "no flat free for a past stay");
+    /* left ten days ago, in the month before this one when the date allows */
+    resv.push({fi, start: -12, end: -10, nights: 2, guest: "Gone Fixture", src: "Direct",
+               manual: true, amount: 8800, pays: [], bookedOn: -14});
+    recompute();
+    const r = resv[resv.length - 1];
+    const leftMonth = dayISO(r.end).slice(0, 7), cur = dayISO(0).slice(0, 7);
+    const beforeLeft = cashMonth(leftMonth).inHand, beforeCur = cashMonth(cur).inHand;
+    try {
+      ok(owedStats().byBucket.gone.indexOf(r) >= 0, "the fixture is not in the already-left bucket");
+      openOwed("gone");
+      await until(() => document.querySelector(".sheet .moneylist .row"), "the owed list");
+      const row = [...document.querySelectorAll(".sheet .moneylist .row")].find(x => /Gone Fixture/.test(x.textContent));
+      ok(row, "the fixture is not listed");
+      row.querySelector("button.paid").click();
+      await until(() => document.querySelector(".sheet .bkgo"), "the payment form");
+      /* the balance is filled in, and the date defaults to the day they left */
+      eq(document.querySelector(".sheet .bkamt input").value, "8800", "the balance offered");
+      /* and the stay reads forwards. Clamping the arrival to today printed
+         "5 Sep → 26 Aug" for a stay of 24–26 Aug — a booking ending before it
+         began, on the form for settling it. */
+      eq(document.querySelector(".sheet .m").textContent,
+        `Gone Fixture · ${flats[fi].id} · ${fmt(r.start)} → ${fmt(r.end)}`, "the stay in the header");
+      const when = [...document.querySelectorAll(".sheet .srcRow")].pop();
+      const pressed = [...when.children].find(b => b.getAttribute("aria-pressed") === "true");
+      ok(pressed && /When they left/.test(pressed.textContent), `the default date is "${pressed && pressed.textContent}"`);
+      ok(pressed.textContent.includes(fmt(r.end)), "the chip does not name the day they left");
+      document.querySelector(".sheet .bkgo").click();
+      await until(() => document.querySelector(".sheet .moneylist") || document.querySelector(".sheet .empty"), "back on the owed list");
+      /* back on the list, and the guest is no longer on it */
+      ok(!/Gone Fixture/.test(document.querySelector(".sheet").textContent), "the settled guest is still listed as owing");
+      ok(/owed/.test(document.querySelector(".sheet .n").textContent), `the sheet that came back is "${document.querySelector(".sheet .n").textContent}"`);
+      eq(dueFrom(r), 0, "still owing after the payment");
+      const p = r.pays[r.pays.length - 1];
+      eq(p.on, r.end, "the payment is not dated to the day they left");
+      /* and the money lands in the month they left, not in this one */
+      eq(cashMonth(leftMonth).inHand - beforeLeft, 8800, "the month they left did not receive the money");
+      if (leftMonth !== cur) eq(cashMonth(cur).inHand - beforeCur, 0, "this month was credited with last month's cash");
+      ok(/dated/.test(activity[0].s), `the log line does not say it was back-dated: ${activity[0].s}`);
+      /* a payment can never be dated ahead of today */
+      addPayment(r, 100, "Cash", "", 5);
+      eq(r.pays[r.pays.length - 1].on, 0, "a future-dated payment was accepted");
+      return `₹8,800 dated ${fmt(r.end)}, back on the list, ${leftMonth} credited`;
+    } finally {
+      closeSheet();
+      const i = resv.indexOf(r); if (i >= 0) resv.splice(i, 1);
+      recompute();
+      if (stored != null) localStorage.setItem(STORE, stored);
+      activity.length = 0; keep.forEach(a => activity.push(a)); jset(LOG_STORE, activity);
+    }
+  });
+
   /* ══ the whole surface ══════════════════════════════════════════════════ */
 
   await test("no text falls below AA in either theme", async () => {

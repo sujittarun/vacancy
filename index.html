@@ -7213,17 +7213,25 @@ const moneyShort = n =>{
   return sign + "₹" + v.toLocaleString("en-IN");
 };
 
-function addPayment(r, amount, method, note){
+/* `on` is the day the money actually arrived, as an offset like everything
+   else. It was always today, which is right for a payment being taken and
+   wrong for one being caught up on: twelve guests who left in August, paid at
+   the door and were never written down, were about to be recorded as
+   September's money. Never in the future — a receipt cannot predate its own
+   recording the other way round. */
+function addPayment(r, amount, method, note, on){
   amount = toAmount(amount);
   if(!amount) return false;
   if(PAY_METHODS.indexOf(method) < 0) method = "Cash";
-  const p = { id: uuid(), amount, method, on: 0, note: (note||"").trim() };
+  on = Math.min(0, on | 0);
+  const p = { id: uuid(), amount, method, on, note: (note||"").trim() };
   (r.pays = r.pays || []).push(p);
   if(MODE === "live" && r.sid)
     enqueue({k:"pay+", id:p.id, body:{stay_id:r.sid, amount, method,
-      received_on: dayISO(0), note: p.note || null, created_by: session && session.uid}});
+      received_on: dayISO(on), note: p.note || null, created_by: session && session.uid}});
   save(); cacheSave();
-  logAct("paid", `Took ${money(amount)} from ${r.guest || "a guest"} · ${method} · ${flatLabel(r.fi)}`,
+  logAct("paid", `Took ${money(amount)} from ${r.guest || "a guest"} · ${method} · ${flatLabel(r.fi)}`
+    + (on < 0 ? ` · dated ${fmt(on)}` : ""),
     {flat: flatLabel(r.fi), guest: r.guest});
   return true;
 }
@@ -13653,13 +13661,23 @@ function moneyPill(r, fi, day){
 
 /* Recording money is two touches: the amount is already the balance, and the
    method defaults to how this booking's source is actually settled. */
-function openPayment(r, fi, day){
+/* `back` is where the form returns to — Record, or ✕. It always went to the
+   room sheet, which is right when the form was opened from a room and wrong
+   when it was opened from the list of everyone who owes: clearing twelve
+   departed guests meant twelve trips back through Business → Money → the
+   list, one per payment. The caller says where it came from. */
+function openPayment(r, fi, day, back){
+  back = back || (()=> openSheet(fi, day));
   sheetWipe();
   const t = el("div");
+  /* r.start, not Math.max(r.start, 0). The clamp reads "the part of this stay
+     still ahead", which is the room sheet's framing and is nonsense on a guest
+     who has gone: a stay of 24–26 Aug came up as "5 Sep → 26 Aug", a booking
+     that ends before it starts, on the form for settling it. */
   t.innerHTML = `<div class="n">${money(dueFrom(r))} due</div>`
-              + `<div class="m">${esc(r.guest)} · ${flats[r.fi].id} · ${fmt(Math.max(r.start,0))} → ${fmt(r.end)}</div>`;
+              + `<div class="m">${esc(r.guest)} · ${flats[r.fi].id} · ${fmt(r.start)} → ${fmt(r.end)}</div>`;
   const x = el("button", null, "✕"); x.setAttribute("aria-label","Back");
-  x.onclick = ()=> openSheet(fi, day);
+  x.onclick = back;
   sheetH.append(t, x);
 
   const form = el("div","bkform");
@@ -13683,12 +13701,35 @@ function openPayment(r, fi, day){
   });
   form.append(chips);
 
+  /* WHEN, for a guest who has already gone. Money taken at the door and never
+     written down is the ordinary case for a departed guest, so the receipt
+     defaults to the day they left; a transfer that landed today is one tap.
+     Not offered for a guest still here — the money arrives when it arrives,
+     and that is today. */
+  let on = 0;
+  const gone = r.end < 0;
+  if(gone){
+    const whenCap = el("div","bkcap");
+    whenCap.append(el("span", null, "Received"), el("span", null, `left ${fmt(r.end)}`));
+    const when = el("div","srcRow");
+    const opts = [[r.end, `When they left · ${fmt(r.end)}`], [0, "Today"]];
+    on = r.end;
+    opts.forEach(([d, label])=>{
+      const c = el("button", null, label);
+      c.setAttribute("aria-pressed", String(d === on));
+      c.onclick = ()=>{ on = d; haptic(8);
+        [...when.children].forEach((o, i)=> o.setAttribute("aria-pressed", String(opts[i][0] === on))); };
+      when.appendChild(c);
+    });
+    form.append(whenCap, when);
+  }
+
   const go = el("button","bkgo","Record it");
   go.onclick = ()=>{
     /* toAmount already parses "₹1,500.50" correctly. Pre-stripping to digits
        first turned 1500.50 into "150050" — a ₹1,501 payment recorded as
        ₹1,50,050, which then clamps dueFrom to 0 and flips the row to settled. */
-    if(addPayment(r, amt.value, method)){ haptic(18); openSheet(fi, day); }
+    if(addPayment(r, amt.value, method, "", on)){ haptic(18); back(); }
   };
   form.append(go);
   sheetB.append(form);
@@ -13707,7 +13748,7 @@ function openPayment(r, fi, day){
       const del = el("button","rowx","✕");
       del.setAttribute("aria-label", `Remove this ${money(p.amount)} payment`);
       armConfirm(del, {rest:"✕", armed:"Remove?",
-        run:()=>{ dropPayment(r, p); openPayment(r, fi, day); }});
+        run:()=>{ dropPayment(r, p); openPayment(r, fi, day, back); }});
       end.append(del);
       row.append(m, end);
       card.appendChild(row);
@@ -14892,7 +14933,7 @@ function openOwed(bucket){
       const end = el("div","rowend");
       const pay = el("button","paid due", money(dueFrom(r)));
       pay.setAttribute("aria-label", `Record a payment from ${r.guest} — ${money(dueFrom(r))} still due`);
-      pay.onclick = ()=>{ haptic(10); openPayment(r, r.fi, Math.max(r.start, 0)); };
+      pay.onclick = ()=>{ haptic(10); openPayment(r, r.fi, Math.max(r.start, 0), ()=> openOwed(which)); };
       end.appendChild(pay);
       if(r.phone){
         const call = el("a","rowx");
