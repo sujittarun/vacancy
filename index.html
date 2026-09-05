@@ -4762,14 +4762,25 @@ function todayBoard(){
     const owing = bookings().filter(r => r.start === d && dueFrom(r) > 0);
     if(!owing.length) continue;
     const total = owing.reduce((s,r)=> s + dueFrom(r), 0);
+    /* Worked out fresh on every open, not captured once when the board was
+       built: this is also the way BACK from the payment form, and a list that
+       came back holding the guest just settled would be a list arguing with
+       the money. When the last one is paid there is nothing to come back to,
+       so the sheet closes and the board redraws without the card. */
+    const openArrivals = ()=>{
+      const left = bookings().filter(r => r.start === d && dueFrom(r) > 0);
+      if(!left.length){ closeSheet(); refreshScreen(); return; }
+      const sum = left.reduce((a,r)=> a + dueFrom(r), 0);
+      openFlatList(`${money(sum)} to collect`, `${fmtL(d)} · arriving with a balance`,
+        left.map(r=>({fi:r.fi, d, pay:r,
+          meta:`<b>${esc(r.guest)}</b>${r.phone ? " · " + esc(r.phone) : ""}`
+             + `<em>${money(dueFrom(r))} of ${money(r.amount)} · ${esc(r.src)}</em>`,
+          pill: money(dueFrom(r))})), null, openArrivals);
+    };
     todo.push({
       label:`Collect ${money(total)} from ${owing.length} arrival${owing.length>1?"s":""} ${d===0?"today":"tomorrow"}`,
       note:"balance still due when they arrive",
-      open:()=>openFlatList(`${money(total)} to collect`, `${fmtL(d)} · arriving with a balance`,
-        owing.map(r=>({fi:r.fi, d,
-          meta:`<b>${esc(r.guest)}</b>${r.phone ? " · " + esc(r.phone) : ""}`
-             + `<em>${money(dueFrom(r))} of ${money(r.amount)} · ${esc(r.src)}</em>`,
-          pill: money(dueFrom(r))})))});
+      open: openArrivals});
   }
 
   /* THE OTHER END OF THE STAY. The loop above catches a guest ARRIVING with a
@@ -4788,18 +4799,27 @@ function todayBoard(){
       r.start <= 0 && r.end > 0 && r.end <= NOW + 1 && dueFrom(r) > 0);
     if(going.length){
       const total = going.reduce((s2, r)=> s2 + dueFrom(r), 0);
+      // same rule as the arrivals list above: re-derived on open, so it is
+      // also the way back from the payment form
+      const openLeaving = ()=>{
+        const left = bookings().filter(r =>
+          r.start <= 0 && r.end > 0 && r.end <= NOW + 1 && dueFrom(r) > 0);
+        if(!left.length){ closeSheet(); refreshScreen(); return; }
+        const sum = left.reduce((a, r)=> a + dueFrom(r), 0);
+        openFlatList(`${money(sum)} to collect`,
+          "in the flat now, leaving within two days",
+          left.map(r=>({fi:r.fi, d:0, pay:r,
+            meta:`<b>${esc(r.guest)}</b>${r.phone ? " · " + esc(r.phone) : ""}`
+               + `<em>${money(dueFrom(r))} of ${money(r.amount)} · leaves ${esc(fmt(r.end))}</em>`,
+            pill: money(dueFrom(r))})), null, openLeaving);
+      };
       todo.push({
         /* "before 1 guest leave" — the plural was hung on the noun and the
            verb was left behind. Both move together or neither does. */
         label:`Collect ${money(total)} before `
           + (going.length === 1 ? "a guest leaves" : `${going.length} guests leave`),
         note:"in the flat now, checking out within two days",
-        open:()=>openFlatList(`${money(total)} to collect`,
-          "in the flat now, leaving within two days",
-          going.map(r=>({fi:r.fi, d:0,
-            meta:`<b>${esc(r.guest)}</b>${r.phone ? " · " + esc(r.phone) : ""}`
-               + `<em>${money(dueFrom(r))} of ${money(r.amount)} · leaves ${esc(fmt(r.end))}</em>`,
-            pill: money(dueFrom(r))})))});
+        open: openLeaving});
     }
   }
 
@@ -16750,7 +16770,11 @@ function buildingForm(){
 /* ── opportunities, one tap deep ─────────────────────────────────────────── */
 /* One sheet for every "show me the flats" tap. Rows carry a flat, a line of
    detail and a pill; an optional broadcast button copies a ready message. */
-function openFlatList(title, sub, rows, broadcast){
+/* `reopen`, when the list can change under its own actions. A row whose money
+   has just been recorded is no longer on the list, so the way back from the
+   payment form is not "this list as it was" but "this list, worked out
+   again" — and when nothing is left the job is done and the sheet closes. */
+function openFlatList(title, sub, rows, broadcast, reopen){
   sheetWipe();
   const t = el("div");
   t.innerHTML = `<div class="n">${title}</div><div class="m">${sub}</div>`;
@@ -16778,7 +16802,22 @@ function openFlatList(title, sub, rows, broadcast){
     const row = el("button","row");
     row.append(el("div","id", flats[r.fi].id));
     const m = el("div","meta"); m.innerHTML = r.meta;
-    row.append(m, el("span","pill now", r.pill));
+    /* THE MONEY IS THE THING TO DO. On the two collect lists the pill holds a
+       balance and was a <span>, so tapping it fell through to the row and
+       opened the room — from where recording the payment is another two taps
+       through the booking row's own pill. The board raised the job and then
+       made the operator go and find it. Where a row carries a booking to
+       settle, its pill IS the payment form. */
+    if(r.pay){
+      const pay = el("button","paid due", r.pill);
+      pay.setAttribute("aria-label",
+        `Record a payment from ${r.pay.guest || "the guest"} — ${money(dueFrom(r.pay))} still due`);
+      pay.onclick = ev=>{ ev.stopPropagation(); haptic(10);
+        openPayment(r.pay, r.pay.fi, Math.max(r.pay.start, 0), reopen || closeSheet); };
+      row.append(m, pay);
+    } else {
+      row.append(m, el("span","pill now", r.pill));
+    }
     row.onclick = ()=>{ haptic(9); openSheet(r.fi, r.d || 0); };
     card2.appendChild(row);
   });

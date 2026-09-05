@@ -2932,10 +2932,12 @@ export async function run(filter) {
       ok(pressed && /When they left/.test(pressed.textContent), `the default date is "${pressed && pressed.textContent}"`);
       ok(pressed.textContent.includes(fmt(r.end)), "the chip does not name the day they left");
       document.querySelector(".sheet .bkgo").click();
-      await until(() => document.querySelector(".sheet .moneylist") || document.querySelector(".sheet .empty"), "back on the owed list");
-      /* back on the list, and the guest is no longer on it */
-      ok(!/Gone Fixture/.test(document.querySelector(".sheet").textContent), "the settled guest is still listed as owing");
-      ok(/owed/.test(document.querySelector(".sheet .n").textContent), `the sheet that came back is "${document.querySelector(".sheet .n").textContent}"`);
+      /* .sheet.on, not .sheet: closeSheet only drops the class, it never
+         empties the node, so a bare ".sheet .bkgo" still matches the form that
+         has just been dismissed. */
+      await until(() => document.querySelector(".sheet.on .moneylist"), "back on the owed list");
+      ok(!/Gone Fixture/.test(document.querySelector(".sheet.on").textContent), "the settled guest is still listed as owing");
+      ok(/owed/.test(document.querySelector(".sheet.on .n").textContent), `the sheet that came back is "${document.querySelector(".sheet.on .n").textContent}"`);
       eq(dueFrom(r), 0, "still owing after the payment");
       const p = r.pays[r.pays.length - 1];
       eq(p.on, r.end, "the payment is not dated to the day they left");
@@ -2943,6 +2945,48 @@ export async function run(filter) {
       eq(cashMonth(leftMonth).inHand - beforeLeft, 8800, "the month they left did not receive the money");
       if (leftMonth !== cur) eq(cashMonth(cur).inHand - beforeCur, 0, "this month was credited with last month's cash");
       ok(/dated/.test(activity[0].s), `the log line does not say it was back-dated: ${activity[0].s}`);
+      /* THE SAME MONEY, FROM THE BOARD. "Worth doing now" raises the job and
+         its list held the balance in a <span>, so tapping the money fell
+         through to the row and opened the room — the board naming the task
+         and then sending the operator to go and find it. */
+      closeSheet();
+      const inFlat = bookings().find(z => z.start <= 0 && z.end > 0 && z.end <= NOW + 1 && dueFrom(z) > 0);
+      let built = null;
+      if(!inFlat){
+        const f2 = flats.map((f, i) => i).find(i => freeSpan(i, 0, 2));
+        ok(f2 != null, "no flat free for the leaving fixture");
+        resv.push({fi: f2, start: -2, end: 1, nights: 3, guest: "Board Fixture", src: "Direct",
+                   manual: true, amount: 9000, pays: [], bookedOn: -4});
+        recompute();
+        built = resv[resv.length - 1];
+      }
+      const target = inFlat || built;
+      const board = todayBoard();
+      const item = board.todo.find(x => /before a guest leaves|guests leave/.test(x.label));
+      ok(item, "the board no longer raises money leaving with a guest");
+      item.open();
+      await until(() => document.querySelector(".sheet.on .row"), "the collect list");
+      const brow = [...document.querySelectorAll(".sheet .row")].find(x => new RegExp(target.guest).test(x.textContent));
+      ok(brow, "the guest is not on the collect list");
+      const bpay = brow.querySelector("button.paid");
+      ok(bpay, "the balance on the board's list is not a control");
+      ok(bpay.textContent.includes(money(dueFrom(target))), "the control does not carry the balance");
+      bpay.click();
+      await until(() => document.querySelector(".sheet.on .bkgo"), "the payment form from the board");
+      ok(/due/.test(document.querySelector(".sheet.on .n").textContent), "the money did not open the payment form");
+      /* Record it settles them and never lands on the room. With one row left
+         the job is done and the sheet closes; with more, the list comes back
+         without the guest just paid. */
+      document.querySelector(".sheet.on .bkgo").click();
+      await until(() => !document.querySelector(".sheet.on .bkgo"), "the form to close");
+      eq(dueFrom(target), 0, "still owing after recording from the board");
+      const stillOn = document.querySelector(".sheet.on");
+      if(stillOn){
+        ok(/to collect/.test(stillOn.querySelector(".n").textContent),
+          `recording from the board landed on "${stillOn.querySelector(".n").textContent}"`);
+        ok(!new RegExp(target.guest).test(stillOn.textContent), "the settled guest is still on the collect list");
+      }
+      if(built){ const j = resv.indexOf(built); if(j >= 0) resv.splice(j, 1); recompute(); }
       /* a payment can never be dated ahead of today */
       addPayment(r, 100, "Cash", "", 5);
       eq(r.pays[r.pays.length - 1].on, 0, "a future-dated payment was accepted");
