@@ -1153,8 +1153,12 @@ button{background:none;border:0;padding:0;cursor:pointer;
 /* nothing sticky inside the trough — see the .mlab note; the month name lives
    in the chrome above it instead */
 /* the answer takes whatever is left and scrolls inside it */
-/* the answer: page content, full length, nothing clipping it */
-.answer{margin-top:10px}
+/* the answer list: page content, full length, nothing clipping it.
+   NOT ".answer" — that is the Ask tab's sentence, 17.5px with its own bold and
+   its own .n and .y colours, and a list card wearing the same name inherited
+   all of it (the .stack collision, again, and caught the same way: by a
+   symptom on a different screen). A class carries its component's name. */
+.freelist{margin-top:10px}
 /* ── the pinned answer bar ──────────────────────────────────────────────────
    Full bleed, the top bar's own material, and a hairline plus a soft shadow
    that only appear once it is actually stuck — a pinned band that looks pinned
@@ -1162,12 +1166,24 @@ button{background:none;border:0;padding:0;cursor:pointer;
 .answerbar{
   position:sticky;top:0;z-index:5;
   margin:8px -20px 0;padding:6px 20px 7px;
-  background:var(--bar);
-  -webkit-backdrop-filter:var(--tint-2);backdrop-filter:var(--tint-2);
   border-bottom:1px solid transparent;
   transition:border-color .2s,box-shadow .2s;
 }
+/* THE MATERIAL ARRIVES WITH THE JOB. At rest nothing scrolls under this bar,
+   and a 52% white with a brightening blur laid over the page ground read as
+   a band of a different colour cutting across the screen — the owner
+   circled it. So the glass sits on a layer of its own at opacity 0 and fades
+   in as the bar pins, which is the moment rows start passing beneath it and
+   the moment it has something to be glass against. */
+.answerbar::before{
+  content:"";position:absolute;inset:0;z-index:-1;
+  background:var(--bar);
+  -webkit-backdrop-filter:var(--tint-2);backdrop-filter:var(--tint-2);
+  opacity:0;transition:opacity .22s var(--out);
+}
+.answerbar.stuck::before{opacity:1}
 .answerbar.stuck{border-bottom-color:var(--line);box-shadow:0 10px 22px -16px rgba(0,0,0,.5)}
+@media (prefers-reduced-motion:reduce){ .answerbar, .answerbar::before{transition:none} }
 .answerbar .picks{margin-top:0}
 /* stuck, the nights control also says WHICH nights — the picker head has
    scrolled away by then, and a list with no dates over it is a list of
@@ -1474,10 +1490,13 @@ button{background:none;border:0;padding:0;cursor:pointer;
    long as the finger is down. Off, it is display:none and costs nothing. */
 .hud{
   position:absolute;inset:0;display:none;align-items:center;gap:9px;
-  padding:0 2px;background:var(--bar);
+  padding:0 2px;
   pointer-events:none;
 }
 .hud.on{display:flex}
+/* while the readout is up the chips under it step out of the way — hidden, not
+   painted over, so no second material is needed and nothing ghosts through */
+.hud.on + .monthfilt{visibility:hidden}
 .hud .n{font-size:19px;font-weight:690;letter-spacing:-.035em;line-height:1;
   flex:0 0 auto;font-variant-numeric:tabular-nums}
 .hud .n.none{color:var(--hot)}
@@ -10182,7 +10201,7 @@ function renderMonth(){
        top, throwing away the fortnight the operator had just found. */
     if(monthCode && !flats.some(f => f.code === monthCode)) monthCode = null;
     const filt = el("div","roomfilt monthfilt");
-    const list = el("div","card answer");
+    const list = el("div","card freelist");
     const paintList = ()=>{
       list.textContent = "";
       const show = free.filter(i => !monthCode || flats[i].code === monthCode);
@@ -10220,7 +10239,7 @@ function renderMonth(){
       chip(null, "All", free.length);
       B2.forEach(b2=> chip(b2.code, b2.short || b2.name, freeIn(b2.code)));
     }
-    hudrow.append(filt, hud);
+    hudrow.append(hud, filt);          // hud first: the chip row hides while it is on
     paintList();
     s.appendChild(list);
 

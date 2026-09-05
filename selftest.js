@@ -1010,8 +1010,8 @@ export async function run(filter) {
       let best = { d: 0, f: -1 };
       for (let d = 0; d < DAYS; d++) { const f = freeCount(d); if (f > best.f) best = { d, f }; }
       pendingStart = null; sel = { a: best.d, n: 1 }; renderMonth();
-      await until(() => document.querySelector(".answer .row"), "the answer");
-      const list = scr.querySelector(".answer"), bar = scr.querySelector(".answerbar");
+      await until(() => document.querySelector(".freelist .row"), "the answer");
+      const list = scr.querySelector(".freelist"), bar = scr.querySelector(".answerbar");
       ok(list && bar, "no answer list or no answer bar");
       /* the list is page content: nothing of it is clipped inside itself */
       ok(list.scrollHeight <= list.clientHeight + 1, "the list still scrolls inside a box of its own");
@@ -1033,7 +1033,7 @@ export async function run(filter) {
       ok(cal.bottom <= bt + 1, "the calendar is still on screen under the pinned bar");
       /* and the list is what is under the bar */
       const under = document.elementFromPoint(window.innerWidth / 2, bt + bar.offsetHeight + 40);
-      ok(under && under.closest(".answer"), `what scrolls under the bar is ${under && under.className}`);
+      ok(under && under.closest(".freelist"), `what scrolls under the bar is ${under && under.className}`);
       /* stuck, the nights control says which nights, because the head has gone */
       ok(/Sep|Oct|Nov|Aug/.test(bar.querySelector(".pn b").textContent),
         `the pinned bar does not carry the dates: ${bar.querySelector(".pn b").textContent}`);
@@ -2531,7 +2531,7 @@ export async function run(filter) {
       const all = +chips()[0].querySelector("i").textContent;
       const parts = chips().slice(1).reduce((s2, c) => s2 + +c.querySelector("i").textContent, 0);
       eq(parts, all, "the building counts do not add up to the All count");
-      eq(all, document.querySelectorAll(".answer .row").length, "rows shown against the All count");
+      eq(all, document.querySelectorAll(".freelist .row").length, "rows shown against the All count");
 
       /* pick the building with the most free, so the assertion is not about an
          empty list by accident */
@@ -2541,7 +2541,7 @@ export async function run(filter) {
       const name = pick.querySelector("span").textContent;
       pick.click();
       await wait(60);
-      const rows = [...document.querySelectorAll(".answer .row")];
+      const rows = [...document.querySelectorAll(".freelist .row")];
       eq(rows.length, want, `rows shown for ${name}`);
       ok(rows.every(r => r.textContent.includes(name)), `a row from another building is still listed`);
       /* the All chip stays the whole portfolio's answer whatever is picked —
@@ -2734,47 +2734,118 @@ export async function run(filter) {
     } finally { pulseSeg = was; }
   });
 
-  /* Two panels stacked in a card body shared a border line to the pixel, and
-     at arm's length that does not read as two panels touching — it reads as
-     one panel broken. The owner circled it twice. A gap is cheap; finding
-     this by eye on six segments is not, so it is measured. */
-  await test("no two panels on the Business tab share an edge, and nothing spills out of its card", async () => {
-    const was = pulseSeg;
-    try {
-      const bad = [];
-      for (const seg of ["now", "money", "profit", "rooms", "guests", "upkeep"]) {
-        pulseSeg = seg;
-        switchTo(SCREENS.findIndex(s => s.id === "trends"));
-        await until(() => document.querySelector("#scr-trends .tcard"), `the ${seg} cards`);
-        /* .tcard starts at opacity 0 and translateY(12px) until the screen is
-           marked seen — measured against that, every rect is 12px out. */
-        document.getElementById("scr-trends").classList.add("seen");
-        freeze(() => {
-          const boxes = [...document.querySelectorAll(
-            "#scr-trends .tcard, #scr-trends .tcard .card, #scr-trends .costsbtn, #scr-trends .opp")];
-          for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
-            const a = boxes[i], b = boxes[j];
-            if (a.contains(b) || b.contains(a)) continue;
-            const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
-            if (!ra.height || !rb.height) continue;
-            const gap = rb.top - ra.bottom;
-            const across = Math.min(ra.right, rb.right) - Math.max(ra.left, rb.left);
-            if (across > 4 && gap < 2)
-              bad.push(`${seg}: ${(a.className || "").slice(0, 18)} / ${(b.className || "").slice(0, 18)} at ${gap.toFixed(1)}px`);
-          }
-          document.querySelectorAll("#scr-trends .tcard").forEach(c => {
-            const rc = c.getBoundingClientRect();
-            c.querySelectorAll("*").forEach(e => {
-              const r = e.getBoundingClientRect();
-              if (r.height && r.bottom > rc.bottom + 1)
-                bad.push(`${seg}: ${(e.className || e.tagName).toString().slice(0, 18)} spills ${(r.bottom - rc.bottom).toFixed(1)}px`);
-            });
-          });
-        });
+  /* ── every screen and sheet, measured for panels that touch or overlap ────
+     Panels stacked on a shared edge read as one panel broken; a panel whose
+     content runs past its own bottom reads as an overlap. The owner circled
+     both on Money, then a band on Month, and asked for every screen to be
+     checked the same way. So this walks the four screens, the six Business
+     segments, Month at rest, pinned and with a range, and every sheet that
+     opens without a server — and measures rather than looks. */
+  await test("no two panels share an edge or overlap on any screen or sheet, and nothing spills out of its panel", async () => {
+    const PANELS = ".card, .tcard, .answerbar, .night, .tile, .opp, .costsbtn, .ops-row, .seg, .bigAct, "
+      + ".roomRoutes button, .actWhy, .stepWide, .step, .bkamt, .bkgo, .strip-call, .blocked, .paid, .rowx, .pill";
+    /* a descendant inside a scroller between it and the panel is clipped by
+       that scroller — the calendar grid inside its trough is the obvious one */
+    const clipped = (e, top) => {
+      for (let p = e.parentElement; p && p !== top; p = p.parentElement) {
+        const cs = getComputedStyle(p);
+        if (/(auto|scroll|hidden)/.test(cs.overflowY + " " + cs.overflowX)) return true;
       }
-      eq(bad.length, 0, `panels touching or spilling — ${bad.slice(0, 4).join(" · ")}`);
-      return "six segments measured, no shared edges, nothing outside its card";
-    } finally { pulseSeg = was; }
+      return false;
+    };
+    const short = e => (e.className || e.tagName || "").toString().trim().slice(0, 20);
+    const scan = (root, label) => {
+      const bad = [];
+      const boxes = [...root.querySelectorAll(PANELS)].filter(e => {
+        const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0;
+      });
+      const stuck = root.querySelector(".answerbar.stuck");
+      for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
+        const a2 = boxes[i], b2 = boxes[j];
+        if (a2.contains(b2) || b2.contains(a2)) continue;
+        if (stuck && (a2 === stuck || b2 === stuck)) continue;   // what scrolled under the pinned bar is under it by design
+        const ra = a2.getBoundingClientRect(), rb = b2.getBoundingClientRect();
+        const across = Math.min(ra.right, rb.right) - Math.max(ra.left, rb.left);
+        if (across <= 4) continue;                                   // side by side: not this test's business
+        const vov = Math.min(ra.bottom, rb.bottom) - Math.max(ra.top, rb.top);
+        const touch = Math.abs(rb.top - ra.bottom) < 2 || Math.abs(ra.top - rb.bottom) < 2;
+        if (vov > 1) bad.push(`${label}: ${short(a2)} overlaps ${short(b2)} by ${vov.toFixed(1)}px`);
+        else if (touch) bad.push(`${label}: ${short(a2)} touches ${short(b2)}`);
+      }
+      root.querySelectorAll(".card, .tcard").forEach(c => {
+        const rc = c.getBoundingClientRect();
+        if (!rc.height) return;
+        c.querySelectorAll("*").forEach(e => {
+          const r = e.getBoundingClientRect();
+          if (!r.height || clipped(e, c)) return;
+          const over = Math.max(r.bottom - rc.bottom, r.right - rc.right);
+          if (over > 1) bad.push(`${label}: ${short(e)} spills its card by ${over.toFixed(1)}px`);
+        });
+      });
+      return bad;
+    };
+
+    const steps = [];
+    const at = (label, prep) => steps.push([label, prep]);
+    const go = id => switchTo(SCREENS.findIndex(x => x.id === id));
+    const scr = id => document.getElementById("scr-" + id);
+    at("rooms", async () => { go("rooms"); await until(() => scr("rooms").querySelector(".tile"), "rooms"); return scr("rooms"); });
+    at("month", async () => { calLean = false; pendingStart = null; sel = {a: 0, n: 1}; monthCode = null; go("month");
+      await until(() => scr("month").querySelector(".freelist .row, .freelist .empty"), "month"); return scr("month"); });
+    at("month · pinned", async () => { const m = scr("month"); m.scrollTop = 600; stuckMark && stuckMark(); return m; });
+    at("month · a range", async () => { pendingStart = null; sel = {a: 9, n: 4}; calLean = true; renderMonth();
+      await until(() => scr("month").querySelector(".day.rngA"), "the band"); return scr("month"); });
+    at("ask", async () => { go("ask"); askText = "3 nights"; renderAsk(); await wait(120); return scr("ask"); });
+    ["now", "money", "profit", "rooms", "guests", "upkeep"].forEach(seg => at("business · " + seg, async () => {
+      pulseSeg = seg; go("trends");
+      await until(() => scr("trends").querySelector(".tcard, .empty"), seg);
+      scr("trends").classList.add("seen"); return scr("trends"); }));
+    const sheetOf = (label, open, ready) => at("sheet · " + label, async () => {
+      open();
+      await until(() => document.querySelector(".sheet.on") && (!ready || ready()), label);
+      return document.querySelector(".sheet");
+    });
+    const inHouse = bookings().find(r => r.start <= 0 && r.end > 1 && !r.openEnd);
+    const freeFi = flats.map((f, i) => i).find(i => freeSpan(i, 0, 3));
+    const owing = bookings().find(r => dueFrom(r) > 0);
+    const future = bookings().find(r => r.start > 0 && r.end < DAYS && !r.openEnd);
+    const cur = dayISO(0).slice(0, 7);
+    sheetOf("room", () => openSheet(inHouse ? inHouse.fi : 0, 0), () => document.querySelector(".sheet .bigAct"));
+    sheetOf("booking form", () => openBooking(freeFi, 0, 2), () => document.querySelector(".sheet .bkgo"));
+    if (inHouse) sheetOf("stay editor", () => openStayDates(inHouse, () => {}), () => document.querySelector(".sheet .bkgo"));
+    if (future) sheetOf("move picker", () => openGuestMove(future, () => {}), () => document.querySelector(".sheet .row.move, .sheet .movenote"));
+    sheetOf("block form", () => openBlockForm(freeFi, 0), () => document.querySelector(".sheet .fgrid"));
+    sheetOf("fault form", () => openIssueForm(freeFi, 0), () => document.querySelector(".sheet .fgrid"));
+    if (owing) sheetOf("payment", () => openPayment(owing, owing.fi, 0), () => document.querySelector(".sheet .bkgo"));
+    sheetOf("owed", () => openOwed("all"), () => document.querySelector(".sheet .moneylist"));
+    sheetOf("cash", () => openCash(cur), () => document.querySelector(".sheet .moneylist"));
+    sheetOf("spend", () => openSpend(cur), () => document.querySelector(".sheet .moneylist"));
+    if (FIN.length >= 2) sheetOf("compare", () => openCompare({title: "Month on month", aLabel: "A", bLabel: "B",
+      aKeys: [FIN[FIN.length - 2][0]], bKeys: [FIN[FIN.length - 1][0]]}), () => document.querySelector(".sheet .kpis"));
+    sheetOf("data", () => openDataSheet(), () => document.querySelector(".sheet .blocked"));
+    sheetOf("activity", () => openActivity(), () => document.querySelector(".sheet .n"));
+    sheetOf("inventory", () => openInventory(), () => document.querySelector(".sheet .row, .sheet .card"));
+    sheetOf("arrivals", () => openOps("arrivals", 0), () => document.querySelector(".sheet .n"));
+
+    const was = {seg: pulseSeg, a: sel.a, n: sel.n, lean: calLean, code: monthCode, ask: askText};
+    const bad = [], seen = [];
+    try {
+      for (const [label, prep] of steps) {
+        try {
+          const root = await prep();
+          await wait(60);
+          freeze(() => bad.push(...scan(root, label)));
+          seen.push(label);
+        } catch (e) {
+          bad.push(`${label}: could not open — ${e && e.message || e}`);
+        } finally { closeSheet(); }
+      }
+    } finally {
+      pulseSeg = was.seg; sel = {a: was.a, n: was.n}; calLean = was.lean; monthCode = was.code; askText = was.ask;
+      pendingStart = null; scr("month").scrollTop = 0; closeSheet();
+    }
+    eq(bad.length, 0, `${bad.length} — ${bad.slice(0, 6).join(" · ")}`);
+    return `${seen.length} screens and sheets measured, none touching, none spilling`;
   });
 
   /* The owner asked for what he is owed at the top of Money, or on the Now
