@@ -994,34 +994,60 @@ export async function run(filter) {
 
   /* ══ the frame ═════════════════════════════════════════════════════════ */
 
-  /* The tab was 1705px at 8 free flats and 3730px — four and a half screens —
-     on the emptiest night in the book, with the answer starting at y=1065 every
-     time. It is a fixed frame now: two bounded troughs move, nothing else, and
-     the answer's size cannot change the layout above it. */
-  await test("the Month tab does not scroll, at any number of free flats", async () => {
+  /* The tab was a fixed frame — two bounded troughs and nothing else moved —
+     and the answer sat in a 156px box. It is a page again: the calendar
+     scrolls away, the answer bar pins under the top bar, and the list runs
+     its full length with no inner scroll. This test used to assert the page
+     could not scroll; it now asserts what the page does when it does. */
+  await test("the Month tab scrolls as a page, the answer bar pins, and the list is never boxed", async () => {
     const scr = document.getElementById("scr-month");
-    document.querySelectorAll(".tabbar button")[1].click();
-    await until(() => document.querySelector(".calscroll .day[data-d]"), "the calendar trough");
-    const check = where => {
-      const slack = scr.scrollHeight - scr.clientHeight;
-      ok(slack <= 1, `${where}: the page scrolls by ${slack}px`);
-    };
-    pendingStart = null; sel = { a: 5, n: 4 }; renderMonth();
-    await until(() => document.querySelector(".listtrough .row"), "the answer");
-    check("a typical selection");
-    const rows1 = scr.querySelectorAll(".row").length;
-
-    /* the emptiest night in the book — the worst case for the list */
-    let best = { d: 0, f: -1 };
-    for (let d = 0; d < DAYS; d++) { const f = freeCount(d); if (f > best.f) best = { d, f }; }
-    pendingStart = null; sel = { a: best.d, n: 1 }; renderMonth();
-    await until(() => scr.querySelectorAll(".row").length > rows1, "the long answer");
-    check(`${best.f} free`);
-    const trough = scr.querySelector(".listtrough");
-    ok(trough.scrollHeight > trough.clientHeight + 100,
-       "the long answer is not actually overflowing its trough — test proves nothing");
-    return `${best.f} free · ${Math.round(trough.scrollHeight)}px of list inside a `
-         + `${Math.round(trough.clientHeight)}px trough, frame unmoved`;
+    const keep = {a: sel.a, n: sel.n};
+    try {
+      document.querySelectorAll(".tabbar button")[1].click();
+      await until(() => document.querySelector(".calscroll .day[data-d]"), "the calendar trough");
+      await until(() => document.querySelector(".screen.on.seen"), "the entrance to finish");
+      /* the emptiest night in the book — the longest list */
+      let best = { d: 0, f: -1 };
+      for (let d = 0; d < DAYS; d++) { const f = freeCount(d); if (f > best.f) best = { d, f }; }
+      pendingStart = null; sel = { a: best.d, n: 1 }; renderMonth();
+      await until(() => document.querySelector(".answer .row"), "the answer");
+      const list = scr.querySelector(".answer"), bar = scr.querySelector(".answerbar");
+      ok(list && bar, "no answer list or no answer bar");
+      /* the list is page content: nothing of it is clipped inside itself */
+      ok(list.scrollHeight <= list.clientHeight + 1, "the list still scrolls inside a box of its own");
+      ok(scr.scrollHeight > scr.clientHeight + 200, "the page does not scroll with the longest list");
+      /* at rest, nothing is stuck and the nights label is the plain count */
+      ok(!bar.classList.contains("stuck"), "the bar reads as stuck before anything scrolled");
+      eq(bar.querySelector(".pn b").textContent, "1 night", "the resting nights label");
+      /* scroll the page: the calendar leaves, the bar pins at the screen's top.
+         The scroll EVENT that flips the stuck flag fires on the next painted
+         frame, and a pane driven from a tool call does not always paint — so
+         the mark is called directly here and the pin itself is asserted from
+         geometry, which position:sticky settles synchronously. */
+      scr.scrollTop = 600;
+      stuckMark && stuckMark();
+      ok(bar.classList.contains("stuck"), "the bar does not know it is pinned");
+      const st = scr.getBoundingClientRect().top, bt = bar.getBoundingClientRect().top;
+      ok(Math.abs(bt - st) <= 1, `the bar is ${(bt - st).toFixed(1)}px from the top of the screen while stuck`);
+      const cal = scr.querySelector(".calscroll").getBoundingClientRect();
+      ok(cal.bottom <= bt + 1, "the calendar is still on screen under the pinned bar");
+      /* and the list is what is under the bar */
+      const under = document.elementFromPoint(window.innerWidth / 2, bt + bar.offsetHeight + 40);
+      ok(under && under.closest(".answer"), `what scrolls under the bar is ${under && under.className}`);
+      /* stuck, the nights control says which nights, because the head has gone */
+      ok(/Sep|Oct|Nov|Aug/.test(bar.querySelector(".pn b").textContent),
+        `the pinned bar does not carry the dates: ${bar.querySelector(".pn b").textContent}`);
+      /* tapping it goes back to the calendar — a smooth scroll, so it takes
+         frames; given the pane paints, it is there well inside the wait */
+      bar.querySelector(".pn b").click();
+      await until(() => scr.scrollTop < 5, "the tap to scroll back to the top", 8000);
+      stuckMark && stuckMark();
+      ok(!bar.classList.contains("stuck"), "the bar stayed stuck at the top of the page");
+      eq(bar.querySelector(".pn b").textContent, "1 night", "the nights label back at rest");
+      return `${best.f} free · ${Math.round(scr.scrollHeight)}px page, bar pinned at ${Math.round(bt - st)}px, list unboxed`;
+    } finally {
+      sel = keep; pendingStart = null; scr.scrollTop = 0;
+    }
   });
 
   /* Pull-to-refresh decided it was "at the top" by reading the SCREEN's
@@ -2505,7 +2531,7 @@ export async function run(filter) {
       const all = +chips()[0].querySelector("i").textContent;
       const parts = chips().slice(1).reduce((s2, c) => s2 + +c.querySelector("i").textContent, 0);
       eq(parts, all, "the building counts do not add up to the All count");
-      eq(all, document.querySelectorAll(".listtrough .row").length, "rows shown against the All count");
+      eq(all, document.querySelectorAll(".answer .row").length, "rows shown against the All count");
 
       /* pick the building with the most free, so the assertion is not about an
          empty list by accident */
@@ -2515,14 +2541,14 @@ export async function run(filter) {
       const name = pick.querySelector("span").textContent;
       pick.click();
       await wait(60);
-      const rows = [...document.querySelectorAll(".listtrough .row")];
+      const rows = [...document.querySelectorAll(".answer .row")];
       eq(rows.length, want, `rows shown for ${name}`);
       ok(rows.every(r => r.textContent.includes(name)), `a row from another building is still listed`);
-      /* the headline stays the whole portfolio's answer — the chips carry the
-         per-building counts, and a headline that moved with them would leave
-         "3 free of 10" with nothing on screen saying which ten */
-      ok(document.querySelector(".hud .n").textContent === String(all),
-        "the headline followed the filter instead of staying the portfolio's answer");
+      /* the All chip stays the whole portfolio's answer whatever is picked —
+         it is the count line now, and a count that moved with the filter
+         would leave "3" with nothing on screen saying three of what */
+      eq(chips()[0].querySelector("i").textContent, String(all),
+        "the All chip followed the filter instead of staying the portfolio's answer");
 
       /* THE FILTER MUST SURVIVE THE DATES. renderMonth rebuilds on every tap of
          a date, so a filter held inside it would reset the moment the operator
