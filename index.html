@@ -1215,19 +1215,30 @@ button{background:none;border:0;padding:0;cursor:pointer;
 .kindico svg{width:16px;height:16px;display:block;overflow:visible}
 .kindico .room{opacity:.42}
 .kindico .fly{transform-origin:center}
-/* Bright, dim, amber — and each one is the semantic this app already uses for
-   that state everywhere else, so the chip agrees with the room tile two
-   screens away rather than inventing a private code. */
-.kindico.out{background:color-mix(in srgb,var(--free) 15%,transparent);color:var(--free)}
-.kindico.in{background:var(--held);color:var(--held-ink)}
+/* LEAVING AND ARRIVING ARE THE SAME WEIGHT. These were bright and dim — out
+   took the vacancy semantic because the room is becoming free, in took the
+   occupied one because it is becoming held. The reasoning was sound and the
+   result was not: a dimmed mark reads as disabled, not as a different kind of
+   event, and an arrival is not less important than a departure. It only looked
+   defensible while the two arrows pointed the same way and colour was doing
+   the work of telling them apart.
+
+   The arrows point opposite ways now, so direction carries the distinction and
+   colour is free to say the thing it should say: two ordinary movements at one
+   weight, and the turnaround — the only one with a clock on it — in --now. */
+.kindico.out, .kindico.in{
+  background:color-mix(in srgb,var(--free) 15%,transparent);color:var(--free)}
 .kindico.turn{background:color-mix(in srgb,var(--now) 18%,transparent);color:var(--now-ink)}
-:root[data-theme="light"] .kindico.out{
+:root[data-theme="light"] .kindico.out,
+:root[data-theme="light"] .kindico.in{
   background:color-mix(in srgb,var(--free) 11%,transparent)}
 
 /* the arrow leaves, the arrow arrives, and the turnaround does both */
 @keyframes flyout{ 0%{transform:translateX(-5px);opacity:0}
   35%{opacity:1} 100%{transform:translateX(0);opacity:1} }
-@keyframes flyin{ 0%{transform:translateX(6px);opacity:0}
+/* arriving now travels the way its arrow points: in from the right, toward
+   the wall that is the flat */
+@keyframes flyin{ 0%{transform:translateX(7px);opacity:0}
   35%{opacity:1} 100%{transform:translateX(0);opacity:1} }
 @keyframes flyturn{ 0%,8%{transform:translateX(-1px) rotate(0);opacity:.9}
   46%{transform:translateX(6px) rotate(0);opacity:.25}
@@ -1323,14 +1334,17 @@ button{background:none;border:0;padding:0;cursor:pointer;
 .lbl .kindico{width:19px;height:19px;border-radius:6px}
 .lbl .kindico svg{width:12px;height:12px}
 .dayrows .meta, .dayrows .meta em{white-space:normal;overflow:visible;text-overflow:clip}
-/* Just left, for the same reason the day rows wrap. With a money pill beside
-   it the line has about 230px, and "6 Sep → 9 Sep · 3n · left this morning"
-   clipped at "left this …" — losing exactly the half that says how long ago,
-   which is the thing being decided on. A row that has to be tapped to be read
-   defeats the section. */
+/* EVERY STAY LIST ON THE ROOM SHEET WRAPS, for the same reason the day rows
+   do. With a money pill and two glyphs beside it the line has about 230px, and
+   these rows carry two dates, a night count and a source: "6 Sep → 9 Sep · 3n ·
+   left this morning" clipped at "left this …", and once a staying guest's row
+   printed real dates instead of the word "Now" it clipped at "9 Sep → 13 Sep ·
+   …" and lost the source. A row that has to be tapped to be read defeats the
+   list it is in. */
 .justleft .row{align-items:flex-start}
 .justleft .meta, .justleft .meta em{white-space:normal;overflow:visible;text-overflow:clip}
 .justleft .meta em{margin-top:3px}
+.justleft .rowend{padding-top:1px}
 .dayrows .meta em{margin-top:3px}
 .dayrows .pill{margin-top:1px}
 
@@ -2512,6 +2526,35 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
    comes out of the padding instead. */
 .roomRoutes button s{text-decoration:none;font-size:9.5px;font-weight:500;color:var(--txt-3);
   line-height:1.3;letter-spacing:.005em}
+/* A glyph at the end of the building chips, borrowing .ghost — the app's own
+   icon-button material — rather than inventing a fourth kind of small round
+   thing. Occasional, so it is the size of one.
+
+   THE FADE IS NOT DECORATION. The chips scroll and the button does not, so at
+   any scroll position a chip is clipped hard against it — "Telecom N" cut to
+   "Te" with a button flush on top reads as two controls overlapping, not as a
+   row that continues. The mask makes the cut a fade, which is what a scroller
+   running out of room actually looks like, and the hairline says where the
+   scrolling stops and the button begins. */
+.filtrow{padding:12px 20px 0;display:flex;align-items:center}
+/* THE CHIPS BLEED, WHICH IS WHY THEY OVERLAPPED. .roomfilt carries
+   `margin:0 -20px` so chips can scroll right up to the screen edge — correct
+   everywhere it is used alone, and wrong the moment something sits beside it,
+   because the row then extends twenty pixels PAST its flex box and slides
+   under the button. The owner circled a chip with a button on top of it.
+
+   The left bleed is kept, because that edge is still the screen. The right one
+   is cancelled: on this row the screen edge is the button. */
+.filtrow .roomfilt{flex:1 1 auto;min-width:0;margin-right:0;padding-right:2px}
+/* Square, and the size of the close button it is a sibling in spirit of.
+   .ghost is a labelled control with 12px of side padding; an icon-only one
+   needs the padding it has vertically, not the padding a word needs. A
+   border-left was here too as a second separator and made it 41px wide — the
+   mask already says where the scrolling stops. */
+.filtrow .daycopy{margin-left:10px;padding:7px}
+.daycopy{display:grid;place-items:center;flex:0 0 auto;color:var(--txt-2)}
+.daycopy.done{color:var(--free)}
+.daycopy svg{display:block}
 .rowMore{padding:11px 14px;font-size:12px;color:var(--txt-3);border-top:1px solid var(--line)}
 
 /* a stepper that has to hold a date, so it gets the room a number does not need */
@@ -14868,6 +14911,30 @@ function openSheet(fi, day){
      found by scrolling. Only when the nights being looked at are free; if
      somebody else has since taken them the room is not the operator's to
      give back and the band already says who holds it. */
+  /* THE OTHER HALF OF A TURNOVER DAY. A check-out is what creates the need for
+     a clean, and on the day it happens that is the most actionable thing about
+     the room — the sheet otherwise says a guest left this morning and another
+     arrives tonight and never says whether the flat is fit for them.
+
+     It was tried as a pill on the departing guest's row and taken off again:
+     the clean belongs to the ROOM, not to the person who left, and a third
+     control on that row pushed the line to four. As a route it says the thing
+     once, in the voice it should be said in, and only on a day somebody
+     actually went — which is perhaps one day in ten for any one flat. */
+  if(turnJobs(0).some(j => j.fi === fi)){
+    const p = turnProgress(fi, 0);
+    const cl = el("div","roomRoutes stay");
+    const c = el("button");
+    c.append(el("b", null, p.state === "ready" ? `${fl.id} is ready for the next guest`
+                         : p.state === "cleaning" ? `${fl.id} is being cleaned`
+                         : `${fl.id} has not been cleaned yet`),
+             el("s", null, p.state === "ready" ? `${p.of} checked · open the list`
+                : `${p.done} of ${p.of} checked · somebody left this morning`));
+    c.onclick = ()=>{ haptic(10); openTurn(fi, 0, ()=> openSheet(fi, day)); };
+    cl.appendChild(c);
+    act.append(cl);
+  }
+
   if(canTake && gone.length && gone[0].end > -RECENT_BAND){
     const g = gone[0];
     const chg = el("div","roomRoutes stay");
@@ -14883,26 +14950,43 @@ function openSheet(fi, day){
   sheetB.append(act);
 
   /* ── what is true about this room, read only ─────────────────────────────── */
+  /* A GUEST WHO IS ALREADY IN THE FLAT IS NOT COMING UP. Every future stay went
+     under one heading, so somebody who checked in this afternoon — or a week
+     ago — sat under the word "Coming up", and their row printed "Now" where the
+     others print a date. Both are wrong about the same thing: they are not
+     ahead of you, they are here.
+
+     Two headings, split on the only line that matters — whether tonight is a
+     night of theirs. It also answers the harder case, which is a room that
+     turns over: the guest who left this morning is under Just left with the
+     clean beside them, and the guest who arrives tonight is under In the flat
+     now. One room, one screen, both halves of the day, neither pretending to
+     be the other.
+
+     The row stays in the list rather than being folded into the card at the
+     top, because the owner asked for exactly that — the way to change a
+     staying guest's dates is to tap their row here. */
   const mine = resv.filter(r=>r.fi===fi && r.end>0 && r.start<DAYS).sort((a,b)=>a.start-b.start);
-  const s1 = el("div","sheet-s");
-  s1.append(el("span","lbl", `Coming up · ${mine.length}`),
-            el("span","lbl", `₹${fl.rate.toLocaleString("en-IN")} / night`));
-  sheetB.appendChild(s1);
-  const bl = el("div","card"); bl.style.margin="0 20px";
-  if(!mine.length) bl.appendChild(el("div","empty","Nothing booked in the next nine weeks."));
-  // a glance, not an archive — the strip above already carries the whole shape,
-  // and anything past the next few is a scroll nobody performs
+  const inNow = mine.filter(r => r.start <= 0);
+  const ahead = mine.filter(r => r.start > 0);
   const SHOW = 5;
-  mine.slice(0, SHOW).forEach(r=>{
+
+  /* one row builder, two lists — a second copy is how the two drift */
+  const stayRow = (r, into)=>{
     const row = el("div","row bk");
     row._resv = r;
-    const when = Math.max(r.start,0) === 0 ? "Now" : fmt(Math.max(r.start,0));
     const m = el("div","meta");
     /* Neither the end date nor the night count is knowable for a tenancy the
        import window cut. 176n is the width of the window, and 18 Nov is where
        it stopped — printed here they read as the operator's own figures. */
+    /* Real dates, for these rows too. "Now" was standing in for the arrival on
+       any stay already under way, which threw away the one fact the row was
+       carrying — when they came — and left two guests in the same flat both
+       reading "Now →". The heading says they are here; the row says since when. */
     m.innerHTML = `<b>${esc(r.guest)}</b>`
-                + `<em>${when} → ${r.openEnd ? "no end recorded" : esc(fmt(r.end)) + " · " + r.nights + "n"} · ${esc(r.src)}</em>`;
+                + `<em>${esc(fmt(r.start))} → `
+                + `${r.openEnd ? "no end recorded" : esc(fmt(r.end)) + " · " + r.nights + "n"}`
+                + ` · ${esc(r.src)}</em>`;
     const end = el("div","rowend");
     end.appendChild(!isBlock(r) && r.amount ? moneyPill(r, fi, day)
       : el("span","pill", r.openEnd ? "open" : `${r.nights}n`));
@@ -14927,10 +15011,37 @@ function openSheet(fi, day){
     }
     end.appendChild(x2);
     row.append(m, end);
-    bl.appendChild(row);
-  });
-  if(mine.length > SHOW){
-    const more = el("div","rowMore", `${mine.length - SHOW} more in the strip above`);
+    into.appendChild(row);
+  };
+
+  if(inNow.length){
+    const s0 = el("div","sheet-s");
+    const last = inNow[inNow.length - 1];
+    s0.append(el("span","lbl", `In the flat now · ${inNow.length}`),
+              el("span","lbl", last.openEnd ? "no end recorded"
+                 : last.end === 1 ? "out tomorrow" : `out ${fmt(last.end)}`));
+    sheetB.appendChild(s0);
+    const nl = el("div","card justleft"); nl.style.margin = "0 20px";
+    inNow.forEach(r => stayRow(r, nl));
+    sheetB.appendChild(nl);
+  }
+
+  const s1 = el("div","sheet-s");
+  /* "Coming up · 0" is a count of nothing. The card underneath says what the
+     zero means, in words that are worth reading; the heading does not need to
+     say it first as a numeral. */
+  s1.append(el("span","lbl", ahead.length ? `Coming up · ${ahead.length}` : "Coming up"),
+            el("span","lbl", `₹${fl.rate.toLocaleString("en-IN")} / night`));
+  sheetB.appendChild(s1);
+  const bl = el("div","card justleft"); bl.style.margin="0 20px";
+  if(!ahead.length) bl.appendChild(el("div","empty",
+    inNow.length ? "Nothing booked behind them in the next nine weeks."
+                 : "Nothing booked in the next nine weeks."));
+  // a glance, not an archive — the strip above already carries the whole shape,
+  // and anything past the next few is a scroll nobody performs
+  ahead.slice(0, SHOW).forEach(r => stayRow(r, bl));
+  if(ahead.length > SHOW){
+    const more = el("div","rowMore", `${ahead.length - SHOW} more in the strip above`);
     bl.appendChild(more);
   }
   sheetB.appendChild(bl);
@@ -14940,12 +15051,25 @@ function openSheet(fi, day){
      current guest gets. Without this the week after a check-out was a blind
      spot: the booking existed, held the money, and could not be seen. */
   if(gone.length){
+    /* "JUST" IS A NUMBER AND THE SCREEN SHOULD SAY WHICH. The heading said
+       "Just left" and the hint said "still yours to extend", and neither
+       answered the obvious question — a week? ten days? It is fourteen days,
+       and the hint now says so, because a window nobody can see is one nobody
+       can trust.
+
+       Two rows, not four. This is a recent-departures prompt, not an archive:
+       the reason to look is the guest who went this morning and might stay on,
+       and by the fourth row it has become a list to scroll past on the way to
+       something else. What is cut is not lost — the line under it says how
+       many and since when, and carries any money they still owe, so nothing
+       with a rupee on it can hide behind a fold. */
+    const GONE_SHOW = 2;
     const s2 = el("div","sheet-s");
     s2.append(el("span","lbl", `Just left · ${gone.length}`),
-              el("span","lbl", "still yours to extend"));
+              el("span","lbl", `last ${RECENT_OUT} days`));
     sheetB.appendChild(s2);
     const gl = el("div","card justleft"); gl.style.margin = "0 20px";
-    gone.slice(0, 4).forEach(r=>{
+    gone.slice(0, GONE_SHOW).forEach(r=>{
       const row = el("div","row bk");
       const m = el("div","meta");
       const due = dueFrom(r);
@@ -14959,10 +15083,13 @@ function openSheet(fi, day){
          And "left 1 Sep" after "→ 1 Sep" is the same date twice on one line.
          It stays only for the one who went this morning, where the words say
          something the date does not. */
+      /* The amount is NOT repeated in the sentence. It is on the pill beside
+         it, in the one place that is also the button for taking it — "₹12,000
+         owed" in the text and ₹12,000 on the pill is the same figure twice on
+         one row, and it was pushing the line to four. */
       m.innerHTML = `<b>${esc(r.guest)}</b>`
         + `<em>${esc(fmt(r.start))} → ${esc(fmt(r.end))} · ${r.nights}n`
-        + (r.end === 0 ? " · left this morning" : "")
-        + (due > 0 ? ` · ${esc(money(due))} owed` : "") + `</em>`;
+        + (r.end === 0 ? " · left this morning" : "") + `</em>`;
       const end = el("div","rowend");
       if(due > 0){
         const pay = el("button","paid due", money(due));
@@ -14980,8 +15107,13 @@ function openSheet(fi, day){
       row.append(m, end);
       gl.appendChild(row);
     });
-    if(gone.length > 4)
-      gl.appendChild(el("div","rowMore", `${gone.length - 4} more since ${fmt(-RECENT_OUT + 1)}`));
+    if(gone.length > GONE_SHOW){
+      const rest = gone.slice(GONE_SHOW);
+      const owed = rest.reduce((n, r)=> n + Math.max(0, dueFrom(r)), 0);
+      gl.appendChild(el("div","rowMore",
+        `${rest.length} more since ${fmt(-RECENT_OUT + 1)}`
+        + (owed > 0 ? ` · ${money(owed)} still owed` : "")));
+    }
     sheetB.appendChild(gl);
   }
 
@@ -17308,6 +17440,61 @@ function openFixedForm(o){
 
    A flat appears exactly once. Its row says both halves of a turnaround, so
    nothing has to be cross-referenced against another list.                  */
+/* ══════════════ THE DAY, AS A MESSAGE ═══════════════════════════════════════
+   What actually happens every morning: somebody reads this screen and types
+   the day's rooms into a WhatsApp group, one group per building. That is a
+   person retyping a screen, which is where the mistakes come from — a flat
+   left out, a check-in typed as a check-out.
+
+   So the screen writes it. Grouped by what the cleaner has to DO, not by what
+   the booking system calls it, because "M2 is a turnaround" and "M2 has to be
+   ready by this afternoon" are the same fact and only one of them is
+   actionable. The turnarounds come first for the same reason: they are the
+   ones with somebody arriving behind them.
+
+   Plain text with WhatsApp's own asterisk bold, no links and no table — a
+   table wraps into nonsense on a phone, and the whole point is that it pastes
+   into a group and reads correctly on the smallest screen in it. */
+function dayMessage(d, code){
+  const ops = dayOps(d);
+  const keep = r => !code || (flats[r.fi] && flats[r.fi].code === code);
+  const turn = ops.turnovers.filter(keep);
+  const out  = ops.departures.filter(keep).filter(r => !turn.some(t => t.fi === r.fi));
+  const inn  = ops.arrivals.filter(keep).filter(r => !turn.some(t => t.fi === r.fi));
+  const where = code ? (buildingsOf().find(b => b.code === code) || {}).name : null;
+  /* With a building chosen, every line is in that building and naming it on
+     each row is noise. On All it is the one thing that makes the message
+     usable at all — otherwise it is five flat codes from five places under one
+     heading, which is not a message anybody can send anywhere. */
+  const name = fi => `${flats[fi].id} · ${code ? "" : flats[fi].bshort + " · "}${flats[fi].type}`;
+
+  const L = [];
+  L.push(`*${where || "All buildings"} — ${fmtL(d)}*`);
+  const total = turn.length + out.length + inn.length;
+  if(!total){
+    L.push("", "Nothing moves today. No rooms to turn around.");
+    return L.join("\n");
+  }
+
+  if(turn.length){
+    L.push("", `*Turnaround — clean today, guest arriving* (${turn.length})`);
+    turn.forEach(t => L.push(`• ${name(t.fi)}`));
+  }
+  if(out.length){
+    L.push("", `*Check-out — clean when free* (${out.length})`);
+    out.forEach(r => L.push(`• ${name(r.fi)}`));
+  }
+  if(inn.length){
+    L.push("", `*Check-in — room should be ready* (${inn.length})`);
+    inn.forEach(r => L.push(`• ${name(r.fi)}`));
+  }
+  /* Only rooms somebody LEFT need cleaning, so that is the number to plan
+     around — not the count of everything that moves. */
+  const jobs = turn.length + out.length;
+  if(jobs) L.push("", `${jobs} room${jobs === 1 ? "" : "s"} to clean.`);
+  return L.join("\n");
+}
+
 function openDay(d, focus){
   const dt = dateAt(d);
   /* WHICH BUILDING. The five addresses are in five parts of Hyderabad and get
@@ -17325,12 +17512,52 @@ function openDay(d, focus){
   const head2 = el("div","m");
   t.append(Object.assign(el("div","n"),
     {textContent: `${DOWF[dt.getDay()]} ${dt.getDate()} ${MONF[dt.getMonth()]}`}), head2);
+  /* SEND THE DAY TO THE GROUP. What happens every morning is that somebody
+     reads this screen and retypes it into a WhatsApp group, one per building —
+     which is where a flat gets left out and a check-in gets typed as a
+     check-out. The building chips are what make it work: pick Madhapur, copy,
+     paste into the Madhapur group.
+
+     It is a GLYPH, in the header, the size of the close button beside it. It
+     shipped for an hour as a full-width two-line panel above the list and the
+     owner circled it: this is not something anybody does every time they open
+     the day, and a control used occasionally does not get to be the largest
+     thing on the screen. A place is all it needs. The message itself lives in
+     dayMessage; this is only the door to it. */
+  const cp = el("button","ghost daycopy");
+  const COPY_IC = '<svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><rect x="7.2" y="2.8" width="10" height="12.4" rx="1.8"/><path d="M12.8 17.2H4.6a1.8 1.8 0 0 1-1.8-1.8V6.2"/></svg>';
+  const TICK_IC = '<svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M4.6 10.4 8.2 14l7.2-8"/></svg>';
+  cp.innerHTML = COPY_IC;
+  cp.setAttribute("aria-label", "Copy the day\u2019s check-ins and check-outs to send to the cleaning group");
+  cp.onclick = async ()=>{
+    haptic(12);
+    const ok = await copyText(dayMessage(d, code));
+    cp.classList.toggle("done", ok);
+    cp.innerHTML = ok ? TICK_IC : COPY_IC;
+    /* the confirmation is a toast, because a 36px button has no room to say
+       WHAT was copied — and "did I get Madhapur or all five" is the only
+       question anybody has after pressing it */
+    const b = code && buildingsOf().find(z => z.code === code);
+    const jobs = turnJobs(d).filter(j => !code || (flats[j.fi] && flats[j.fi].code === code)).length;
+    toast(ok ? "" : "warn",
+      ok ? `<b>Copied.</b> ${esc(b ? b.name : "Every building")} \u00b7 ${jobs} to clean \u00b7 `
+           + `paste it into the group.`
+         : `<b>Could not copy.</b> This browser would not let the app reach the clipboard.`,
+      null);
+    setTimeout(()=>{ cp.classList.remove("done"); cp.innerHTML = COPY_IC; }, 2400);
+  };
   const x = el("button", null, "✕"); x.setAttribute("aria-label","Close"); x.onclick = closeSheet;
   sheetH.append(t, x);
 
-  const filtWrap = el("div"); filtWrap.style.cssText = "padding:12px 20px 0";
+  /* IT SITS WITH THE CHIPS, not in the header. In the header it was a third
+     36px control on the title row and pushed "Wednesday 9 September" onto two
+     lines — a permanent cost on every open, paid for a button used
+     occasionally. Here it costs nothing, and it is beside the thing it depends
+     on: the chips choose WHO the message is for, and this sends it. The chips
+     scroll under it; it does not scroll away with them. */
+  const filtWrap = el("div","filtrow");
   const filt = el("div","roomfilt");
-  filtWrap.appendChild(filt);
+  filtWrap.append(filt, cp);
   sheetB.appendChild(filtWrap);
   const body = el("div");
   sheetB.appendChild(body);
@@ -17589,14 +17816,23 @@ const readAsDataUrl = f => new Promise(res=>{
    same ticks, same photographs — a second, prettier view for the manager
    would be a second thing to keep true. */
 /* ── the glyph for one kind of movement ─────────────────────────────────────
-   A wall and an arrow. Which side the wall is on says whether the room is
-   being left or entered, and the arrow moves that way once as the row lands.
+   THE WALL IS THE FLAT AND IT DOES NOT MOVE. The first version put the wall on
+   the left for leaving and on the right for arriving, with the arrow pointing
+   right in both — so the two differed only in which side a hairline sat on,
+   and at 16px they read as the same mark. The owner circled the arriving one
+   and said it should be the opposite, which is exactly right.
+
+   So the wall stays on the left in both, standing for the flat, and the ARROW
+   is what reverses: out of the room, or into it. Two marks that point opposite
+   ways cannot be confused for each other at any size, and the fixed wall is
+   what makes the direction mean something rather than being decoration.
+
    Two arrows crossing is a turnaround, and it turns over. */
 const KIND_SVG = {
   out:  '<path class="room" d="M4.5 3.2v13.6"/>'
-      + '<g class="fly"><path d="M7.5 10h7.5"/><path d="M11.8 6.6 15.2 10l-3.4 3.4"/></g>',
-  in:   '<path class="room" d="M15.5 3.2v13.6"/>'
-      + '<g class="fly"><path d="M5 10h7.5"/><path d="M9.3 6.6 12.7 10l-3.4 3.4"/></g>',
+      + '<g class="fly"><path d="M7.5 10h7.7"/><path d="M11.9 6.6 15.3 10l-3.4 3.4"/></g>',
+  in:   '<path class="room" d="M4.5 3.2v13.6"/>'
+      + '<g class="fly"><path d="M15.3 10H7.6"/><path d="M11 6.6 7.6 10l3.4 3.4"/></g>',
   turn: '<g class="fly"><path d="M4 7.4h10.5"/><path d="M11.6 4.6 14.9 7.4l-3.3 2.8"/>'
       + '<path d="M16 12.6H5.5"/><path d="M8.4 9.8 5.1 12.6l3.3 2.8"/></g>',
 };

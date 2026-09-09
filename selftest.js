@@ -3771,13 +3771,22 @@ export async function run(filter) {
       "the kind is being repeated on every row");
     ok(sheet.querySelectorAll(".opp .kindico").length >= 2, "the tiles carry no mark");
     ok(sheet.querySelectorAll(".sheet-s .kindico").length >= 2, "the headings carry no mark");
-    /* the three are actually different, in colour and in glyph */
-    const seen = [...sheet.querySelectorAll(".opp .kindico")].map(n =>
-      [...n.classList].find(c => c !== "kindico"));
+    /* Each tile wears its own kind... */
+    const marks = [...sheet.querySelectorAll(".opp .kindico")];
+    const seen = marks.map(n => [...n.classList].find(c => c !== "kindico"));
     eq(new Set(seen).size, seen.length, `two tiles wear the same mark: ${seen}`);
-    const bg = [...sheet.querySelectorAll(".opp .kindico")]
-      .map(n => getComputedStyle(n).backgroundColor);
-    eq(new Set(bg).size, bg.length, `two marks are the same colour: ${bg}`);
+    /* ...and the ONE with a clock on it is the one that is coloured
+       differently. Leaving and arriving deliberately share a weight: they are
+       equally ordinary, they are told apart by which way the arrow points, and
+       dimming one of them made it read as disabled rather than as a different
+       kind of event. */
+    const colour = k => { const n = marks.find(m => m.classList.contains(k));
+                          return n ? getComputedStyle(n).backgroundColor : null; };
+    if (colour("out") && colour("in"))
+      eq(colour("in"), colour("out"), "arriving is dimmer than leaving");
+    if (colour("turn") && colour("out"))
+      ok(colour("turn") !== colour("out"),
+        "the turnaround is not marked out from the two ordinary movements");
     closeSheet();
     return `${seen.join(" / ")} — distinct glyph and distinct colour`;
   });
@@ -3822,6 +3831,17 @@ export async function run(filter) {
     }
   });
 
+  /* freeSpan(fi, a, b) clamps `a` to 0 — correct, since you cannot sell a night
+     that has gone — so it answers nothing about the past. Every fixture below
+     seeds departures, so it needs a flat whose past is genuinely empty as well.
+     Getting this wrong does not fail loudly: the seeded rows land on a flat
+     that already had three departures this fortnight, and the assertion that
+     breaks is a count, several lines from the cause. */
+  const pastClear = (fi, from) =>
+    !resv.some(r => r.fi === fi && r.end > from && r.start < 1);
+  const freeFlat = (from, to) => flats.map((f, i) => i)
+    .find(i => freeSpan(i, 0, to) && pastClear(i, from));
+
   /* The two rare controls sat directly under Book, on every room, every time
      it was opened — when a flat goes out of service perhaps twice a month.
      A previous pass fixed their WEIGHT and left their POSITION. */
@@ -3861,7 +3881,7 @@ export async function run(filter) {
      is right in Coming up and wrong in a list where everybody is in the past. */
   await test("a guest who has gone shows the dates they actually stayed", async () => {
     const keepR = resv.slice();
-    const fi = flats.map((f, i) => i).find(i => freeSpan(i, -12, 2));
+    const fi = freeFlat(-12, 2);
     ok(fi != null, "no flat free for the fixture");
     resv.push({fi, start: -11, end: -8, nights: 3, guest: "Gone Lastweek",
                src: "Direct", manual: true, pays: []});
@@ -3898,6 +3918,223 @@ export async function run(filter) {
       closeSheet();
       resv = keepR; recompute();
     }
+  });
+
+  /* "If someone is staying or checked in today it is still showing as coming
+     up." They are not coming up; they are here. And the harder half of the
+     same question — a room that turns over — has to show both guests without
+     either pretending to be the other. */
+  await test("a guest already in the flat is not listed as coming up", async () => {
+    const keepR = resv.slice(), keepTurns = JSON.stringify(turns);
+    const fi = freeFlat(-4, 8);
+    ok(fi != null, "no flat free for the fixture");
+    resv.push({fi, start: -3, end: 0, nights: 3, guest: "Went Today",
+               src: "Direct", manual: true, pays: []});
+    resv.push({fi, start: 0, end: 4, nights: 4, guest: "Here Tonight",
+               src: "Direct", manual: true, pays: []});
+    resv.push({fi, start: 5, end: 7, nights: 2, guest: "Later Guest",
+               src: "Direct", manual: true, pays: []});
+    recompute();
+    try {
+      openSheet(fi, 0);
+      await until(() => document.querySelector(".sheet.on .row.bk"), "the room sheet");
+      const b = document.getElementById("sheetB");
+      const sectionOf = name => {
+        const row = [...b.querySelectorAll(".row.bk")].find(x => x.textContent.includes(name));
+        if (!row) return null;
+        let n = row.closest(".card").previousElementSibling;
+        return n && n.querySelector(".lbl") ? n.querySelector(".lbl").textContent : null;
+      };
+      ok(/^In the flat now/.test(sectionOf("Here Tonight") || ""),
+        `tonight's guest is under "${sectionOf("Here Tonight")}"`);
+      ok(/^Coming up/.test(sectionOf("Later Guest") || ""),
+        `a guest five days out is under "${sectionOf("Later Guest")}"`);
+      ok(/^Just left/.test(sectionOf("Went Today") || ""),
+        `the guest who went this morning is under "${sectionOf("Went Today")}"`);
+      /* BOTH HALVES OF A TURNOVER DAY, on one screen, neither mislabelled */
+      const txt = b.textContent;
+      ok(txt.indexOf("Went Today") > 0 && txt.indexOf("Here Tonight") > 0,
+        "one of the two halves of the turnover is missing");
+      /* and the row says when they arrived, not the word "Now" */
+      const inRow = [...b.querySelectorAll(".row.bk")].find(x => x.textContent.includes("Here Tonight"));
+      ok(!/\bNow\b/.test(inRow.textContent), `the staying guest's row still says "${inRow.querySelector("em").textContent}"`);
+      eq(inRow.querySelector("em").textContent.split(" · ")[0], `${fmt(0)} → ${fmt(4)}`,
+        "the staying guest's own dates");
+      /* the room's own state is stated once, as a route, not as a pill hanging
+         off the person who left */
+      const routes = [...b.querySelectorAll(".roomRoutes.stay button")];
+      const clean = routes.find(x => /cleaned|being cleaned|ready for the next/.test(x.textContent));
+      ok(clean, "a room somebody left this morning does not say whether it has been cleaned");
+      eq(b.querySelectorAll(".justleft .pill.turn").length, 0,
+        "the clean is also hanging off a guest's row");
+      return `${sectionOf("Here Tonight")} / ${sectionOf("Later Guest")} / ${sectionOf("Went Today")}`;
+    } finally {
+      closeSheet();
+      resv = keepR; recompute();
+      turns = JSON.parse(keepTurns); turnSave();
+    }
+  });
+
+  /* A room nobody left today has no clean to report, and must not invent one. */
+  await test("a room nobody left says nothing about cleaning", async () => {
+    const keepR = resv.slice();
+    const fi = freeFlat(-RECENT_OUT, 8);
+    ok(fi != null, "no flat free for the fixture");
+    resv.push({fi, start: 2, end: 5, nights: 3, guest: "Future Only",
+               src: "Direct", manual: true, pays: []});
+    recompute();
+    try {
+      openSheet(fi, 0);
+      await until(() => document.querySelector(".sheet.on .row.bk"), "the room sheet");
+      const t = document.getElementById("sheetB").textContent;
+      ok(!/cleaned/.test(t), "a room with no departure is talking about cleaning");
+      ok(!/In the flat now/.test(t), "an empty flat claims somebody is in it");
+      return "no departure, no clean, no occupant";
+    } finally { closeSheet(); resv = keepR; recompute(); }
+  });
+
+  /* "Just left — should be restricted to 2 records. What does 'just' mean
+     here, 1 week, 10 days?" It is fourteen days, and a window nobody can see
+     is one nobody can trust. */
+  await test("just left shows two, says how long 'just' is, and hides no money", async () => {
+    const keepR = resv.slice();
+    const fi = freeFlat(-13, 2);
+    ok(fi != null, "no flat free for the fixture");
+    [[-12, -10, "Gone A", 4000], [-9, -7, "Gone B", 0], [-5, -3, "Gone C", 0],
+     [-2, 0, "Gone D", 0]].forEach(([a, b, g, owed]) =>
+      resv.push({fi, start: a, end: b, nights: b - a, guest: g, src: "Direct",
+                 manual: true, amount: owed, pays: []}));
+    recompute();
+    try {
+      openSheet(fi, 0);
+      await until(() => document.querySelector(".sheet.on .justleft"), "the room sheet");
+      const b = document.getElementById("sheetB");
+      const head = [...b.querySelectorAll(".sheet-s")]
+        .find(n => /^Just left/.test(n.querySelector(".lbl").textContent));
+      ok(head, "no Just left section");
+      /* the count is all of them; the LIST is two */
+      eq(head.querySelector(".lbl").textContent, "Just left · 4", "the heading counts every one");
+      eq(head.querySelectorAll(".lbl")[1].textContent, `last ${RECENT_OUT} days`,
+        "the window is not stated");
+      const rows = [...b.querySelectorAll(".justleft .row.bk")];
+      eq(rows.length, 2, `${rows.length} rows listed`);
+      /* the two most recent, because that is what "just" means */
+      ok(rows[0].textContent.includes("Gone D") && rows[1].textContent.includes("Gone C"),
+        "the two shown are not the two most recent");
+      /* and nothing with a rupee on it hides behind the fold */
+      const more = b.querySelector(".justleft .rowMore");
+      ok(more, "the ones not shown are not accounted for");
+      ok(/2 more since/.test(more.textContent), `the line says "${more.textContent}"`);
+      ok(/4,000/.test(more.textContent),
+        `money owed by a hidden guest is not surfaced: "${more.textContent}"`);
+      return `4 in ${RECENT_OUT} days, 2 shown, "${more.textContent}"`;
+    } finally { closeSheet(); resv = keepR; recompute(); }
+  });
+
+  /* "Arriving symbol is wrong, should be opp." It was: both arrows pointed
+     right and only the wall moved, so at 16px the two marks were the same
+     mark. The wall is the flat and does not move; the arrow reverses. */
+  await test("leaving and arriving point opposite ways from the same wall", () => {
+    const read = kind => {
+      const w = kindIcon(kind);
+      w.style.cssText = "position:fixed;left:-999px;top:0";
+      document.body.appendChild(w);
+      const paths = [...w.querySelectorAll(".fly path")];
+      const wall = w.querySelector(".room");
+      const mid = p => { const b = p.getBBox(); return b.x + b.width / 2; };
+      const out = { shaft: mid(paths[0]), head: mid(paths[1]),
+                    wall: wall ? Math.round(wall.getBBox().x * 10) / 10 : null };
+      w.remove();
+      return out;
+    };
+    const o = read("out"), i = read("in");
+    ok(o.head > o.shaft, `leaving's arrowhead is at ${o.head}, its shaft at ${o.shaft}`);
+    ok(i.head < i.shaft, `arriving's arrowhead is at ${i.head}, its shaft at ${i.shaft}`);
+    eq(i.wall, o.wall, "the wall moves between the two, so the arrow is not what differs");
+    ok(o.wall != null, "neither mark has a wall to point away from or into");
+    /* and the turnaround is neither of them */
+    ok(KIND_SVG.turn !== KIND_SVG.out && KIND_SVG.turn !== KIND_SVG.in,
+      "the turnaround is wearing one of the other two marks");
+    return `wall at ${o.wall} in both · out →${o.head.toFixed(1)} · in ←${i.head.toFixed(1)}`;
+  });
+
+  /* What actually happens every morning is that somebody retypes this screen
+     into a WhatsApp group, one group per building — which is where a flat gets
+     left out and a check-in gets typed as a check-out. */
+  await test("the day copies as a message a cleaning team can work from", async () => {
+    const d = [0, 1, 2].find(x => { const o = dayOps(x);
+      return o.turnovers.length && o.departures.length + o.arrivals.length > o.turnovers.length; });
+    ok(d !== undefined, "no day with a turnover and something else in the fixture");
+    const all = dayMessage(d, null);
+    /* grouped by what the cleaner DOES, turnarounds first because those are
+       the ones with somebody arriving behind them */
+    ok(all.indexOf("Turnaround") < all.indexOf("Check-out")
+       || all.indexOf("Check-out") === -1, "check-outs are listed above turnarounds");
+    ok(/room[s]? to clean\.$/.test(all.trim()), `it does not end with the count: "${all.slice(-40)}"`);
+    /* only rooms somebody LEFT need cleaning — an arrival into an empty room
+       is not a clean, and the number has to be the one they can plan around */
+    const ops = dayOps(d);
+    const jobs = turnJobs(d).length;
+    ok(all.includes(`${jobs} room${jobs === 1 ? "" : "s"} to clean.`),
+      `the count says something other than ${jobs}: "${all.slice(-40)}"`);
+    /* every flat that moves is named, none twice */
+    const moved = new Set([...ops.departures, ...ops.arrivals].map(r => flats[r.fi].id));
+    [...moved].forEach(id => ok(all.includes(id), `${id} moves today and is not in the message`));
+    ops.turnovers.forEach(t => {
+      const n = (all.match(new RegExp("• " + flats[t.fi].id + " ", "g")) || []).length;
+      eq(n, 1, `${flats[t.fi].id} is listed ${n} times — a turnover is one job, not two`);
+    });
+    /* ONE BUILDING PER GROUP, which is the whole reason the chips are there */
+    const code = flats[ops.departures[0].fi].code;
+    const one = dayMessage(d, code);
+    const others = [...new Set(flats.filter(f => f.code !== code).map(f => f.id))];
+    eq(others.filter(id => new RegExp("• " + id + "\\b").test(one)).length, 0,
+      "a building's message names flats from another building");
+    ok(one.includes((buildingsOf().find(b => b.code === code) || {}).name),
+      "the message does not name the building it is for");
+    /* on All, each line says where it is — otherwise it is five codes from
+       five places under one heading and no group can use it */
+    ops.departures.forEach(r => ok(all.includes(flats[r.fi].bshort),
+      `${flats[r.fi].id} is listed without saying which building it is in`));
+    /* AND IT IS A PLACE, NOT A BANNER. Sending the day is occasional, so the
+       control is a glyph in the header at the size of the close button beside
+       it — it shipped once as a full-width two-line panel above the list and
+       the owner circled it. */
+    openDay(d);
+    await until(() => document.querySelector(".sheet.on .daycopy"), "the copy button");
+    const cp = document.querySelector(".sheet.on .daycopy");
+    const shut = [...document.querySelectorAll(".sheet-h button")]
+      .find(b => b.getAttribute("aria-label") === "Close");
+    const cr = cp.getBoundingClientRect(), sr = shut.getBoundingClientRect();
+    ok(cr.width <= sr.width + 2 && cr.height <= sr.height + 2,
+      `the copy control is ${Math.round(cr.width)}\u00d7${Math.round(cr.height)} `
+      + `against a close button of ${Math.round(sr.width)}\u00d7${Math.round(sr.height)}`);
+    ok(cr.width >= 28 && cr.height >= 28,
+      `${Math.round(cr.width)}\u00d7${Math.round(cr.height)} is too small to hit`);
+    /* beside the chips that decide who the message is for, and not in the
+       header — where a third control on the title row wrapped the date */
+    ok(cp.parentElement.querySelector(".roomfilt"), "the copy control has left the chip row");
+    const title = document.querySelector(".sheet-h .n");
+    ok(title.getBoundingClientRect().height < parseFloat(getComputedStyle(title).fontSize) * 1.7,
+      `the sheet title is wrapping: ${Math.round(title.getBoundingClientRect().height)}px`);
+    ok(!cp.textContent.trim(), `the glyph carries the words "${cp.textContent.trim()}"`);
+    ok((cp.getAttribute("aria-label") || "").length > 20,
+      "an icon-only button with no label anybody can read");
+    closeSheet();
+    return one.split("\n")[0] + " · " + jobs + " to clean";
+  });
+
+  /* A day with nothing on it must not send an empty message that reads as a
+     failure to load. */
+  await test("a quiet day says so rather than sending an empty list", () => {
+    const quiet = [];
+    for (let x = 0; x < DAYS; x++) if (!dayOps(x).departures.length
+        && !dayOps(x).arrivals.length) { quiet.push(x); break; }
+    if (!quiet.length) return "no empty day in the fixture";
+    const m = dayMessage(quiet[0], null);
+    ok(/Nothing moves/.test(m), `an empty day copies as "${m}"`);
+    ok(!/•/.test(m), "an empty day copies with bullets in it");
+    return m.split("\n").pop();
   });
 
   await test("no text falls below AA in either theme", async () => {
