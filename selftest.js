@@ -3566,6 +3566,229 @@ export async function run(filter) {
 
   /* ══ the whole surface ══════════════════════════════════════════════════ */
 
+  /* ══ the cleaner's seat ══════════════════════════════════════════════════ */
+
+  /* A staff session takes an entirely different road: staffPull, not cloudPull,
+     and the phone ends up holding flats, movements and a checklist — no stays,
+     no payments, no expenses, no other building. This drives that shape
+     through the real render rather than the RPCs, which need a live account. */
+  const asStaff = (fn) => async () => {
+    const keepMe = me, keepMode = MODE, keepFlats = flats.slice(),
+          keepResv = resv.slice(), keepBook = staffBook, keepDay = staffDay,
+          keepTurns = JSON.stringify(turns), keepAct = activity.slice();
+    try {
+      /* the building with the most movement across the three days it holds */
+      const cnt = {};
+      [-1, 0, 1].forEach(d => dayOps(d).departures.forEach(r => {
+        const b = flats[r.fi].bname; cnt[b] = (cnt[b] || 0) + 1; }));
+      const bname = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0][0];
+      const all = flats.slice();
+      me = { role: "staff", buildings: ["fake-building"] };
+      MODE = "live";
+      /* exactly the shape staffPull builds: no rate, one building, and the
+         building code replaced by its id because a cleaner is never told it */
+      flats = all.filter(f => f.bname === bname)
+                 .map(f => ({ ...f, code: "bid", bshort: f.bname, rate: 0 }));
+      NF = flats.length;
+      flatIndex = Object.fromEntries(flats.map((f, i) => [f.id, i]));
+      staffBook = {};
+      [-1, 0, 1].forEach(d => {
+        const ops = dayOps(d), m = new Map();
+        ops.departures.forEach(r => { const f = all[r.fi]; if (f.bname !== bname) return;
+          m.set(f.id, { fi: flatIndex[f.id], out: true, in: false }); });
+        ops.arrivals.forEach(r => { const f = all[r.fi]; if (f.bname !== bname) return;
+          const e = m.get(f.id); if (e) e.in = true;
+          else m.set(f.id, { fi: flatIndex[f.id], out: false, in: true }); });
+        staffBook[dayISO(d)] = [...m.values()];
+      });
+      /* held before resv is emptied: the names this seat must never see */
+      const guests = [...new Set(keepResv.map(r => r.guest).filter(Boolean))];
+      resv = []; recompute();
+      staffDay = 0;
+      return await fn(bname, all, guests);
+    } finally {
+      closeSheet();
+      me = keepMe; MODE = keepMode; staffBook = keepBook; staffDay = keepDay;
+      flats = keepFlats; NF = flats.length;
+      flatIndex = Object.fromEntries(flats.map((f, i) => [f.id, i]));
+      resv = keepResv; recompute();
+      turns = JSON.parse(keepTurns); turnSave();
+      activity.length = 0; keepAct.forEach(a => activity.push(a)); jset(LOG_STORE, activity);
+      leaveStaff();
+      document.querySelectorAll(".toast").forEach(t => t.remove());
+    }
+  };
+
+  /* THE WHOLE POINT OF THE ROLE. Not "the money is hidden" — the money was
+     never sent, so there is nothing on the phone to hide. */
+  await test("a cleaner's phone holds the day's rooms and nothing else",
+    asStaff(async (bname, all, guests) => {
+      const d = 1;
+      staffDay = d; paintStaff();
+      await until(() => document.querySelector("#scr-staff .jobcard, #scr-staff .staffend"),
+        "the cleaner's screen");
+      eq(resv.length, 0, "a cleaner's phone is holding stays");
+      ok(document.documentElement.classList.contains("staffmode"), "the app is not in staff mode");
+      eq(document.getElementById("tabbar").hidden, true, "the four tabs are still offered");
+      ok(document.getElementById("scr-staff").classList.contains("on"),
+        "the cleaner's screen is not the one on show");
+      const txt = document.getElementById("scr-staff").textContent;
+      ok(!/₹/.test(txt), "money reached the cleaner's screen");
+      /* no guest anywhere on it — the names are in `all`, which this seat
+         never received */
+      const names = guests.filter(n => n.length > 3);
+      const leaked = names.filter(n => txt.includes(n));
+      eq(leaked.length, 0, `guest names on the cleaner's screen: ${leaked.slice(0, 3)}`);
+      /* and no other building */
+      const others = [...new Set(all.map(f => f.bname))].filter(b => b !== bname);
+      eq(others.filter(b => txt.includes(b)).length, 0, "another building is named");
+      return `${flats.length} flats in ${bname}, no stay, no rupee, no name`;
+    }));
+
+  /* Every card is a door into that room's checklist, and it opens the right
+     room — a cleaner tapping 3B and getting 3A ticks the wrong list. */
+  await test("every room on the cleaner's screen opens its own checks",
+    asStaff(async () => {
+      const withWork = [-1, 0, 1].find(d => dayMoves(d).some(m => m.out));
+      ok(withWork !== undefined, "no departure in three days of the fixture");
+      staffDay = withWork; paintStaff();
+      await until(() => document.querySelector("#scr-staff .jobcard"), "the cards");
+      const cards = [...document.querySelectorAll("#scr-staff .jobcard")];
+      eq(cards.length, dayMoves(withWork).length, "a card per room that moves");
+      const i = dayMoves(withWork).findIndex(m => m.out);
+      cards[i].click();
+      await until(() => document.querySelector(".sheet.on .chkbox"), "the checks");
+      eq(document.querySelector(".sheet.on .n").textContent,
+        flats[dayMoves(withWork)[i].fi].id, "the card opened somebody else's room");
+      /* the header names the movement without naming anybody, because it has
+         no name to give */
+      const m = document.querySelector(".sheet.on .m").textContent;
+      ok(/someone/i.test(m), `the header says "${m}"`);
+      /* and a cleaner cannot shorten the list they are being checked against */
+      ok(!/Edit the .* checklist/.test(document.querySelector(".sheet.on").textContent),
+        "a cleaner is offered the checklist editor");
+      return `${cards.length} rooms, each its own door`;
+    }));
+
+  /* A room left dirty at six in the evening is still dirty at eight the next
+     morning, and nobody looking at today would think to look at yesterday. */
+  await test("yesterday's unfinished rooms come and find the cleaner",
+    asStaff(async () => {
+      const y = dayMoves(-1).filter(m => m.out);
+      if (!y.length) return "no departure yesterday in this fixture — nothing to carry";
+      staffDay = 0; paintStaff();
+      await until(() => document.querySelector("#scr-staff"), "the screen");
+      const carry = document.querySelector("#scr-staff .carry");
+      ok(carry, "yesterday's unfinished work is not raised on today's screen");
+      ok(carry.textContent.includes(flats[y[0].fi].id), "the carried room is not named");
+      carry.click();
+      await wait(80);
+      eq(staffDay, -1, "the carry-over does not go to yesterday");
+      /* and once every one of them is done it stops nagging */
+      y.forEach(m => turnSet(m.fi, -1, { state: "ready", ready: new Date().toISOString() }));
+      staffDay = 0; paintStaff();
+      ok(!document.querySelector("#scr-staff .carry"),
+        "finished rooms are still being carried forward");
+      return `${y.length} carried, and gone once done`;
+    }));
+
+  /* ══ the small frictions, second round ═══════════════════════════════════ */
+
+  /* "What is 'not started'? Remove it if not necessary." It was a bare number
+     under three tiles that already counted the day and above three rows each
+     carrying a pill that already said "to clean". */
+  await test("the day view stops saying the same thing a fourth time", async () => {
+    const keepTurns = JSON.stringify(turns), stored = localStorage.getItem(STORE);
+    try {
+      const d = [0, 1, 2].find(x => turnJobs(x).length >= 2);
+      ok(d !== undefined, "no day with two cleans in the fixture");
+      openDay(d);
+      await until(() => document.querySelector(".sheet.on .dayrows .row"), "the day view");
+      const txt = () => document.querySelector(".sheet.on").textContent;
+      ok(!/not started/i.test(txt()), "the day view still says 'not started'");
+      /* nothing done: the rows have it covered, so the line stays away */
+      eq(document.querySelectorAll(".sheet.on .ratesay").length, 0,
+        "a progress line is shown before there is any progress");
+      /* one done: now it says something no row says */
+      const j = turnJobs(d)[0];
+      turnSet(j.fi, d, { state: "ready", ready: new Date().toISOString() });
+      openDay(d);
+      await until(() => document.querySelector(".sheet.on .ratesay"), "the progress line");
+      const line = document.querySelector(".sheet.on .ratesay").textContent;
+      ok(/ready/.test(line), `the line says "${line}"`);
+      return `silent at none, "${line.trim()}" at one`;
+    } finally {
+      closeSheet();
+      turns = JSON.parse(keepTurns); turnSave();
+      if (stored != null) localStorage.setItem(STORE, stored);
+    }
+  });
+
+  /* Three kinds of event that were three identical grey rows. The mark belongs
+     where the kind is DECLARED — the tiles and the group heading — and not on
+     every row, which is where it becomes the third wording of one fact. */
+  await test("each kind of movement is marked once, where it is declared", async () => {
+    const d = [0, 1, 2].find(x => { const o = dayOps(x);
+      return o.departures.length && o.arrivals.length; });
+    ok(d !== undefined, "no day with both an arrival and a departure");
+    openDay(d);
+    await until(() => document.querySelector(".sheet.on .dayrows .row"), "the day view");
+    const sheet = document.querySelector(".sheet.on");
+    eq(sheet.querySelectorAll(".dayrows .row .kindico").length, 0,
+      "the kind is being repeated on every row");
+    ok(sheet.querySelectorAll(".opp .kindico").length >= 2, "the tiles carry no mark");
+    ok(sheet.querySelectorAll(".sheet-s .kindico").length >= 2, "the headings carry no mark");
+    /* the three are actually different, in colour and in glyph */
+    const seen = [...sheet.querySelectorAll(".opp .kindico")].map(n =>
+      [...n.classList].find(c => c !== "kindico"));
+    eq(new Set(seen).size, seen.length, `two tiles wear the same mark: ${seen}`);
+    const bg = [...sheet.querySelectorAll(".opp .kindico")]
+      .map(n => getComputedStyle(n).backgroundColor);
+    eq(new Set(bg).size, bg.length, `two marks are the same colour: ${bg}`);
+    closeSheet();
+    return `${seen.join(" / ")} — distinct glyph and distinct colour`;
+  });
+
+  /* THE FOREIGN KEY THAT WOULD HAVE EATEN EVERY FIRST TICK. turn_checks.item_id
+     pointed at check_items, and the app deliberately falls back to a starter
+     list that is computed rather than stored — so on a property where nobody
+     has opened the checklist editor, which is every property on the day the
+     feature ships, the first tick carried an item_id no row had and came back
+     23503. The tick showed on the cleaner's phone and reached nobody. */
+  await test("a tick syncs against a checklist the owner never wrote", async () => {
+    const keepQ = queue.slice(), keepTurns = JSON.stringify(turns);
+    const keepChecks = checklist, keepMode = MODE, keepAct = activity.slice();
+    let gaveUid = null;
+    try {
+      checklist = null;                       // nobody has ever saved a list
+      const fi = 0, type = flats[fi].type;
+      /* On a live account every flat carries the server's uuid — cloudPull
+         reads it, and a flat added from Inventory is given one on its first
+         save — so a sample flat, which has none, has to borrow one here or
+         the sync guard is what the test would be measuring. */
+      if (!flats[fi].uid) { flats[fi].uid = uuid(); gaveUid = fi; }
+      const items = checksFor(type);
+      ok(items.length && items.every(i => i.starter), "the starter list is not being used");
+      const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+      items.forEach(i => ok(UUID.test(i.id),
+        `a starter item's id is not a uuid Postgres will take: ${i.id}`));
+      MODE = "live";
+      queue.length = 0;
+      turnTick(fi, 0, items[0]);
+      const chk = queue.find(o => o.k === "chk+");
+      ok(chk, "ticking enqueued no tick");
+      ok(UUID.test(chk.body.item_id), `the op carries ${chk.body.item_id}`);
+      eq(chk.body.label, items[0].label, "the tick did not snapshot the wording");
+      return `${items.length} starter items, all uuid-shaped, tick carries its own label`;
+    } finally {
+      queue.length = 0; keepQ.forEach(o => queue.push(o)); jset(QUEUE_KEY, queue);
+      turns = JSON.parse(keepTurns); turnSave();
+      checklist = keepChecks; checkSave(); MODE = keepMode;
+      if (gaveUid != null) delete flats[gaveUid].uid;
+      activity.length = 0; keepAct.forEach(a => activity.push(a)); jset(LOG_STORE, activity);
+    }
+  });
+
   await test("no text falls below AA in either theme", async () => {
     const m = await import("./audit.js?t=" + Date.now());
     const out = [];

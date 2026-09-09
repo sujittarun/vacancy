@@ -1153,6 +1153,111 @@ button{background:none;border:0;padding:0;cursor:pointer;
 /* nothing sticky inside the trough — see the .mlab note; the month name lives
    in the chrome above it instead */
 /* the answer takes whatever is left and scrolls inside it */
+/* ── the cleaner's screen ────────────────────────────────────────────────────
+   Sized for a hand holding a mop. Everything is a card, every card is a tap
+   target, and there is nothing on it that is not a room. */
+:root.staffmode .tabbar{display:none}
+:root.staffmode .screen{padding-bottom:28px}
+/* The four screens are SECTIONS, spaced thirty apart because each is a whole
+   card of its own. This one is a list of rooms, and a list closes up. */
+#scr-staff{padding:18px 18px calc(40px + var(--safe-b));gap:10px}
+.staffdays{margin:0}
+.staffsay{margin:2px 2px 2px;font-size:15px;line-height:1.45;color:var(--txt-2)}
+.staffsay b{display:block;font-size:22px;line-height:1.2;font-weight:680;
+  letter-spacing:-.022em;color:var(--txt);margin-bottom:3px}
+.staffsay em{font-style:normal;font-size:13px;color:var(--txt-3)}
+.carry{display:block;width:100%;text-align:left;margin:0;padding:13px 15px;
+  border-radius:var(--r-md);background:color-mix(in srgb,var(--now) 13%,var(--surface));
+  border:1px solid color-mix(in srgb,var(--now) 26%,transparent);color:var(--txt)}
+.carry b{display:block;font-size:14px;font-weight:660;letter-spacing:-.012em}
+.carry em{font-style:normal;font-size:12.5px;color:var(--now-ink)}
+
+.jobcard{display:block;width:100%;text-align:left;padding:14px 15px 13px;
+  border-radius:var(--r-lg);background:var(--surface);border:1px solid var(--line);
+  box-shadow:var(--lift);color:var(--txt);
+  transition:transform .34s var(--spring),background .18s,border-color .18s}
+.jobcard:active{transform:scale(.985);background:var(--press);transition-duration:.085s}
+.jobcard.ready{border-color:color-mix(in srgb,var(--free) 34%,transparent)}
+.jobtop{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.jobid b{display:block;font-size:20px;font-weight:700;letter-spacing:-.02em;line-height:1.15}
+.jobid em{font-style:normal;font-size:12.5px;color:var(--txt-3)}
+.jobkind{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:620;
+  color:var(--txt-2);white-space:nowrap}
+.jobwhy{margin:7px 0 0;font-size:12.5px;line-height:1.4;color:var(--now-ink)}
+.jobfoot{display:flex;align-items:center;gap:12px;margin-top:11px}
+.jobfoot .turnbar{flex:1 1 auto}
+.jobfoot .turnstate{font-size:13px;font-weight:640;letter-spacing:-.01em;white-space:nowrap}
+.jobwhen{font-size:12px;color:var(--txt-3);font-variant-numeric:tabular-nums}
+.staffend{margin:6px 2px 0;font-size:12px;line-height:1.55;color:var(--txt-3)}
+
+/* ══ THE THREE KINDS OF MOVEMENT ═════════════════════════════════════════════
+   A room emptying, a room filling, and a room doing both before three o'clock
+   are three different events, and the day view had been drawing them as three
+   identical grey rows with different words in them. They now differ in colour,
+   in glyph and in motion — and none of it is invented, because the app already
+   has a word for each of these states and it is the honest one:
+
+     leaving     the room is becoming FREE, so it takes the vacancy semantic
+     arriving    the room is becoming HELD, so it takes the occupied one
+     turnaround  the only one with a deadline, so it takes --now, which is
+                 what this whole file uses for a thing with a clock on it
+
+   No new hue was added. Three arbitrary colours would have looked designed and
+   meant nothing; these three already mean exactly what the row is saying, and
+   they carry the same meaning on the Rooms grid two screens away.
+
+   The motion is the direction of the event. Out, in, and out-then-in — a
+   quarter of a second each, once, when the row appears. It exists so the shape
+   of the day is legible before any of the words are read, which is what a
+   manager glancing at a phone between two other things actually does.        */
+.kindico{width:26px;height:26px;flex:0 0 auto;border-radius:8px;display:grid;
+  place-items:center;position:relative;overflow:hidden}
+.kindico svg{width:16px;height:16px;display:block;overflow:visible}
+.kindico .room{opacity:.42}
+.kindico .fly{transform-origin:center}
+/* Bright, dim, amber — and each one is the semantic this app already uses for
+   that state everywhere else, so the chip agrees with the room tile two
+   screens away rather than inventing a private code. */
+.kindico.out{background:color-mix(in srgb,var(--free) 15%,transparent);color:var(--free)}
+.kindico.in{background:var(--held);color:var(--held-ink)}
+.kindico.turn{background:color-mix(in srgb,var(--now) 18%,transparent);color:var(--now-ink)}
+:root[data-theme="light"] .kindico.out{
+  background:color-mix(in srgb,var(--free) 11%,transparent)}
+
+/* the arrow leaves, the arrow arrives, and the turnaround does both */
+@keyframes flyout{ 0%{transform:translateX(-5px);opacity:0}
+  35%{opacity:1} 100%{transform:translateX(0);opacity:1} }
+@keyframes flyin{ 0%{transform:translateX(6px);opacity:0}
+  35%{opacity:1} 100%{transform:translateX(0);opacity:1} }
+@keyframes flyturn{ 0%,8%{transform:translateX(-1px) rotate(0);opacity:.9}
+  46%{transform:translateX(6px) rotate(0);opacity:.25}
+  54%{transform:translateX(-6px) rotate(180deg);opacity:.25}
+  92%,100%{transform:translateX(0) rotate(180deg);opacity:.9} }
+.kindico.out .fly{animation:flyout .72s var(--out) both}
+.kindico.in  .fly{animation:flyin .72s var(--out) both}
+.kindico.turn .fly{animation:flyturn 1.05s var(--out) both}
+
+/* THE LIST ARRIVES AS A LIST. Rows rise in sequence rather than all at once,
+   so the eye is walked down the day instead of being handed it. Capped at
+   nine steps: past that the last row is waiting on the animation, which is
+   the point at which a flourish becomes a delay. */
+@keyframes rowin{ from{opacity:0;transform:translateY(7px)} to{opacity:1;transform:none} }
+.dayrows .row, .jobcard{animation:rowin .34s var(--out) both;
+  animation-delay:calc(var(--i,0) * 34ms)}
+
+/* A GAP BAR WAS DRAWN HERE AND TAKEN OUT AGAIN. A turnaround is a window
+   between two guests and the width of that window is the whole story — but
+   this book records a check-out as a DATE. There are no times in it, so a bar
+   purporting to show four hours would have been drawing the same picture for
+   a comfortable afternoon and a thirty-minute scramble. A chart that cannot
+   vary is not information, it is decoration wearing information's clothes.
+   The turnaround says what is true instead: somebody is arriving today. */
+
+@media (prefers-reduced-motion: reduce){
+  .kindico .fly{animation:none}
+  .dayrows .row, .jobcard{animation:none}
+}
+
 /* ── the clean between two guests ────────────────────────────────────────────
    A state, a count, and a bar. Nothing here is a colour on its own: `ready` is
    the free green the whole app uses for a sellable room, because that is what
@@ -1210,6 +1315,13 @@ button{background:none;border:0;padding:0;cursor:pointer;
    that exists to save the tapping. */
 .dayrows .row{align-items:flex-start}
 .dayrows .row .id{padding-top:1px}
+/* the count and the glyph share the tile's top line; the word sits under both */
+.opptop{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.opp .kindico{width:22px;height:22px;border-radius:7px}
+.opp .kindico svg{width:14px;height:14px}
+.lbl.lblkind{display:inline-flex;align-items:center;gap:7px}
+.lbl .kindico{width:19px;height:19px;border-radius:6px}
+.lbl .kindico svg{width:12px;height:12px}
 .dayrows .meta, .dayrows .meta em{white-space:normal;overflow:visible;text-overflow:clip}
 .dayrows .meta em{margin-top:3px}
 .dayrows .pill{margin-top:1px}
@@ -3929,6 +4041,9 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
     <section class="screen" id="scr-month"></section>
     <section class="screen" id="scr-ask"></section>
     <section class="screen" id="scr-trends"></section>
+    <!-- The cleaner's whole app. Outside SCREENS, so it has no tab and cannot
+         be reached by anybody who is not signed in as staff. -->
+    <section class="screen" id="scr-staff"></section>
 
     <div class="scrim" id="scrim"></div>
     <aside class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Room detail">
@@ -6130,6 +6245,17 @@ function save(){
                            kind:r.kind, reason:r.reason, note:r.note,
                            fault:r.fault, fixer:r.fixer, fixer_phone:r.fixer_phone, cost:r.cost,
                            phone:r.phone, pax:r.pax, amount:r.amount, pays:r.pays,
+                           /* THE ONE FLAG THAT SAID "ANCHORED TO THE CLOCK". The
+                              eight sample movements are pinned to today rather
+                              than to BOOK_ON, and `today` is how the drift
+                              invariant tells them apart from every seeded row
+                              that must NOT move. It was not being written, so
+                              the second time the app opened they came back
+                              indistinguishable — and the invariant that exists
+                              to catch a real date-drift bug started failing on
+                              rows that were never drifting. A row's flags are
+                              part of the row. */
+                           today: r.today ? 1 : undefined,
                            bookedOn: typeof r.bookedOn === "number" ? r.bookedOn : undefined }))
     }));
   }catch(e){ /* private browsing or storage full — the session still works */ }
@@ -6189,6 +6315,7 @@ function load(){
                    fault:r.fault, fixer:r.fixer, fixer_phone:r.fixer_phone, cost:r.cost,
                    phone:r.phone, pax:r.pax, amount:r.amount,
                    pays: (r.pays || []).map(p => ({...p, on: (p.on || 0) + shift})),
+                   today: r.today ? 1 : undefined,
                    bookedOn: typeof r.bookedOn === "number" ? r.bookedOn + shift : undefined })))
       // Blocks linger a week past their end so the app can still ask whether the
       // flat came back into service — and a block that recorded a FAULT is kept
@@ -6646,6 +6773,10 @@ const checkSave = ()=>{ jset(CHECK_STORE, checklist); };
    demand rather than seeded for every flat and day, so an untouched book
    carries no rows at all. */
 const TURN_STATES = ["waiting", "cleaning", "ready"];
+/* Set only for a staff session: {"YYYY-MM-DD": [{fi, out, in}]}, the whole of
+   what a cleaner's phone knows about who is moving. Null for everybody else,
+   who has the book itself and reads it directly. */
+let staffBook = null;
 const turnAt = (fi, day)=>{
   const f = flats[fi]; if(!f) return null;
   return turns[f.id + "|" + dayISO(day)] || null;
@@ -6660,13 +6791,35 @@ const turnAt = (fi, day)=>{
    Sorted with the rushes first, because a flat with somebody arriving the
    same day is the one with a deadline on it. */
 function turnJobs(day){
-  const ops = dayOps(day);
-  const arriving = new Map(ops.arrivals.map(r => [r.fi, r]));
-  return ops.departures
-    .map(r => ({fi: r.fi, out: r, in: arriving.get(r.fi) || null,
-                turn: turnAt(r.fi, day), rush: arriving.has(r.fi)}))
+  return dayMoves(day)
+    .filter(m => m.out)
+    .map(m => ({fi: m.fi, out: m.out, in: m.in,
+                turn: turnAt(m.fi, day), rush: !!m.in}))
     .sort((a, b)=> (b.rush - a.rush) || a.fi - b.fi);
 }
+
+/* WHO MOVED, WITHOUT ASSUMING THE PHONE HOLDS THE BOOK. A manager's phone has
+   every stay and can name the guest; a cleaner's phone has no stays at all —
+   not a redacted copy, none — because the server never sends it any. Both need
+   the same answer to "which rooms move today", so both ask here.
+
+   `out` and `in` are the stay where there is one and `true` where there is
+   only the fact of it, which is exactly the difference between the two seats:
+   a manager reads "Nithya out → Aravind in", a cleaner reads "someone out,
+   someone in". Everything downstream checks `.guest` before printing it. */
+function dayMoves(day){
+  if(staffBook){
+    return (staffBook[dayISO(day)] || []).map(r =>
+      ({fi: r.fi, out: r.out || null, in: r.in || null}));
+  }
+  const ops = dayOps(day);
+  const arriving = new Map(ops.arrivals.map(r => [r.fi, r]));
+  const seen = new Map();
+  ops.departures.forEach(r => seen.set(r.fi, {fi: r.fi, out: r, in: arriving.get(r.fi) || null}));
+  ops.arrivals.forEach(r => { if(!seen.has(r.fi)) seen.set(r.fi, {fi: r.fi, out: null, in: r}); });
+  return [...seen.values()].sort((a, b)=> a.fi - b.fi);
+}
+const nameOf = m => (m && m.guest) || null;
 
 /* The list for a flat, by its type, falling back to a starter set the first
    time anybody opens one. The fallback is NOT written to storage: an owner who
@@ -6858,6 +7011,20 @@ async function signIn(email, password){
   jdel(BROWSE_KEY);
   await loadHost();
 
+  /* A CLEANER'S PHONE HAS NOTHING TO ADOPT, AND MUST NOT TRY. Everything below
+     this line exists for the one dangerous case — an operator whose real book
+     lives only in this browser signing in to an empty server — and it works by
+     pushing the phone's stays up. A staff account cannot write stays at all, so
+     that path can only produce a burst of refusals; and the rows it would be
+     pushing are whatever demo the cleaner happened to tap before signing in.
+     Neither is theirs to send. */
+  if(myRole() === "staff"){
+    jdel(STORE);
+    await staffPull();
+    cacheSave(); paintAcct();
+    return;
+  }
+
   /* Held BEFORE the pull can overwrite them. If the server turns out to be
      empty these are put straight back, so a failed or empty pull can never be
      the thing that loses the book. */
@@ -6934,7 +7101,12 @@ function signOut(silent){
      a reason to discard them. They are host-scoped when they are sent, so they
      keep until the next sign-in and go then. */
   const pending = queue.length;
+  const wasStaff = myRole() === "staff";
   session = null; hostId = null; hostName = ""; me = null; MODE = "sample";
+  /* The cleaner's book goes with the session. It was three days of movements
+     in one building and it means nothing without the login that fetched it. */
+  staffBook = null; turns = {}; turnSave();
+  if(wasStaff && typeof leaveStaff === "function") leaveStaff();
   sessionWipe(); jdel(CLOUD_KEY);
   if(pending){
     /* kept in memory AND on disk, exactly as they were */
@@ -6964,12 +7136,110 @@ function signOut(silent){
 }
 
 /* ── reading the book ──────────────────────────────────────────────────────── */
+/* ══════════════ WHAT A CLEANER'S PHONE HOLDS ════════════════════════════════
+   Not a smaller copy of the book. A different one.
+
+   The temptation with a limited role is to fetch everything and hide most of
+   it, and that is how role systems leak: the data is on the phone, one bug or
+   one curious person away from being read. So a staff session never calls the
+   book's own endpoints at all. Postgres refuses them — private.user_host_ids()
+   returns nothing for this membership, which is the same door host isolation
+   uses — and the app does not try. What arrives is three things:
+
+     the flats of their buildings, by code and type
+     which of those rooms are moving on each of three days, as two booleans
+     the checklist, and the jobs and ticks that already exist
+
+   No guest, no rate, no amount, no balance, no other building. Not filtered
+   out on the phone — never sent. `resv` stays empty for the whole session,
+   which is why every screen that reads it is unreachable from here.
+
+   Three days rather than one because a room left dirty at six in the evening
+   is still dirty at eight the next morning, and a cleaner planning their day
+   wants to know what tomorrow looks like before they go home. */
+const STAFF_DAYS = [-1, 0, 1];
+async function staffPull(){
+  const [fl, cl, ...byDay] = await Promise.all([
+    rest("POST", "/rpc/staff_flats", {}),
+    rest("GET", "/check_items?select=id,unit_type,label,needs_photo,sort"
+              + "&active=is.true&order=sort.asc"),
+    ...STAFF_DAYS.map(d => rest("POST", "/rpc/staff_day", {on_day: dayISO(d)})),
+  ]);
+  if(!fl || !fl.length){
+    /* A membership with role staff and no buildings on it, or every flat
+       retired. Saying so is better than an empty screen that looks broken. */
+    const e = new Error("This login is not attached to a building yet.");
+    e.status = 403; throw e;
+  }
+  flats = fl.map(f => ({
+    uid: f.id, bid: f.building_id, id: f.code, code: f.building_id,
+    bname: f.building, bshort: f.building, floor: null, type: f.unit_type,
+    rate: 0, ord: 0, pop: 0.6 }));
+  NF = flats.length;
+  flatIndex = Object.fromEntries(flats.map((f, i) => [f.id, i]));
+  const byUid = Object.fromEntries(flats.map((f, i) => [f.uid, i]));
+
+  staffBook = {};
+  STAFF_DAYS.forEach((d, i) => {
+    staffBook[dayISO(d)] = (byDay[i] || []).map(r => {
+      const fi = byUid[r.flat_id];
+      return fi === undefined ? null
+           : {fi, out: r.checking_out || null, in: r.checking_in || null};
+    }).filter(Boolean);
+  });
+
+  /* The list, if the owner has written one. If they have not, checksFor falls
+     back to the starter set — computed identically on this phone and on the
+     manager's, so a tick made here is a tick they recognise. */
+  if(cl && cl.length){
+    checklist = {};
+    cl.forEach(c => (checklist[c.unit_type] = checklist[c.unit_type] || []).push(
+      {id: c.id, label: c.label, photo: !!c.needs_photo, sort: c.sort | 0}));
+    Object.values(checklist).forEach(a => a.sort((x, y) => x.sort - y.sort));
+    checkSave();
+  }
+
+  /* The jobs already on the server, so a room another cleaner finished shows
+     finished rather than untouched. Read after the flats, because the ids only
+     mean anything against them. */
+  const uids = flats.map(f => f.uid);
+  const [tr, tc] = await Promise.all([
+    rest("GET", "/turnarounds?select=id,flat_id,day,state,started_at,ready_at"
+              + "&day=gte." + dayISO(STAFF_DAYS[0])
+              + "&day=lte." + dayISO(STAFF_DAYS[STAFF_DAYS.length - 1])),
+    rest("GET", "/turn_checks?select=id,turnaround_id,item_id,label,done_at,photo_path"),
+  ]);
+  const ticksBy = {};
+  (tc || []).forEach(t => (ticksBy[t.turnaround_id] = ticksBy[t.turnaround_id] || []).push(t));
+  turns = {};
+  (tr || []).forEach(t => {
+    const fi = byUid[t.flat_id]; if(fi === undefined) return;
+    const checks = {};
+    (ticksBy[t.id] || []).forEach(c => {
+      checks[c.item_id] = {label: c.label, at: c.done_at, photo: c.photo_path || null};
+    });
+    turns[flats[fi].id + "|" + t.day] = {
+      id: t.id, flat: flats[fi].id, day: t.day, state: t.state,
+      started: t.started_at || undefined, ready: t.ready_at || undefined, checks};
+  });
+  turnSave();
+
+  resv = []; issues = []; expenses = []; usingDemo = false;
+  recompute();
+  paintStaff();
+}
+
 async function cloudPull(){
   /* The same race from the other side: anything that calls a pull while the
      queue still holds writes would paint the server's older book over rows
      this phone has not managed to send yet. */
   if(queue.length || inflight){ needPull = true; return; }
   if(!hostId) await loadHost();
+  /* A cleaner's session takes a different road entirely — see staffPull. Put
+     here rather than at each call site so that every refresh the app already
+     does (sign-in, boot, coming back to the tab, after a flush, pull-to-
+     reload) reaches the right one without any of them having to know. */
+  if(myRole() === "staff") return staffPull();
   /* HOLD_BACK, not eight days: the Profit tab reads finished months off this
      book, and an eight-day window left it 89% empty on a live phone. */
   const from = dayISO(-HOLD_BACK), to = dayISO(DAYS);
@@ -7062,7 +7332,11 @@ async function cloudPull(){
    local store, so a book cached yesterday still reads correctly today. */
 function cacheSave(){
   if(MODE !== "live") return;
-  jset(CLOUD_KEY, { on: isoDay(today), host: hostId, hostName,
+  /* THE SEAT IS PART OF THE CACHE. Without it, a cleaner reopening the app
+     paints the manager's four tabs from cache and swaps to their own screen a
+     second later when loadHost comes back — a flash of somebody else's app, on
+     the phone of the person least meant to see it. */
+  jset(CLOUD_KEY, { on: isoDay(today), host: hostId, hostName, me,
     flats: flats.map(f=>({uid:f.uid, bid:f.bid, id:f.id, code:f.code, bname:f.bname,
                           bshort:f.bshort, floor:f.floor, type:f.type, rate:f.rate, ord:f.ord})),
     issues: issues.map(x=>({...x, id2:flats[x.fi] && flats[x.fi].id})),
@@ -7079,6 +7353,7 @@ function cacheLoad(){
   const was = new Date(d.on + "T00:00:00"); was.setHours(0,0,0,0);
   const shift = Math.round((was - today) / 86400000);
   hostId = d.host || null; hostName = d.hostName || "";
+  if(d.me && d.me.role) me = d.me;
   flats = d.flats.map(f=>({...f, pop:0.6}));
   NF = flats.length;
   flatIndex = Object.fromEntries(flats.map((f,i)=>[f.id, i]));
@@ -17054,28 +17329,40 @@ function openDay(d, focus){
       + (where ? ` · ${where}` : "");
 
     const sum = el("div","opps"); sum.style.margin = "14px 20px 0";
-    [[turnovers.length, "turnaround", 1], [outOnly.length, "leaving", 0], [inOnly.length, "arriving", 0]]
-      .forEach(([n, label, hot])=>{
+    [[turnovers.length, "turnaround", 1, "turn"], [outOnly.length, "leaving", 0, "out"],
+     [inOnly.length, "arriving", 0, "in"]]
+      .forEach(([n, label, hot, kind])=>{
         const c = el("div","opp" + (n ? (hot ? " hot" : "") : " zero"));
-        c.append(el("b", null, String(n)), el("s", null, label));
+        const top = el("div","opptop");
+        top.append(el("b", null, String(n)));
+        /* The arrow moves the way the guest does. Once, when the sheet opens,
+           on the three tiles the eye lands on first — so the shape of the day
+           is legible before a word of it has been read. */
+        if(n) top.append(kindIcon(kind));
+        c.append(top, el("s", null, label));
         sum.appendChild(c);
       });
     body.appendChild(sum);
 
-    /* THE DAY'S CLEANING, IN ONE SENTENCE. A manager wants "four rooms still
-       to do" before they want any single room, and until now the app could
-       only have told them by opening four sheets. */
+    /* THE DAY'S CLEANING, AND ONLY WHEN IT ADDS SOMETHING. This shipped as a
+       three-part tally, and on a morning where nothing had begun it rendered
+       as the words "3 not started" alone under three tiles reading 2 / 1 / 2
+       and above three rows each carrying a pill saying "to clean". The owner
+       marked it on a screenshot and asked what it was, which is the correct
+       response to a number with nothing attached to it.
+
+       Progress is worth a line the moment any of it exists — "2 of 5 done" is
+       not on the screen anywhere else. Before then the rows have already said
+       it, twice. So the line appears when there is progress to report and
+       stays quiet when there is not. */
     const jobs = turnJobs(d).filter(j => !code || (flats[j.fi] && flats[j.fi].code === code));
-    if(jobs.length){
-      const st = {ready:0, cleaning:0, waiting:0};
-      jobs.forEach(j => st[turnProgress(j.fi, d).state]++);
+    const done = jobs.filter(j => turnProgress(j.fi, d).state === "ready").length;
+    if(done){
       const line = el("p","ratesay");
-      line.innerHTML = st.ready === jobs.length
+      line.innerHTML = done === jobs.length
         ? `<b>Every room is ready.</b> ${jobs.length} turned around${where ? " in " + esc(where) : ""}.`
-        : [st.ready && `<b>${st.ready}</b> ready`,
-           st.cleaning && `<b>${st.cleaning}</b> being cleaned`,
-           st.waiting && `<b>${st.waiting}</b> not started`]
-            .filter(Boolean).join(" · ");
+        : `<b>${done} of ${jobs.length}</b> ready · `
+          + `${jobs.length - done} still being cleaned.`;
       body.appendChild(line);
     }
 
@@ -17093,14 +17380,29 @@ function openDay(d, focus){
     const anchors = {};
     const group = (key, title, hint, rows, fill)=>{
       if(!rows.length) return;
+      const KIND = {turnovers: "turn", departures: "out", arrivals: "in"};
       const h = el("div","sheet-s");
-      h.append(el("span","lbl", `${title} · ${rows.length}`), el("span","lbl", hint));
+      const lead = el("span","lbl lblkind");
+      lead.append(kindIcon(KIND[key]), document.createTextNode(`${title} · ${rows.length}`));
+      h.append(lead, el("span","lbl", hint));
       body.appendChild(h);
       anchors[key] = h;
       const card = el("div","card dayrows"); card.style.margin = "0 20px";
-      rows.forEach(item=>{
+      /* A GLYPH PER ROW WAS TRIED HERE AND TAKEN OUT. On this screen the rows
+         are already GROUPED by kind, with a heading over each block, so a mark
+         on every row was the third place one screen said "this is a
+         turnaround" — the duplication the owner has now objected to twice. It
+         costs 26px of row height to say nothing new.
+
+         The kind is declared where it is declared: on the three tiles at the
+         top and on the group heading. That is also where the motion is worth
+         having, because it is the first thing the eye lands on. The cleaner's
+         screen keeps its per-card glyph, because that screen has no groups
+         and the glyph is the only thing carrying the distinction. */
+      rows.forEach((item, i)=>{
         const fl = flats[item.fi];
         const row = el("button","row");
+        row.style.setProperty("--i", Math.min(i, 9));
         row.append(el("div","id", fl.id));
         const m = el("div","meta");
         fill(m, item, fl, row);
@@ -17244,6 +17546,176 @@ const readAsDataUrl = f => new Promise(res=>{
    The screen a cleaner works from and the screen a manager reads. Same list,
    same ticks, same photographs — a second, prettier view for the manager
    would be a second thing to keep true. */
+/* ── the glyph for one kind of movement ─────────────────────────────────────
+   A wall and an arrow. Which side the wall is on says whether the room is
+   being left or entered, and the arrow moves that way once as the row lands.
+   Two arrows crossing is a turnaround, and it turns over. */
+const KIND_SVG = {
+  out:  '<path class="room" d="M4.5 3.2v13.6"/>'
+      + '<g class="fly"><path d="M7.5 10h7.5"/><path d="M11.8 6.6 15.2 10l-3.4 3.4"/></g>',
+  in:   '<path class="room" d="M15.5 3.2v13.6"/>'
+      + '<g class="fly"><path d="M5 10h7.5"/><path d="M9.3 6.6 12.7 10l-3.4 3.4"/></g>',
+  turn: '<g class="fly"><path d="M4 7.4h10.5"/><path d="M11.6 4.6 14.9 7.4l-3.3 2.8"/>'
+      + '<path d="M16 12.6H5.5"/><path d="M8.4 9.8 5.1 12.6l3.3 2.8"/></g>',
+};
+const KIND_WORD = {out: "Leaving", in: "Arriving", turn: "Turnaround"};
+function kindIcon(kind){
+  const w = el("span", "kindico " + kind);
+  w.innerHTML = `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" `
+    + `stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${KIND_SVG[kind]}</svg>`;
+  return w;
+}
+/* out, in, or both — the one word this row is about */
+/* Named for its component, not for the idea: `kindOf` already belongs to the
+   cost lines two thousand lines up, and this file has shipped that collision
+   twice — .stack and .answer — in CSS. It costs nothing to be specific. */
+const moveKind = m => m.out && m.in ? "turn" : m.out ? "out" : "in";
+
+/* ══════════════ THE CLEANER'S WHOLE APP ═════════════════════════════════════
+   One screen. The rooms that move today, in the buildings this login covers,
+   each one a door into its own checklist. No tabs, because there is nowhere
+   else to go; no money, because none of it is sent to this phone; no other
+   building, because Postgres will not answer for one.
+
+   Three days are held — see staffPull — and the day is switchable, but the
+   screen opens on today and says so, because a cleaner opening this at eight
+   in the morning is asking one question and it is not "which day is it". */
+let staffDay = 0;
+function enterStaff(){
+  document.documentElement.classList.add("staffmode");
+  document.querySelectorAll(".screen").forEach(x => x.classList.remove("on"));
+  document.getElementById("scr-staff").classList.add("on");
+  const tb = document.getElementById("tabbar"); if(tb) tb.hidden = true;
+}
+function leaveStaff(){
+  document.documentElement.classList.remove("staffmode");
+  const tb = document.getElementById("tabbar"); if(tb) tb.hidden = false;
+  document.getElementById("scr-staff").classList.remove("on");
+  document.getElementById("scr-" + SCREENS[curScreen].id).classList.add("on");
+}
+
+function paintStaff(){
+  if(myRole() !== "staff"){ if(staffBook) staffBook = null; return; }
+  enterStaff();
+  const host = document.getElementById("scr-staff");
+  host.textContent = "";
+
+  const where = [...new Set(flats.map(f => f.bname))].join(" · ");
+  /* The title is the day being looked at, not always today: a cleaner who has
+     tapped Tomorrow and then looked back up at the bar must not be told they
+     are reading today's rooms. */
+  document.getElementById("scrTitle").firstChild.nodeValue =
+    staffDay === 0 ? "Today" : staffDay === -1 ? "Yesterday" : "Tomorrow";
+  document.getElementById("scrSub").textContent = where;
+
+  /* THE DAY, AND ONLY THE DAYS THERE IS WORK ON. A chip for a day with nothing
+     on it is a control that answers "nothing", which is worse than not being
+     offered — except today, which is always shown because its emptiness is
+     itself the answer. */
+  const jobsOn = d => dayMoves(d).length;
+  const strip = el("div","roomfilt staffdays");
+  STAFF_DAYS.forEach(d=>{
+    if(d !== 0 && !jobsOn(d)) return;
+    const b = el("button", null, d === 0 ? "Today" : d === -1 ? "Yesterday" : "Tomorrow");
+    b.type = "button";
+    b.setAttribute("aria-selected", String(d === staffDay));
+    b.setAttribute("aria-label", `Show ${d === 0 ? "today" : d === -1 ? "yesterday" : "tomorrow"}`
+      + `, ${jobsOn(d)} room${jobsOn(d) === 1 ? "" : "s"}`);
+    b.onclick = ()=>{ haptic(9); staffDay = d; paintStaff(); };
+    strip.appendChild(b);
+  });
+  if(strip.children.length > 1) host.appendChild(strip);
+
+  /* Between the cache saying "you are staff" and the network saying which
+     rooms move, there is a second. Saying "nothing to do today" in it would be
+     a lie that a cleaner might act on. */
+  if(!staffBook){
+    host.appendChild(el("p","staffend", "Fetching today\u2019s rooms\u2026"));
+    return;
+  }
+  const moves = dayMoves(staffDay);
+  const cleans = moves.filter(m => m.out);
+  const left = cleans.filter(m => turnProgress(m.fi, staffDay).state !== "ready").length;
+
+  /* ONE SENTENCE, AND IT IS THE ONLY SUMMARY ON THE SCREEN. What is left to
+     do, said once — not a count of rooms, a count of states and a pill on
+     every row all saying the same thing three ways. */
+  const head = el("div","staffsay");
+  head.innerHTML = !moves.length
+    ? `<b>Nothing to do ${staffDay === 0 ? "today" : staffDay === -1 ? "yesterday" : "tomorrow"}.</b>`
+      + `<em>No room in ${esc(where)} is changing hands.</em>`
+    : !left
+    ? `<b>All done.</b><em>${cleans.length} room${cleans.length === 1 ? "" : "s"} `
+      + `turned around${moves.length > cleans.length
+         ? ` · ${moves.length - cleans.length} arriving into a room nobody left` : ""}.</em>`
+    : `<b>${left} room${left === 1 ? "" : "s"} to clean.</b>`
+      + `<em>${fmtL(staffDay)}${cleans.length > left
+         ? ` · ${cleans.length - left} already ready` : ""}.</em>`;
+  host.appendChild(head);
+
+  /* A ROOM LEFT DIRTY OVERNIGHT IS STILL DIRTY IN THE MORNING, and the day
+     chips are not enough on their own — somebody looking at today will not
+     think to look at yesterday. So yesterday's unfinished work comes and finds
+     them. */
+  if(staffDay === 0){
+    const over = dayMoves(-1).filter(m => m.out && turnProgress(m.fi, -1).state !== "ready");
+    if(over.length){
+      const c = el("button","carry");
+      c.innerHTML = `<b>${over.length} room${over.length === 1 ? "" : "s"} from yesterday `
+        + `never finished.</b><em>${over.map(m => esc(flats[m.fi].id)).join(" · ")} ›</em>`;
+      c.onclick = ()=>{ haptic(10); staffDay = -1; paintStaff(); };
+      host.appendChild(c);
+    }
+  }
+
+  moves.forEach((m, i)=>{
+    const fl = flats[m.fi], kind = moveKind(m);
+    const p = turnProgress(m.fi, staffDay);
+    const card = el("button","jobcard " + p.state);
+    card.style.setProperty("--i", Math.min(i, 9));
+    card.setAttribute("aria-label", `${fl.id}, ${KIND_WORD[kind].toLowerCase()}, `
+      + (p.state === "ready" ? "ready" : `${p.done} of ${p.of} checked`) + " — open the checks");
+
+    const top = el("div","jobtop");
+    const idc = el("div","jobid");
+    idc.innerHTML = `<b>${esc(fl.id)}</b><em>${esc(fl.type)}</em>`;
+    const kw = el("div","jobkind");
+    kw.append(kindIcon(kind), el("span", null, KIND_WORD[kind]));
+    top.append(idc, kw);
+    card.appendChild(top);
+    /* Why this one is the urgent one, in the words a cleaner would use. */
+    if(kind === "turn")
+      card.appendChild(el("p","jobwhy", "Somebody moves in today — this room is needed back."));
+
+    const foot = el("div","jobfoot");
+    const st = el("span","turnstate " + p.state);
+    /* "Not started" used to live here and on the manager's day view, next to a
+       bar that was already empty and a pill that already said "to clean". The
+       count says the same thing without a third wording of it, and it is the
+       only line that keeps meaning something once work has begun. */
+    st.textContent = !m.out ? "No clean needed"
+                   : p.state === "ready" ? "Ready"
+                   : `${p.done} of ${p.of} checked`;
+    foot.append(st);
+    if(p.state !== "ready" && m.out){
+      const bar = el("div","turnbar"); const fill = el("i");
+      fill.style.width = (p.pct * 100).toFixed(1) + "%";
+      bar.appendChild(fill); foot.appendChild(bar);
+    } else if(p.state === "ready" && p.t && p.t.ready){
+      foot.appendChild(el("span","jobwhen", clockOf(p.t.ready)));
+    }
+    card.appendChild(foot);
+
+    card.onclick = ()=>{ haptic(10); openTurn(m.fi, staffDay, ()=>{ closeSheet(); }); };
+    host.appendChild(card);
+  });
+
+  host.appendChild(el("p","staffend",
+    "Tap a room to work through its checks. Everything you tick is saved here "
+    + "and reaches the office straight away."));
+  host.scrollTop = 0;
+}
+
 function openTurn(fi, day, backTo){
   const fl = flats[fi];
   const dayIso = dayISO(day);
@@ -17252,17 +17724,19 @@ function openTurn(fi, day, backTo){
     const t = turnAt(fi, day);
     const done = t && t.checks ? t.checks : {};
     const doneN = items.filter(i => done[i.id]).length;
-    const ops = dayOps(day);
-    const out = ops.departures.find(r => r.fi === fi);
-    const inn = ops.arrivals.find(r => r.fi === fi);
+    /* A manager's phone can name who is out and who is in; a cleaner's was
+       never sent a guest, so it says the same sentence without the names. */
+    const mv = dayMoves(day).find(x => x.fi === fi) || {out: null, in: null};
+    const out = mv.out, inn = mv.in;
+    const who = (m, fallback) => nameOf(m) ? esc(nameOf(m)) : fallback;
 
     sheetWipe();
     const h = el("div");
     h.innerHTML = `<div class="n">${esc(fl.id)}</div>`
       + `<div class="m">${esc(fl.type)} · ${esc(fl.bshort)} · `
-      + (out && inn ? `${esc(out.guest)} out → ${esc(inn.guest)} in`
-         : out ? `${esc(out.guest)} out · nobody in behind them`
-         : inn ? `${esc(inn.guest)} arriving`
+      + (out && inn ? `${who(out, "someone")} out → ${who(inn, "someone")} in`
+         : out ? `${who(out, "Someone")} out · nobody in behind them`
+         : inn ? `${who(inn, "Someone")} arriving`
          : "no movement recorded") + `</div>`;
     const x = el("button", null, backTo ? "‹" : "✕");
     x.setAttribute("aria-label", backTo ? "Back" : "Close");
@@ -17357,7 +17831,8 @@ function openTurn(fi, day, backTo){
         logAct("clean", `${fl.id} is ready for the next guest · ${items.length} checked`,
                {flat: fl.id});
         toast("", `<b>${esc(fl.id)} is ready.</b> ${items.length} checked${
-          inn ? ` · ${esc(inn.guest)} can go in` : ""}.`, fi);
+          inn ? ` · ${nameOf(inn) ? esc(nameOf(inn)) + " can" : "whoever arrives can"} go in` : ""}.`,
+          staffBook ? null : fi);
         paint(); refreshScreen();
       };
     }
@@ -17916,6 +18391,12 @@ const SUBS = [
 ];
 /* re-render the current screen in place after the data changes, keeping your place */
 function refreshScreen(){
+  if(myRole() === "staff"){
+    const st = document.getElementById("scr-staff"), top = st.scrollTop;
+    paintStaff();
+    st.scrollTop = top;
+    return;
+  }
   const s = document.getElementById("scr-" + SCREENS[curScreen].id);
   const top = s.scrollTop;
   SCREENS[curScreen].render();
@@ -17923,6 +18404,10 @@ function refreshScreen(){
 }
 
 function switchTo(i, focusInput){
+  /* The hash survives a reload and a sign-out, so a phone that was on Business
+     as a manager and is now signed in as staff would be sent to a screen this
+     seat has no data for. There is one screen; it is the only place to go. */
+  if(myRole() === "staff"){ paintStaff(); return; }
   // a tab you are ARRIVING at starts clean; a refresh of the one you are on
   // does not (see askText)
   if(i !== curScreen && SCREENS[i].id === "ask") askText = "";
