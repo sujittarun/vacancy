@@ -5908,6 +5908,66 @@ function seedRealBook(){
                reason: /pest/i.test(why) ? "Maintenance" : "Owner use",
                note: why, guest:"Out of service", src:"Block"});
   });
+  seedTodayMoves();
+}
+
+/* ── a day worth looking at, in the sample book ───────────────────────────────
+   Every stay above is anchored to BOOK_ON and drifts with it, which is right:
+   a book read on Saturday still says Saturday on Tuesday. The consequence is
+   that the sample AGES. It was exported at the end of August, so by the middle
+   of September its interesting days are behind it and "today" on the public
+   link is two check-outs and nothing else — which is a poor advertisement for
+   a screen whose whole subject is what moves today.
+
+   These are anchored to TODAY instead, so the sample always opens on a day
+   that has something to show: turnarounds in two buildings, a check-out with
+   nobody behind it, arrivals into empty rooms, and one of each tomorrow so the
+   strip is worth stepping along. Spread across four addresses, because the
+   building filter cannot be judged on a day that happens in one.
+
+   Sample only. Signing in replaces the whole book with the server's, and
+   nothing here is ever written to it.                                        */
+function seedTodayMoves(){
+  /* [flat, out-guest or null, in-guest or null, in-nights, source, day] */
+  const MOVES = [
+    ["TT-102", "Nithya",   "Aravind",  4, "Airbnb",      0],
+    ["M2",     "Farhan",   "Deepika",  3, "Direct",      0],
+    ["B201",   "Sneha",    null,       0, null,          0],
+    ["LP-3",   null,       "Kishore",  5, "MakeMyTrip",  0],
+    ["2A",     null,       "Ritika",   2, "Direct",      0],
+    ["B301",   "Manoj",    "Yusuf",    6, "Booking.com", 1],
+    ["TT-302", "Charan",   null,       0, null,          1],
+    ["M1",     null,       "Preethi",  3, "Agoda",       1],
+  ];
+  /* NOT Math.max(a, 0). That clamp belongs to freeRange, where it is right —
+     you cannot sell a night that has gone — and it is wrong here, where the
+     question is whether a row already occupies these nights. A departure
+     seeded as start −3 → end 0 checked no nights at all under the clamp, so
+     the guard passed on a flat that was already taken and the demo day showed
+     B201 twice, two guests leaving one flat on one morning. */
+  const free = (fi, a, b)=>{
+    for(let d = a; d < Math.min(b, DAYS); d++)
+      if(resv.some(r => r.fi === fi && r.start <= d && r.end > d)) return false;
+    return true;
+  };
+  MOVES.forEach(([id, out, into, nights, src, day])=>{
+    const fi = flatIndex[id];
+    if(fi === undefined) return;
+    /* Never on top of a real sample stay: the seeded day is a garnish, and a
+       double-booked flat in the demo would be a bug on the one screen that
+       exists to make double-booking impossible. */
+    /* `today: 1` marks these as the one part of the sample anchored to the
+       clock rather than to BOOK_ON. Every other seeded row must sit exactly
+       where BOOK_ON puts it — that invariant caught a real drift bug and is
+       tested — and these are the deliberate exception, so they say so rather
+       than quietly failing it. */
+    if(out && free(fi, day - 3, day))
+      resv.push({fi, start: day - 3, end: day, nights: 3, guest: out,
+                 src: "Direct", amount: 12000, pays: [], bookedOn: day - 12, today: 1});
+    if(into && free(fi, day, day + nights))
+      resv.push({fi, start: day, end: day + nights, nights, guest: into,
+                 src, amount: nights * 4200, pays: [], bookedOn: day - 6, today: 1});
+  });
 }
 
 /* ── the workbook's own money ────────────────────────────────────────────────

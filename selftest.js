@@ -495,6 +495,11 @@ export async function run(filter) {
     let checked = 0;
     for (const r of resv) {
       if (r.manual || isBlock(r)) continue;          // put there by a test, not the seed
+      /* and the handful the sample anchors to TODAY on purpose, so the public
+         link always opens on a day with turnarounds on it. They carry the flag
+         precisely so this invariant can exclude them by name rather than by
+         accident; everything from BOOK is still held to BOOK_ON. */
+      if (r.today) continue;
       const set = want[r.fi];
       if (!set) continue;
       ok(set.has(r.start),
@@ -3174,6 +3179,31 @@ export async function run(filter) {
       recompute(); closeSheet();
       if (stored != null) localStorage.setItem(STORE, stored);
     }
+  });
+
+  /* THE ONE THING THIS APP MUST NEVER SHOW. The sample book is what the public
+     link opens and what every test below builds its fixtures against, so a
+     flat let to two people in it is both a lie on the demo and a booby trap
+     under the suite. Caught for real: a seeded demo day used freeRange's
+     `Math.max(a, 0)` as a collision guard, which checks no nights at all for a
+     stay that ended this morning, and B201 shipped with two guests leaving it
+     on the same day. */
+  await test("no flat in the sample book is let to two people at once", async () => {
+    const clash = [];
+    for (let fi = 0; fi < NF; fi++) {
+      const mine = resv.filter(r => r.fi === fi).sort((a, b) => a.start - b.start);
+      for (let i = 1; i < mine.length; i++)
+        if (mine[i].start < mine[i - 1].end)
+          clash.push(`${flats[fi].id}: ${mine[i - 1].guest} ${mine[i - 1].start}\u2192${mine[i - 1].end}`
+                   + ` over ${mine[i].guest} ${mine[i].start}\u2192${mine[i].end}`);
+    }
+    eq(clash.length, 0, `overlapping stays: ${clash.slice(0, 3).join(" \u00b7 ")}`);
+    /* and the day view can therefore never list one flat twice */
+    const ops = dayOps(0);
+    const outs = ops.departures.map(r => r.fi), ins = ops.arrivals.map(r => r.fi);
+    eq(outs.length, new Set(outs).size, "two guests leave one flat today");
+    eq(ins.length, new Set(ins).size, "two guests arrive in one flat today");
+    return `${resv.length} stays across ${NF} flats, none overlapping`;
   });
 
   /* ══ the whole surface ══════════════════════════════════════════════════ */
