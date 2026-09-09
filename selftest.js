@@ -2333,14 +2333,24 @@ export async function run(filter) {
       recompute();
       const r = resv.find(x => x.guest === "Extend Fixture");
       openSheet(fi, 0);
-      await until(() => document.querySelector(".roomRoutes.stay button"), "the change-dates route");
-      const route = document.querySelector(".roomRoutes.stay button");
-      ok(/Extend Fixture/.test(route.textContent), "the route does not name the guest");
-      ok(/in until/.test(route.textContent), `the route does not say they are in: ${route.textContent}`);
-      const glyph = [...document.querySelectorAll(".rowdt")]
+      await until(() => document.querySelector(".sheet.on .rowdt"), "the guest's row");
+      /* THROUGH THE ROW, which is the way in. There used to be a "Change X's
+         dates" route on the band as well, and it sat directly above a Coming
+         up row naming the same guest, the same dates, and carrying the glyph
+         that opens the same editor — the owner counted the guest's name four
+         times on one screen and asked for the duplicates to go. The row is
+         what remains, so the row is what this drives. */
+      const glyph = [...document.querySelectorAll(".sheet.on .rowdt")]
         .find(b => /Extend Fixture/.test(b.getAttribute("aria-label") || ""));
       ok(glyph, "the guest's own row has no dates glyph");
-      route.click();
+      ok(![...document.querySelectorAll(".sheet.on .roomRoutes.stay button")]
+        .some(b => /Change Extend Fixture/.test(b.textContent)),
+        "the band still repeats a guest who is already a row");
+      /* and the band does not name them a third time either */
+      const band = document.querySelector(".sheet.on .actWhy");
+      ok(!band || !/Extend Fixture/.test(band.textContent),
+        `the band repeats the guest: ${band && band.textContent}`);
+      glyph.click();
       await until(() => document.querySelector(".stepWide.locked"), "the editor, with the arrival locked");
       const go = document.querySelector(".bkgo");
       ok(go.disabled, "Save is live before anything has changed");

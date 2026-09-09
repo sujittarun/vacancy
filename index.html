@@ -9428,9 +9428,10 @@ function extendAfter(block, mv){
    all" is a call that comes within a day or two and belongs on the band, in
    the guest's own name, where nobody has to look for it. "We forgot to put
    his extra nights in last week" is a correction, and corrections surface
-   days later — so the stay stays LISTED, and editable, for a month. Past a
-   month the room sheet would be an archive nobody scrolls. */
-const RECENT_OUT = 30;      // still listed on the room sheet, still editable
+   days later — so the stay stays LISTED, and editable, for a fortnight. Past
+   that the room sheet becomes an archive: measured on G02, thirty days put
+   ten departed guests under a heading nobody had asked to read. */
+const RECENT_OUT = 14;      // still listed on the room sheet, still editable
 const RECENT_BAND = 2;      // recent enough to be offered on the action band
 /* The stays that ended in that window, newest first. Blocks are excluded: an
    out-of-service spell that lapsed is the decide board's business, not a
@@ -14263,19 +14264,21 @@ function openSheet(fi, day){
             ? `<b>${esc(busy.guest)}</b> is in · no end date recorded`
             : `<b>${esc(busy.guest)}</b> is in until ${esc(fmt(busy.end))}`)
       : `Not free for those nights`;
-    /* ONLY WHEN IT SAYS SOMETHING THE SHEET HAS NOT. Since the readout above
-       opens on tonight — "Nirvaan · night 15 of 45" — and Coming up lists the
-       same stay with its end date and source, this band was the third telling
-       of one fact, stacked between them.
+    /* ONLY WHEN IT SAYS SOMETHING THE SHEET HAS NOT. "Kavan is in until 15
+       Sep" was appearing three times on one screen — here, on the route below
+       it, and on his own row in Coming up — with "Book from 15 Sep" in
+       between saying the same date a fourth time as an action. The owner
+       circled it.
 
-       It is NOT always redundant, which is why this is a condition and not a
-       deletion. The readout speaks for TONIGHT only: with 3 nights selected,
-       or a night further out, the blocker it names may not be the one standing
-       in the way, and "Not free for those nights" — the no-single-blocker case
-       — is a sentence nothing else on the screen says at all. Blocks are safe
-       to fold in because addBlock puts the reason in `guest`, so an outage
-       appears in Coming up under its own name. */
-    const alreadyOnScreen = !!busy && bN === 1 && bDay === 0;
+       So the band is suppressed whenever BOTH halves of what it says are
+       already carried: the blocker has a name and a date on its Coming up
+       row, and the next-free button states the day the room comes back. What
+       survives is the case where neither does — no single blocker to name
+       ("Not free for those nights"), or a dead end with no next-free button
+       to carry the date. Blocks fold in with bookings because addBlock puts
+       the reason in `guest`, so an outage appears in Coming up under its own
+       name. */
+    const alreadyOnScreen = !!busy && !!nxt;
     if(!alreadyOnScreen) act.append(why);
     if(nxt){
       // a dead end is a wasted screen — offer the nearest thing that can be sold
@@ -14284,21 +14287,16 @@ function openSheet(fi, day){
       b.onclick = ()=>{ haptic(12); openBooking(fi, nxt.from, Math.min(nxt.nights, 3)); };
       act.append(b);
     }
-    /* The stay in the way is the one the operator is most likely here to
-       change — "he wants two more nights" is asked about the guest who is in,
-       and the room sheet is where the operator is looking when it is asked.
-       Given as a route in the guest's own name, under the sale and above the
-       two repair routes, so it is findable without competing with Book. */
-    if(busy && !isBlock(busy) && !busy.openEnd){
-      const chg = el("div","roomRoutes stay");
-      const c = el("button");
-      c.append(el("b", null, `Change ${busy.guest}'s dates`),
-               el("s", null, (busy.start <= 0 ? `in until ${fmt(busy.end)}` : `${fmt(busy.start)} → ${fmt(busy.end)}`)
-                             + " · keep them longer, or shorter"));
-      c.onclick = ()=>{ haptic(9); openStayDates(busy, ()=> openSheet(fi, day)); };
-      chg.appendChild(c);
-      act.append(chg);
-    }
+    /* NO ROUTE FOR A GUEST WHO IS ALREADY A ROW. This offered "Change Kavan's
+       dates" directly above a Coming up row that names Kavan, states the same
+       dates, and carries the glyph that opens the very same editor. The owner
+       asked for it to go, and he is right: a control is worth its space when
+       it reaches something otherwise hard to find, and a guest who is in the
+       flat is the least hidden thing on this screen.
+
+       The just-left route below is the opposite case and stays. That stay is
+       not in Coming up at all — it is under a heading further down that
+       nobody scrolls to unless they already know it is there. */
   }
 
   /* THE CALL COMES AFTER THEY HAVE GONE. When the flat is free and a guest
