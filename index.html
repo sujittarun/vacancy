@@ -14972,7 +14972,7 @@ function openSheet(fi, day){
   const SHOW = 5;
 
   /* one row builder, two lists — a second copy is how the two drift */
-  const stayRow = (r, into)=>{
+  const stayRow = (r, into, here)=>{
     const row = el("div","row bk");
     row._resv = r;
     const m = el("div","meta");
@@ -14983,13 +14983,25 @@ function openSheet(fi, day){
        any stay already under way, which threw away the one fact the row was
        carrying — when they came — and left two guests in the same flat both
        reading "Now →". The heading says they are here; the row says since when. */
+    /* THE NIGHT COUNT, ONCE. For a guest who is IN, the card at the top of
+       this sheet already reads "Sumit · night 2 of 7" — which states the
+       length AND how far through it they are, and the dates on this line state
+       the span again. Three tellings of the number 7 on one screen. The card
+       keeps it, because progress is the one thing only the card can say; this
+       line keeps the dates and the source, which the card cannot. */
     m.innerHTML = `<b>${esc(r.guest)}</b>`
                 + `<em>${esc(fmt(r.start))} → `
-                + `${r.openEnd ? "no end recorded" : esc(fmt(r.end)) + " · " + r.nights + "n"}`
+                + `${r.openEnd ? "no end recorded"
+                    : esc(fmt(r.end)) + (here ? "" : " · " + r.nights + "n")}`
                 + ` · ${esc(r.src)}</em>`;
     const end = el("div","rowend");
-    end.appendChild(!isBlock(r) && r.amount ? moneyPill(r, fi, day)
-      : el("span","pill", r.openEnd ? "open" : `${r.nights}n`));
+    /* AND THE MONEY SLOT SAYS MONEY OR NOTHING. It used to fall back to "6n"
+       or "open" when a stay had no amount recorded — chosen when this line was
+       clipped to one line and might not have reached the night count. The rows
+       wrap now, so the line always carries it, and the fallback had become a
+       pill restating the words two inches to its left. An empty slot is
+       honest; a pill that repeats the sentence beside it is not. */
+    if(!isBlock(r) && r.amount) end.appendChild(moneyPill(r, fi, day));
     const x2 = el("button","rowx","✕");
     x2.setAttribute("aria-label", `Cancel ${r.guest}'s booking in ${fl.id}`);
     armConfirm(x2, {rest:"✕", armed:"Cancel?",
@@ -15022,7 +15034,7 @@ function openSheet(fi, day){
                  : last.end === 1 ? "out tomorrow" : `out ${fmt(last.end)}`));
     sheetB.appendChild(s0);
     const nl = el("div","card justleft"); nl.style.margin = "0 20px";
-    inNow.forEach(r => stayRow(r, nl));
+    inNow.forEach(r => stayRow(r, nl, true));
     sheetB.appendChild(nl);
   }
 

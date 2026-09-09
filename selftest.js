@@ -2473,10 +2473,16 @@ export async function run(filter) {
       eq(a.k, "dates", "the newest activity kind");
       ok(/now leaves .* not .*2 nights more/.test(a.s), `the line: ${a.s}`);
       eq(a.g, "Extend Fixture", "the guest on the entry");
-      /* the row on the sheet says the new end */
+      /* THE ROW SAYS THE NEW END. This read the night count, which an
+         in-the-flat row no longer prints — the card at the top of the sheet
+         says "night 2 of 6" and printing 6 again here was the third telling.
+         The end DATE is what actually moved, and it is the better assertion
+         anyway: a night count can be right while the dates are wrong. */
       const row = [...document.querySelectorAll(".sheet .row.bk .meta")]
         .find(m => /Extend Fixture/.test(m.textContent));
-      ok(row && /6n/.test(row.textContent), `the sheet row does not show six nights: ${row && row.textContent}`);
+      ok(row, "the extended guest is not on the sheet");
+      ok(row.textContent.includes(fmt(r.end)),
+        `the sheet row does not show the new end ${fmt(r.end)}: ${row.textContent}`);
       const btn = undoButton();
       ok(btn, "no Undo on the toast");
       btn.click();
@@ -4135,6 +4141,67 @@ export async function run(filter) {
     ok(/Nothing moves/.test(m), `an empty day copies as "${m}"`);
     ok(!/•/.test(m), "an empty day copies with bullets in it");
     return m.split("\n").pop();
+  });
+
+  /* "Same data twice — is this okay?" The card at the top of the room sheet
+     reads "Sumit · night 2 of 7" and the row underneath read "8 Sep → 15 Sep ·
+     7n · Airbnb" with a "7n" pill beside it: the number 7 three times on one
+     screen, for one guest. */
+  await test("a staying guest's night count is stated once, not three times", async () => {
+    const keepR = resv.slice();
+    const fi = freeFlat(-2, 12);
+    ok(fi != null, "no flat free for the fixture");
+    resv.push({fi, start: -1, end: 6, nights: 7, guest: "Counted Once",
+               src: "Airbnb", manual: true, pays: []});
+    recompute();
+    try {
+      openSheet(fi, 0);
+      await until(() => document.querySelector(".sheet.on .row.bk"), "the room sheet");
+      const b = document.getElementById("sheetB");
+      const row = [...b.querySelectorAll(".row.bk")].find(x => x.textContent.includes("Counted Once"));
+      ok(row, "the staying guest is not on the sheet");
+      /* THE CARD KEEPS IT, because how far through a stay somebody is, is the
+         one thing only the card can say. */
+      ok(/night 2 of 7/.test(nightStory(fi, 0)),
+        `the card reads "${nightStory(fi, 0)}"`);
+      /* the row keeps the dates and the source, and drops the count */
+      const em = row.querySelector("em").textContent;
+      ok(/Airbnb/.test(em), `the row lost the source: "${em}"`);
+      ok(/→/.test(em), `the row lost its dates: "${em}"`);
+      ok(!/7n/.test(em), `the row still repeats the count: "${em}"`);
+      /* and the money slot says money or nothing — never the sentence again.
+         NOT a digit count over textContent: the DOM concatenates without
+         spaces, so "of 7" runs into "Today" and \b stops matching — which is
+         how this assertion first failed against an app that was correct. */
+      const pill = row.querySelector(".rowend .pill");
+      ok(!pill, `the money slot fell back to a pill reading "${pill && pill.textContent}"`);
+      return "card says how far through, row says when and from where";
+    } finally { closeSheet(); resv = keepR; recompute(); }
+  });
+
+  /* A stay WITH money keeps its pill — that is the slot doing its actual job,
+     and it is also the button for taking the payment. */
+  await test("a stay that is owed money still says so on its row", async () => {
+    const keepR = resv.slice();
+    const fi = freeFlat(-2, 12);
+    ok(fi != null, "no flat free for the fixture");
+    resv.push({fi, start: 2, end: 5, nights: 3, guest: "Owes Money",
+               src: "Direct", manual: true, amount: 9000, pays: []});
+    recompute();
+    try {
+      openSheet(fi, 0);
+      await until(() => document.querySelector(".sheet.on .row.bk"), "the room sheet");
+      const row = [...document.querySelectorAll(".sheet.on .row.bk")]
+        .find(x => x.textContent.includes("Owes Money"));
+      const pill = row.querySelector(".rowend .paid, .rowend .pill");
+      ok(pill, "a stay with money owed has no money pill");
+      ok(/9,000|payout/.test(pill.textContent), `the pill says "${pill.textContent}"`);
+      /* a guest not yet in still gets the night count, because no card is
+         telling anybody how far through a stay that has not started is */
+      ok(/3n/.test(row.querySelector("em").textContent),
+        "a future stay lost its night count as well");
+      return `${pill.textContent} kept, 3n kept on a future stay`;
+    } finally { closeSheet(); resv = keepR; recompute(); }
   });
 
   await test("no text falls below AA in either theme", async () => {
