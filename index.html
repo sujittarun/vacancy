@@ -7163,12 +7163,14 @@ function signOut(silent){
      a reason to discard them. They are host-scoped when they are sent, so they
      keep until the next sign-in and go then. */
   const pending = queue.length;
-  const wasStaff = myRole() === "staff";
   session = null; hostId = null; hostName = ""; me = null; MODE = "sample";
-  /* The cleaner's book goes with the session. It was three days of movements
-     in one building and it means nothing without the login that fetched it. */
-  staffBook = null; turns = {}; turnSave();
-  if(wasStaff && typeof leaveStaff === "function") leaveStaff();
+  /* The cleaner's day goes with the session — three days of movements in one
+     building, meaningless without the login that fetched them. The TURNAROUNDS
+     do not: `turns = {}` was here and wiped the cleaning record on every sign
+     out, including the owner's own, for a session that had nothing to do with
+     it. What is on the server comes back on the next pull; what is not, was
+     somebody's morning. */
+  staffBook = null;
   sessionWipe(); jdel(CLOUD_KEY);
   if(pending){
     /* kept in memory AND on disk, exactly as they were */
@@ -7178,23 +7180,35 @@ function signOut(silent){
   }
   if(tok) fetch(SUPA_URL + "/auth/v1/logout", {method:"POST",
     headers:{apikey:SUPA_KEY, Authorization:"Bearer " + tok}}).catch(()=>{});
-  if(!silent){
-    /* migrateInventory, same as boot — without it a sign-out rebuilt the
-       inventory from the raw stored rows and quietly reverted the Lotus Pond
-       merge on any device that had it. */
-    flats = migrateInventory(loadInventory()) || defaultInventory();
-    NF = flats.length;
-    flatIndex = Object.fromEntries(flats.map((f,i)=>[f.id,i]));
-    usingDemo = !load();
-    /* `else issues = []` used to sit here, and it deleted every logged fault —
-       permanently, with no cloud involved. load() has just restored the local
-       issues from storage two lines above; throwing them away was a leftover
-       from when signing out meant discarding a cloud book. The faults are the
-       flat's repair history, which is the one record that cannot be
-       reconstructed from anything else. */
-    if(usingDemo) seedRealBook();
-    recompute(); paintAcct(); refreshScreen();
-  }
+
+  /* THE BOOK COMES BACK WHETHER OR NOT ANYBODY IS TOLD. This whole block used
+     to sit inside `if(!silent)`, which was harmless while every session held
+     the same SHAPE of book: the local store had the operator's inventory and
+     his stays either way, so leaving memory alone until the next render cost
+     nothing.
+
+     A staff session broke that premise. It replaces `flats` with the two or
+     ten flats of one building and empties `resv` outright, and the silent sign
+     out is the one an expired token fires — which is exactly what happens when
+     the server cannot be reached. So a cleaner's phone losing its connection
+     handed the next person an app showing ten flats, no bookings, and the word
+     "Demo data", with the real book still sitting in storage one call away.
+     Restoring is not a notification; it is putting the book back. */
+  flats = migrateInventory(loadInventory()) || defaultInventory();
+  NF = flats.length;
+  flatIndex = Object.fromEntries(flats.map((f,i)=>[f.id,i]));
+  usingDemo = !load();
+  /* `else issues = []` used to sit here, and it deleted every logged fault —
+     permanently, with no cloud involved. load() has just restored the local
+     issues from storage two lines above; throwing them away was a leftover
+     from when signing out meant discarding a cloud book. The faults are the
+     flat's repair history, which is the one record that cannot be
+     reconstructed from anything else. */
+  if(usingDemo) seedRealBook();
+  recompute();
+  applySeat();
+  paintAcct();
+  if(!silent) refreshScreen();
 }
 
 /* ── reading the book ──────────────────────────────────────────────────────── */
@@ -7288,6 +7302,7 @@ async function staffPull(){
 
   resv = []; issues = []; expenses = []; usingDemo = false;
   recompute();
+  applySeat();
   paintStaff();
 }
 
@@ -7302,6 +7317,7 @@ async function cloudPull(){
      does (sign-in, boot, coming back to the tab, after a flush, pull-to-
      reload) reaches the right one without any of them having to know. */
   if(myRole() === "staff") return staffPull();
+  applySeat();
   /* HOLD_BACK, not eight days: the Profit tab reads finished months off this
      book, and an eight-day window left it 89% empty on a live phone. */
   const from = dayISO(-HOLD_BACK), to = dayISO(DAYS);
@@ -7310,7 +7326,7 @@ async function cloudPull(){
      it: an expense logged on one phone, or written to the table from the
      sheet, never appeared on the other. "We both see the same book" was true
      of the calendar and false of every rupee behind it. */
-  const [bs, fl, st, pm, iss, ex, cl, rm] = await Promise.all([
+  const [bs, fl, st, pm, iss, ex, cl, rm, ci, tr, tc] = await Promise.all([
     rest("GET", "/buildings?select=id,code,name,short_name,sort_order&order=sort_order.asc,code.asc"),
     rest("GET", "/flats?select=id,building_id,code,floor,unit_type,nightly_rate&active=is.true&order=code.asc"),
     rest("GET", "/stays?select=*&ends_on=gt." + from + "&starts_on=lt." + to),
@@ -7319,6 +7335,16 @@ async function cloudPull(){
     rest("GET", "/expenses?select=id,building_id,line,amount,paid_on,note&paid_on=gt." + from + "&order=paid_on.asc"),
     rest("GET", "/cost_lines?select=building_id,line,amount,kind"),
     rest("GET", "/revenue_months?select=building_id,month,amount"),
+    /* THE CLEANING COMES DOWN TOO. It went up from the day it shipped and was
+       never fetched back, so a manager watched "to clean" on every row of the
+       day view while the cleaner's phone showed the same rooms finished. The
+       one question this feature exists to answer -- is 3B done yet -- could
+       only be answered on the phone that did the work. */
+    rest("GET", "/check_items?select=id,unit_type,label,needs_photo,sort"
+              + "&active=is.true&order=sort.asc"),
+    rest("GET", "/turnarounds?select=id,flat_id,day,state,started_at,ready_at"
+              + "&day=gte." + dayISO(-RECENT_OUT) + "&day=lte." + dayISO(DAYS)),
+    rest("GET", "/turn_checks?select=id,turnaround_id,item_id,label,done_at,photo_path"),
   ]);
   const paysBy = {};
   (pm || []).forEach(p => (paysBy[p.stay_id] = paysBy[p.stay_id] || []).push(
@@ -7385,6 +7411,30 @@ async function cloudPull(){
     (finUser[r.month] = finUser[r.month] || {})[code] = Number(r.amount); });
   jset(FINU_STORE, finUser);
   finBust();
+
+  /* The list and the jobs, mapped exactly as a cleaner's phone maps them --
+     one shape, so a tick made on either is read the same way on both. */
+  if(ci && ci.length){
+    checklist = {};
+    ci.forEach(c => (checklist[c.unit_type] = checklist[c.unit_type] || []).push(
+      {id: c.id, label: c.label, photo: !!c.needs_photo, sort: c.sort | 0}));
+    Object.values(checklist).forEach(a => a.sort((x, y) => x.sort - y.sort));
+    checkSave();
+  }
+  const ticksBy = {};
+  (tc || []).forEach(t => (ticksBy[t.turnaround_id] = ticksBy[t.turnaround_id] || []).push(t));
+  turns = {};
+  (tr || []).forEach(t => {
+    const fi2 = byUid[t.flat_id]; if(fi2 === undefined) return;
+    const checks = {};
+    (ticksBy[t.id] || []).forEach(c => {
+      checks[c.item_id] = {label: c.label, at: c.done_at, photo: c.photo_path || null};
+    });
+    turns[flats[fi2].id + "|" + t.day] = {
+      id: t.id, flat: flats[fi2].id, day: t.day, state: t.state,
+      started: t.started_at || undefined, ready: t.ready_at || undefined, checks};
+  });
+  turnSave();
 
   usingDemo = false;
   recompute(); cacheSave();
@@ -17883,20 +17933,32 @@ const moveKind = m => m.out && m.in ? "turn" : m.out ? "out" : "in";
    in the morning is asking one question and it is not "which day is it". */
 let staffDay = 0;
 function enterStaff(){
+  if(document.documentElement.classList.contains("staffmode")) return;
   document.documentElement.classList.add("staffmode");
   document.querySelectorAll(".screen").forEach(x => x.classList.remove("on"));
   document.getElementById("scr-staff").classList.add("on");
   const tb = document.getElementById("tabbar"); if(tb) tb.hidden = true;
 }
 function leaveStaff(){
+  if(!document.documentElement.classList.contains("staffmode")) return;
   document.documentElement.classList.remove("staffmode");
   const tb = document.getElementById("tabbar"); if(tb) tb.hidden = false;
   document.getElementById("scr-staff").classList.remove("on");
   document.getElementById("scr-" + SCREENS[curScreen].id).classList.add("on");
 }
+/* ONE FUNCTION DECIDES WHICH APP THIS IS, and it is driven by the seat rather
+   than by the event that changed it. The shell could ENTER staff mode from
+   three places and could only LEAVE it from signOut — so a phone that had been
+   a cleaner's and was now the owner's kept the cleaner's shell: no tabs, the
+   four screens hidden, every refresh routed to a screen with nobody's data on
+   it. Anything that can change `me` calls this, and it is idempotent. */
+function applySeat(){
+  if(myRole() === "staff") enterStaff();
+  else { staffBook = null; leaveStaff(); }
+}
 
 function paintStaff(){
-  if(myRole() !== "staff"){ if(staffBook) staffBook = null; return; }
+  if(myRole() !== "staff"){ applySeat(); return; }
   enterStaff();
   const host = document.getElementById("scr-staff");
   host.textContent = "";
@@ -18692,6 +18754,7 @@ const SUBS = [
 ];
 /* re-render the current screen in place after the data changes, keeping your place */
 function refreshScreen(){
+  applySeat();
   if(myRole() === "staff"){
     const st = document.getElementById("scr-staff"), top = st.scrollTop;
     paintStaff();

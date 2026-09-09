@@ -2050,6 +2050,15 @@ export async function run(filter) {
       ok(rows > 0 || /nothing yet|looking/.test((document.querySelector(".sheet .m")||{}).textContent||""),
          "the sheet was blank while it waited for the server");
       eq(head, "Everything that has happened", "the sheet did not open");
+      /* Name the intruder. "asked the server 12 times" says a pull got
+         through and nothing about WHICH, and this test has now twice been the
+         place a leaked cloudPull surfaced — once as thirty downstream failures
+         and once as a count that moved from 9 to 12 the day cloudPull grew
+         three more reads. The paths are the diagnosis. */
+      const strays = hits.filter(p => !/app_events/.test(p));
+      eq(strays.length, 0,
+        `${strays.length} request(s) reached the wire that are not the activity `
+        + `sheet's: ${[...new Set(strays.map(p => String(p).split("?")[0]))].join(", ")}`);
       eq(hits.length, 1, `asked the server ${hits.length} times, want 1`);
       ok(/app_events/.test(hits[0]), `asked for the wrong thing: ${hits[0]}`);
       release([]);
@@ -4276,6 +4285,141 @@ export async function run(filter) {
       return `${pill.textContent} kept, 3n kept on a future stay`;
     } finally { closeSheet(); resv = keepR; recompute(); }
   });
+
+  /* ══ one phone, two seats ════════════════════════════════════════════════ */
+
+  /* The owner signed in as staff and back as himself on the same phone and the
+     app was left wrong. The shell could ENTER staff mode from three places and
+     leave it from exactly one, and a staff session replaces `flats` with one
+     building and empties `resv` — so anything that ended the session without
+     going through the full sign-out handed the next person a cleaner's app
+     with nobody's data in it. */
+  const stubStaff = () => async (path) => {
+    if (/token\?grant_type=password/.test(path))
+      return {access_token: "t", refresh_token: "r", expires_in: 3600, user: {id: "u1"}};
+    if (/memberships/.test(path))
+      return [{host_id: "h1", role: "staff", building_ids: ["b1"], hosts: {name: "Crescent Stays"}}];
+    if (/rpc\/staff_flats/.test(path))
+      return [{id: "f1", code: "ZZ-1", unit_type: "1 BHK", building_id: "b1", building: "Zed"}];
+    if (/rpc\/staff_day/.test(path))
+      return [{flat_id: "f1", flat_code: "ZZ-1", unit_type: "1 BHK", building_id: "b1",
+               building: "Zed", checking_out: true, checking_in: false}];
+    return [];
+  };
+  const seatSnap = () => ({
+    role: myRole(),
+    staffmode: document.documentElement.classList.contains("staffmode"),
+    tabbar: !document.getElementById("tabbar").hidden,
+    on: [...document.querySelectorAll(".screen.on")].map(s => s.id).join(","),
+    NF, stays: resv.length,
+  });
+  const restoreSeat = (k) => {
+    resv = k.resv; flats = k.flats; NF = flats.length; issues = k.issues;
+    queue = k.queue; MODE = k.MODE; hostId = k.hostId; session = k.session;
+    me = k.me; usingDemo = k.usingDemo; staffBook = null;
+    flatIndex = Object.fromEntries(flats.map((f, i) => [f.id, i]));
+    turns = JSON.parse(k.turns); turnSave();
+    if (k.store != null) localStorage.setItem(STORE, k.store); else jdel(STORE);
+    if (k.cloud != null) localStorage.setItem(CLOUD_KEY, k.cloud); else jdel(CLOUD_KEY);
+    jset(QUEUE_KEY, queue);
+    applySeat(); recompute();
+  };
+  const holdSeat = () => ({
+    resv: resv.slice(), flats: flats.slice(), issues: issues.slice(),
+    queue: queue.slice(), MODE, hostId, session, me, usingDemo,
+    turns: JSON.stringify(turns),
+    store: localStorage.getItem(STORE), cloud: localStorage.getItem(CLOUD_KEY),
+  });
+
+  /* THE ONE THE OWNER HIT. A silent sign-out is what an expired token fires,
+     and a token expires the moment the server cannot be reached — so a
+     cleaner's phone losing its connection used to hand back an app showing one
+     building, no bookings, and the word "Demo data", with the real book in
+     storage one call away. */
+  await test("a silent sign-out puts the book back, not just a quiet one", async () => {
+    const keep = holdSeat();
+    const realApi = window.api;
+    try {
+      const wasNF = NF, wasStays = bookings().length;
+      ok(wasStays > 10, "the fixture book is too small to prove anything");
+      window.api = stubStaff();
+      await signIn("tt@x.z", "pw");
+      const asStaff = seatSnap();
+      eq(asStaff.NF, 1, "the cleaner should be holding one building's flats");
+      eq(asStaff.stays, 0, "a cleaner's phone is holding stays");
+      /* the token dies — no toast, no tap, exactly what a dead network does */
+      signOut(true);
+      const after = seatSnap();
+      eq(after.NF, wasNF, `${after.NF} flats after a silent sign-out, was ${wasNF}`);
+      eq(bookings().length, wasStays, `${bookings().length} bookings after, was ${wasStays}`);
+      ok(!after.staffmode, "the cleaner's shell survived the sign-out");
+      ok(after.tabbar, "the four tabs are still hidden");
+      return `${wasNF} flats and ${wasStays} bookings restored without a word`;
+    } finally { window.api = realApi; restoreSeat(keep); }
+  });
+
+  /* The shell had one way in and one way out, and they were not the same set
+     of doors. This is the invariant that makes them one. */
+  await test("the seat decides the shell, whichever way the seat changed", async () => {
+    const keep = holdSeat();
+    try {
+      me = {role: "staff", buildings: ["b1"]}; MODE = "live";
+      applySeat();
+      ok(document.documentElement.classList.contains("staffmode"), "staff did not get the staff shell");
+      eq(document.getElementById("tabbar").hidden, true, "staff can still see the four tabs");
+      /* the seat changes without a sign-out — a re-read of the membership, a
+         cache restored from another session, anything */
+      me = {role: "owner", buildings: null};
+      applySeat();
+      ok(!document.documentElement.classList.contains("staffmode"),
+        "the owner is still in the cleaner's shell");
+      eq(document.getElementById("tabbar").hidden, false, "the owner's tabs did not come back");
+      ok(document.getElementById("scr-" + SCREENS[curScreen].id).classList.contains("on"),
+        "no screen is showing");
+      ok(!document.getElementById("scr-staff").classList.contains("on"),
+        "the cleaner's screen is still on show");
+      eq(staffBook, null, "the cleaner's day is still on the owner's phone");
+      /* and it is idempotent, because it is called from every refresh */
+      applySeat(); applySeat();
+      ok(!document.documentElement.classList.contains("staffmode"), "applySeat is not idempotent");
+      return "staff → shell, owner → tabs, both ways, repeatable";
+    } finally { restoreSeat(keep); }
+  });
+
+  /* Turnaround records are the cleaners' work, not a property of the session
+     that happened to be open. `turns = {}` on every sign-out wiped the owner's
+     own cleaning record for a session that had nothing to do with it. */
+  await test("signing out does not erase the cleaning record", async () => {
+    const keep = holdSeat();
+    const realApi = window.api;
+    try {
+      const fi = flats.map((f, i) => i).find(i => freeSpan(i, 0, 2));
+      turnSet(fi, 0, {state: "ready", ready: new Date().toISOString()});
+      const had = Object.keys(turns).length;
+      ok(had > 0, "the fixture job was not recorded");
+      window.api = stubStaff();
+      await signIn("tt@x.z", "pw");
+      signOut(false);
+      ok(Object.keys(turns).length >= 1 || jget(TURN_STORE),
+        "signing out wiped every turnaround this phone knew about");
+      return `${had} job${had === 1 ? "" : "s"} kept across a sign-out`;
+    } finally { window.api = realApi; restoreSeat(keep); }
+  });
+
+  /* The cleaning went UP from the day it shipped and was never fetched back,
+     so a manager watched "to clean" while the cleaner's phone showed done. */
+  await test("the manager's pull brings the cleaning down as well as up", () => {
+    const src = cloudPull.toString();
+    ok(/\/turnarounds\?/.test(src), "cloudPull does not read turnarounds");
+    ok(/\/turn_checks\?/.test(src), "cloudPull does not read the ticks");
+    ok(/\/check_items\?/.test(src), "cloudPull does not read the checklist");
+    /* and it maps them into the same shape a cleaner's phone builds, or a tick
+       made on one is unreadable on the other */
+    ok(/turns\[flats\[fi2\]\.id \+ "\|" \+ t\.day\]/.test(src),
+      "cloudPull keys turnarounds differently from staffPull");
+    return "turnarounds, ticks and the list all come down";
+  });
+
 
   await test("no text falls below AA in either theme", async () => {
     const m = await import("./audit.js?t=" + Date.now());
