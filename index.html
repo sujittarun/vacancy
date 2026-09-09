@@ -1153,6 +1153,55 @@ button{background:none;border:0;padding:0;cursor:pointer;
 /* nothing sticky inside the trough — see the .mlab note; the month name lives
    in the chrome above it instead */
 /* the answer takes whatever is left and scrolls inside it */
+/* ── the clean between two guests ────────────────────────────────────────────
+   A state, a count, and a bar. Nothing here is a colour on its own: `ready` is
+   the free green the whole app uses for a sellable room, because that is what
+   a finished turnaround produces. */
+.turnhead{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:8px}
+.turnstate{font-size:15px;font-weight:660;letter-spacing:-.018em;color:var(--txt)}
+.turnstate.ready{color:var(--free)}
+.turnstate.cleaning{color:var(--now)}
+.turnstate.waiting{color:var(--txt-2)}
+.turncount{font-size:12px;font-weight:620;color:var(--txt-2);font-variant-numeric:tabular-nums}
+.turnbar{height:6px;border-radius:3px;background:var(--surface-3);overflow:hidden}
+.turnbar i{display:block;height:100%;border-radius:3px;background:var(--now);
+  transition:width .3s var(--out)}
+.turnbar i.done{background:var(--free)}
+
+/* one line of the list */
+.checks .row.chk{grid-template-columns:auto 1fr auto;gap:12px;align-items:center}
+/* THE LABEL IS THE CONTENT HERE, so it may not be clipped and it may not be
+   squeezed. A checklist row carries no flat id, so under the shared .row grid
+   of `60px 1fr auto` the label landed in the 60px track and read "Keys ret…".
+   Two columns, and the text wraps. */
+.clist .row.chk{grid-template-columns:1fr auto;gap:12px;align-items:center}
+.clist .meta, .clist .meta b{white-space:normal;overflow:visible;text-overflow:clip}
+.checks .meta, .checks .meta b, .checks .meta em{white-space:normal;overflow:visible;text-overflow:clip}
+.chkbox{width:30px;height:30px;flex:0 0 auto;border-radius:9px;display:grid;place-items:center;
+  background:var(--surface-2);border:1.5px solid var(--line-2);color:var(--free-ink);
+  font-size:15px;font-weight:800;transition:background .18s,border-color .18s,transform .3s var(--spring)}
+.chkbox.on{background:var(--free);border-color:transparent}
+.chkbox:active{transform:scale(.9);transition-duration:.085s}
+/* the camera is open and we are waiting for it: the row must not look dead */
+.chkbox.waiting{opacity:.5}
+.row.chk.on .meta b{color:var(--txt-2)}
+/* the mark that says this one wants a photograph, and the one that opens it */
+.chkcam{font-size:13px;color:var(--txt-3);flex:0 0 auto}
+.chkpic{width:30px;height:30px;flex:0 0 auto;border-radius:9px;display:grid;place-items:center;
+  background:var(--surface-2);border:1px solid var(--line);color:var(--free);font-size:13px}
+.chkcamtog{width:30px;height:30px;flex:0 0 auto;border-radius:9px;display:grid;place-items:center;
+  background:var(--surface-2);border:1px solid var(--line);color:var(--txt-3);font-size:13px;
+  transition:background .18s,color .18s}
+.chkcamtog.on{background:color-mix(in srgb,var(--now) 20%,transparent);color:var(--now-ink);
+  border-color:transparent}
+.turnpic{width:100%;border-radius:var(--r-md);display:block}
+.bkgo.undo{background:var(--surface-2);color:var(--txt-2);border:1px solid var(--line)}
+/* the state pill on a day row, which is also the way into the job */
+.pill.turn{cursor:pointer;font-variant-numeric:tabular-nums}
+.pill.turn.ready{background:color-mix(in srgb,var(--free) 17%,transparent);color:var(--free)}
+.pill.turn.cleaning{background:color-mix(in srgb,var(--now) 18%,transparent);color:var(--now-ink)}
+.pill.turn.waiting{background:var(--surface-3);color:var(--txt-2)}
+
 /* THE DAY'S ROWS SAY TWO THINGS AND BOTH MATTER. The shared .row rule clips
    to one line with an ellipsis, which is right where the second line is a
    reminder — and wrong here, where it carries the balance to collect and the
@@ -6570,6 +6619,144 @@ function payKey(r, pay){
   return stableId(["pay", stayKey(r), pay.amount, pay.method, dayISO(pay.on || 0)]);
 }
 
+/* ══════════════ THE CLEAN BETWEEN TWO GUESTS ════════════════════════════════
+   The one part of this business that is neither a booking nor a repair, and
+   the part with a deadline measured in minutes. The book could always say a
+   turnaround was COMING — the decide board has raised them for months — and
+   had no idea whether one had HAPPENED.
+
+   A job is a flat and a day, so its id is those two things. Deterministic, the
+   same way a stay's is: the cleaner's phone and the manager's phone both
+   compute it without asking each other, which is what lets a tick made on one
+   appear on the other without a round trip to find out what to call it. */
+const turnKey  = (flatUid, day) => stableId(["turn", hostId || "local", flatUid, dayISO(day)]);
+const checkKey = (turnId, itemId) => stableId(["chk", turnId, itemId]);
+
+const TURN_STORE = "vacancy.turnarounds.v1";
+const CHECK_STORE = "vacancy.checklist.v1";
+/* keyed `flatId|YYYY-MM-DD` so a day rolling over cannot renumber yesterday */
+let turns = jget(TURN_STORE) || {};
+/* {unit type: [{id, label, photo, sort}]} — per type, because a studio has no
+   second bedroom and asking about one teaches staff to tick without reading */
+let checklist = jget(CHECK_STORE) || null;
+const turnSave  = ()=>{ jset(TURN_STORE, turns); };
+const checkSave = ()=>{ jset(CHECK_STORE, checklist); };
+
+/* What a turnaround starts as, before anybody has touched it. Written on
+   demand rather than seeded for every flat and day, so an untouched book
+   carries no rows at all. */
+const TURN_STATES = ["waiting", "cleaning", "ready"];
+const turnAt = (fi, day)=>{
+  const f = flats[fi]; if(!f) return null;
+  return turns[f.id + "|" + dayISO(day)] || null;
+};
+/* Which flats need one on a given day: the ones somebody has LEFT. "Whenever
+   there is a tenant vacated" is how the owner put it, and it is the right
+   line — a room nobody has slept in does not need turning, so an arrival into
+   an already-empty flat raises no job and carries no pill. A check-out with
+   nobody following still does: the room has to be cleaned whether or not
+   anybody is waiting at the door.
+
+   Sorted with the rushes first, because a flat with somebody arriving the
+   same day is the one with a deadline on it. */
+function turnJobs(day){
+  const ops = dayOps(day);
+  const arriving = new Map(ops.arrivals.map(r => [r.fi, r]));
+  return ops.departures
+    .map(r => ({fi: r.fi, out: r, in: arriving.get(r.fi) || null,
+                turn: turnAt(r.fi, day), rush: arriving.has(r.fi)}))
+    .sort((a, b)=> (b.rush - a.rush) || a.fi - b.fi);
+}
+
+/* The list for a flat, by its type, falling back to a starter set the first
+   time anybody opens one. The fallback is NOT written to storage: an owner who
+   has never opened the editor should not find a list they did not make, and
+   the moment they save one this stops being reached. */
+const STARTER_CHECKS = [
+  ["Keys returned", 0], ["AC remote present", 1], ["TV remote present", 1],
+  ["Geyser working", 0], ["Bed linen changed", 0], ["Towels replaced", 0],
+  ["Bathroom cleaned", 0], ["Kitchen cleaned", 0], ["Bins emptied", 0],
+  ["Nothing left behind", 1],
+];
+function checksFor(type){
+  if(checklist && checklist[type]) return checklist[type].filter(i => !i.off);
+  return STARTER_CHECKS.map(([label, photo], i)=>
+    ({id: stableId(["ci", type, label]), label, photo: !!photo, sort: i, starter: 1}));
+}
+const unitTypes = ()=> [...new Set(flats.map(f => f.type))].sort();
+/* Two to a bedroom, which is how the operator quotes it: a studio and a 1 BHK
+   sleep two, a 2 BHK four, a 3 BHK six, a 4 BHK eight. Read off the type's own
+   leading digit rather than a table, so a flat type nobody has thought of yet
+   still gets a sensible number instead of a wrong one. A penthouse is named,
+   not numbered, and is the largest thing in this book. */
+function paxFor(type){
+  const t = String(type || "");
+  const m = /^\s*(\d+)\s*BHK/i.exec(t);
+  if(m) return Math.max(1, Math.min(12, (+m[1]) * 2));
+  if(/penthouse/i.test(t)) return 8;
+  return 2;                       // studio, and anything unnamed
+}
+
+/* How far along, as a fraction and as a sentence. `of` counts the list as it
+   stands NOW, and `done` counts ticks that were made against whatever the list
+   said at the time — an owner editing the checklist mid-morning must not make
+   a finished room look unfinished, so a job with every tick it needs is done
+   even if the list has since grown. */
+function turnProgress(fi, day){
+  const f = flats[fi]; if(!f) return {state:"waiting", done:0, of:0, pct:0};
+  const t = turnAt(fi, day);
+  const of = checksFor(f.type).length;
+  const done = t ? Object.keys(t.checks || {}).length : 0;
+  return {state: (t && t.state) || "waiting", done, of,
+          pct: of ? Math.min(1, done / of) : 0, t};
+}
+
+function turnSet(fi, day, patch){
+  const f = flats[fi]; if(!f) return null;
+  const key = f.id + "|" + dayISO(day);
+  const t = turns[key] || {id: turnKey(f.uid || f.id, day), flat: f.id,
+                           day: dayISO(day), state: "waiting", checks: {}};
+  Object.assign(t, patch);
+  turns[key] = t;
+  turnSave();
+  if(MODE === "live" && f.uid)
+    enqueue({k:"turn~", id:t.id, body:{
+      id: t.id, flat_id: f.uid, day: t.day, state: t.state,
+      started_at: t.started || null, ready_at: t.ready || null,
+      by_user: session && session.uid}});
+  return t;
+}
+
+function turnTick(fi, day, item, photoPath){
+  const f = flats[fi]; if(!f) return null;
+  const t = turnSet(fi, day, {});
+  const now = new Date().toISOString();
+  t.checks = t.checks || {};
+  t.checks[item.id] = {label: item.label, at: now, photo: photoPath || null};
+  /* the first tick is what starts the clock — nobody presses "begin" */
+  if(!t.started){ t.started = now; t.state = "cleaning"; }
+  turns[f.id + "|" + dayISO(day)] = t;
+  turnSave();
+  if(MODE === "live" && f.uid){
+    enqueue({k:"turn~", id:t.id, body:{
+      id: t.id, flat_id: f.uid, day: t.day, state: t.state,
+      started_at: t.started || null, ready_at: t.ready || null,
+      by_user: session && session.uid}});
+    enqueue({k:"chk+", id: checkKey(t.id, item.id), body:{
+      id: checkKey(t.id, item.id), turnaround_id: t.id, item_id: item.id,
+      label: item.label, done_at: now, photo_path: photoPath || null,
+      by_user: session && session.uid}});
+  }
+  return t;
+}
+function turnUntick(fi, day, item){
+  const f = flats[fi]; if(!f) return;
+  const t = turnAt(fi, day); if(!t || !t.checks) return;
+  delete t.checks[item.id];
+  turnSave();
+  if(MODE === "live") enqueue({k:"chk-", id: checkKey(t.id, item.id)});
+}
+
 /* ── THE FIRST SIGN-IN IS THE DANGEROUS ONE ──────────────────────────────────
    This used to be: authenticate, cloudPull(), jdel(STORE). cloudPull replaces
    flats and resv wholesale with whatever the server has, and jdel throws the
@@ -6717,14 +6904,26 @@ async function signIn(email, password){
   cacheSave();
   paintAcct();
 }
+/* WHICH SEAT THE PERSON HOLDING THE PHONE IS IN. The book has three: the owner
+   who watches, the managers who run it, and — from this release — the people
+   who clean between guests, who see the day's rooms and nothing else.
+
+   Sample mode answers "owner", because a demo with a disabled control is a
+   demo of the wrong thing. */
+let me = null;                       // {role, buildings} once signed in
+const myRole = ()=> MODE === "live" ? ((me && me.role) || "manager") : "owner";
+const myBuildings = ()=> (me && me.buildings) || null;   // null = all of them
+
 async function loadHost(){
-  const rows = await rest("GET", "/memberships?select=host_id,role,hosts(name,slug)");
+  const rows = await rest("GET",
+    "/memberships?select=host_id,role,building_ids,hosts(name,slug)");
   if(!rows || !rows.length){
     const e = new Error("This login is not attached to a property yet.");
     e.status = 403; throw e;
   }
   hostId = rows[0].host_id;
   hostName = (rows[0].hosts && rows[0].hosts.name) || "";
+  me = {role: rows[0].role || "manager", buildings: rows[0].building_ids || null};
 }
 function signOut(silent){
   const tok = session && session.access_token;
@@ -6735,7 +6934,7 @@ function signOut(silent){
      a reason to discard them. They are host-scoped when they are sent, so they
      keep until the next sign-in and go then. */
   const pending = queue.length;
-  session = null; hostId = null; hostName = ""; MODE = "sample";
+  session = null; hostId = null; hostName = ""; me = null; MODE = "sample";
   sessionWipe(); jdel(CLOUD_KEY);
   if(pending){
     /* kept in memory AND on disk, exactly as they were */
@@ -6980,6 +7179,18 @@ function runOp(op){
                     + "&line=eq." + encodeURIComponent(op.body.line), undefined, MIN);
     case "rev~":  return rest("POST",  "/revenue_months", {...op.body, host_id:hostId},
                     {Prefer:"return=minimal,resolution=merge-duplicates"});
+    /* THE CLEAN. Upserts on the row's own id, which both phones derive from
+       the flat and the day — so the cleaner starting a job and the manager
+       watching it are writing to the same row without either having asked the
+       other what it is called. */
+    case "turn~": return rest("POST",  "/turnarounds", {...op.body, host_id:hostId},
+                    {Prefer:"return=minimal,resolution=merge-duplicates"});
+    case "chk+":  return rest("POST",  "/turn_checks", {...op.body, host_id:hostId},
+                    {Prefer:"return=minimal,resolution=merge-duplicates"});
+    case "chk-":  return rest("DELETE","/turn_checks?id=eq." + op.id, undefined, MIN);
+    case "item~": return rest("POST",  "/check_items", {...op.body, host_id:hostId},
+                    {Prefer:"return=minimal,resolution=merge-duplicates"});
+    case "item-": return rest("DELETE","/check_items?id=eq." + op.id, undefined, MIN);
   }
   return Promise.resolve();
 }
@@ -9599,6 +9810,15 @@ function renderRooms(){
     + `<span>Inventory · ${NF} flats</span>`;
   inv.onclick = ()=>{ haptic(10); openInventory(); };
   note.appendChild(inv);
+  /* The list the cleaners work from, reachable from the screen that owns the
+     rooms rather than buried in a job. */
+  if(CAN_EDIT_CHECKS()){
+    const cl = el("button","copybtn");
+    cl.innerHTML = '<svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M7 3.5h6a1.5 1.5 0 0 1 1.5 1.5v11A1.5 1.5 0 0 1 13 17.5H7A1.5 1.5 0 0 1 5.5 16V5A1.5 1.5 0 0 1 7 3.5Z"/><path d="M8 8l1.2 1.2L12 6.6M8 13l1.2 1.2L12 11.6"/></svg>'
+      + `<span>Turnaround checks</span>`;
+    cl.onclick = ()=>{ haptic(10); openChecklist(unitTypes()[0] || "3 BHK"); };
+    note.appendChild(cl);
+  }
 
   s.append(hero, stayWrap, nightsWrap, tilesWrap, note);
 
@@ -15603,7 +15823,10 @@ function openRate(key, monthKey){
 function openExpense(code, monthKey, after){
   sheetWipe();
   const B = buildingsOf();
-  if(!code && B.length) code = B[0].code;
+  /* No default here. It used to fall back to the first building, which now
+     runs BEFORE the chip row asks which building was used last and quietly
+     beat it — an expense logged against Madhapur reopened on TreeTops. The
+     fallback lives with the chips, where it can be the remembered one. */
   const t = el("div");
   t.innerHTML = `<div class="n">Log an expense</div>`
               + `<div class="m">a one-off, on the day it happened</div>`;
@@ -15626,32 +15849,82 @@ function openExpense(code, monthKey, after){
     nm.style.cssText = "flex:1 1 auto;font-size:12.5px;color:var(--txt-2)";
     row.append(nm, node); form.appendChild(row); return node;
   };
-  const bSel = el("select");
-  bSel.style.cssText = "flex:0 0 170px";
-  bSel.setAttribute("aria-label","Which building this expense is for");
-  B.forEach(b=>{ const o = el("option", null, b.name); o.value = b.code;
-    if(b.code === code) o.selected = true; bSel.appendChild(o); });
-  mk("Building", bSel);
 
-  const lSel = el("select");
-  lSel.style.cssText = "flex:0 0 170px";
-  lSel.setAttribute("aria-label","Which cost line this belongs to");
-  const fillLines = ()=>{
-    const keep = lSel.value;
-    lSel.textContent = "";
-    costLines(bSel.value).forEach(k=>{ const o = el("option", null, k); o.value = k;
-      if(k === keep) o.selected = true; lSel.appendChild(o); });
-    if(!keep) lSel.value = "Maintenance";
-  };
-  fillLines();
-  bSel.onchange = fillLines;
-  mk("Cost line", lSel);
+  /* ── THE AMOUNT, FIRST AND BIG ─────────────────────────────────────────────
+     The form asked Building, then Cost line, then Amount — and the first two
+     were <select>s, which on a phone are not a tap but a full-screen wheel:
+     tap, wait, scroll, Done, twice, before reaching the one field the operator
+     actually came holding a number for. Measured against the owner's own
+     complaint, logging one receipt was seven interactions.
 
+     So the number comes first with the keypad already up, and the two
+     questions behind it are chip rows: every answer visible, one tap each, no
+     wheel. Both remember what was used last, because the honest pattern is
+     the same building and the same line over and over — which makes the
+     ordinary receipt "type the amount, Save". */
+  const amtWrap = el("div","bkamt");
+  amtWrap.appendChild(el("s", null, "₹"));
   const amt = el("input");
-  amt.type = "tel"; amt.inputMode = "numeric"; amt.placeholder = "₹";
+  amt.type = "tel"; amt.inputMode = "numeric"; amt.placeholder = "What it cost";
   amt.setAttribute("aria-label","What it cost");
-  amt.style.cssText = "flex:0 0 170px;text-align:right";
-  mk("Amount", amt);
+  amtWrap.appendChild(amt);
+  form.appendChild(amtWrap);
+
+  /* the last one logged, so the next one is nearly free */
+  const LAST_EXP = "vacancy.lastexpense.v1";
+  const last = jget(LAST_EXP) || {};
+  let bCode = code || (B.some(z => z.code === last.code) ? last.code : (B[0] && B[0].code));
+  const lines = ()=> costLines(bCode);
+  let line = lines().indexOf(last.line) >= 0 ? last.line
+           : (lines().indexOf("Maintenance") >= 0 ? "Maintenance" : lines()[0]);
+
+  const bCap = el("div","bkcap");
+  bCap.append(el("span", null, "Which building"), el("span", null, "tap one"));
+  const bRow = el("div","roomfilt");
+  const lCap = el("div","bkcap");
+  const lCapR = el("span", null, "tap one");
+  lCap.append(el("span", null, "What kind of cost"), lCapR);
+  const lRow = el("div","roomfilt");
+
+  const paintB = ()=>{
+    bRow.textContent = "";
+    B.forEach(b=>{
+      const c = el("button", null, b.short || b.name);
+      c.type = "button";
+      c.setAttribute("aria-selected", String(b.code === bCode));
+      c.setAttribute("aria-label", `Log it against ${b.name}`);
+      c.onclick = ()=>{ haptic(8); bCode = b.code;
+        if(lines().indexOf(line) < 0) line = lines()[0];
+        paintB(); paintL(); paint(); };
+      bRow.appendChild(c);
+    });
+  };
+  const paintL = ()=>{
+    lRow.textContent = "";
+    const ls = lines();
+    lCapR.textContent = `${ls.length} line${ls.length === 1 ? "" : "s"}`;
+    ls.forEach(k=>{
+      const c = el("button", null, k);
+      c.type = "button";
+      c.setAttribute("aria-selected", String(k === line));
+      c.setAttribute("aria-label", `File it under ${k}`);
+      c.onclick = ()=>{ haptic(8); line = k; paintL(); paint(); };
+      lRow.appendChild(c);
+    });
+    showChosen();
+  };
+  /* Eleven cost lines do not fit a phone, and the one already chosen — the one
+     the operator used last — was the one hanging off the right edge. Measured:
+     with Maintenance selected it sat sixth, half cut off, so the form opened
+     looking as though nothing was chosen.
+     offsetLeft is 0 on a node that is not in the document yet, so this is a
+     named function rather than an inline line: paintL runs while the form is
+     still being built, and it has to run again once the form is on screen. */
+  const showChosen = ()=>{
+    const on = lRow.querySelector('[aria-selected="true"]');
+    if(on && on.offsetParent) lRow.scrollLeft = Math.max(0, on.offsetLeft - 12);
+  };
+  form.append(bCap, bRow, lCap, lRow);
 
   const when = el("input");
   when.type = "date";
@@ -15693,48 +15966,59 @@ function openExpense(code, monthKey, after){
   note.style.cssText = "flex:0 0 170px";
   mk("Note", note);
 
+  const go = el("button","bkgo","Save");
   const live = el("div");
   live.style.cssText = "margin:8px 0 2px;font-size:12px;line-height:1.5;color:var(--txt-3)";
   const paint = ()=>{
     const v = Math.round(+amt.value || 0), mk2 = monthOf(when.value);
+    /* BEFORE THE EARLY RETURN. The button's state was set on the last two
+       lines of this function, which an empty form never reaches — so Save sat
+       enabled and inviting over "Nothing entered yet." and did nothing when
+       pressed. A control that looks live and is not is worse than one that is
+       plainly out. */
+    go.disabled = !(v > 0 && mk2);
+    go.textContent = v > 0 ? `Log ${money(v)}` : "Save";
     if(!v || !mk2){ live.textContent = "Nothing entered yet."; return; }
-    const b = B.find(z=> z.code === bSel.value);
-    const std = costFor(bSel.value)[lSel.value];
-    live.innerHTML = `<b>${money(v)}</b> against ${esc(b ? b.name : bSel.value)} in `
+    const b = B.find(z=> z.code === bCode);
+    const std = costFor(bCode)[line];
+    live.innerHTML = `<b>${money(v)}</b> against ${esc(b ? b.name : bCode)} in `
       + `${MON[+mk2.slice(5,7)-1]} ${mk2.slice(0,4)}`
-      + (std ? ` — replacing the standing ${esc(lSel.value)} of ${money(std)} for that month alone.` : ".");
+      + (std ? ` — replacing the standing ${esc(line)} of ${money(std)} for that month alone.` : ".");
   };
   [amt, when].forEach(n=> n.addEventListener("input", paint));
-  [bSel, lSel].forEach(n=> n.addEventListener("change", paint));
   if(opts.length) syncChips();
-  paint();
+  paintB(); paintL(); paint();
   form.appendChild(live);
 
-  const go = el("button","bkgo","Save");
   go.onclick = ()=>{
     const v = Math.round(+amt.value || 0);
     if(!(v > 0) || !when.value) return;
     const eid = uuid();
     expenses.push({id: eid,
-                   code: bSel.value, line: lSel.value, amount: v,
+                   code: bCode, line, amount: v,
                    on: when.value, note: note.value.trim() || undefined});
     expSave();
+    jset(LAST_EXP, {code: bCode, line});      // the next receipt starts here
     if(MODE === "live") enqueue({k:"exp+", id:eid, body:{
-      building_id: bidOf(bSel.value), line: lSel.value, amount: v,
+      building_id: bidOf(bCode), line, amount: v,
       paid_on: when.value, note: note.value.trim() || null,
       created_by: session && session.uid }});
-    track("expense_logged", {code: bSel.value, line: lSel.value, month: monthOf(when.value)});
-    logAct("expense", `Logged ${money(v)} · ${lSel.value} · `
-      + `${(B.find(z=>z.code===bSel.value)||{}).name || bSel.value} · paid ${when.value}`);
+    track("expense_logged", {code: bCode, line, month: monthOf(when.value)});
+    logAct("expense", `Logged ${money(v)} · ${line} · `
+      + `${(B.find(z=>z.code===bCode)||{}).name || bCode} · paid ${when.value}`);
     haptic(18); closeSheet(); refreshScreen();
-    const b = B.find(z=> z.code === bSel.value);
-    toast("", `<b>${money(v)} logged.</b> ${esc(b ? b.name : bSel.value)} · ${esc(lSel.value)} · `
+    const b = B.find(z=> z.code === bCode);
+    toast("", `<b>${money(v)} logged.</b> ${esc(b ? b.name : bCode)} · ${esc(line)} · `
       + `${esc(when.value)}`, null);
     if(after) after();
   };
   form.appendChild(go);
   sheetB.appendChild(form);
   sheet.classList.add("on"); scrim.classList.add("on");
+  sheetB.scrollTop = 0;
+  showChosen();                     // now that the row has a width to measure
+  /* the keypad, unasked. The amount is why anybody opened this sheet. */
+  setTimeout(()=> amt.focus(), 120);
 }
 
 /* ── THE MONTH'S LEDGER ──────────────────────────────────────────────────────
@@ -16058,15 +16342,21 @@ function openBooking(fi, from, nights){
   amt.type = "text"; amt.inputMode = "numeric"; amt.placeholder = "Total";
   amt.setAttribute("aria-label","Total agreed for the stay");
   amtWrap.appendChild(amt);
-  let pax = 2, touchedAmt = false;
+  /* HOW MANY PEOPLE A FLAT USUALLY TAKES. Two was the default for a studio and
+     for a four-bedroom penthouse alike, so the larger flats were re-counted by
+     hand on every booking — four taps on a 3 BHK, six on a Penthouse, every
+     time, for a number the flat itself already implies. Two to a bedroom is
+     the operator's own rule; the stepper still moves for the party that does
+     not fit it. */
+  let pax = paxFor(fl.type), touchedAmt = false;
   amt.addEventListener("input", ()=>{ touchedAmt = true; });
   const step = el("div","step");
-  const pLess = el("button",null,"−"), pMore = el("button",null,"+"), paxN = el("b","","2");
+  const pLess = el("button",null,"−"), pMore = el("button",null,"+"), paxN = el("b","",String(pax));
   pLess.setAttribute("aria-label","Fewer guests"); pMore.setAttribute("aria-label","More guests");
   const setPax = v => { pax = Math.max(1, Math.min(12, v)); paxN.textContent = pax;
     pLess.disabled = pax <= 1; pMore.disabled = pax >= 12; haptic(5); };
   pLess.onclick = ()=> setPax(pax-1); pMore.onclick = ()=> setPax(pax+1);
-  step.append(pLess, paxN, pMore); setPax(2);
+  step.append(pLess, paxN, pMore); setPax(pax);
   row.append(amtWrap, step);
 
   let src = "Direct";
@@ -16772,6 +17062,23 @@ function openDay(d, focus){
       });
     body.appendChild(sum);
 
+    /* THE DAY'S CLEANING, IN ONE SENTENCE. A manager wants "four rooms still
+       to do" before they want any single room, and until now the app could
+       only have told them by opening four sheets. */
+    const jobs = turnJobs(d).filter(j => !code || (flats[j.fi] && flats[j.fi].code === code));
+    if(jobs.length){
+      const st = {ready:0, cleaning:0, waiting:0};
+      jobs.forEach(j => st[turnProgress(j.fi, d).state]++);
+      const line = el("p","ratesay");
+      line.innerHTML = st.ready === jobs.length
+        ? `<b>Every room is ready.</b> ${jobs.length} turned around${where ? " in " + esc(where) : ""}.`
+        : [st.ready && `<b>${st.ready}</b> ready`,
+           st.cleaning && `<b>${st.cleaning}</b> being cleaned`,
+           st.waiting && `<b>${st.waiting}</b> not started`]
+            .filter(Boolean).join(" · ");
+      body.appendChild(line);
+    }
+
     if(!total){
       const e = el("div","blocked");
       e.innerHTML = where
@@ -16803,20 +17110,38 @@ function openDay(d, focus){
       body.appendChild(card);
     };
 
+    /* WHERE THE CLEAN HAS GOT TO. A check-out creates the need for one, so
+       every row in these two groups carries its state — and the pill is the
+       way in, because "is 3B done yet" is the question this screen is opened
+       to answer and it should not need a second screen to answer it. */
+    const turnPill = (fi, row)=>{
+      const p = turnProgress(fi, d);
+      const b = el("button","pill turn " + p.state);
+      b.textContent = p.state === "ready" ? "ready"
+                    : p.state === "cleaning" ? `${p.done}/${p.of}` : "to clean";
+      b.setAttribute("aria-label", p.state === "ready"
+        ? `${flats[fi].id} is ready for the next guest — open the checks`
+        : `${flats[fi].id}, ${p.done} of ${p.of} checked — open the checks`);
+      b.onclick = ev=>{ ev.stopPropagation(); haptic(10);
+        openTurn(fi, d, ()=> openDay(d, focus)); };
+      row.append(b);
+    };
     group("turnovers", "Turnaround", "clean in the gap", turnovers, (m, t2, fl, row)=>{
       /* BOTH HALVES ON ONE ROW. This is the whole point of the view: the flat,
          who is out, who is in, and what is coming. */
       m.innerHTML = `<b>${esc(t2.out.guest)}</b> out → <b>${esc(t2.in.guest)}</b> in`
         + `<em>${esc(fl.type)} · ${esc(fl.bshort)} · ${t2.in.nights} night${t2.in.nights>1?"s":""}`
         + ` · ${esc(t2.in.src || "Direct")}</em>`;
-      row.append(m, el("span","pill warn", "same day"));
+      row.append(m);
+      turnPill(t2.fi, row);
     });
     group("departures", "Leaving", "nobody in behind them", outOnly, (m, r, fl, row)=>{
-      const next = runFrom(r.fi, d), due = dueFrom(r);
+      const due = dueFrom(r);
       m.innerHTML = `<b>${esc(r.guest)}</b> out · stayed ${r.nights} night${r.nights>1?"s":""}`
         + `<em>${esc(fl.type)} · ${esc(fl.bshort)}`
         + (due > 0 ? ` · <b class="hi-now">${esc(money(due))} still due</b>` : "") + `</em>`;
-      row.append(m, el("span", next ? "pill good" : "pill", next ? `${next} nt open` : "free"));
+      row.append(m);
+      turnPill(r.fi, row);
     });
     group("arrivals", "Arriving", "into an empty room", inOnly, (m, r, fl, row)=>{
       const due = dueFrom(r);
@@ -16859,58 +17184,334 @@ function openDay(d, focus){
   sheetB.scrollTop = 0;
 }
 
-function openOps(kind, d){
-  const ops = dayOps(d);
-  const list = ops[kind];
-  const TITLE = {arrivals:"Arriving", departures:"Leaving", turnovers:"Same-day turnaround"};
-  const BLANK = {
-    arrivals:"Nobody is checking in.",
-    departures:"Nobody is checking out.",
-    turnovers:"No room has a check-out and a check-in on the same day — no rush cleans."
-  };
-  sheetWipe();
+/* ── PHOTOGRAPHS ──────────────────────────────────────────────────────────────
+   `capture` asks the phone for the camera rather than the gallery. It is a
+   REQUEST, not a guarantee: iOS Safari honours it and opens the camera
+   directly, some Android browsers still offer a chooser, and a desktop
+   ignores it entirely. Nothing a web page can do closes that gap, so the app
+   does not pretend to — it asks for the camera, records how old the file
+   was when it arrived, and says so where the photo is read.
 
-  const t = el("div");
-  t.innerHTML = `<div class="n">${TITLE[kind]}</div><div class="m">${fmtL(d)}${d===0?" · today":""}</div>`;
-  const x = el("button",null,"✕"); x.setAttribute("aria-label","Close"); x.onclick = closeSheet;
-  sheetH.append(t, x);
-
-  if(kind === "turnovers" && list.length){
-    const warn = el("p");
-    warn.style.cssText = "margin:16px 20px 0;font-size:13px;line-height:1.55;color:var(--txt-2)";
-    warn.innerHTML = `<b class="hi-now">${list.length} room${list.length>1?"s":""} must be cleaned between a check-out and a check-in on the same day.</b> These are the ones that go wrong.`;
-    sheetB.appendChild(warn);
-  }
-
-  const card = el("div","card");
-  card.style.margin = "16px 20px 0";
-  if(!list.length) card.appendChild(el("div","empty", BLANK[kind]));
-
-  list.forEach(item=>{
-    const fi = kind === "turnovers" ? item.fi : item.fi;
-    const fl = flats[fi];
-    const row = el("button","row");
-    row.append(el("div","id", fl.id));
-    const m = el("div","meta");
-    if(kind === "arrivals"){
-      m.innerHTML = `<b>${esc(item.guest)}</b> · ${item.nights} night${item.nights>1?"s":""}<em>${esc(fl.type)} · ${esc(fl.bshort)} · out ${fmt(item.end)}</em>`;
-      row.append(m, el("span","pill", item.src));
-    } else if(kind === "departures"){
-      m.innerHTML = `<b>${esc(item.guest)}</b> · stayed ${item.nights} night${item.nights>1?"s":""}<em>${esc(fl.type)} · ${esc(fl.bshort)}</em>`;
-      const next = runFrom(fi, d);
-      row.append(m, el("span", next ? "pill good" : "pill", next ? `${next} nt open` : "re-let same day"));
-    } else {
-      m.innerHTML = `<b>${esc(item.out.guest)}</b> out → <b>${esc(item.in.guest)}</b> in<em>${esc(fl.type)} · ${esc(fl.bshort)} · ${item.in.nights} night${item.in.nights>1?"s":""}</em>`;
-      row.append(m, el("span","pill warn","clean today"));
-    }
-    row.onclick = ()=>{ haptic(9); openSheet(fi, d); };
-    card.appendChild(row);
+   The age check catches the ordinary case, which is somebody picking last
+   week's picture out of the gallery. It cannot catch a photograph taken thirty
+   seconds ago in the wrong room, and nothing here claims it does. */
+const FRESH_MS = 8 * 60 * 1000;
+function askForPhoto(){
+  return new Promise(resolve=>{
+    const inp = el("input");
+    inp.type = "file";
+    inp.accept = "image/*";
+    inp.setAttribute("capture", "environment");
+    inp.style.cssText = "position:fixed;left:-9999px;width:1px;height:1px";
+    document.body.appendChild(inp);
+    inp.onchange = ()=>{
+      const f = inp.files && inp.files[0];
+      inp.remove();
+      if(!f) return resolve(null);
+      const age = Date.now() - (f.lastModified || Date.now());
+      resolve({file: f, fresh: age <= FRESH_MS, age});
+    };
+    /* A cancelled picker fires no event on most browsers, so the promise would
+       hang and the row would sit disabled for ever. Resolve on the way back to
+       the page instead, unless a file has already arrived. */
+    let settled = false;
+    const orig = resolve;
+    resolve = v =>{ if(!settled){ settled = true; orig(v); } };
+    addEventListener("focus", ()=> setTimeout(()=>{
+      if(!settled && !(inp.files && inp.files.length)){ inp.remove(); resolve(null); }
+    }, 700), {once: true});
+    inp.click();
   });
-  sheetB.appendChild(card);
-
-  sheet.classList.add("on"); scrim.classList.add("on");
-  sheetB.scrollTop = 0; x.focus();
 }
+
+/* Held on the device until it can go up. A photo is the slowest thing this app
+   moves and the one most likely to be taken in a lift with no signal, so it is
+   written to the job first and uploaded when there is a network — the tick is
+   never blocked on a byte leaving the phone. */
+const PHOTO_STORE = "vacancy.photos.v1";
+let photoQueue = jget(PHOTO_STORE) || {};
+function keepPhoto(path, dataUrl){
+  photoQueue[path] = dataUrl;
+  try{ jset(PHOTO_STORE, photoQueue); }
+  catch(e){ /* storage full: the tick still stands, the picture is what is lost */ }
+}
+const readAsDataUrl = f => new Promise(res=>{
+  const r = new FileReader(); r.onload = ()=> res(r.result); r.onerror = ()=> res(null);
+  r.readAsDataURL(f);
+});
+
+/* ── ONE CLEAN ────────────────────────────────────────────────────────────────
+   The screen a cleaner works from and the screen a manager reads. Same list,
+   same ticks, same photographs — a second, prettier view for the manager
+   would be a second thing to keep true. */
+function openTurn(fi, day, backTo){
+  const fl = flats[fi];
+  const dayIso = dayISO(day);
+  const paint = ()=>{
+    const items = checksFor(fl.type);
+    const t = turnAt(fi, day);
+    const done = t && t.checks ? t.checks : {};
+    const doneN = items.filter(i => done[i.id]).length;
+    const ops = dayOps(day);
+    const out = ops.departures.find(r => r.fi === fi);
+    const inn = ops.arrivals.find(r => r.fi === fi);
+
+    sheetWipe();
+    const h = el("div");
+    h.innerHTML = `<div class="n">${esc(fl.id)}</div>`
+      + `<div class="m">${esc(fl.type)} · ${esc(fl.bshort)} · `
+      + (out && inn ? `${esc(out.guest)} out → ${esc(inn.guest)} in`
+         : out ? `${esc(out.guest)} out · nobody in behind them`
+         : inn ? `${esc(inn.guest)} arriving`
+         : "no movement recorded") + `</div>`;
+    const x = el("button", null, backTo ? "‹" : "✕");
+    x.setAttribute("aria-label", backTo ? "Back" : "Close");
+    x.onclick = backTo || closeSheet;
+    sheetH.append(h, x);
+
+    /* where the job is, in one line and one bar */
+    const st = (t && t.state) || "waiting";
+    const head = el("div","turnhead");
+    const lab = el("div","turnstate " + st);
+    lab.textContent = st === "ready" ? "Ready for the next guest"
+                    : st === "cleaning" ? "Being cleaned" : "Not started";
+    const cnt = el("div","turncount", `${doneN} of ${items.length}`);
+    head.append(lab, cnt);
+    const bar = el("div","turnbar"); const fillEl = el("i");
+    fillEl.style.width = (items.length ? doneN / items.length * 100 : 0).toFixed(1) + "%";
+    if(st === "ready") fillEl.classList.add("done");
+    bar.appendChild(fillEl);
+    const wrap = el("div"); wrap.style.cssText = "padding:14px 20px 0";
+    wrap.append(head, bar);
+    if(t && (t.started || t.ready)){
+      const when = el("p","ratesay");
+      when.textContent = [t.started && "started " + clockOf(t.started),
+                          t.ready && "ready " + clockOf(t.ready)].filter(Boolean).join(" · ");
+      wrap.appendChild(when);
+    }
+    sheetB.appendChild(wrap);
+
+    const card = el("div","card checks"); card.style.cssText = "margin:14px 20px 0";
+    items.forEach(item=>{
+      const hit = done[item.id];
+      const row = el("div","row chk" + (hit ? " on" : ""));
+      const box = el("button","chkbox" + (hit ? " on" : ""));
+      box.innerHTML = hit ? "✓" : "";
+      box.setAttribute("aria-pressed", hit ? "true" : "false");
+      box.setAttribute("aria-label", (hit ? "Undo " : "Tick ") + item.label);
+      const m = el("div","meta");
+      m.innerHTML = `<b>${esc(item.label)}</b>`
+        + (hit ? `<em>${esc(clockOf(hit.at))}${hit.photo ? " · photo" : ""}`
+                 + (hit.stale ? " · <b class=\"hi-now\">picture was not fresh</b>" : "") + `</em>`
+           : item.photo ? `<em>needs a photo</em>` : "");
+      row.append(box, m);
+
+      const tick = async ()=>{
+        if(hit){ turnUntick(fi, day, item); haptic(8); paint(); return; }
+        if(item.photo){
+          box.classList.add("waiting");
+          const got = await askForPhoto();
+          box.classList.remove("waiting");
+          if(!got) return;                       // cancelled: the tick does not happen
+          const path = `${hostId || "local"}/${turnKey(fl.uid || fl.id, day)}/${item.id}.jpg`;
+          const url = await readAsDataUrl(got.file);
+          if(url) keepPhoto(path, url);
+          const t2 = turnTick(fi, day, item, path);
+          if(t2 && !got.fresh) t2.checks[item.id].stale = 1, turnSave();
+          haptic(14);
+        } else {
+          turnTick(fi, day, item);
+          haptic(10);
+        }
+        paint();
+      };
+      box.onclick = tick;
+      if(item.photo && hit && hit.photo){
+        const see = el("button","chkpic");
+        see.textContent = "◉";
+        see.setAttribute("aria-label", "See the photo for " + item.label);
+        see.onclick = ()=> openPhoto(hit.photo, item.label, ()=> paint());
+        row.append(see);
+      } else if(item.photo && !hit){
+        row.append(el("span","chkcam","▣"));
+      }
+      card.appendChild(row);
+    });
+    sheetB.appendChild(card);
+
+    /* the one button, and it refuses until the list is done */
+    const left = items.length - doneN;
+    const go = el("button","bkgo");
+    go.style.cssText = "margin:16px 20px 0;width:calc(100% - 40px)";
+    if(st === "ready"){
+      go.textContent = "Mark it not ready";
+      go.classList.add("undo");
+      go.onclick = ()=>{ haptic(10); turnSet(fi, day, {state:"cleaning", ready:null});
+        logAct("clean", `${fl.id} put back to being cleaned`, {flat: fl.id}); paint(); };
+    } else {
+      go.textContent = left ? `${left} still to check` : "Ready for the next guest";
+      go.disabled = !!left;
+      go.onclick = ()=>{
+        haptic(18);
+        turnSet(fi, day, {state:"ready", ready: new Date().toISOString()});
+        logAct("clean", `${fl.id} is ready for the next guest · ${items.length} checked`,
+               {flat: fl.id});
+        toast("", `<b>${esc(fl.id)} is ready.</b> ${items.length} checked${
+          inn ? ` · ${esc(inn.guest)} can go in` : ""}.`, fi);
+        paint(); refreshScreen();
+      };
+    }
+    sheetB.appendChild(go);
+
+    if(CAN_EDIT_CHECKS()){
+      const edit = el("button","costsbtn");
+      edit.style.cssText = "margin:12px 20px 0;width:calc(100% - 40px)";
+      edit.append(el("span", null, `Edit the ${fl.type} checklist`),
+                  el("em", null, `${items.length} item${items.length===1?"":"s"} ›`));
+      edit.onclick = ()=>{ haptic(9); openChecklist(fl.type, ()=> paint()); };
+      sheetB.appendChild(edit);
+    }
+    sheetB.scrollTop = 0;
+  };
+  paint();
+  sheet.classList.add("on"); scrim.classList.add("on");
+}
+const clockOf = iso =>{ const d = new Date(iso);
+  return isNaN(d) ? "" : String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0"); };
+/* Only the people who run the book shape the list. A cleaner ticking it must
+   not be able to shorten it. */
+const CAN_EDIT_CHECKS = ()=> myRole() !== "staff";
+
+function openPhoto(path, label, backTo){
+  sheetWipe();
+  const t = el("div");
+  t.innerHTML = `<div class="n">${esc(label)}</div><div class="m">photographed on the job</div>`;
+  const x = el("button", null, "‹"); x.setAttribute("aria-label","Back"); x.onclick = backTo || closeSheet;
+  sheetH.append(t, x);
+  const box = el("div"); box.style.cssText = "padding:14px 20px 0";
+  const local = photoQueue[path];
+  if(local){
+    const img = el("img","turnpic"); img.src = local; img.alt = label;
+    box.appendChild(img);
+  } else {
+    const e = el("div","blocked");
+    e.innerHTML = `<b>Not on this phone.</b> The picture was taken on another device and `
+      + `has not been fetched here yet.`;
+    box.appendChild(e);
+  }
+  sheetB.appendChild(box);
+  sheet.classList.add("on"); scrim.classList.add("on");
+}
+
+/* ── THE LIST ITSELF ──────────────────────────────────────────────────────────
+   Per flat type, edited by the owner or a manager. Adding an item does not
+   reopen a job that is already finished — see turnProgress. */
+function openChecklist(type, backTo){
+  const paint = ()=>{
+    const items = checksFor(type);
+    sheetWipe();
+    const h = el("div");
+    h.innerHTML = `<div class="n">${esc(type)} checklist</div>`
+      + `<div class="m">${items.length} item${items.length===1?"":"s"} · `
+      + `${items.filter(i=>i.photo).length} need a photo</div>`;
+    const x = el("button", null, backTo ? "‹" : "✕");
+    x.setAttribute("aria-label", backTo ? "Back" : "Close");
+    x.onclick = backTo || closeSheet;
+    sheetH.append(h, x);
+
+    const why = el("p","ratesay"); why.style.cssText = "margin:14px 20px 0";
+    why.innerHTML = `Ticked on every turnaround in a <b>${esc(type)}</b>. `
+      + `Tap the camera to make an item need a photograph — keep those few, `
+      + `because a thirty-minute clean is not thirty minutes of photography.`;
+    sheetB.appendChild(why);
+
+    const card = el("div","card clist"); card.style.cssText = "margin:12px 20px 0";
+    items.forEach((item, i)=>{
+      const row = el("div","row chk");
+      const m = el("div","meta");
+      m.innerHTML = `<b>${esc(item.label)}</b>`;
+      const cam = el("button","chkcamtog" + (item.photo ? " on" : ""));
+      cam.textContent = "▣";
+      cam.setAttribute("aria-pressed", item.photo ? "true" : "false");
+      cam.setAttribute("aria-label", (item.photo ? "Stop asking" : "Ask")
+        + " for a photo of " + item.label);
+      cam.onclick = ()=>{ haptic(8); saveList(type, items.map((z,j)=>
+        j === i ? {...z, photo: !z.photo} : z)); paint(); };
+      const del = el("button","rowx","✕");
+      del.setAttribute("aria-label", "Remove " + item.label);
+      armConfirm(del, {rest:"✕", armed:"Remove?", run:()=>{
+        saveList(type, items.filter((z,j)=> j !== i)); paint(); }});
+      const end = el("div","rowend"); end.append(cam, del);
+      row.append(m, end);
+      card.appendChild(row);
+    });
+    if(!items.length) card.appendChild(el("div","empty","Nothing to check yet."));
+    sheetB.appendChild(card);
+
+    const form = el("div","bkform");
+    const inp = el("input");
+    inp.type = "text"; inp.placeholder = "Add something to check";
+    inp.setAttribute("aria-label", "A new item for the " + type + " checklist");
+    const add = el("button","bkgo","Add it");
+    const take = ()=>{
+      const label = inp.value.trim();
+      if(!label) return;
+      saveList(type, items.concat([{id: uuid(), label, photo:false, sort: items.length}]));
+      haptic(12); paint();
+    };
+    add.onclick = take;
+    inp.addEventListener("keydown", e=>{ if(e.key === "Enter"){ e.preventDefault(); take(); }});
+    form.append(inp, add);
+    sheetB.appendChild(form);
+
+    /* the same list, for every other type, in one tap */
+    const others = unitTypes().filter(z => z !== type);
+    if(others.length){
+      const s2 = el("div","sheet-s"); s2.style.cssText = "margin:18px 20px 6px";
+      s2.append(el("span","lbl","Other types"), el("span","lbl","each has its own list"));
+      sheetB.appendChild(s2);
+      const row = el("div","roomfilt"); row.style.cssText = "padding:0 20px";
+      others.forEach(z=>{
+        const b = el("button");
+        b.append(el("span", null, z), el("i", null, String(checksFor(z).length)));
+        b.setAttribute("aria-label", `Edit the ${z} checklist`);
+        b.onclick = ()=>{ haptic(9); openChecklist(z, backTo); };
+        row.appendChild(b);
+      });
+      sheetB.appendChild(row);
+    }
+    sheetB.scrollTop = 0;
+  };
+  paint();
+  sheet.classList.add("on"); scrim.classList.add("on");
+}
+
+function saveList(type, items){
+  checklist = checklist || {};
+  const was = checklist[type] || [];
+  checklist[type] = items.map((z, i)=> ({id: z.id, label: z.label, photo: !!z.photo, sort: i}));
+  checkSave();
+  if(MODE === "live"){
+    checklist[type].forEach(z => enqueue({k:"item~", id:z.id, body:{
+      id: z.id, unit_type: type, label: z.label, needs_photo: z.photo, sort: z.sort, active: true}}));
+    /* an item the owner removed has to be removed there too, or it comes back
+       on the next phone that pulls */
+    was.filter(z => !items.some(y => y.id === z.id))
+       .forEach(z => enqueue({k:"item-", id:z.id}));
+  }
+  logAct("checks", `Changed the ${type} checklist · ${items.length} item${items.length===1?"":"s"}`);
+}
+
+/* openOps is gone. It was three sheets behind three tiles — Arriving, Leaving,
+   Turnaround — and openDay above answers all three at once, which is what the
+   tiles now open. Nothing called it any more.
+
+   Its "62 nt open" pill went with it, and that is the point rather than a side
+   effect: the owner counted the same fact in four places and asked for it
+   once. How long a room stays empty after a check-out is a SELLING question,
+   and the room sheet's Open stretches, the strip and the tiles all answer it
+   already. What the day view needs in that slot is the thing nothing else on
+   the screen says — whether the room has been cleaned. */
 
 /* ── inventory editor ─────────────────────────────────────────────────────── */
 function openInventory(editing){

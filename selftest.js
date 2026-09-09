@@ -112,13 +112,42 @@ async function test(name, fn) {
     results.push({ name, pass: false, detail: String(e && e.message || e) });
     try { window.__done = (window.__done || 0) + 1; } catch (e) {}
   } finally {
+    /* LET THE IN-FLIGHT WRITES LAND FIRST. A test that stubs the network and
+       holds the answer releases it on the way out — so its eight parallel
+       reads resolve AFTER this block would have run, and cloudPull assigns
+       `flats = []` to an inventory this code has already put back. The next
+       test then snapshots the emptiness as its own starting point and every
+       one after it fails with "no flat free for the fixture".
+       Restoring before the dust settles is not restoring. */
+    await wait(30);
     // every test runs against the real book; put it back exactly
     try {
-      if (JSON.stringify(flats) !== snapF) applyInventory(JSON.parse(snapF));
+      /* A RESTORE MUST BE DUMB AND TOTAL. This used applyInventory, which is a
+         MIGRATION: it re-keys every booking through the old flat list, logs an
+         activity line, and writes to storage. Handed the good snapshot after a
+         test had emptied `flats`, it mapped every row through an empty list —
+         and if it threw, the catch below swallowed it and left the inventory
+         empty for good, because the NEXT test then snapshotted the emptiness
+         as its own starting point. That is how one leaked stub turned into
+         thirty failures reading "no flat free for the fixture".
+         Restoring is not migrating. Put the three variables back. */
+      if (JSON.stringify(flats) !== snapF) {
+        flats = JSON.parse(snapF);
+        NF = flats.length;
+        flatIndex = Object.fromEntries(flats.map((f, i) => [f.id, i]));
+      }
       resv = JSON.parse(snapR);
       recompute();
       window.closeGate && closeGate();
       closeSheet();
+      /* AND CLEAR THE TOASTS. A test that cancels a booking or extends a stay
+         raises one, and they linger for up to twenty seconds — so a run left a
+         stack of "Ended Fixture now leaves 12 Sep" over the app, which the
+         owner saw while watching the preview and reasonably read as the app
+         shouting at him. They are also a hazard inside the suite itself:
+         undoButton() searches every toast on screen, so one left by an earlier
+         test is a button a later test can click by mistake. */
+      document.querySelectorAll(".toast").forEach(t => t.remove());
     } catch (e) { /* a restore failure is reported by the next test failing */ }
   }
 }
@@ -372,8 +401,10 @@ export async function run(filter) {
     const fi = flats.findIndex((f, i) => freeSpan(i, 0, 2));
     addBooking(fi, 0, 2, '<img src=x onerror="window.__pwn=1">Raj', "Direct", { amount: 5000 });
     recompute();
-    openOps("arrivals", 0);
-    await until(() => document.querySelector(".sheet .meta"), "the arrivals sheet to render");
+    /* openDay, since the three ops sheets became one. The claim is unchanged:
+       a guest name is text wherever it is drawn. */
+    openDay(0);
+    await until(() => document.querySelector(".sheet .meta"), "the day sheet to render");
     const injected = !!document.querySelector(".sheet img[src='x']");
     const ran = window.__pwn === 1;
     delete window.__pwn;
@@ -1886,11 +1917,23 @@ export async function run(filter) {
   await test("the activity sheet paints before the network answers, and asks once", async () => {
     const realFetch = window.fetch, realRest = window.rest;
     const wasMode = MODE, wasHost = hostId, wasWho = typeof actWho !== "undefined" ? actWho : null;
+    /* NOTHING ELSE MAY USE THE WIRE WHILE IT IS STUBBED. This test counts the
+       requests the activity sheet makes, and it makes them through a stub that
+       answers [] to everything — so a background cloudPull slipping through
+       the same stub both breaks the count (nine requests, not one) and, far
+       worse, hands the app an empty book and an empty INVENTORY. That is
+       exactly what happened: flats went to zero here and every later test
+       failed with "no flat free for the fixture", thirty of them, which read
+       for three runs like test pollution and was this.
+       flush() calls cloudPull when needPull is set and the queue has drained,
+       so both are cleared for the duration and put back afterwards. */
+    const wasNeed = needPull, wasQueue = queue.slice(), wasFlats = flats.slice(), wasNF = NF;
     const hits = [];
     let release;
     const held = new Promise(r => { release = r; });
     try {
       MODE = "live"; hostId = "h1";
+      needPull = false; queue = [];
       actWho = {};                                  // membership already known
       window.rest = async (m, p)=>{ hits.push(p); await held; return []; };
       openActivity();
@@ -1910,6 +1953,14 @@ export async function run(filter) {
       release && release([]);
       window.fetch = realFetch; window.rest = realRest;
       MODE = wasMode; hostId = wasHost; actWho = wasWho;
+      needPull = wasNeed; queue = wasQueue; jset(QUEUE_KEY, queue);
+      /* and the inventory, in case a pull got through anyway — an empty one
+         is the single most destructive thing a leaked stub can leave behind */
+      if(flats.length !== wasNF){
+        flats = wasFlats; NF = wasNF;
+        flatIndex = Object.fromEntries(flats.map((f, i) => [f.id, i]));
+        recompute();
+      }
       closeSheet();
     }
   });
@@ -2840,7 +2891,7 @@ export async function run(filter) {
     sheetOf("data", () => openDataSheet(), () => document.querySelector(".sheet .blocked"));
     sheetOf("activity", () => openActivity(), () => document.querySelector(".sheet .n"));
     sheetOf("inventory", () => openInventory(), () => document.querySelector(".sheet .row, .sheet .card"));
-    sheetOf("arrivals", () => openOps("arrivals", 0), () => document.querySelector(".sheet .n"));
+    sheetOf("the day", () => openDay(0), () => document.querySelector(".sheet .n"));
 
     const was = {seg: pulseSeg, a: sel.a, n: sel.n, lean: calLean, code: monthCode, ask: askText};
     const bad = [], seen = [];
@@ -3205,6 +3256,313 @@ export async function run(filter) {
     eq(ins.length, new Set(ins).size, "two guests arrive in one flat today");
     return `${resv.length} stays across ${NF} flats, none overlapping`;
   });
+
+  /* ══ the clean between two guests ═══════════════════════════════════════ */
+
+  /* The app could always say a turnaround was COMING and had no idea whether
+     one had HAPPENED. This is the whole loop: the job appears because somebody
+     left, the first tick starts the clock, an item the owner marked cannot be
+     ticked without a photograph, and the room is not ready until the list is. */
+  await test("a clean runs from the first tick to ready, and refuses to finish early", async () => {
+    const keepChecks = checklist, keepTurns = JSON.stringify(turns);
+    const keepAct = activity.slice(), stored = localStorage.getItem(STORE);
+    const fi = flats.map((f, i) => i).find(i => freeSpan(i, -3, 5));
+    ok(fi != null, "no flat free for the fixture");
+    const type = flats[fi].type;
+    resv.push({fi, start: -3, end: 0, nights: 3, guest: "Cleaner Out", src: "Direct",
+               manual: true, pays: []});
+    resv.push({fi, start: 0, end: 3, nights: 3, guest: "Cleaner In", src: "Direct",
+               manual: true, pays: []});
+    recompute();
+    try {
+      /* a departure raises the job; an arrival into an already-empty room
+         does not, because nobody has slept in it */
+      const jobs = turnJobs(0);
+      ok(jobs.some(j => j.fi === fi && j.rush), "a same-day turnaround is not raised as a job");
+      const arriveOnly = dayOps(0).arrivals.find(r => !dayOps(0).departures.some(z => z.fi === r.fi));
+      if (arriveOnly)
+        ok(!jobs.some(j => j.fi === arriveOnly.fi),
+          "an arrival into an empty room is being raised as a clean");
+
+      /* two items, one of which the owner says needs a photograph */
+      saveList(type, [
+        {id: "t-plain", label: "Bins emptied", photo: false},
+        {id: "t-photo", label: "TV remote present", photo: true},
+      ]);
+      eq(turnProgress(fi, 0).state, "waiting", "a job starts as anything but waiting");
+
+      openTurn(fi, 0);
+      await until(() => document.querySelector(".sheet.on .chkbox"), "the clean sheet");
+      const boxes = () => [...document.querySelectorAll(".sheet.on .chkbox")];
+      eq(boxes().length, 2, "items on the sheet");
+      const go = () => document.querySelector(".sheet.on .bkgo");
+      ok(go().disabled, "ready is offered before anything is checked");
+
+      /* the plain one ticks, and that first tick is what starts the clock —
+         nobody presses "begin" */
+      boxes()[0].click();
+      await until(() => turnProgress(fi, 0).state === "cleaning", "the clock to start");
+      const t = turnAt(fi, 0);
+      ok(t.started, "the job records no start time");
+      eq(Object.keys(t.checks).length, 1, "ticks recorded");
+      ok(t.checks["t-plain"].at, "the tick carries no time");
+      ok(go().disabled, "ready is offered with an item outstanding");
+      ok(/1 still to check/.test(go().textContent), `the button says "${go().textContent}"`);
+
+      /* THE PHOTO ITEM. Cancelling the camera must not tick it — the whole
+         point of marking an item is that a tick without a picture is not a
+         tick. Simulated by refusing the picker the way a cancel does. */
+      const realAsk = window.askForPhoto;
+      try {
+        window.askForPhoto = async () => null;
+        boxes()[1].click();
+        await wait(120);
+        eq(Object.keys(turnAt(fi, 0).checks).length, 1,
+          "an item that needs a photo was ticked without one");
+      } finally { window.askForPhoto = realAsk; }
+
+      /* with a picture, it ticks and the room can be finished */
+      turnTick(fi, 0, {id: "t-photo", label: "TV remote present"}, "local/x/y.jpg");
+      openTurn(fi, 0);
+      await until(() => document.querySelector(".sheet.on .bkgo"), "the sheet again");
+      ok(!go().disabled, "ready is refused with every item checked");
+      ok(/Ready for the next guest/.test(go().textContent), `the button says "${go().textContent}"`);
+      go().click();
+      await until(() => turnProgress(fi, 0).state === "ready", "the room to go ready");
+      ok(turnAt(fi, 0).ready, "the job records no ready time");
+      ok(/is ready for the next guest/.test(activity[0].s), `not logged: ${activity[0].s}`);
+      return "raised, started on the first tick, refused without a photo, ready on the last";
+    } finally {
+      closeSheet();
+      resv = resv.filter(r => !/^Cleaner /.test(r.guest || ""));
+      recompute();
+      checklist = keepChecks; checkSave();
+      turns = JSON.parse(keepTurns); turnSave();
+      if (stored != null) localStorage.setItem(STORE, stored);
+      activity.length = 0; keepAct.forEach(a => activity.push(a)); jset(LOG_STORE, activity);
+    }
+  });
+
+  /* A studio has no second bedroom, and asking about one teaches staff to tick
+     without reading. */
+  await test("each flat type carries its own checklist, and editing one leaves the others alone", async () => {
+    const keep = checklist, keepAct = activity.slice();
+    try {
+      const types = unitTypes();
+      ok(types.length >= 2, "the book has only one flat type, so this proves nothing");
+      const before = types.map(t => checksFor(t).length);
+      saveList(types[0], checksFor(types[0]).concat([{id: "only-here", label: "Balcony swept", photo: true}]));
+      eq(checksFor(types[0]).length, before[0] + 1, "the edited type did not grow");
+      types.slice(1).forEach((t, i) =>
+        eq(checksFor(t).length, before[i + 1], `${t} changed when ${types[0]} was edited`));
+      ok(checksFor(types[0]).some(i => i.label === "Balcony swept" && i.photo),
+        "the new item did not keep its photo flag");
+      /* removing it takes it away again, and only from that type */
+      saveList(types[0], checksFor(types[0]).filter(i => i.id !== "only-here"));
+      eq(checksFor(types[0]).length, before[0], "the item was not removed");
+      ok(/Changed the/.test(activity[0].s), `not logged: ${activity[0].s}`);
+      return `${types.length} types, ${before.join("/")} items, edits stay put`;
+    } finally {
+      checklist = keep; checkSave();
+      activity.length = 0; keepAct.forEach(a => activity.push(a)); jset(LOG_STORE, activity);
+    }
+  });
+
+  /* Two phones must agree what a job is called without asking each other. */
+  await test("a clean has the same id on any phone, and a tick belongs to it", () => {
+    const fi = 0, f = flats[fi];
+    const a = turnKey(f.uid || f.id, 0), b = turnKey(f.uid || f.id, 0);
+    eq(a, b, "the same flat and day produced two different ids");
+    ok(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(a),
+      `not a uuid Postgres will take: ${a}`);
+    ok(turnKey(f.uid || f.id, 0) !== turnKey(f.uid || f.id, 1), "two days share one id");
+    ok(turnKey(flats[1].uid || flats[1].id, 0) !== a, "two flats share one id");
+    eq(checkKey(a, "item-1"), checkKey(a, "item-1"), "a tick's id is not stable");
+    ok(checkKey(a, "item-1") !== checkKey(a, "item-2"), "two items share one tick id");
+    return "stable per flat and day, distinct across both";
+  });
+
+  /* The manager's question is "is 3B done yet", and it should not need a
+     second screen to answer. */
+  await test("the day view carries every clean's state, and opens it", async () => {
+    const keepTurns = JSON.stringify(turns), stored = localStorage.getItem(STORE);
+    const fi = flats.map((f, i) => i).find(i => freeSpan(i, -3, 3));
+    ok(fi != null, "no flat free for the fixture");
+    resv.push({fi, start: -3, end: 0, nights: 3, guest: "Pill Fixture", src: "Direct",
+               manual: true, pays: []});
+    recompute();
+    try {
+      openDay(0);
+      await until(() => document.querySelector(".sheet.on .dayrows .row"), "the day view");
+      const rowOf = () => [...document.querySelectorAll(".sheet.on .dayrows .row")]
+        .find(x => /Pill Fixture/.test(x.textContent));
+      ok(rowOf(), "the departing flat is not on the day view");
+      const pill = () => rowOf().querySelector(".pill.turn");
+      ok(pill(), "a flat somebody has left carries no clean state");
+      eq(pill().textContent, "to clean", "an untouched clean does not say so");
+      /* the count line agrees with the pills */
+      const jobs = turnJobs(0).length;
+      const pills = document.querySelectorAll(".sheet.on .pill.turn").length;
+      eq(pills, jobs, `${pills} pills against ${jobs} jobs`);
+      /* and the pill is the way in */
+      pill().click();
+      await until(() => document.querySelector(".sheet.on .chkbox"), "the clean, from the pill");
+      ok(document.querySelector(".sheet.on .n").textContent === flats[fi].id,
+        "the pill opened somebody else's flat");
+      return `${jobs} jobs, ${pills} pills, each one a door`;
+    } finally {
+      closeSheet();
+      resv = resv.filter(r => r.guest !== "Pill Fixture");
+      recompute();
+      turns = JSON.parse(keepTurns); turnSave();
+      if (stored != null) localStorage.setItem(STORE, stored);
+    }
+  });
+
+  /* ══ the small frictions ════════════════════════════════════════════════ */
+
+  /* "Number of guests should default: 1 BHK or studio 2, 2 BHK 4, 3 BHK 6,
+     4 BHK 8." Two was the default for a studio and a penthouse alike, so every
+     larger flat was re-counted by hand on every booking. */
+  await test("the guest count starts at what the flat sleeps", async () => {
+    eq(paxFor("Studio"), 2, "a studio");
+    eq(paxFor("1 BHK"), 2, "a 1 BHK");
+    eq(paxFor("2 BHK"), 4, "a 2 BHK");
+    eq(paxFor("3 BHK"), 6, "a 3 BHK");
+    eq(paxFor("4 BHK"), 8, "a 4 BHK");
+    eq(paxFor("Penthouse"), 8, "a penthouse");
+    eq(paxFor(""), 2, "a type nobody has named");
+    ok(paxFor("12 BHK") <= 12, "the stepper's own ceiling is not respected");
+    /* and the form actually opens on it — the pax stepper is the SECOND .step
+       on the sheet, the first being the nights one */
+    const shown = {};
+    for (const ty of unitTypes()) {
+      const fi = flats.map((f, i) => i).find(i => flats[i].type === ty && freeSpan(i, 0, 2));
+      if (fi == null) continue;
+      openBooking(fi, 0, 2);
+      await until(() => document.querySelectorAll(".sheet.on .step b").length >= 2, `the ${ty} form`);
+      const steps = [...document.querySelectorAll(".sheet.on .step b")];
+      shown[ty] = +steps[steps.length - 1].textContent;
+      eq(shown[ty], paxFor(ty), `the ${ty} booking form opens on the wrong count`);
+      closeSheet();
+      await wait(40);
+    }
+    ok(Object.keys(shown).length >= 3, `only ${Object.keys(shown).length} types could be checked`);
+    return Object.entries(shown).map(([t, n]) => `${t} ${n}`).join(" · ");
+  });
+
+  /* "Logging expenses is a bit of a hassle, needs to tap a few times." Two
+     <select>s on a phone are two full-screen wheels, in front of the one field
+     the operator opened the sheet holding a number for. */
+  await test("an expense is the amount, then two taps that remember themselves", async () => {
+    const keepExp = expenses.slice(), keepLast = localStorage.getItem("vacancy.lastexpense.v1");
+    const keepAct = activity.slice();
+    try {
+      openExpense(null, dayISO(0).slice(0, 7));
+      await until(() => document.querySelector(".sheet.on .bkamt input"), "the expense form");
+      const sheet = () => document.querySelector(".sheet.on");
+      /* no wheels: every answer is visible and one tap away */
+      eq(sheet().querySelectorAll("select").length, 0, "the form still uses a dropdown");
+      const rows = () => [...sheet().querySelectorAll(".roomfilt")];
+      eq(rows().length, 2, "the building and cost-line chip rows");
+      eq(rows()[0].children.length, buildingsOf().length, "a building is missing from the chips");
+      ok(rows()[1].children.length >= 3, "the cost lines are not offered as chips");
+      /* the amount comes first, and Save refuses an empty form */
+      const first = sheet().querySelector(".bkform > *");
+      ok(first.classList.contains("bkamt"), `the form leads with ${first.className}`);
+      const go = () => sheet().querySelector(".bkgo");
+      ok(go().disabled, "Save is live with nothing entered");
+      /* pick a building and a line that are NOT the defaults, then log it */
+      const b2 = [...rows()[0].children].find(c => c.getAttribute("aria-selected") === "false");
+      const wantB = b2.textContent;
+      b2.click(); await wait(60);
+      const l2 = [...rows()[1].children].find(c => c.getAttribute("aria-selected") === "false");
+      const wantL = l2.textContent;
+      l2.click(); await wait(60);
+      const amt = sheet().querySelector(".bkamt input");
+      amt.value = "3100"; amt.dispatchEvent(new Event("input"));
+      await wait(80);
+      ok(!go().disabled, "Save is refused with an amount entered");
+      ok(/3,100/.test(go().textContent), `the button does not name the figure: ${go().textContent}`);
+      go().click();
+      await until(() => expenses.length === keepExp.length + 1, "the expense to be logged");
+      const e = expenses[expenses.length - 1];
+      eq(e.amount, 3100, "the amount logged");
+      eq(e.line, wantL, "the cost line logged");
+
+      /* THE POINT: the next one starts where the last one ended, so a second
+         receipt for the same building and line is the amount and Save. */
+      document.querySelectorAll(".toast").forEach(t => t.remove());
+      openExpense(null, dayISO(0).slice(0, 7));
+      await until(() => document.querySelector(".sheet.on .roomfilt"), "the form again");
+      eq(rows()[0].querySelector('[aria-selected="true"]').textContent, wantB,
+        "the building was not remembered");
+      eq(rows()[1].querySelector('[aria-selected="true"]').textContent, wantL,
+        "the cost line was not remembered");
+      /* and the remembered line is ON SCREEN, not hanging off the right edge */
+      const on = rows()[1].querySelector('[aria-selected="true"]');
+      const rr = rows()[1].getBoundingClientRect(), ro = on.getBoundingClientRect();
+      ok(ro.left >= rr.left - 1 && ro.right <= rr.right + 1,
+        `the chosen cost line is off screen: ${on.textContent}`);
+      return `${wantB} · ${wantL} remembered, amount and Save is the whole of the next one`;
+    } finally {
+      closeSheet();
+      expenses.length = 0; keepExp.forEach(e => expenses.push(e)); expSave();
+      if (keepLast != null) localStorage.setItem("vacancy.lastexpense.v1", keepLast);
+      else localStorage.removeItem("vacancy.lastexpense.v1");
+      activity.length = 0; keepAct.forEach(a => activity.push(a)); jset(LOG_STORE, activity);
+      document.querySelectorAll(".toast").forEach(t => t.remove());
+    }
+  });
+
+  /* "I don't need this open night info, we are showing this in multiple places
+     and no point showing 62 nt open." How long a room stays empty is a selling
+     question the strip, the tiles and Open stretches all answer already. */
+  await test("the day view spends its one pill on the clean, not on nights nobody asked about", async () => {
+    const stored = localStorage.getItem(STORE), keepTurns = JSON.stringify(turns);
+    const fi = flats.map((f, i) => i).find(i => freeSpan(i, -3, 3));
+    ok(fi != null, "no flat free for the fixture");
+    resv.push({fi, start: -3, end: 0, nights: 3, guest: "Pill Only", src: "Direct",
+               manual: true, pays: []});
+    recompute();
+    try {
+      openDay(0);
+      await until(() => document.querySelector(".sheet.on .dayrows .row"), "the day view");
+      const txt = document.querySelector(".sheet.on").textContent;
+      ok(!/nt open/.test(txt), "the day view still counts nights nobody asked for");
+      ok(!/re-let same day/.test(txt), "the old leaving pill is still there");
+      const row = [...document.querySelectorAll(".sheet.on .dayrows .row")]
+        .find(x => /Pill Only/.test(x.textContent));
+      const pills = row.querySelectorAll(".pill");
+      eq(pills.length, 1, `a leaving row carries ${pills.length} pills`);
+      ok(pills[0].classList.contains("turn"), "the one pill is not the clean's state");
+      /* and openOps is gone rather than merely unreachable */
+      eq(typeof window.openOps, "undefined", "the three old sheets are still in the file");
+      return "one pill, and it says whether the room has been cleaned";
+    } finally {
+      closeSheet();
+      resv = resv.filter(r => r.guest !== "Pill Only");
+      recompute();
+      turns = JSON.parse(keepTurns); turnSave();
+      if (stored != null) localStorage.setItem(STORE, stored);
+    }
+  });
+
+  /* A NOTE WHERE A TEST BRIEFLY WAS. While chasing the cascade above I added a
+     guard in cloudPull refusing to replace a non-empty inventory with an empty
+     answer, and a test for it, on the reasoning that save() has refused to
+     write an empty book over a stored one since day one.
+
+     It was wrong, and the suite said so. rest() throws on any non-2xx, so an
+     empty array is not a failed read — it is a 200 saying this host has no
+     flats, which is precisely the state a first sign-in is in. The guard
+     returned early from cloudPull, adoption never ran, and "signing in to an
+     empty server adopts the book instead of erasing it" went red. That test
+     exists because erasing the operator's book on first sign-in was once a
+     real bug, and it outranks a symmetry argument.
+
+     Both were reverted. The cascade's actual cause was the stub above reaching
+     a background pull, which is fixed where it happens. */
 
   /* ══ the whole surface ══════════════════════════════════════════════════ */
 
