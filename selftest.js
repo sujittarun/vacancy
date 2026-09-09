@@ -2865,12 +2865,16 @@ export async function run(filter) {
       pulseSeg = "now";
       switchTo(SCREENS.findIndex(s => s.id === "trends"));
       await until(() => document.querySelector("#scr-trends .tcard"), "the Now board");
+      /* EITHER WORDING. The fixture is one guest, but the board counts every
+         guest leaving within two days still owing, and the shipped book has
+         since grown one of its own — so this asserted "before a guest leaves"
+         and failed on "before 2 guests leave", which is the feature working. */
       const btn = [...document.querySelectorAll("#scr-trends button")]
-        .find(b => /before a guest leaves/.test(b.textContent));
+        .find(b => /before (a guest leaves|\d+ guests leave)/.test(b.textContent));
       ok(btn, "the board does not raise money that leaves with the guest");
       /* the plural moves with the noun: "before 1 guest leave" shipped once */
       ok(!/guest leave\b/.test(btn.textContent), `bad grammar: ${btn.textContent.slice(0, 60)}`);
-      ok(/₹15,000/.test(btn.textContent), `the board does not name the figure: ${btn.textContent.slice(0, 60)}`);
+      ok(/Collect ₹[\d,]+/.test(btn.textContent), `the board raises no figure: ${btn.textContent.slice(0, 60)}`);
       btn.click();
       await until(() => document.querySelector(".sheet.on .row"), "the list of who to collect from");
       const txt = document.querySelector(".sheet").textContent;
@@ -2883,9 +2887,18 @@ export async function run(filter) {
       resv[resv.length - 1].end = 9; recompute();
       switchTo(SCREENS.findIndex(s => s.id === "trends"));
       await until(() => document.querySelector("#scr-trends .tcard"), "the board again");
-      ok(![...document.querySelectorAll("#scr-trends button")]
-        .some(b => /before a guest leaves/.test(b.textContent)),
-        "a guest leaving in nine days is being raised as expiring today");
+      /* The CARD may still stand — other guests can legitimately be leaving
+         within two days — so the claim is about this stay, not about the card.
+         The board's rule is a deadline; nine days away is not one. */
+      const later = [...document.querySelectorAll("#scr-trends button")]
+        .find(b => /before (a guest leaves|\d+ guests leave)/.test(b.textContent));
+      if(later){
+        later.click();
+        await until(() => document.querySelector(".sheet.on .row"), "the collect list again");
+        ok(!/Leaving Fixture/.test(document.querySelector(".sheet.on").textContent),
+          "a guest leaving in nine days is still raised as expiring today");
+        closeSheet();
+      }
       return "₹15,000 raised with a day left, named and dialable, gone when the date moves out";
     } finally {
       closeSheet();
@@ -2997,6 +3010,159 @@ export async function run(filter) {
       recompute();
       if (stored != null) localStorage.setItem(STORE, stored);
       activity.length = 0; keep.forEach(a => activity.push(a)); jset(LOG_STORE, activity);
+    }
+  });
+
+  /* ══ the day, and the guest who has already gone ════════════════════════ */
+
+  /* "Some tenant booked 2 Sep to 9 Sep, today they left — but it shows free.
+     They said at the last moment they would continue to the 12th. Right now I
+     can't see the previous booking, I can't edit it, or do anything." The stay
+     was in memory the whole time, holding its payments and its id, and no
+     screen would show it. */
+  await test("a guest who left this morning is still on the room sheet, and can be kept on", async () => {
+    const stored = localStorage.getItem(STORE), keep = activity.slice();
+    const fi = flats.map((f, i) => i).find(i => freeSpan(i, -7, 5));
+    ok(fi != null, "no flat free for the fixture");
+    /* the owner's own case: in on the 2nd, out this morning, ₹31,500 for 7 */
+    resv.push({fi, start: -7, end: 0, nights: 7, guest: "Ended Fixture", src: "Direct",
+               manual: true, amount: 31500, pays: [], bookedOn: -9});
+    recompute();
+    const r = resv[resv.length - 1];
+    try {
+      /* the calendar is right: the room IS free tonight */
+      eq(!!occ[fi][0], false, "the flat is held on a night the guest has left");
+      ok(justLeft(fi).some(z => z.guest === "Ended Fixture"),
+        `the departed stay is not reachable: ${justLeft(fi).map(z=>z.guest)}`);
+      eq(justLeft(fi)[0].guest, "Ended Fixture", "the most recent departure is not the one who left today");
+      openSheet(fi, 0);
+      await until(() => document.querySelector(".sheet.on .roomAct"), "the room sheet");
+      /* the route, in their own name, on the band */
+      const route = [...document.querySelectorAll(".sheet .roomRoutes.stay button")]
+        .find(b => /Extend Ended Fixture/.test(b.textContent));
+      ok(route, "no way to put back a guest who left this morning");
+      ok(/left this morning/.test(route.textContent), `the route does not say when they left: ${route.textContent}`);
+      /* and the stay is listed, not only routed to */
+      ok(/Just left/.test(document.querySelector(".sheet.on").textContent), "no Just left section");
+      route.click();
+      await until(() => document.querySelector(".sheet.on .bkgo"), "the dates editor");
+      ok(/left this morning/.test(document.querySelector(".sheet .m").textContent),
+        `the editor calls a departed guest something else: ${document.querySelector(".sheet .m").textContent}`);
+      /* the arrival is a fact and stays locked; the nights extend */
+      ok(document.querySelector(".sheet .stepWide.locked"), "a departed guest's arrival is editable");
+      const more = document.querySelector('.sheet .step button[aria-label="A night more"]');
+      more.click(); more.click(); more.click();
+      eq(document.querySelector(".sheet .step b").textContent, "10", "nights after three taps");
+      /* the deal's own rate, not the rate card: ₹31,500 over 7 is ₹4,500 */
+      eq(document.querySelector(".sheet .bkamt input").value, "45000", "the total offered for three more nights");
+      const go = document.querySelector(".sheet .bkgo");
+      ok(/is staying/.test(go.textContent), `the button says "${go.textContent}"`);
+      go.click();
+      await until(() => !document.querySelector(".sheet.on .bkgo"), "the editor to close");
+      eq(r.end, 3, "the new end");
+      eq(r.nights, 10, "the new nights");
+      eq(r.amount, 45000, "the new total");
+      /* and the room is theirs again tonight — the point of the whole thing */
+      eq(!!occ[fi][0], true, "the room is still free on a night the guest is now staying");
+      eq(!!occ[fi][2], true, "the last extended night is not held");
+      ok(/now leaves/.test(activity[0].s), `the change was not logged: ${activity[0].s}`);
+      /* nothing was re-typed: the same row, so the money and the id survive */
+      eq(resv.filter(x => x.guest === "Ended Fixture").length, 1, "the extension made a second booking");
+      return "left this morning, put back to 12 Sep on the same booking, ₹45,000 at the stay's own rate";
+    } finally {
+      const i = resv.indexOf(r); if (i >= 0) resv.splice(i, 1);
+      recompute(); closeSheet();
+      if (stored != null) localStorage.setItem(STORE, stored);
+      activity.length = 0; keep.forEach(a => activity.push(a)); jset(LOG_STORE, activity);
+    }
+  });
+
+  /* "I don't have to tap on Leaving and see, and then see on Arriving, and then
+     see what is Turnaround. I need one view." */
+  await test("one day view holds arrivals, departures and turnarounds, each flat once", async () => {
+    const stored = localStorage.getItem(STORE);
+    const free = flats.map((f, i) => i).filter(i => freeSpan(i, -3, 6));
+    ok(free.length >= 3, "not enough free flats for the fixture");
+    const [a, b, c] = free;
+    const made = [
+      {fi: a, start: -3, end: 0, nights: 3, guest: "Turn Out", src: "Airbnb", manual: true, pays: []},
+      {fi: a, start: 0, end: 4, nights: 4, guest: "Turn In", src: "Direct", manual: true, amount: 20000, pays: []},
+      {fi: b, start: -2, end: 0, nights: 2, guest: "Out Only", src: "Direct", manual: true, amount: 9000, pays: []},
+      {fi: c, start: 0, end: 3, nights: 3, guest: "In Only", src: "Agoda", manual: true, amount: 12000, pays: []},
+    ];
+    made.forEach(m => resv.push(m));
+    recompute();
+    try {
+      openDay(0);
+      await until(() => document.querySelector(".sheet.on .dayrows .row"), "the day view");
+      const sheet = document.querySelector(".sheet.on");
+      /* every group present, and named */
+      const heads = [...sheet.querySelectorAll(".lbl")].map(x => x.textContent);
+      ok(heads.some(h => /^Turnaround · /.test(h)), `no turnaround group: ${heads}`);
+      ok(heads.some(h => /^Leaving · /.test(h)), `no leaving group: ${heads}`);
+      ok(heads.some(h => /^Arriving · /.test(h)), `no arriving group: ${heads}`);
+      /* THE POINT: both halves of a turnaround on one row, so nothing has to be
+         cross-referenced against a second list */
+      const turn = [...sheet.querySelectorAll(".dayrows .row")]
+        .find(x => /Turn Out/.test(x.textContent));
+      ok(turn, "the turnaround flat is not listed");
+      ok(/Turn In/.test(turn.textContent), `the row does not name who is coming in: ${turn.textContent}`);
+      /* and that flat is NOT repeated under leaving or arriving */
+      const rows = [...sheet.querySelectorAll(".dayrows .row")];
+      const ids = rows.map(x => x.querySelector(".id").textContent);
+      eq(ids.length, new Set(ids).size, `a flat appears twice: ${ids}`);
+      eq(rows.filter(x => /Turn Out|Turn In/.test(x.textContent)).length, 1,
+        "the turnaround guests appear outside the turnaround group");
+      /* the money that has to be collected before a door shuts is on the row */
+      const out = rows.find(x => /Out Only/.test(x.textContent));
+      ok(/₹9,000/.test(out.textContent), `a departing balance is not shown: ${out.textContent}`);
+      /* and none of it is clipped — this view exists to save the tapping */
+      rows.forEach(x => {
+        const m = x.querySelector(".meta");
+        ok(m.scrollWidth <= m.clientWidth + 1, `a row is clipped: ${x.textContent.slice(0, 40)}`);
+      });
+      /* BY BUILDING. The five addresses get visited by different people, so
+         "what is happening in Madhapur today" has to be one tap, not a read
+         down a list ordered by flat id. */
+      const chips = [...sheet.querySelectorAll(".roomfilt button")];
+      ok(chips.length >= 2, "no building filter on a day spanning several buildings");
+      eq(chips[0].querySelector("span").textContent, "All", "the first chip");
+      /* the chip counts are flats-to-handle and must add up to the All chip */
+      const num = c => +c.querySelector("i").textContent;
+      eq(chips.slice(1).reduce((a2, c) => a2 + num(c), 0), num(chips[0]),
+        "the building chips do not add up to All");
+      const one = chips.slice(1).find(c => num(c) > 0);
+      const name = one.querySelector("span").textContent;
+      one.click();
+      await wait(80);
+      const only = [...sheet.querySelectorAll(".dayrows .row")];
+      eq(only.length, num(one), `rows shown for ${name}`);
+      ok(only.every(x => x.textContent.includes(name)), "a row from another building is still listed");
+      ok(sheet.querySelector(".m").textContent.includes(name),
+        `the sheet does not say which building: ${sheet.querySelector(".m").textContent}`);
+      chips[0].click();
+      await wait(80);
+      eq(sheet.querySelectorAll(".dayrows .row").length, rows.length, "All did not bring the rest back");
+
+      /* the three tiles on Rooms all open THIS, not three separate sheets */
+      closeSheet();
+      switchTo(SCREENS.findIndex(s2 => s2.id === "rooms"));
+      await until(() => document.querySelector("#scr-rooms .op"), "the ops row");
+      const tiles = [...document.querySelectorAll("#scr-rooms .op")];
+      eq(tiles.length, 3, "the three counts are gone");
+      for (const t of tiles) {
+        t.click();
+        await until(() => document.querySelector(".sheet.on .dayrows"), "the day view from a tile");
+        const n = document.querySelector(".sheet.on .n").textContent;
+        ok(/September|October|November|August/.test(n), `a tile opened "${n}" instead of the day`);
+        closeSheet();
+        await wait(40);
+      }
+      return `${rows.length} flats, one row each, all three tiles open the one view`;
+    } finally {
+      made.forEach(m => { const i = resv.indexOf(m); if (i >= 0) resv.splice(i, 1); });
+      recompute(); closeSheet();
+      if (stored != null) localStorage.setItem(STORE, stored);
     }
   });
 
