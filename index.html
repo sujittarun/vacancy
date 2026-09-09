@@ -6689,6 +6689,21 @@ async function telStart(){
    round trips on a phone is a stutter the operator can feel. */
 function track(name, props){
   if(!telOn()) return;
+  /* AN ACTIVITY EVENT WITH NO HOST CANNOT BE READ BY ANYBODY. pullActivity
+     asks for `name=eq.act & host_id=eq.<host>`, so a row posted without one is
+     invisible to every phone including the one that wrote it — bandwidth off a
+     metered connection in exchange for a row nothing will ever select.
+
+     It is written whenever logAct fires with no host attached: a booking made
+     in the sample book before anybody signs in, and — the reason this was
+     found — every action the self-test suite performs. 23,717 such rows had
+     accumulated against 72 readable ones. The suite now switches telemetry off
+     for its own run, which is the real fix; this is the guard that means a
+     missed switch costs one row rather than ten thousand.
+
+     Crashes and boots are different and still go up without a host: nobody
+     reads them in the app, the point of them is that they arrive at all. */
+  if(name === "act" && !hostId) return;
   /* WHO, EXPLICITLY. user_id has no default on the table and this never sent
      one, so every event from every phone arrived anonymous whoever was signed
      in — and a shared activity log with nobody's name on anything is a list

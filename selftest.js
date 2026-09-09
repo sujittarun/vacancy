@@ -164,6 +164,20 @@ export async function run(filter) {
   only = filter || null;
   results.length = 0;
 
+  /* THE SUITE DOES NOT TALK TO THE SERVER ABOUT ITSELF. Every test that books,
+     pays, cancels or ticks calls logAct, logAct calls track, and track posts to
+     app_events — as anon, with no host, from whatever machine is running the
+     tests. 23,717 rows of "Priya Fixture", "filler 317" and "Gone Fixture" had
+     piled up in the operator's telemetry against 72 real ones before anybody
+     looked, and the only reason it did no visible harm is that the activity
+     sheet filters on host_id and so could never see them.
+
+     Restored in the finally below, because a suite that leaves telemetry off
+     is a suite that hides the next real crash. */
+  const telWas = telOff;
+  telOff = true;
+  try {
+
   /* ══ data loss ══════════════════════════════════════════════════════════ */
 
   /* THE UNDO, not whichever button is nearest the top of the document. Every
@@ -2034,12 +2048,26 @@ export async function run(filter) {
        flush() calls cloudPull when needPull is set and the queue has drained,
        so both are cleared for the duration and put back afterwards. */
     const wasNeed = needPull, wasQueue = queue.slice(), wasFlats = flats.slice(), wasNF = NF;
+    const realPull = cloudPull;
     const hits = [];
     let release;
     const held = new Promise(r => { release = r; });
     try {
       MODE = "live"; hostId = "h1";
       needPull = false; queue = [];
+      /* AND THE DOOR needPull AND queue DO NOT CLOSE. Those two guard the pull
+         that flush() starts. They do nothing about the one on visibilitychange,
+         which fires whenever this pane is fronted or hidden and calls
+         flush().then(cloudPull) on the strength of MODE alone — which this test
+         has just set to "live".
+
+         That is how eleven book reads landed in a counter meant to see one, on
+         a run where the only thing that changed was me bringing the tab to the
+         front. It cost three separate investigations before the assertion was
+         made to name the paths it caught rather than only count them. The test
+         is about the activity sheet; it should not also be a report on whether
+         somebody switched windows while it ran. */
+      cloudPull = async () => {};
       actWho = {};                                  // membership already known
       window.rest = async (m, p)=>{ hits.push(p); await held; return []; };
       openActivity();
@@ -2066,6 +2094,7 @@ export async function run(filter) {
       return `${rows} rows painted before the answer, 1 request`;
     } finally {
       release && release([]);
+      cloudPull = realPull;
       window.fetch = realFetch; window.rest = realRest;
       MODE = wasMode; hostId = wasHost; actWho = wasWho;
       needPull = wasNeed; queue = wasQueue; jset(QUEUE_KEY, queue);
@@ -4479,6 +4508,34 @@ export async function run(filter) {
     }
   });
 
+  /* 23,717 rows of "Priya Fixture" and "filler 317" reached the operator's
+     telemetry table against 72 real ones, because every test that books or
+     pays calls logAct, logAct calls track, and nothing ever turned it off. */
+  await test("the suite does not post its own fixtures to the server", () => {
+    ok(telOff, "telemetry is live while the tests are running");
+    ok(!telOn(), "telOn() still says yes with the suite's switch thrown");
+    /* and the app itself refuses an activity event nobody could ever read —
+       pullActivity asks for host_id=eq.<host>, so a row without one is
+       invisible to every phone including the one that wrote it */
+    const wasOff = telOff, wasHost = hostId, wasQ = telQueue.length;
+    try {
+      telOff = false; hostId = null;
+      track("act", {k: "book", s: "unreadable row"});
+      eq(telQueue.length, wasQ, "an activity event with no host was queued to go up");
+      hostId = "h-test";
+      track("act", {k: "book", s: "readable row"});
+      eq(telQueue.length, wasQ + 1, "an activity event WITH a host was dropped");
+      telQueue.length = wasQ;
+      /* a crash still goes up without a host — nobody reads those in the app,
+         the whole point of them is that they arrive at all */
+      hostId = null;
+      track("error", {m: "boom"});
+      eq(telQueue.length, wasQ + 1, "a crash report was dropped for having no host");
+      telQueue.length = wasQ;
+    } finally { telOff = wasOff; hostId = wasHost; }
+    return "off during the run, and act needs a host even when on";
+  });
+
   await test("no text falls below AA in either theme", async () => {
     const m = await import("./audit.js?t=" + Date.now());
     const out = [];
@@ -4502,4 +4559,5 @@ export async function run(filter) {
     all: results.map(r => `${r.pass ? "PASS" : "FAIL"}  ${r.name}${r.detail ? " — " + r.detail : ""}`),
     ...(flaky.length ? { note: "some tests only passed on retry — the page was being driven by something else, or a real intermittent bug is hiding here" } : {}),
   };
+  } finally { telOff = telWas; }
 }
