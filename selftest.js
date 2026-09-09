@@ -469,15 +469,48 @@ export async function run(filter) {
     } finally { done(); }
   });
 
+  /* THIS ONE WRITES TO DISK, so it has to clean up after itself. applyInventory
+     is not a setter — it re-keys every booking and PERSISTS the result — so the
+     harness putting `flats` back in memory left Kondapur in localStorage. Every
+     full run then booted with last run's extra flat and added another: NF read
+     38, then 39, then 40, with two KP-101 rows sharing an id, and the failure
+     surfaced somewhere else entirely. A test that touches storage restores
+     storage. */
   await test("Ask matches a building added after boot", async () => {
-    const next = flats.map(f => ({ ...f }));
-    next.push({ id: "KP-101", code: "KP", bname: "Kondapur", bshort: "Kondapur",
-                type: "2 BHK", floor: 1, rate: 3000 });
-    applyInventory(next);
-    await until(() => flats.some(f => f.code === "KP"), "the new building to land in flats");
-    const bldg = parseQuery("anything in kondapur tonight").bldg;
-    eq(bldg, "KP", "building matched for a name added after boot");
-    return "live inventory, not the boot seed";
+    const before = localStorage.getItem(INV_STORE);
+    const wasFlats = flats.map(f => ({ ...f }));
+    try {
+      const next = flats.map(f => ({ ...f }));
+      next.push({ id: "KP-101", code: "KP", bname: "Kondapur", bshort: "Kondapur",
+                  type: "2 BHK", floor: 1, rate: 3000 });
+      applyInventory(next);
+      await until(() => flats.some(f => f.code === "KP"), "the new building to land in flats");
+      const bldg = parseQuery("anything in kondapur tonight").bldg;
+      eq(bldg, "KP", "building matched for a name added after boot");
+      return "live inventory, not the boot seed";
+    } finally {
+      applyInventory(wasFlats);
+      if (before != null) localStorage.setItem(INV_STORE, before);
+      else localStorage.removeItem(INV_STORE);
+    }
+  });
+
+  /* The invariant that would have caught the above on the run that caused it,
+     rather than three runs later on an unrelated test. */
+  await test("no test has left a flat behind in the inventory", () => {
+    const ids = flats.map(f => f.id);
+    const dupes = ids.filter((v, i) => ids.indexOf(v) !== i);
+    eq(dupes.length, 0, `flats sharing an id: ${[...new Set(dupes)].join(", ")}`);
+    const stored = (() => { try { return JSON.parse(localStorage.getItem(INV_STORE) || "null"); }
+                           catch (e) { return null; } })();
+    const rows = stored && (Array.isArray(stored) ? stored : stored.flats);
+    if (rows) {
+      const sIds = rows.map(f => f.id);
+      const sd = sIds.filter((v, i) => sIds.indexOf(v) !== i);
+      eq(sd.length, 0, `stored inventory has duplicates: ${[...new Set(sd)].join(", ")}`);
+    }
+    ok(!flats.some(f => f.code === "KP"), "Kondapur is still in the book");
+    return `${NF} flats, every id its own`;
   });
 
   await test("'this weekend' means this one, on every weekday", () => {
@@ -3786,6 +3819,84 @@ export async function run(filter) {
       checklist = keepChecks; checkSave(); MODE = keepMode;
       if (gaveUid != null) delete flats[gaveUid].uid;
       activity.length = 0; keepAct.forEach(a => activity.push(a)); jset(LOG_STORE, activity);
+    }
+  });
+
+  /* The two rare controls sat directly under Book, on every room, every time
+     it was opened — when a flat goes out of service perhaps twice a month.
+     A previous pass fixed their WEIGHT and left their POSITION. */
+  await test("the room sheet is ordered by how often each thing is wanted", async () => {
+    const fi = flats.map((f, i) => i).find(i => resv.some(r => r.fi === i && r.end > 0));
+    ok(fi != null, "no flat with a booking for the fixture");
+    openSheet(fi, 0);
+    await until(() => document.querySelector(".sheet.on .roomRoutes"), "the room sheet");
+    const b = document.getElementById("sheetB");
+    const heads = [...b.querySelectorAll(".sheet-s .lbl:first-child")].map(n => n.textContent);
+    const routes = b.querySelector(".roomRoutes:not(.stay)");
+    ok(routes, "the fault and out-of-service routes are gone entirely");
+    /* below everything: the last heading on the sheet, and after the primary */
+    eq(heads[heads.length - 1], "If something is wrong", `headings ran ${heads.join(" / ")}`);
+    const big = b.querySelector(".bigAct, .bookbtn");
+    if (big) ok(routes.getBoundingClientRect().top > big.getBoundingClientRect().bottom,
+      "the rare pair is still above the primary action");
+    const cards = [...b.querySelectorAll(".card")];
+    ok(cards.length && routes.getBoundingClientRect().top >
+       cards[cards.length - 1].getBoundingClientRect().top,
+      "the rare pair is above the last list on the sheet");
+    /* quiet is not the same as hard to hit — both keep a real target and both
+       still say which way they go, which is the one thing that can be got
+       wrong here */
+    const btns = [...routes.querySelectorAll("button")];
+    eq(btns.length, 2, "both routes are present");
+    btns.forEach(x => ok(x.getBoundingClientRect().height >= 44,
+      `${x.textContent.slice(0, 12)} is ${Math.round(x.getBoundingClientRect().height)}px tall`));
+    ok(/stays on sale/.test(routes.textContent) && /cannot be sold/.test(routes.textContent),
+      "the qualifiers that say which one takes the room off sale are gone");
+    closeSheet();
+    return `${heads.join(" \u00b7 ")} \u2014 rare pair last`;
+  });
+
+  /* "9 Sep → 9 Sep" for a three-night stay, and "9 Sep → 1 Sep" for one who
+     left last week: an end eight days before its own start. Math.max(start, 0)
+     is right in Coming up and wrong in a list where everybody is in the past. */
+  await test("a guest who has gone shows the dates they actually stayed", async () => {
+    const keepR = resv.slice();
+    const fi = flats.map((f, i) => i).find(i => freeSpan(i, -12, 2));
+    ok(fi != null, "no flat free for the fixture");
+    resv.push({fi, start: -11, end: -8, nights: 3, guest: "Gone Lastweek",
+               src: "Direct", manual: true, pays: []});
+    resv.push({fi, start: -3, end: 0, nights: 3, guest: "Gone Today",
+               src: "Direct", manual: true, pays: []});
+    recompute();
+    try {
+      openSheet(fi, 0);
+      await until(() => document.querySelector(".sheet.on .row.bk"), "the room sheet");
+      const rowOf = n => [...document.querySelectorAll(".sheet.on .row.bk")]
+        .find(x => x.textContent.includes(n));
+      const older = rowOf("Gone Lastweek"), today = rowOf("Gone Today");
+      ok(older && today, "the departed guests are not on the sheet");
+      /* the arrow's two halves are the stay's own two ends, in order */
+      eq(older.querySelector("em").textContent.split(" \u00b7 ")[0],
+        `${fmt(-11)} \u2192 ${fmt(-8)}`, "the older stay's dates");
+      eq(today.querySelector("em").textContent.split(" \u00b7 ")[0],
+        `${fmt(-3)} \u2192 ${fmt(0)}`, "this morning's stay's dates");
+      /* and the end date is not then printed a second time on the same line */
+      const half = older.querySelector("em").textContent.split("\u2192")[1];
+      eq((half.match(new RegExp(fmt(-8).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g")) || []).length,
+        1, "the end date is printed twice on one row");
+      ok(/left this morning/.test(today.textContent), "the one who went today does not say so");
+      ok(!/left this morning/.test(older.textContent), "a stay from last week says it left today");
+      /* and the whole of it is readable — the row must not be clipped at
+         "left this …", which loses the half that says how long ago */
+      [older, today].forEach(row => {
+        const em = row.querySelector("em");
+        ok(em.scrollWidth <= em.clientWidth + 1,
+          `"${em.textContent}" is clipped on the row`);
+      });
+      return `${fmt(-11)} \u2192 ${fmt(-8)}, once each, nothing clipped`;
+    } finally {
+      closeSheet();
+      resv = keepR; recompute();
     }
   });
 

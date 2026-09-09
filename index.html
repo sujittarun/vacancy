@@ -1323,6 +1323,14 @@ button{background:none;border:0;padding:0;cursor:pointer;
 .lbl .kindico{width:19px;height:19px;border-radius:6px}
 .lbl .kindico svg{width:12px;height:12px}
 .dayrows .meta, .dayrows .meta em{white-space:normal;overflow:visible;text-overflow:clip}
+/* Just left, for the same reason the day rows wrap. With a money pill beside
+   it the line has about 230px, and "6 Sep → 9 Sep · 3n · left this morning"
+   clipped at "left this …" — losing exactly the half that says how long ago,
+   which is the thing being decided on. A row that has to be tapped to be read
+   defeats the section. */
+.justleft .row{align-items:flex-start}
+.justleft .meta, .justleft .meta em{white-space:normal;overflow:visible;text-overflow:clip}
+.justleft .meta em{margin-top:3px}
 .dayrows .meta em{margin-top:3px}
 .dayrows .pill{margin-top:1px}
 
@@ -14872,15 +14880,6 @@ function openSheet(fi, day){
     act.append(chg);
   }
 
-  const routes = el("div","roomRoutes");
-  const rFault = el("button", null, "Log a fault");
-  rFault.append(el("s", null, "stays on sale"));
-  rFault.onclick = ()=>{ haptic(9); openIssueForm(fi, day); };
-  const rOut = el("button", null, "Out of service");
-  rOut.append(el("s", null, "cannot be sold"));
-  rOut.onclick = ()=>{ haptic(9); openBlockForm(fi, day); };
-  routes.append(rFault, rOut);
-  act.append(routes);
   sheetB.append(act);
 
   /* ── what is true about this room, read only ─────────────────────────────── */
@@ -14945,14 +14944,24 @@ function openSheet(fi, day){
     s2.append(el("span","lbl", `Just left · ${gone.length}`),
               el("span","lbl", "still yours to extend"));
     sheetB.appendChild(s2);
-    const gl = el("div","card"); gl.style.margin = "0 20px";
+    const gl = el("div","card justleft"); gl.style.margin = "0 20px";
     gone.slice(0, 4).forEach(r=>{
       const row = el("div","row bk");
       const m = el("div","meta");
       const due = dueFrom(r);
+      /* NOT Math.max(start, 0). That clamp is copied from Coming up, where it
+         is right — a guest already in the flat arrived before today and the row
+         says "Now". Every guest in THIS list is in the past, so the clamp fired
+         every time and printed today as everybody's arrival: "9 Sep → 9 Sep"
+         for a three-night stay, and for one who left last week "9 Sep → 1 Sep",
+         an end eight days before its own start.
+
+         And "left 1 Sep" after "→ 1 Sep" is the same date twice on one line.
+         It stays only for the one who went this morning, where the words say
+         something the date does not. */
       m.innerHTML = `<b>${esc(r.guest)}</b>`
-        + `<em>${esc(fmt(Math.max(r.start,0)))} → ${esc(fmt(r.end))} · ${r.nights}n · `
-        + `${r.end === 0 ? "left this morning" : "left " + esc(fmt(r.end))}`
+        + `<em>${esc(fmt(r.start))} → ${esc(fmt(r.end))} · ${r.nights}n`
+        + (r.end === 0 ? " · left this morning" : "")
         + (due > 0 ? ` · ${esc(money(due))} owed` : "") + `</em>`;
       const end = el("div","rowend");
       if(due > 0){
@@ -15053,6 +15062,39 @@ function openSheet(fi, day){
   }
   if(!any) gl.appendChild(el("div","empty","Solidly booked for the whole horizon."));
   sheetB.appendChild(gl);
+
+  /* ── the two things that are not an everyday thing ────────────────────────
+     These sat directly under the primary action, and a previous pass demoted
+     them by size and ink because three controls were rendering as near-equals.
+     That fixed the WEIGHT and left the POSITION, which is the louder of the
+     two: the first thing under Book, on every room, every time it is opened —
+     when a flat goes out of service perhaps twice a month and a fault is
+     logged rather less often than a booking is made.
+
+     They come to the bottom, where the sheet already reads in order of how
+     often it is wanted: what is booked, who has just gone, what needs fixing,
+     what is free, and then the rare pair. They keep their 48px targets and
+     their qualifiers, because a fault logged late is what costs a night — the
+     point is that they stop competing with Book, not that they get harder to
+     press.
+
+     One heading over both, because they answer one question. Which of the two
+     is right is the single thing a new operator can get wrong here, so the
+     line under each still says which way it goes: one keeps the room on sale
+     and the other takes it off. */
+  const s4 = el("div","sheet-s");
+  s4.append(el("span","lbl","If something is wrong"), el("span","lbl","not every day"));
+  sheetB.appendChild(s4);
+  const routes = el("div","roomRoutes");
+  routes.style.margin = "0 20px";
+  const rFault = el("button", null, "Log a fault");
+  rFault.append(el("s", null, "stays on sale"));
+  rFault.onclick = ()=>{ haptic(9); openIssueForm(fi, day); };
+  const rOut = el("button", null, "Out of service");
+  rOut.append(el("s", null, "cannot be sold"));
+  rOut.onclick = ()=>{ haptic(9); openBlockForm(fi, day); };
+  routes.append(rFault, rOut);
+  sheetB.appendChild(routes);
 
   sheet.classList.add("on"); scrim.classList.add("on");
   sheetB.scrollTop = 0;
