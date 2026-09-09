@@ -19042,9 +19042,25 @@ if(location.hostname === "localhost" || location.hostname === "127.0.0.1"){
       toast("", "<b>Signed in.</b> " + NF + " flats, " + bookings().length
                + " bookings — the same book on every phone.", null);
     }catch(e){
-      // the two failures worth telling apart: wrong details, and no signal
+      /* THREE FAILURES, NOT TWO. "No connection. Check your signal" was told
+         to somebody whose signal was fine: their router was answering the
+         project's own hostname with the wrong address, so every other site
+         worked and this one alone could not be reached. Checking the signal
+         tells that person nothing, and the next guess is that the password is
+         wrong — which it is not.
+
+         navigator.onLine lies in one direction only: it says false when the
+         phone genuinely has nothing, and true optimistically. That is exactly
+         the split needed here. A throw with no status means the request never
+         got an answer; if the phone also believes it is online, the fault is
+         between the phone and this one server, and the fastest thing anybody
+         can do about it is try a different network. */
       fail(e.status === undefined
-        ? "No connection. Check your signal and try again."
+        ? (navigator.onLine === false
+            ? "No connection. Check your signal and try again."
+            : "Cannot reach the server \u2014 but this phone is online, so it is "
+              + "not your password. Try mobile data instead of wifi; if that works, "
+              + "the wifi is blocking it.")
         : e.status === 400 || e.status === 401
           ? "That email and password did not match."
           : e.message);

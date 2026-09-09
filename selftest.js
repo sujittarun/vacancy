@@ -4421,6 +4421,64 @@ export async function run(filter) {
   });
 
 
+  /* The owner could not sign in, and the app said "check your signal" to a
+     phone whose signal was fine — its router was answering the project's own
+     hostname with the wrong address, so every other site worked and this one
+     alone did not. The next guess after "check your signal" is "my password is
+     wrong", which sends somebody resetting a password that was never the
+     problem. */
+  await test("a sign-in that cannot reach the server does not blame the password", async () => {
+    const gate = document.getElementById("gate"), errB = document.getElementById("gateErr");
+    const form = document.getElementById("gateForm");
+    const em = document.getElementById("gateEmail"), pw = document.getElementById("gatePass");
+    const keepMode = MODE, keepSess = session, keepOnline = online;
+    const realApi = window.api;
+    const wasE = em.value, wasP = pw.value;
+    const onlineDesc = Object.getOwnPropertyDescriptor(Navigator.prototype, "onLine");
+    const setOnline = v => Object.defineProperty(navigator, "onLine",
+      {configurable: true, get: () => v});
+    const submit = async () => {
+      errB.textContent = "";
+      form.dispatchEvent(new Event("submit", {cancelable: true, bubbles: true}));
+      await until(() => errB.textContent.trim(), "an error on the gate", 4000);
+      return errB.textContent.trim();
+    };
+    try {
+      em.value = "someone@example.com"; pw.value = "whatever";
+
+      /* 1. the request never gets an answer, and the phone believes it is
+            online — a blocked or misdirected host, not a dead signal */
+      setOnline(true);
+      window.api = async () => { throw new TypeError("Failed to fetch"); };
+      const unreachable = await submit();
+      ok(!/signal/i.test(unreachable), `it still blames the signal: "${unreachable}"`);
+      ok(!/password did not match/i.test(unreachable),
+        `it blamed the password for a network failure: "${unreachable}"`);
+      ok(/not your password/i.test(unreachable) && /mobile data|wifi/i.test(unreachable),
+        `it does not say what to try: "${unreachable}"`);
+
+      /* 2. genuinely offline — then "check your signal" is the right advice */
+      setOnline(false);
+      const offline = await submit();
+      ok(/signal/i.test(offline), `a phone with no connection is told: "${offline}"`);
+
+      /* 3. and a real refusal is still a real refusal */
+      setOnline(true);
+      window.api = async () => { const e = new Error("Invalid login credentials"); e.status = 400; throw e; };
+      const wrong = await submit();
+      ok(/did not match/i.test(wrong), `a wrong password is reported as: "${wrong}"`);
+      return "unreachable, offline and refused all say different things";
+    } finally {
+      window.api = realApi;
+      if (onlineDesc) Object.defineProperty(Navigator.prototype, "onLine", onlineDesc);
+      try { delete navigator.onLine; } catch (e) { }
+      em.value = wasE; pw.value = wasP; errB.textContent = "";
+      MODE = keepMode; session = keepSess; online = keepOnline;
+      gate.classList.remove("on");
+      document.querySelectorAll(".toast").forEach(t => t.remove());
+    }
+  });
+
   await test("no text falls below AA in either theme", async () => {
     const m = await import("./audit.js?t=" + Date.now());
     const out = [];
