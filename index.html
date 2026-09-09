@@ -7091,33 +7091,44 @@ async function signIn(email, password){
     flats = hadFlats; NF = flats.length;
     flatIndex = Object.fromEntries(flats.map((f,i)=>[f.id, i]));
   }
-  /* Re-point the held rows at whatever the inventory now is, by flat CODE —
-     the uuids differ per device but the code is the operator's own name for
-     the room and is the same on both. */
-  const placed = hadLocal.filter(r=>{
-    const id = hadFlats[r.fi] && hadFlats[r.fi].id;
-    const fi = id != null ? flatIndex[id] : undefined;
-    if(fi === undefined) return false;
-    r.fi = fi; return true;
-  });
-  const missing = reconcile(placed);
-  /* THE SAMPLE BOOK NEVER GOES UP. This asked "are there rows the server has
-     not got?" before it asked "are these rows even real?", so signing in on a
-     phone that had been browsing the invented book tried to adopt seven
-     hundred invented stays into the shared one. Most collided with a real
-     stay and came back 23P01 — which is where the burst of "that room was
-     taken" messages after sign-in came from, each with its own round trip.
-     The ones that did NOT collide were worse: they would have landed, and
-     Crescent Stays' book would have grown guests who do not exist.
+  /* THE SAMPLE BOOK NEVER GOES UP — AND NEVER COMES IN EITHER. This guard used
+     to sit BELOW reconcile, and reconcile does not merely report which rows the
+     server is missing: it MERGES them into resv, deliberately, so a genuine
+     booking made offline stays on screen while it makes its way up. So the
+     order was: merge the whole invented book into the live one, then decide not
+     to push it. jdel(STORE) then deleted the sample from disk and left it in
+     memory, and cacheSave() two lines later wrote it into the cloud cache,
+     where it survived every reload after.
 
-     A browsed sample is not the operator's work and is not owed a migration.
-     Anything they actually edited is: usingDemo is cleared the moment a real
-     booking is entered, so an edited book takes the adopt path below. */
+     What that looked like on the owner's phone: G02 showing "Sumit 8 Sep → 15
+     Sep" from the real book and "Kavan 8 Sep → 15 Sep" from the sample, side by
+     side, as though one flat held two guests. The database was clean the whole
+     time — Kavan is a row in BOOK, not in Postgres — so nothing was ever
+     double-booked. It was worse than a display fault though: a payment taken
+     against a guest who does not exist would have been an insert against a
+     stay_id no table has.
+
+     A browsed sample is not the operator's work. It is not owed a migration and
+     it is not owed a place on the screen. Anything they actually edited is:
+     usingDemo is cleared the moment a real booking is entered, so an edited
+     book still takes the adopt path below. */
   if(wasDemo){
     jdel(STORE);
-  } else if(missing.length){
-    issues = issues.length ? issues : hadIssues;
-    await adoptLocalBook(missing);
+  } else {
+    /* Re-point the held rows at whatever the inventory now is, by flat CODE —
+       the uuids differ per device but the code is the operator's own name for
+       the room and is the same on both. */
+    const placed = hadLocal.filter(r=>{
+      const id = hadFlats[r.fi] && hadFlats[r.fi].id;
+      const fi = id != null ? flatIndex[id] : undefined;
+      if(fi === undefined) return false;
+      r.fi = fi; return true;
+    });
+    const missing = reconcile(placed);
+    if(missing.length){
+      issues = issues.length ? issues : hadIssues;
+      await adoptLocalBook(missing);
+    }
   }
   cacheSave();
   paintAcct();

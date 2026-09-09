@@ -1919,6 +1919,79 @@ export async function run(filter) {
     }
   });
 
+  /* THE ONE THE OWNER CAUGHT ON HIS OWN PHONE. G02 showed "Sumit 8 Sep → 15
+     Sep" from the real book and "Kavan 8 Sep → 15 Sep" from the sample, side
+     by side, as though one flat held two guests. Postgres was clean — Kavan is
+     a row in BOOK, not in the database — but reconcile MERGES the rows it
+     reports, so the invented book was folded into the live one on screen and
+     then written to the cloud cache, where it survived reloads.
+
+     The sibling of the adoption test above, and the two constrain each other:
+     an EDITED book must survive signing in, and a BROWSED one must not. */
+  await test("a browsed sample book does not follow you into the live one", async () => {
+    const keepR = resv.slice(), keepF = flats.slice(), keepNF = NF,
+          keepQ = queue.slice(), keepMode = MODE, keepHost = hostId,
+          keepSess = session, keepIss = issues.slice(), keepDemo = usingDemo;
+    const backup = localStorage.getItem(STORE), cloudWas = localStorage.getItem(CLOUD_KEY);
+    const realApi = window.api;
+    try {
+      /* browsing, not working: the book is the sample and nothing has been
+         entered into it */
+      usingDemo = true;
+      const sample = bookings().slice(0, 4).map(r => r.guest);
+      ok(sample.length >= 2, "the sample book is too small to prove anything");
+      const serverGuest = "Real Server Guest";
+      const fi = flats.map((f, i) => i).find(i => freeSpan(i, 20, 24));
+      ok(fi != null, "no flat free for the server fixture");
+
+      /* a server that HAS a book of its own — one flat, one stay */
+      window.api = async (path) => {
+        if (/token\?grant_type=password/.test(path))
+          return {access_token: "t", refresh_token: "r", expires_in: 3600, user: {id: "u1"}};
+        if (/\/rest\/v1\/memberships/.test(path))
+          return [{host_id: "h1", role: "owner", hosts: {name: "Crescent Stays", slug: "cs"}}];
+        if (/\/rest\/v1\/buildings/.test(path))
+          return [{id: "b1", code: flats[fi].code, name: flats[fi].bname,
+                   short_name: flats[fi].bshort, sort_order: 0}];
+        if (/\/rest\/v1\/flats/.test(path))
+          return [{id: "f1", building_id: "b1", code: flats[fi].id, floor: 1,
+                   unit_type: flats[fi].type, nightly_rate: 3000}];
+        if (/\/rest\/v1\/stays/.test(path))
+          return [{id: "s1", flat_id: "f1", kind: "booking",
+                   starts_on: dayISO(20), ends_on: dayISO(23),
+                   guest_name: serverGuest, source: "Direct"}];
+        return [];
+      };
+      await signIn("x@y.z", "pw");
+
+      /* the server's book, and ONLY the server's book */
+      const now = bookings().map(r => r.guest);
+      ok(now.includes(serverGuest), "the server's own booking did not arrive");
+      const leaked = sample.filter(g => now.includes(g));
+      eq(leaked.length, 0, `invented guests followed the sign-in through: ${leaked.join(", ")}`);
+      eq(bookings().length, 1, `${bookings().length} bookings after signing in to a server with one`);
+      /* nothing invented was queued for the shared book either */
+      eq(queue.filter(o => o.k === "stay+").length, 0,
+        `${queue.filter(o => o.k === "stay+").length} invented stays queued to go up`);
+      /* and the cache written on the way out is clean, or it comes back on
+         the next reload */
+      const cached = jget(CLOUD_KEY) || {};
+      const cachedGuests = (cached.rows || []).map(r => r.guest);
+      eq(sample.filter(g => cachedGuests.includes(g)).length, 0,
+        "the sample was written into the cloud cache and will return on reload");
+      return `${sample.length} sample guests dropped, ${serverGuest} kept`;
+    } finally {
+      window.api = realApi;
+      resv = keepR; flats = keepF; NF = keepNF; queue = keepQ; issues = keepIss;
+      MODE = keepMode; hostId = keepHost; session = keepSess; usingDemo = keepDemo;
+      flatIndex = Object.fromEntries(flats.map((f, i) => [f.id, i]));
+      if (backup != null) localStorage.setItem(STORE, backup); else jdel(STORE);
+      if (cloudWas != null) localStorage.setItem(CLOUD_KEY, cloudWas); else jdel(CLOUD_KEY);
+      jset(QUEUE_KEY, queue);
+      recompute();
+    }
+  });
+
   /* The owner's one hard requirement: it must stay as fast as it is now. Every
      read is served from memory in both modes; the cloud only ever appears on
      the WRITE path, behind a queue. */
