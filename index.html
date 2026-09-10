@@ -860,6 +860,10 @@ button{background:none;border:0;padding:0;cursor:pointer;
    says what it is made of, in the amber the app uses for "look again" */
 .opp.thin b{color:var(--txt-3)}
 .opp.thin s{color:var(--now-ink);font-weight:600}
+/* a rate under the coverage gate: the figure goes quiet and the caveat says
+   what it is made of — the same treatment the tile had, on a row */
+.row.rate.thin .paid{color:var(--txt-3)}
+.row.rate .paid.clear{font-variant-numeric:tabular-nums;font-weight:700}
 /* The three rate tiles sat flush on the comparison card below them — zero gap —
    and their second line ("285 of 900 nights") wrapped straight into the card's
    top edge on a phone. A tile is also a button that opens fifteen months, and
@@ -13093,29 +13097,39 @@ function renderTrends(){
          is the least useful form a rate can take — the operator's question is
          never "what is it" but "which way is it going" — and the trend was
          only ever available as one blended revenue line on the card above. */
-      const opps = el("div","opps");
-      const tile = (key, v, lab, thin)=>{
-        const d = el("button","opp tap" + (thin ? " thin" : ""));
-        d.append(el("b",null,v), el("s",null,lab), el("em","go","›"));
-        d.setAttribute("aria-label", `${lab}, ${v} — see fifteen months`);
-        d.onclick = ()=>{ haptic(9); openRate(key, finMonth); };
-        opps.appendChild(d);
+      /* ROWS, NOT TILES. These were three .opp tiles across a 375px phone —
+         eighty-two pixels of content each — holding a six-character figure
+         AND a qualifier that is sometimes a whole caveat ("from 13% of
+         nights"). "₹3,847" ran to the tile's edge and the qualifiers wrapped
+         to three lines. The owner sent the screenshot twice. A tile that
+         narrow cannot hold that much, and the card already knows the answer:
+         the five comparison rows directly beneath are full-width lines with a
+         name on the left, a figure on the right and a chevron. The three
+         rates are the same kind of thing, so they are the first three rows of
+         the same list. One idiom per card. */
+      const rows = el("div","card");
+      const rate = (key, v, lab, what, thin)=>{
+        const r2 = el("button","row bk cmp rate" + (thin ? " thin" : ""));
+        const L = el("div","meta");
+        L.innerHTML = `<b>${esc(lab)}</b><em${thin ? ' class="hi-now"' : ""}>${esc(what)}</em>`;
+        const pill = el("span","paid clear" + (thin ? " gated" : ""), v);
+        r2.append(L, pill, el("em","chev","›"));
+        r2.setAttribute("aria-label", `${lab}, ${v}, ${what} — see fifteen months`);
+        r2.onclick = ()=>{ haptic(9); openRate(key, finMonth); };
+        rows.appendChild(r2);
       };
       if(T){
-        tile("occ",    Math.round(T.occ*100) + "%", `${T.nights} of ${T.cap} nights`);
+        rate("occ", Math.round(T.occ*100) + "%", "Occupancy", `${T.nights} of ${T.cap} nights`);
         /* A month the app keeps that is under the 80% gate printed ₹3,994 a
            night and ₹661 per available night in full ink — figures off a
            fifth of the nights, next to an occupancy that is exact. The rate
-           tiles for such a month go quiet and say what they are made of;
-           the sheet behind them opens the same way it always did. */
+           rows for such a month go quiet and say what they are made of; the
+           sheet behind them opens the same way it always did. */
         const thin = !!(T.app && !T.canState);
         const why  = thin ? `from ${Math.round((T.cover || 0) * 100)}% of nights` : null;
-        tile("adr",    money(T.adr),    why || "average room rate", thin);
-        tile("revpar", money(T.revpar), why || "per available night", thin);
+        rate("adr",    money(T.adr),    "Average room rate",   why || "what a sold night brought in", thin);
+        rate("revpar", money(T.revpar), "Per available night", why || "revenue over every night, sold or not", thin);
       }
-      b.appendChild(opps);
-
-      const rows = el("div","card");
       const pcx = (a, b2)=> b2 ? (a/b2 - 1) : null;
       const arrow = v => (v >= 0 ? "▲ " : "▼ ") + Math.abs(v*100).toFixed(1) + "%";
       /* a period, only from months this screen knows, carrying its own name */

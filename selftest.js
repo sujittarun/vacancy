@@ -5376,6 +5376,44 @@ export async function run(filter) {
     } finally { pulseSeg = wasSeg; document.querySelectorAll(".tabbar button")[0].click(); await wait(60); }
   });
 
+  /* Three tiles eighty-two pixels wide cannot hold a six-character figure and
+     a caveat. The rates are the first three rows of the card's own list now. */
+  await test("the three rates are rows of the card's list, and nothing wraps or overflows", async () => {
+    const wasSeg = pulseSeg;
+    try {
+      document.querySelectorAll(".tabbar button")[3].click();
+      await until(() => document.querySelector("#tabseg button"), "the Business segments");
+      const profit = [...document.querySelectorAll("#tabseg button")].find(b => /Profit/.test(b.textContent));
+      ok(profit, "no Profit segment"); profit.click();
+      await until(() => [...document.querySelectorAll(".tcard, .card")].some(c => /The three rates/.test(c.textContent)), "the rates card");
+      const cardEl = [...document.querySelectorAll(".tcard, .card")].find(c => /The three rates/.test(c.textContent));
+      eq(cardEl.querySelectorAll(".opp").length, 0, "the card still carries tiles");
+      const rates = [...cardEl.querySelectorAll(".row.rate")];
+      eq(rates.length, 3, "three rate rows");
+      /* they come before the comparisons, in the same list */
+      const all = [...cardEl.querySelectorAll(".row.cmp")];
+      eq(all.indexOf(rates[2]), 2, "the rates are not the first three rows of the list");
+      ok(/Month on month/.test(all[3].textContent), "the comparisons do not follow the rates");
+      const lh = parseFloat(getComputedStyle(rates[0].querySelector("em")).lineHeight) || 16;
+      rates.forEach(r => {
+        const b = r.querySelector(".meta b"), em = r.querySelector(".meta em"), pill = r.querySelector(".paid"), chev = r.querySelector(".chev");
+        ok(b && em && pill && chev, "a rate row is missing its label, detail, figure or chevron");
+        ok(em.getBoundingClientRect().height <= lh * 2.2, `"${em.textContent}" runs to three lines`);
+        ok(pill.scrollWidth <= pill.clientWidth + 1, `the figure "${pill.textContent}" overflows its pill`);
+        ok(pill.getBoundingClientRect().right <= chev.getBoundingClientRect().left + 1, `the figure "${pill.textContent}" runs into the chevron`);
+      });
+      eq(rates[0].querySelector(".meta b").textContent, "Occupancy", "the first rate's name");
+      ok(/^\d+%$/.test(rates[0].querySelector(".paid").textContent), `occupancy reads "${rates[0].querySelector(".paid").textContent}"`);
+      ok(/^\d+ of \d+ nights$/.test(rates[0].querySelector(".meta em").textContent), `occupancy's detail reads "${rates[0].querySelector(".meta em").textContent}"`);
+      /* each row is still the door to its fifteen months */
+      rates[1].click();
+      await until(() => sheet.classList.contains("on"), "the rate's own sheet");
+      ok(/rate|night/i.test(document.querySelector(".sheet .n").textContent), `the sheet is titled "${document.querySelector(".sheet .n").textContent}"`);
+      closeSheet();
+      return rates.map(r => `${r.querySelector(".meta b").textContent} ${r.querySelector(".paid").textContent}`).join(" · ");
+    } finally { closeSheet(); pulseSeg = wasSeg; document.querySelectorAll(".tabbar button")[0].click(); await wait(60); }
+  });
+
   await test("no text falls below AA in either theme", async () => {
     const m = await import("./audit.js?t=" + Date.now());
     const out = [];
