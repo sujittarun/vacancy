@@ -4092,6 +4092,67 @@ export async function run(filter) {
     }
   });
 
+  /* "Moving a coming up guest from one flat to another — the movement option
+     used to show before. It is missing now." On 4 Sep the ⇄ was folded into the
+     dates glyph, as a route at the foot of the editor, and the operator could
+     not find it; a guest arriving today had lost it outright, because the
+     route was tied to the editor's lock on their arrival rather than to the
+     rule the move itself uses. */
+  await test("the move is on a coming-up guest's row, and a guest arriving today keeps it", async () => {
+    const keepR = resv.slice();
+    const fi = freeFlat(-4, 10);
+    ok(fi != null, "no flat free for the fixture");
+    resv.push({fi, start: -3, end: 1, nights: 4, guest: "In Already",
+               src: "Direct", manual: true, amount: 8000, pays: []});
+    resv.push({fi, start: 1, end: 4, nights: 3, guest: "Due Later",
+               src: "Direct", manual: true, amount: 9000, pays: []});
+    recompute();
+    const fi2 = freeFlat(-1, 6);
+    ok(fi2 != null && fi2 !== fi, "no second flat for the guest arriving today");
+    resv.push({fi: fi2, start: 0, end: 3, nights: 3, guest: "Arrives Today",
+               src: "Direct", manual: true, pays: []});
+    recompute();
+    try {
+      openSheet(fi, 0);
+      await until(() => document.querySelector(".sheet.on .rowdt"), "the room sheet");
+      const rowOf = who => [...document.querySelectorAll(".sheet.on .row.bk")].find(x => x.textContent.includes(who));
+      const later = rowOf("Due Later"), inRow = rowOf("In Already");
+      ok(later && inRow, "the fixture rows are not on the sheet");
+      const mv = later.querySelector(".rowsw");
+      ok(mv, "the coming-up guest's row has no move glyph");
+      eq(mv.getAttribute("aria-label"), "Move Due Later to another flat", "the move glyph's label");
+      ok(later.querySelector(".rowdt"), "the dates glyph left the row when the move came back");
+      eq(inRow.querySelector(".rowsw"), null, "a guest already in is offered a move");
+      /* four controls beside the name, and the line still reads */
+      const em = later.querySelector("em");
+      ok(em.scrollWidth <= em.clientWidth + 1, `"${em.textContent}" is clipped beside the controls`);
+      ok(later.querySelector("b").getBoundingClientRect().width > 40, "the name has no room left");
+      mv.click();
+      await until(() => document.querySelector(".sheet.on .row.move, .sheet.on .movenote"), "the move picker");
+      ok(/Move Due Later/.test(document.querySelector(".sheet .n").textContent),
+        `the picker is not for the guest tapped: ${document.querySelector(".sheet .n").textContent}`);
+      ok(document.querySelector(".sheet.on .row.move"), "nowhere offered for a three-night stay in a free book");
+      /* the guest arriving today: arrival locked in the editor, and still movable */
+      const today = resv.find(x => x.guest === "Arrives Today");
+      openStayDates(today, () => {});
+      await until(() => document.querySelector(".sheet.on .bkgo"), "the editor");
+      ok(document.querySelector(".sheet.on .stepWide.locked"), "a guest arriving today can shift their arrival");
+      const route = [...document.querySelectorAll(".sheet.on .roomRoutes.stay button")]
+        .find(b => /Move Arrives Today/.test(b.textContent));
+      ok(route, "a guest arriving today has no move route in the editor");
+      /* and a guest already in has none, anywhere */
+      const inAlready = resv.find(x => x.guest === "In Already");
+      openStayDates(inAlready, () => {});
+      await until(() => /In Already/.test(document.querySelector(".sheet .n").textContent), "the in-house editor");
+      ok(![...document.querySelectorAll(".sheet.on .roomRoutes.stay button")].some(b => /Move In Already/.test(b.textContent)),
+        "a guest already in is offered a move in the editor");
+      return "⇄ on the row for Due Later, none for In Already; Arrives Today locked in place but movable";
+    } finally {
+      closeSheet();
+      resv = keepR; recompute();
+    }
+  });
+
   /* A room nobody left today has no clean to report, and must not invent one. */
   await test("a room nobody left says nothing about cleaning", async () => {
     const keepR = resv.slice();
