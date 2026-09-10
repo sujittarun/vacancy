@@ -10044,7 +10044,12 @@ function openStayDates(r, backTo){
   go.onclick = take;
 
   form.append(prev, whenCap, whenRow, state, capRow, amtWrap, moneyState, go);
-  if(!inHouse){
+  /* r.start >= 0, not !inHouse. The editor locks the arrival of anyone whose
+     first night is tonight, which is right for the dates — but whereCouldGo,
+     moveFor and the ⇄ on the row all let a guest arriving TODAY move, because
+     the morning a room turns out not to be ready is the commonest reason for
+     one. Tied to inHouse, this route vanished for exactly that guest. */
+  if(r.start >= 0){
     const routes = el("div","roomRoutes stay");
     const mv = el("button");
     mv.append(el("b", null, `Move ${r.guest} to another flat`),
@@ -14387,7 +14392,12 @@ function attachStripScrub(wrap, strip, head, say, call, mini, readD, readW, fi){
 function moneyPill(r, fi, day){
   const due = dueFrom(r);
   if(due > 0){
-    const b = el("button","paid due", money(due) + " due");
+    /* The amount alone, as the Just left rows on the same sheet already print
+       it. "₹12,000 due" said in words what the amber pill already says by
+       colour, and the word was the 30px that pushed a guest's name onto a
+       second line once the move came back beside the dates and the cancel.
+       The label still says the whole sentence. */
+    const b = el("button","paid due", money(due));
     b.setAttribute("aria-label",
       `${money(due)} still due from ${r.guest} of ${money(r.amount)} — record a payment`);
     b.onclick = ev=>{ ev.stopPropagation(); haptic(9); openPayment(r, fi, day); };
@@ -15084,15 +15094,34 @@ function openSheet(fi, day){
       run:()=>{ cancelWithUndo(r, fi); closeSheet(); refreshScreen(); }});
     /* Small on purpose. Changing a stay is a real thing to want and a rare
        thing to do, so it sits on the guest's own row at the size of a glyph —
-       not a pill, not a card, not a third route competing with Book. One
-       glyph, for every guest: the dates, and for a guest not yet in, the move
-       as a route inside. The ⇄ used to sit here for future guests only, which
-       is exactly the wrong half — the guest who is IN is the one whose stay
-       gets extended, and he had nothing. */
+       not a pill, not a card, not a third route competing with Book. The
+       dates glyph is for every guest: the guest who is IN is the one whose
+       stay gets extended, and for a while he had nothing.
+
+       THE MOVE IS ITS OWN GLYPH AGAIN. On 4 Sep the ⇄ was folded into the
+       dates glyph — one control per row, the move a route at the foot of the
+       editor — and the operator reported it gone: "moving a coming up guest
+       from one flat to another used to show before; it is missing now." A
+       calendar glyph does not say "move", and a route under a disabled Save
+       button, below the fold on a phone, is a place nobody looks for one. A
+       control the operator cannot find is missing, whatever the code says.
+       So the ⇄ sits on the row for a guest not yet in, as it did, beside the
+       dates glyph rather than instead of it. Both lists wrap their line, so a
+       fourth control costs the name a second line and not its tail. The
+       editor keeps its route as well: a guest reached for their dates may
+       turn out to need a room. */
+    if(!isBlock(r) && !r.openEnd && r.start >= 0){
+      const mvb = el("button","rowx rowmv rowsw");
+      mvb.innerHTML = SVG_SWAP;
+      mvb.setAttribute("aria-label", `Move ${r.guest} to another flat`);
+      mvb.onclick = ev=>{ ev.stopPropagation(); haptic(9);
+        openGuestMove(r, ()=> openSheet(fi, day)); };
+      end.appendChild(mvb);
+    }
     if(!isBlock(r) && !r.openEnd){
       const ed = el("button","rowx rowmv rowdt");
       ed.innerHTML = SVG_DATES;
-      ed.setAttribute("aria-label", `Change ${r.guest}'s dates` + (r.start > 0 ? ", or move them" : ""));
+      ed.setAttribute("aria-label", `Change ${r.guest}'s dates`);
       ed.onclick = ev=>{ ev.stopPropagation(); haptic(9);
         openStayDates(r, ()=> openSheet(fi, day)); };
       end.appendChild(ed);
