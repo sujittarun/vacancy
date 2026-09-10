@@ -4680,6 +4680,69 @@ export async function run(filter) {
     return "off during the run, and act needs a host even when on";
   });
 
+  /* "Turnaround should be gone after 2 PM, and see only who checked in today."
+     chg marks the night that is both a check-out and a first night, and the
+     tile said "Turnaround" for the whole of it — at nine in the evening, with
+     the new guest asleep inside, the grid still read as a room between guests. */
+  await test("a turnaround is a morning: the tile reads as the new guest after check-in time", async () => {
+    const keepR = resv.slice(), realClock = pastCheckin;
+    const fi = freeFlat(-3, 6);
+    ok(fi != null, "no flat free for the fixture");
+    resv.push({fi, start: -2, end: 0, nights: 2, guest: "Leaving Today", src: "Direct", manual: true, pays: []});
+    resv.push({fi, start: 0, end: 3, nights: 3, guest: "Arriving Today", src: "Airbnb", manual: true, pays: []});
+    resv.push({fi, start: 3, end: 4, nights: 1, guest: "Turn Tomorrow", src: "Direct", manual: true, pays: []});
+    recompute();
+    try {
+      ok(chg[fi][0] === 1, "the fixture is not a same-day turnaround");
+      const note = t => t.querySelector("s").textContent;
+      /* ten in the morning: the room is between guests and the tile says so */
+      pastCheckin = () => false;
+      let t = roomTile(fi, 0, 1);
+      eq(note(t), "Turnaround", "before check-in the tile should still say Turnaround");
+      ok(t.classList.contains("turn"), "before check-in the tile lost the turnaround fill");
+      ok(!t.querySelector(".fresh"), "a room still turning over is marked as a new arrival");
+      /* four in the afternoon: the new guest is in, and is marked as new */
+      pastCheckin = () => true;
+      t = roomTile(fi, 0, 1);
+      eq(note(t), "Arriving Today", `after check-in the tile reads "${note(t)}"`);
+      ok(!t.classList.contains("turn"), "after check-in the tile still wears the turnaround fill");
+      ok(t.querySelector(".fresh"), "the guest who arrived today carries no mark");
+      ok(/checked in today/.test(t.getAttribute("aria-label")), `aria: ${t.getAttribute("aria-label")}`);
+      /* a same-day changeover on a FUTURE day is a plan, not a state — the
+         clock has nothing to say about it */
+      const f = roomTile(fi, 3, 1);
+      eq(note(f), "Turnaround", `a future turnaround reads "${note(f)}" after check-in time`);
+      ok(!f.querySelector(".fresh"), "a future day is marked as a fresh arrival");
+      return "Turnaround until 14:00, then the new guest with a dot; tomorrow untouched";
+    } finally {
+      pastCheckin = realClock;
+      resv = keepR; recompute();
+    }
+  });
+
+  /* The dot is for the guest whose first night is tonight — not for anybody
+     who happens to be in. */
+  await test("only the guest who arrived today is marked as new", async () => {
+    const keepR = resv.slice(), realClock = pastCheckin;
+    const fi = freeFlat(-9, 6);
+    ok(fi != null, "no flat free for the fixture");
+    resv.push({fi, start: -8, end: 2, nights: 10, guest: "Night Nine", src: "Direct", manual: true, pays: []});
+    recompute();
+    try {
+      pastCheckin = () => true;
+      const t = roomTile(fi, 0, 1);
+      eq(t.querySelector("s").textContent, "Night Nine", "a guest on night nine lost their name");
+      ok(!t.querySelector(".fresh"), "a guest on night nine is marked as having arrived today");
+      ok(!/checked in today/.test(t.getAttribute("aria-label")), "aria claims a night-nine guest checked in today");
+      /* and the dot never shares a tile with the orphan flag: one lives on
+         free rooms, the other on booked ones */
+      const bothDots = [...document.querySelectorAll(".tile")]
+        .filter(x => x.querySelector(".flag") && x.querySelector(".fresh")).length;
+      eq(bothDots, 0, "a tile carries both the orphan flag and the new-arrival dot");
+      return "night nine: name, no dot";
+    } finally { pastCheckin = realClock; resv = keepR; recompute(); }
+  });
+
   await test("no text falls below AA in either theme", async () => {
     const m = await import("./audit.js?t=" + Date.now());
     const out = [];

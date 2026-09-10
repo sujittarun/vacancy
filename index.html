@@ -547,6 +547,10 @@ button{background:none;border:0;padding:0;cursor:pointer;
 .tile.turn s{color:var(--now);opacity:1}
 .tile.turn::after{content:"";position:absolute;top:0;right:0;width:17px;height:17px;
   background:var(--now);clip-path:polygon(100% 0,0 0,100% 100%);border-top-right-radius:9px}
+/* checked in today: the same corner, on the held fill, so the two dots never
+   share a tile — one lives on free rooms and the other on booked ones */
+.tile .fresh{position:absolute;top:7px;right:7px;width:6px;height:6px;border-radius:50%;
+  background:var(--free);box-shadow:0 0 0 2px var(--held)}
 /* an orphan night — free, but wedged between two bookings, so hard to sell */
 .tile .flag{position:absolute;top:7px;right:7px;width:6px;height:6px;border-radius:50%;
   /* The ring was 2px of var(--free) — the same fill as the tile underneath it,
@@ -9558,7 +9562,16 @@ function roomTile(fi, day, stay){
      say "Free n+", which is this file's established idiom for "and beyond". */
   const open = freeSpan(fi, day, day + nights);
   const blocked = blk[fi][day];
-  const turn = chg[fi][day] && !open;
+  /* A TURNAROUND IS A MORNING, NOT A DAY. chg marks the night that is both
+     somebody's check-out and somebody else's first night, and the tile said
+     "Turnaround" for the whole of it — at nine in the evening, with the new
+     guest asleep inside, the grid still read as a room between guests. The
+     owner: "turnaround should be gone after 2 PM, and see only who checked in
+     today." So on today's tile the word lasts until check-in time and then the
+     tile reads as the guest who is in, marked as new. Future days keep the
+     word, because there it is a plan and not a state. */
+  const afterCheckin = day === 0 && pastCheckin();
+  const turn = chg[fi][day] && !open && !afterCheckin;
   const run = open ? runFrom(fi, day) : 0;
   const b = el("button","tile" + (open ? " free" : blocked ? " oos" : (turn ? " turn" : "")));
   /* `open` is a verdict on the WHOLE stay the dial is asking about, but the
@@ -9604,6 +9617,12 @@ function roomTile(fi, day, stay){
     : "Booked";
   b.append(el("b",null,fl.id), el("s", showName ? "who" : null, note));
   if(open && run === 1) b.appendChild(el("i","flag"));   // orphan night
+  /* WHO IS NEW. A guest whose first night is tonight is the one the operator
+     wants to pick out of forty tiles — keys, deposit, the welcome message —
+     and until now they looked exactly like a guest on night nine. A dot, in
+     the corner the orphan flag uses on free tiles, on the held fill. */
+  const fresh = showName && who.start === day && day === 0;
+  if(fresh) b.appendChild(el("i","fresh"));
   /* the spoken label says what the printed one says — "Free 2+n" announced as
      "free for 2 nights" understates a flat that is free to the end of the book,
      and the two disagreeing is its own small lie */
@@ -9613,7 +9632,7 @@ function roomTile(fi, day, stay){
         : `free for ${run} night${run>1?"s":""} from`)
       : blocked ? "out of service on"
       : partial ? `free for ${partial} of ${nights} nights from`
-      : named ? `booked to ${who.guest.trim()} on`
+      : named ? `booked to ${who.guest.trim()}${fresh ? ", checked in today," : ""} on`
       : "not available on"} ${fmtL(day)}`);
   b.onclick = ()=>{
     /* honoured only while it could plausibly belong to the gesture that set
@@ -10140,6 +10159,16 @@ function extendAfter(block, mv){
    days later — so the stay stays LISTED, and editable, for a fortnight. Past
    that the room sheet becomes an archive: measured on G02, thirty days put
    ten departed guests under a heading nobody had asked to read. */
+/* When a room stops being "between guests" and starts being the new guest's.
+   Check-out is the morning, check-in is the afternoon, and 14:00 is the hour
+   Crescent Stays quotes. Used by the room grid only: the day view and the
+   cleaner's screen are about the clean itself, which is a job until it is
+   marked done whatever the clock says. */
+const CHECKIN_HOUR = 14;
+/* A function rather than an expression at the call site, so a test can hold
+   the clock at ten in the morning and at four in the afternoon on the same
+   tile — the two states this rule exists to tell apart. */
+function pastCheckin(){ return new Date().getHours() >= CHECKIN_HOUR; }
 const RECENT_OUT = 14;      // still listed on the room sheet, still editable
 const RECENT_BAND = 2;      // recent enough to be offered on the action band
 /* The stays that ended in that window, newest first. Blocks are excluded: an
