@@ -2584,6 +2584,10 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
    himself. Everything below it arrives pre-filled, so the common booking is
    still two touches — the number, and Book.                                  */
 .bkform{margin:14px 20px 0;display:flex;flex-direction:column;gap:8px}
+/* the rows that come and go with an answer — .srcRow and .bkamt set their own
+   display, which outranks the browser's [hidden], so hidden rows stayed on
+   screen until this said otherwise */
+.bkform > [hidden]{display:none}
 .bkform input{width:100%;padding:12px 13px;border-radius:var(--r-sm);background:var(--surface-2);
   border:1px solid var(--line);color:var(--txt);font-family:var(--ui);
   font-size:16px;   /* 16px or iOS zooms the whole page on focus */
@@ -2634,6 +2638,20 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
    being squeezed into 120 centred pixels and wrapped mid-phrase — ":not(
    :first-child)" is the whole fix and it applies everywhere at once. */
 .bkcap span:last-child:not(:first-child){flex:0 0 120px;text-align:center}
+/* the right half as a STATE rather than a column heading — "₹4,000 still due"
+   over a row of chips has no narrow control to centre on, so it sits at the
+   end of the line at its own width */
+.bkcap.tail span:last-child:not(:first-child){flex:0 0 auto;text-align:right}
+/* the money box's two tags sit INSIDE the box, at its end — "all" fills it
+   with the total, the method names itself and changes on a tap — so the whole
+   of a payment is one box and nothing under it comes or goes */
+.bkamt.recv input{padding-right:118px}
+.recTools{position:absolute;right:7px;top:50%;transform:translateY(-50%);display:flex;gap:5px}
+.recTools button{padding:6px 10px;border-radius:var(--r-xs);background:var(--surface-3);
+  border:1px solid var(--line);font-size:11.5px;font-weight:640;color:var(--txt-2);
+  white-space:nowrap;letter-spacing:.01em;transition:transform .3s var(--spring),background .18s,color .18s}
+.recTools button:active{transform:scale(.94);transition-duration:.085s}
+.recTools button[hidden]{display:none}
 .bkrow{display:flex;gap:8px}
 .bkamt{position:relative;flex:1;min-width:0}
 .bkamt s{position:absolute;left:13px;top:50%;transform:translateY(-50%);text-decoration:none;
@@ -7981,10 +7999,21 @@ function addBooking(fi, start, nights, guest, src, extra){
   // A platform booking is already settled by the guest. Recording that here is
   // not an assumption, it is what happened — and it is the difference between a
   // payment column the operator trusts and one he learns to ignore.
-  if(amount && PLATFORMS.indexOf(row.src) >= 0) addPayment(row, amount, "Platform");
+  const platform = amount && PLATFORMS.indexOf(row.src) >= 0;
+  if(platform) addPayment(row, amount, "Platform");
+  /* MONEY TAKEN WITH THE BOOKING. A guest who pays on the phone, or hands over
+     a deposit, was being booked and then chased: the row went in owing the
+     whole stay, sat on the Money tab and on "Collect from arrivals", and the
+     operator followed up a debt that was never owed — or opened the payment
+     form straight after booking, a second screen for one transaction. The
+     form asks once, and what it took is recorded as a payment like any other:
+     the same row, the same undo, the same line in the log. Never for a
+     platform booking, whose money the platform already holds. */
+  const paid = platform ? 0 : toAmount(extra.paid);
   usingDemo = false;
   recompute(); save(); cacheSave();
   track("booking_added", {nights, priced: !!amount, src: row.src || null,
+                          paid: !paid ? "none" : amount && paid >= amount ? "full" : "part",
                           ahead: start > 0, live: MODE === "live"});
   /* `quiet` is for the undo, which re-adds the row it just removed and then
      logs the restore itself. Without it the timeline carried BOTH — a restore
@@ -7993,6 +8022,8 @@ function addBooking(fi, start, nights, guest, src, extra){
     logAct("book", `Booked ${guest} into ${flatLabel(fi)} · ${fmt(start)}–${fmt(start+nights)}`
       + ` · ${nights} night${nights>1?"s":""}` + (amount ? ` · ${money(amount)}` : " · no amount"),
       {flat: flatLabel(fi), guest});
+  /* after the booking's own line, so the log reads in the order it happened */
+  if(paid) addPayment(row, paid, extra.method, "", 0);
   return true;
 }
 
@@ -16931,9 +16962,64 @@ function openBooking(fi, from, nights){
     const c = el("button", null, s);
     c.setAttribute("aria-pressed", s === src);
     c.onclick = ()=>{ src = s; haptic(8);
-      [...srcRow.children].forEach(o=>o.setAttribute("aria-pressed", o.textContent === src)); };
+      [...srcRow.children].forEach(o=>o.setAttribute("aria-pressed", o.textContent === src));
+      paintPay(); };
     srcRow.appendChild(c);
   });
+
+  /* ── what was received, while the booking is being taken ─────────────────
+     "While booking we need a small option to mark it as paid, so that I don't
+     have to follow up; some customers pay partial while booking." One box,
+     under the total, and the whole payment lives inside it: empty is nothing
+     received, a number is a part payment, and the two tags at its end are
+     "all" — which fills in the total in one tap — and the method, which names
+     itself and changes when tapped. Nothing under it appears or disappears.
+     The caption on the right says what the box means for the stay, and the
+     Book button says what it is about to record. A platform booking has no
+     box: the platform holds the money and the row already records it, so the
+     line says that instead. */
+  let paidMethod = "UPI", paintGo = null;
+  const payCap = el("div","bkcap tail");
+  const payCapR = el("span");
+  payCap.append(el("span", null, "Received now"), payCapR);
+  const recWrap = el("div","bkamt recv");
+  recWrap.appendChild(el("s", null, "₹"));
+  const rec = el("input");
+  rec.type = "text"; rec.inputMode = "numeric"; rec.placeholder = "Nothing yet";
+  rec.setAttribute("aria-label","Amount received now");
+  rec.addEventListener("input", ()=> paintPay());
+  const tools = el("div","recTools");
+  const allBtn = el("button", null, "all");
+  allBtn.onclick = ()=>{ rec.value = String(toAmount(amt.value)); haptic(8); paintPay(); };
+  const viaBtn = el("button", null, paidMethod);
+  /* in the order the next tap is likeliest to want: a transfer, then cash */
+  const VIA = ["UPI","Cash","Bank","Card"];
+  viaBtn.onclick = ()=>{ paidMethod = VIA[(VIA.indexOf(paidMethod) + 1) % VIA.length]; haptic(8); paintPay(); };
+  tools.append(allBtn, viaBtn);
+  recWrap.append(rec, tools);
+  const platNote = el("div","bkstate");
+
+  /* what the form will hand to addBooking, as the box stands */
+  const paidNow = ()=> PLATFORMS.indexOf(src) >= 0 ? 0 : toAmount(rec.value);
+  function paintPay(){
+    const plat = PLATFORMS.indexOf(src) >= 0, total = toAmount(amt.value), paid = paidNow();
+    recWrap.hidden = plat; platNote.hidden = !plat;
+    if(plat){
+      payCapR.textContent = "";
+      platNote.textContent = (total ? `${money(total)} paid to ${src}` : `Paid to ${src}`)
+        + " · the payout comes to you";
+    }else{
+      allBtn.hidden = !total || paid >= total;
+      allBtn.setAttribute("aria-label", `All of it · ${money(total)}`);
+      viaBtn.textContent = paidMethod;
+      viaBtn.setAttribute("aria-label", `Received by ${paidMethod} · tap to change`);
+      payCapR.textContent = !paid
+        ? (total ? `${money(total)} due on arrival` : "no total yet")
+        : paid >= total ? "settled"
+        : `${money(total - paid)} still due`;
+    }
+    if(paintGo) paintGo();
+  }
 
   const go = el("button","bkgo","");
 
@@ -16963,9 +17049,15 @@ function openBooking(fi, from, nights){
         : `${fl.id} is not free on ${fmtL(day)}`;
     }
     if(!touchedAmt) amt.value = (fl.rate || 0) * n ? String((fl.rate || 0) * n) : "";
-    go.textContent = ok ? `Book ${n} night${n>1?"s":""}` : "Not available";
-    go.disabled = !ok;
+    paintGo = ()=>{
+      const paid = paidNow();
+      go.textContent = !ok ? "Not available"
+        : `Book ${n} night${n>1?"s":""}` + (paid ? ` · ${money(paid)} paid` : "");
+      go.disabled = !ok;
+    };
+    paintPay();
   }
+  amt.addEventListener("input", paintPay);
   dLess.onclick = ()=>{ day = Math.max(0, day-1); haptic(5); paint(); };
   dMore.onclick = ()=>{ day = Math.min(DAYS-1, day+1); haptic(5); paint(); };
   nLess.onclick = ()=>{ n = Math.max(1, n-1); haptic(5); paint(); };
@@ -16978,6 +17070,7 @@ function openBooking(fi, from, nights){
     if(PLATFORMS.indexOf(src) < 0){
       src = "Repeat guest";
       [...srcRow.children].forEach(o=>o.setAttribute("aria-pressed", o.textContent === src));
+      paintPay();
     }
     back.style.display = "";
     back.textContent = seen.stays === 1
@@ -16988,7 +17081,8 @@ function openBooking(fi, from, nights){
   const take = ()=>{
     if(go.disabled) return;
     if(addBooking(fi, day, n, who.value.trim(), src,
-                  {phone: phone.value, pax, amount: amt.value}   /* same: keep the decimal */)){
+                  {phone: phone.value, pax, amount: amt.value,   /* same: keep the decimal */
+                   paid: paidNow(), method: paidMethod})){
       haptic(18); closeSheet(); refreshScreen();
     }else{
       haptic(30); go.textContent = "Just taken";
@@ -16998,7 +17092,8 @@ function openBooking(fi, from, nights){
   go.onclick = take;
   who.addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); who.blur(); take(); }});
 
-  form.append(whenCap, whenRow, state, phone, who, back, capRow, row, srcRow, go);
+  form.append(whenCap, whenRow, state, phone, who, back, capRow, row, srcRow,
+              payCap, recWrap, platNote, go);
   sheetB.append(form);
   /* AFTER the row is in the document, because the question is how wide it came
      out. Seven channels do not fit a phone — measured at 375px, the row scrolls

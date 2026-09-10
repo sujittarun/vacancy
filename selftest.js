@@ -2613,6 +2613,89 @@ export async function run(filter) {
     }
   });
 
+  /* "While booking we need a small option to mark it as paid, so that I don't
+     have to follow up; some customers pay partial while booking." Driven
+     through the real form: one box, its "all" tag, its method tag, the caption
+     that says what is left, the button that says what it will record — and the
+     row that comes out of it, which must carry the money as a payment. */
+  await test("a booking can be taken as paid, in full or in part, and a platform booking asks nothing", async () => {
+    const stored = localStorage.getItem(STORE), keep = activity.slice();
+    const fi = flats.map((f, i) => i).find(i => freeSpan(i, 0, 14));
+    ok(fi != null, "no flat free for the fixtures");
+    const q = sel => document.querySelector(".sheet.on " + sel);
+    const tag = label => [...document.querySelectorAll(".sheet.on .recTools button")].find(b => b.textContent === label);
+    const cap = () => q(".bkcap.tail span:last-child").textContent;
+    const type = (input, v) => { input.value = v; input.dispatchEvent(new Event("input", {bubbles:true})); };
+    const open = async (day, n) => { openBooking(fi, day, n); await until(() => q(".bkgo"), "the booking form"); };
+    const book = async name => { type(q('input[aria-label^="Guest name"]'), name); q(".bkgo").click();
+      await until(() => !q(".bkgo"), "the form to close"); return resv.find(x => x.guest === name); };
+    try {
+      /* paid in full, by the tag */
+      await open(1, 2);
+      const rec = () => q('input[aria-label="Amount received now"]');
+      ok(rec(), "no box for the money received");
+      eq(rec().value, "", "the box is not empty to begin with");
+      type(q('input[aria-label="Total agreed for the stay"]'), "12000");
+      eq(cap(), "₹12,000 due on arrival", "the caption with nothing received");
+      ok(tag("all") && !tag("all").hidden, "no all tag while the box is short of the total");
+      eq(tag("UPI") && tag("UPI").textContent, "UPI", "the assumed method");
+      tag("all").click();
+      eq(rec().value, "12000", "the all tag did not fill the box");
+      ok(tag("all").hidden, "the all tag stays once the box holds the total");
+      eq(cap(), "settled", "the caption for a stay paid in full");
+      eq(q(".bkgo").textContent, "Book 2 nights · ₹12,000 paid", "the button says what it records");
+      const full = await book("Paid Fixture");
+      ok(full, "the booking was not taken");
+      eq(full.amount, 12000, "the total on the row");
+      eq(paidOn(full), 12000, "the money on the row");
+      eq(full.pays[0].method, "UPI", "the method on the payment");
+      eq(dueFrom(full), 0, "still due on a stay paid in full");
+      ok(activity.some(a => a.k === "paid" && /Paid Fixture/.test(a.s) && /12,000/.test(a.s)), "the payment is not in the log");
+      /* paid in part, in cash, by typing */
+      await open(4, 2);
+      type(q('input[aria-label="Total agreed for the stay"]'), "10000");
+      type(rec(), "4000");
+      eq(cap(), "₹6,000 still due", "the caption for a part payment");
+      tag("UPI").click();
+      ok(tag("Cash"), `one tap from UPI did not reach Cash: ${[...document.querySelectorAll(".sheet.on .recTools button")].map(b => b.textContent)}`);
+      eq(q(".bkgo").textContent, "Book 2 nights · ₹4,000 paid", "the button for a part payment");
+      const partR = await book("Part Fixture");
+      ok(partR, "the part-paid booking was not taken");
+      eq(paidOn(partR), 4000, "the money on the part-paid row");
+      eq(partR.pays[0].method, "Cash", "the method on the part payment");
+      eq(dueFrom(partR), 6000, "still due after a part payment");
+      /* nothing: a box emptied again records nothing */
+      await open(7, 1);
+      type(q('input[aria-label="Total agreed for the stay"]'), "5000");
+      type(rec(), "1000");
+      type(rec(), "");
+      eq(cap(), "₹5,000 due on arrival", "the caption after the box is emptied");
+      eq(q(".bkgo").textContent, "Book 1 night", "the button when nothing is taken");
+      const owing = await book("Owing Fixture");
+      eq((owing.pays || []).length, 0, "payments on a stay taken as unpaid");
+      eq(dueFrom(owing), 5000, "due on a stay taken as unpaid");
+      /* a platform booking: no box, a line, and the platform payment as before */
+      await open(9, 1);
+      type(q('input[aria-label="Total agreed for the stay"]'), "7000");
+      tag("all").click();
+      [...document.querySelectorAll(".sheet.on .srcRow button")].find(b => b.textContent === "Airbnb").click();
+      ok(q(".bkamt.recv").hidden, "the box is still asked of a platform booking");
+      ok(/₹7,000 paid to Airbnb/.test(q(".bkstate:last-of-type").textContent), `the platform line: ${q(".bkstate:last-of-type").textContent}`);
+      eq(q(".bkgo").textContent, "Book 1 night", "the button claims a payment on a platform booking");
+      const plat = await book("Plat Fixture");
+      eq(withPlatform(plat), 7000, "the platform payment");
+      eq(plat.pays.length, 1, "payments on a platform booking taken with the box full");
+      return "all · UPI, ₹4,000 typed · Cash with ₹6,000 due, emptied · nothing, Airbnb untouched";
+    } finally {
+      closeSheet();
+      ["Paid Fixture","Part Fixture","Owing Fixture","Plat Fixture"].forEach(g => {
+        const r = resv.find(x => x.guest === g); if (r) resv.splice(resv.indexOf(r), 1); });
+      recompute();
+      if (stored != null) localStorage.setItem(STORE, stored);
+      activity.length = 0; keep.forEach(a => activity.push(a)); jset(LOG_STORE, activity);
+    }
+  });
+
   await test("the dates editor stops at the next guest and refuses an arrival that lands on one", async () => {
     const stored = localStorage.getItem(STORE);
     try {
