@@ -100,15 +100,15 @@ rate × nights, so accepting it is no taps at all.
 
 **Guests** is a stepper. Nobody should open a keyboard to say "two people".
 
-**Received now** is the money taken while the booking is made — a transfer on the phone,
-a deposit in hand. Three chips: *Nothing yet*, *All of it*, *Part*. Pick one of the last
-two and the method chips appear under it (UPI is assumed; cash, bank and card are a tap
-away); *Part* also opens a box for the amount. The caption on the right says what the
-answer means — *settled*, or *₹6,000 still due* — and the Book button repeats what it is
-about to record: *Book 3 nights · ₹4,000 paid*. What was taken is a payment like any other,
-on the guest's row, so a stay paid at booking never appears on the Money tab or in
-*Collect from arrivals*. A platform booking has no chips: the platform holds the money, and
-the line says so.
+**Received now** is one box under the total, and the whole payment lives in it. Leave it
+empty and nothing was received. Type a number and that is a part payment. Two small tags
+sit inside the box at its end: **all** fills in the total in one tap, and the method names
+itself — *UPI* to begin with — and changes to cash, bank or card as you tap it. The caption
+on the right says what the box means for the stay — *₹6,000 still due*, or *settled* — and
+the Book button repeats what it is about to record: *Book 3 nights · ₹4,000 paid*. What was
+taken is a payment like any other, on the guest's row, so a stay paid at booking never
+appears on the Money tab or in *Collect from arrivals*. A platform booking has no box: the
+platform holds the money, and the line says so.
 
 ### Money, and the mistake most booking apps make
 

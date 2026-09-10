@@ -2642,6 +2642,16 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
    over a row of chips has no narrow control to centre on, so it sits at the
    end of the line at its own width */
 .bkcap.tail span:last-child:not(:first-child){flex:0 0 auto;text-align:right}
+/* the money box's two tags sit INSIDE the box, at its end — "all" fills it
+   with the total, the method names itself and changes on a tap — so the whole
+   of a payment is one box and nothing under it comes or goes */
+.bkamt.recv input{padding-right:118px}
+.recTools{position:absolute;right:7px;top:50%;transform:translateY(-50%);display:flex;gap:5px}
+.recTools button{padding:6px 10px;border-radius:var(--r-xs);background:var(--surface-3);
+  border:1px solid var(--line);font-size:11.5px;font-weight:640;color:var(--txt-2);
+  white-space:nowrap;letter-spacing:.01em;transition:transform .3s var(--spring),background .18s,color .18s}
+.recTools button:active{transform:scale(.94);transition-duration:.085s}
+.recTools button[hidden]{display:none}
 .bkrow{display:flex;gap:8px}
 .bkamt{position:relative;flex:1;min-width:0}
 .bkamt s{position:absolute;left:13px;top:50%;transform:translateY(-50%);text-decoration:none;
@@ -2665,7 +2675,6 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
   white-space:nowrap;transition:transform .3s var(--spring), background .18s, color .18s}
 .srcRow button:active{transform:scale(.95)}
 .srcRow button[aria-pressed="true"]{background:var(--free);color:var(--free-ink);border-color:transparent}
-.srcRow button[disabled]{opacity:.4}
 .bkgo{width:100%;padding:14px;border-radius:var(--r-sm);border:none;background:var(--free);
   color:var(--free-ink);font-family:var(--ui);font-size:15px;font-weight:650;
   transition:transform .35s var(--spring)}
@@ -16959,74 +16968,56 @@ function openBooking(fi, from, nights){
   });
 
   /* ── what was received, while the booking is being taken ─────────────────
-     "While booking we need to have a small option to mark it as paid, so that
-     I don't have to follow up; some customers pay partial while booking."
-     Three answers, one row of chips, nothing else on screen until one of them
-     needs it: "All of it" and "Part" bring the method chips in underneath,
-     "Part" brings an amount box, and the caption on the right says what the
-     answer means for the stay — settled, or what is still due. A platform
-     booking has no question to ask: the platform holds the money and the row
-     already records it, so the block collapses to that one line. */
-  let paidMode = "none", paidMethod = "UPI", paintGo = null;
+     "While booking we need a small option to mark it as paid, so that I don't
+     have to follow up; some customers pay partial while booking." One box,
+     under the total, and the whole payment lives inside it: empty is nothing
+     received, a number is a part payment, and the two tags at its end are
+     "all" — which fills in the total in one tap — and the method, which names
+     itself and changes when tapped. Nothing under it appears or disappears.
+     The caption on the right says what the box means for the stay, and the
+     Book button says what it is about to record. A platform booking has no
+     box: the platform holds the money and the row already records it, so the
+     line says that instead. */
+  let paidMethod = "UPI", paintGo = null;
   const payCap = el("div","bkcap tail");
   const payCapR = el("span");
   payCap.append(el("span", null, "Received now"), payCapR);
-  const payRow = el("div","srcRow payRow");
-  const payChip = {};
-  [["none","Nothing yet"],["full","All of it"],["part","Part"]].forEach(([k, label])=>{
-    const c = el("button", null, label);
-    c.dataset.mode = k;
-    c.onclick = ()=>{ if(c.disabled) return; paidMode = k; haptic(8); paintPay();
-      if(k === "part") setTimeout(()=> part.focus(), 60); };
-    payChip[k] = c; payRow.appendChild(c);
-  });
-  const partWrap = el("div","bkamt");
-  partWrap.appendChild(el("s", null, "₹"));
-  const part = el("input");
-  part.type = "text"; part.inputMode = "numeric"; part.placeholder = "How much was received";
-  part.setAttribute("aria-label","Amount received now, part of the total");
-  part.addEventListener("input", paintPay);
-  partWrap.appendChild(part);
-  const viaRow = el("div","srcRow viaRow");
-  PAY_METHODS.filter(m => m !== "Platform").forEach(mth=>{
-    const c = el("button", null, mth);
-    c.onclick = ()=>{ paidMethod = mth; haptic(8); paintPay(); };
-    viaRow.appendChild(c);
-  });
+  const recWrap = el("div","bkamt recv");
+  recWrap.appendChild(el("s", null, "₹"));
+  const rec = el("input");
+  rec.type = "text"; rec.inputMode = "numeric"; rec.placeholder = "Nothing yet";
+  rec.setAttribute("aria-label","Amount received now");
+  rec.addEventListener("input", ()=> paintPay());
+  const tools = el("div","recTools");
+  const allBtn = el("button", null, "all");
+  allBtn.onclick = ()=>{ rec.value = String(toAmount(amt.value)); haptic(8); paintPay(); };
+  const viaBtn = el("button", null, paidMethod);
+  /* in the order the next tap is likeliest to want: a transfer, then cash */
+  const VIA = ["UPI","Cash","Bank","Card"];
+  viaBtn.onclick = ()=>{ paidMethod = VIA[(VIA.indexOf(paidMethod) + 1) % VIA.length]; haptic(8); paintPay(); };
+  tools.append(allBtn, viaBtn);
+  recWrap.append(rec, tools);
   const platNote = el("div","bkstate");
 
-  /* what the form will hand to addBooking, from the chips as they stand */
-  const paidNow = ()=>{
-    if(PLATFORMS.indexOf(src) >= 0 || paidMode === "none") return 0;
-    return paidMode === "full" ? toAmount(amt.value) : toAmount(part.value);
-  };
+  /* what the form will hand to addBooking, as the box stands */
+  const paidNow = ()=> PLATFORMS.indexOf(src) >= 0 ? 0 : toAmount(rec.value);
   function paintPay(){
-    const plat = PLATFORMS.indexOf(src) >= 0, total = toAmount(amt.value);
-    payRow.hidden = plat; partWrap.hidden = plat || paidMode !== "part";
-    viaRow.hidden = plat || paidMode === "none"; platNote.hidden = !plat;
+    const plat = PLATFORMS.indexOf(src) >= 0, total = toAmount(amt.value), paid = paidNow();
+    recWrap.hidden = plat; platNote.hidden = !plat;
     if(plat){
       payCapR.textContent = "";
-      platNote.textContent = total
-        ? `${money(total)} paid to ${src} · the payout comes to you`
-        : `Paid to ${src} · the payout comes to you`;
-      if(paintGo) paintGo();
-      return;
+      platNote.textContent = (total ? `${money(total)} paid to ${src}` : `Paid to ${src}`)
+        + " · the payout comes to you";
+    }else{
+      allBtn.hidden = !total || paid >= total;
+      allBtn.setAttribute("aria-label", `All of it · ${money(total)}`);
+      viaBtn.textContent = paidMethod;
+      viaBtn.setAttribute("aria-label", `Received by ${paidMethod} · tap to change`);
+      payCapR.textContent = !paid
+        ? (total ? `${money(total)} due on arrival` : "no total yet")
+        : paid >= total ? "settled"
+        : `${money(total - paid)} still due`;
     }
-    /* "All of it" needs a total to be all of; without one it waits, and an
-       answer already given on it falls back rather than recording nothing */
-    payChip.full.disabled = !total;
-    if(!total && paidMode === "full") paidMode = "none";
-    Object.keys(payChip).forEach(k => payChip[k].setAttribute("aria-pressed", k === paidMode));
-    [...viaRow.children].forEach(o => o.setAttribute("aria-pressed", o.textContent === paidMethod));
-    const paid = paidNow();
-    payCapR.textContent = paidMode === "none"
-      ? (total ? `${money(total)} due on arrival` : "no total yet")
-      : paidMode === "part" && !paid ? "how much?"
-      : paid >= total ? "settled"
-      : `${money(total - paid)} still due`;
-    /* the commit button says what it is about to record, at the moment it
-       matters — but only paint() knows whether the nights are free, so it
-       owns the button and this only asks it to look again */
     if(paintGo) paintGo();
   }
 
@@ -17102,7 +17093,7 @@ function openBooking(fi, from, nights){
   who.addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); who.blur(); take(); }});
 
   form.append(whenCap, whenRow, state, phone, who, back, capRow, row, srcRow,
-              payCap, payRow, partWrap, viaRow, platNote, go);
+              payCap, recWrap, platNote, go);
   sheetB.append(form);
   /* AFTER the row is in the document, because the question is how wide it came
      out. Seven channels do not fit a phone — measured at 375px, the row scrolls
