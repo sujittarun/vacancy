@@ -4975,6 +4975,171 @@ export async function run(filter) {
     }
   });
 
+  /* ══ two phones, one book, right now ═════════════════════════════════════ */
+
+  /* The subtitle read "19 of 38 free · 10 Sep → 13 …" beside the Demo pill —
+     a range with its end cut off, on the line whose job is the range. */
+  await test("the Rooms subtitle says the whole range without clipping", async () => {
+    const keepN = stayNights, keepD = pickedNight;
+    try {
+      document.querySelectorAll(".tabbar button")[0].click();
+      await until(() => document.querySelector(".tile"), "the room grid");
+      /* three nights inside one month */
+      const seg = [...document.querySelectorAll(".seg button, .nights button")].find(b => /3 nights/.test(b.textContent));
+      ok(seg, "no 3-night control to press");
+      seg.click(); await wait(120);
+      const sub = document.getElementById("scrSub");
+      ok(/\d+ of \d+ free · \d+–\d+ [A-Z][a-z]{2}$/.test(sub.textContent),
+        `the subtitle reads "${sub.textContent}"`);
+      ok(sub.scrollWidth <= sub.clientWidth + 1, `the subtitle still clips: "${sub.textContent}"`);
+      return sub.textContent;
+    } finally {
+      const one = [...document.querySelectorAll(".seg button, .nights button")].find(b => /1 night/.test(b.textContent));
+      if (one) { one.click(); await wait(60); }
+    }
+  });
+
+  /* Nobody reloads a phone browser. The book stays fresh and the app does not. */
+  await test("a page that comes back to the front reloads itself when a newer build is out", async () => {
+    const realFetch = window.fetch, realReload = reloadPage;
+    const wasBoot = bootTag, wasAt = tagAt, wasPending = pendingTag;
+    let served = '"build-1"', reloads = 0;
+    try {
+      window.fetch = async (u, o) => (o && o.method === "HEAD")
+        ? {headers: {get: k => (k === "etag" ? served : null)}} : realFetch(u, o);
+      reloadPage = () => { reloads++; };
+      bootTag = null; tagAt = 0; pendingTag = null;
+      await checkForNewBuild(true);
+      eq(bootTag, '"build-1"', "the running copy's tag was not recorded");
+      eq(reloads, 0, "it reloaded on the first sight of its own tag");
+      /* the same build again: nothing */
+      await checkForNewBuild(true);
+      eq(reloads, 0, "it reloaded with nothing new out");
+      /* a new build, screen free: reload */
+      served = '"build-2"';
+      await checkForNewBuild(true);
+      eq(reloads, 1, "a newer build did not reload a free screen");
+      /* a newer build while a sheet is open: no reload, a way to */
+      pendingTag = null; bootTag = '"build-2"'; served = '"build-3"';
+      openSheet(0, 0); await until(() => sheet.classList.contains("on"), "a sheet");
+      await checkForNewBuild(true);
+      eq(reloads, 1, "it reloaded out from under an open sheet");
+      const t = [...document.querySelectorAll(".toast")].find(x => /newer version/i.test(x.textContent));
+      ok(t, "no word that a newer version is waiting");
+      ok([...t.querySelectorAll("button")].some(b => /load it/i.test(b.textContent)), "no way to load it now");
+      /* and it goes the moment the screen is free */
+      closeSheet(); await wait(750);
+      eq(reloads, 2, "the deferred reload never happened once the sheet closed");
+      /* the throttle: a second look inside five minutes costs no request */
+      let heads = 0; window.fetch = async (u, o) => { if (o && o.method === "HEAD") heads++; return {headers: {get: () => served}}; };
+      tagAt = Date.now(); await checkForNewBuild(); eq(heads, 0, "it asked the server again inside the throttle");
+      return "records, ignores same, reloads free, defers busy, throttles";
+    } finally {
+      window.fetch = realFetch; reloadPage = realReload;
+      bootTag = wasBoot; tagAt = wasAt; pendingTag = wasPending;
+      closeSheet(); document.querySelectorAll(".toast").forEach(x => x.remove());
+    }
+  });
+
+  /* Two managers on the shared spreadsheet could see each other's cursor and
+     today only that stopped them booking the same flat for the same night.
+     Driven through a stand-in socket: the real one measured 20–23 ms from
+     here, and cannot be reached from the test at all on the owner's wifi. */
+  await test("a phone that opens a booking tells the others, and they mark the room", async () => {
+    const RealWS = window.WebSocket;
+    const keep = {MODE, hostId, session, me, ws: liveWs, mine, sheetFlat, peersN: peers.size};
+    const sent = []; let sock = null;
+    class FakeWS { constructor(url){ this.url = url; this.readyState = 0; sock = this;
+        setTimeout(() => { this.readyState = 1; this.onopen && this.onopen(); }, 0); }
+      send(s){ sent.push(JSON.parse(s)); } close(){ this.readyState = 3; this.onclose && this.onclose(); } }
+    try {
+      window.WebSocket = FakeWS;
+      MODE = "live"; hostId = "h-live"; me = {role: "owner", buildings: null, name: "Tarun"};
+      session = {uid: "u-me", email: "tarun.sujit@gmail.com", access_token: "tok"};
+      peers.clear(); liveWs = null; mine = null;
+      liveConnect();
+      await until(() => sent.some(m => m.event === "phx_join"), "the join");
+      const join = sent.find(m => m.event === "phx_join");
+      eq(join.topic, "realtime:editing:h-live", "the channel is not the host's");
+      eq(join.payload.access_token, "tok", "the join carries no token");
+
+      /* THIS phone opens a booking: it says so, with a name, a flat and a day */
+      const fi = flats.map((f, i) => i).find(i => freeSpan(i, 0, 3));
+      openBooking(fi, 0, 2);
+      await until(() => sent.some(m => m.event === "broadcast" && m.payload.event === "editing"), "the editing signal");
+      const e = sent.find(m => m.event === "broadcast" && m.payload.event === "editing").payload.payload;
+      eq(e.code, flats[fi].id, "the signal names the wrong flat");
+      eq(e.who, "Tarun", "the signal does not carry the name"); eq(e.kind, "book", "the kind");
+      eq(e.uid, "u-me", "the signal does not say whose it is");
+      /* closing the sheet says done, once */
+      const before = sent.filter(m => m.event === "broadcast" && m.payload.event === "done").length;
+      closeSheet();
+      eq(sent.filter(m => m.event === "broadcast" && m.payload.event === "done").length, before + 1, "closing did not say done");
+
+      /* ANOTHER phone opens the same flat: the tile is marked, in place */
+      document.querySelectorAll(".tabbar button")[0].click();
+      await until(() => document.querySelector(".tile"), "the room grid");
+      const tileOf = () => [...document.querySelectorAll(".tile")].find(t => t.querySelector("b").textContent === flats[fi].id);
+      const noteBefore = tileOf().querySelector("s").textContent;
+      sock.onmessage({data: JSON.stringify({topic: "realtime:editing:h-live", event: "broadcast",
+        payload: {event: "editing", payload: {uid: "u-other", who: "Raghuveer", kind: "book", code: flats[fi].id, flat: flats[fi].uid || null, day: dayISO(0)}}})});
+      const t = tileOf();
+      ok(t.classList.contains("busy"), "the other phone's booking did not mark the tile");
+      eq(t.querySelector("s").textContent, "Raghuveer · booking", `the tile reads "${t.querySelector("s").textContent}"`);
+      /* and the room sheet warns, on that flat only */
+      openSheet(fi, 0);
+      await until(() => document.getElementById("busyban"), "the warning on the sheet");
+      ok(/Raghuveer is booking/.test(document.getElementById("busyban").textContent), "the warning does not say who");
+      closeSheet();
+      const other = flats.map((f, i) => i).find(i => i !== fi && freeSpan(i, 0, 3));
+      openSheet(other, 0); await until(() => sheet.classList.contains("on"), "another sheet");
+      ok(!document.getElementById("busyban"), "a flat nobody is on carries the warning");
+      closeSheet();
+      /* our own echo is ignored */
+      sock.onmessage({data: JSON.stringify({event: "broadcast", payload: {event: "editing", payload: {uid: "u-me", who: "Tarun", kind: "book", code: flats[other].id}}})});
+      ok(!peers.has("u-me"), "the phone marked its own signal as somebody else");
+
+      /* "done" clears it in one message, and the tile's own words come back */
+      sock.onmessage({data: JSON.stringify({event: "broadcast", payload: {event: "done", payload: {uid: "u-other"}}})});
+      ok(!tileOf().classList.contains("busy"), "done did not clear the mark");
+      eq(tileOf().querySelector("s").textContent, noteBefore, "the tile's own line did not come back");
+
+      /* a phone that dies mid-form clears on its own, after the stale window */
+      sock.onmessage({data: JSON.stringify({event: "broadcast", payload: {event: "editing", payload: {uid: "u-dead", who: "Rahul", kind: "pay", code: flats[fi].id}}})});
+      ok(tileOf().classList.contains("busy"), "the second signal did not mark");
+      peers.get("u-dead").at = Date.now() - LIVE_STALE - 1;
+      await wait(5200);
+      ok(!peers.has("u-dead"), "a dead phone's signal never expired");
+      ok(!tileOf().classList.contains("busy"), "the mark outlived the signal");
+
+      /* the socket goes with the session */
+      liveClose(); signOut(true);
+      ok(!liveWs, "the socket survived signing out");
+      return `join on the host's channel · editing/done both ways · stale in ${LIVE_STALE / 1000}s`;
+    } finally {
+      window.WebSocket = RealWS;
+      liveClose(); peers.clear();
+      MODE = keep.MODE; hostId = keep.hostId; session = keep.session; me = keep.me;
+      liveWs = keep.ws; mine = keep.mine; sheetFlat = keep.sheetFlat;
+      closeSheet(); document.querySelectorAll(".toast").forEach(x => x.remove());
+      applySeat(); recompute(); refreshScreen();
+    }
+  });
+
+  /* A cleaner's phone has nothing to say about bookings and should not be on
+     the channel at all. */
+  await test("a staff phone does not join the editing channel", () => {
+    const RealWS = window.WebSocket; let made = 0;
+    const keep = {MODE, hostId, session, me, ws: liveWs};
+    try {
+      window.WebSocket = class { constructor(){ made++; } send(){} close(){} };
+      MODE = "live"; hostId = "h-live"; me = {role: "staff", buildings: ["b1"]}; session = {uid: "u-s", access_token: "t"}; liveWs = null;
+      liveConnect();
+      eq(made, 0, "a staff phone opened a socket");
+      return "no socket for staff";
+    } finally { window.WebSocket = RealWS; MODE = keep.MODE; hostId = keep.hostId; session = keep.session; me = keep.me; liveWs = keep.ws; applySeat(); }
+  });
+
   await test("no text falls below AA in either theme", async () => {
     const m = await import("./audit.js?t=" + Date.now());
     const out = [];

@@ -567,6 +567,17 @@ button{background:none;border:0;padding:0;cursor:pointer;
    pixels, and beside a six-character room code the tile has six to spare, so
    "TT-202" and "₹16.8k" overlapped by four. The underline is the same amber
    at no width at all. */
+/* somebody else has this room open on their phone right now. The ring is the
+   attention amber and it breathes; the line under the room number says who and
+   what, in the tile's own ink — amber text does not clear AA on this fill. */
+.tile.busy{outline:2px solid var(--now);outline-offset:-2px;animation:busypulse 1.6s ease-in-out infinite}
+.tile s.who.busy{color:var(--held-ink);font-weight:650}
+@keyframes busypulse{0%,100%{outline-color:var(--now)}50%{outline-color:color-mix(in srgb,var(--now) 30%,transparent)}}
+@media (prefers-reduced-motion: reduce){.tile.busy{animation:none}}
+.busyban{margin:12px 20px 0;padding:11px 14px;border-radius:var(--r-md);
+  background:color-mix(in srgb,var(--now) 14%,var(--surface));
+  border:1px solid color-mix(in srgb,var(--now) 30%,transparent);
+  font-size:13px;line-height:1.45;color:var(--txt)}
 /* an orphan night — free, but wedged between two bookings, so hard to sell */
 .tile .flag{position:absolute;top:7px;right:7px;width:6px;height:6px;border-radius:50%;
   /* The ring was 2px of var(--free) — the same fill as the tile underneath it,
@@ -6852,6 +6863,156 @@ function payKey(r, pay){
   return stableId(["pay", stayKey(r), pay.amount, pay.method, dayISO(pay.on || 0)]);
 }
 
+/* ══════════════ WHO IS TOUCHING WHAT, RIGHT NOW ══════════════════════════════
+   Two managers on a shared spreadsheet can see each other's cursor, and today
+   both went to book the same flat for the same night and only that stopped
+   them. Here the database would have stopped the second one — 23P01, the
+   exclusion constraint, "that room was taken" — after they had typed the whole
+   booking. Correct, and late. What the spreadsheet had was the warning before
+   the typing.
+
+   So when a phone opens a booking, a dates change or a payment on a room, it
+   says so to every other phone on the same book, and says "done" when the
+   sheet closes. The others mark the tile and warn on the sheet. Supabase
+   Realtime BROADCAST carries it, not Presence: measured from here, a broadcast
+   reaches the other client in 20–23 ms, while presence — a CRDT that syncs
+   across nodes on a timer — took 2–3 s. The owner asked for milliseconds.
+
+   Broadcast has no memory, so the signal is kept alive by hand: re-sent every
+   ten seconds while the sheet is open, and dropped by the listener after
+   twenty-six without one. A clean close clears the other phones in one round
+   trip; a phone that dies with the form open clears them within half a
+   minute. The channel is named by host and carries a first name, a flat code
+   and a date — nothing that is not already on the other phone's screen.
+
+   This is a warning, not a lock. The constraint remains the authority; this
+   is what lets two people avoid ever reaching it. */
+/* Declared HERE, with the other early state, and not beside the functions that
+   use them at the foot of the file. closeSheet() reads pendingTag, switchTo()
+   calls closeSheet() at boot, and a `let` is in the temporal dead zone until
+   its own line runs — so the first sign-in-free load threw on the first screen
+   and nothing below that point in the script ever ran: no gate handler, no
+   visibility handler, no rollover. Forty-one tests went red at once, all
+   saying the same thing, and the page looked fine. */
+let bootTag = null, tagAt = 0, pendingTag = null;
+const RECHECK_MS = 5 * 60 * 1000;
+const LIVE_HEARTBEAT = 10000, LIVE_STALE = 26000, LIVE_PING = 25000;
+let liveWs = null, liveRef = 0, liveTopic = null, liveTimer = null, livePing = null, liveBackoff = 800;
+let mine = null;                  // {kind, fi, day} — the form this phone has open
+let sheetFlat = null;             // the flat the open sheet is about, if any
+const peers = new Map();          // uid -> {who, kind, flat, code, day, at}
+
+const liveWho = ()=> (me && me.name)
+  || (session && session.email ? session.email.split("@")[0].replace(/[._-]+/g, " ").slice(0, 14) : "Someone");
+
+function liveConnect(){
+  if(MODE !== "live" || !hostId || !session || liveWs || myRole() === "staff") return;
+  const url = SUPA_URL.replace(/^http/, "ws") + "/realtime/v1/websocket?apikey="
+            + encodeURIComponent(SUPA_KEY) + "&vsn=1.0.0";
+  let ws; try{ ws = new WebSocket(url); }catch(e){ return; }
+  liveWs = ws; liveTopic = "realtime:editing:" + hostId;
+  ws.onopen = ()=>{
+    liveBackoff = 800;
+    liveSend("phx_join", {config: {broadcast: {self: false, ack: false}}, access_token: session.access_token});
+    clearInterval(livePing);
+    livePing = setInterval(()=> liveSendRaw("phoenix", "heartbeat", {}), LIVE_PING);
+    if(mine) liveAnnounce();
+  };
+  ws.onmessage = ev=>{
+    let d; try{ d = JSON.parse(ev.data); }catch(e){ return; }
+    if(d && d.event === "broadcast" && d.payload) liveHear(d.payload.event, d.payload.payload || {});
+  };
+  ws.onclose = ()=>{
+    if(liveWs === ws) liveWs = null;
+    clearInterval(livePing);
+    if(MODE === "live" && session) setTimeout(liveConnect, liveBackoff = Math.min(liveBackoff * 2, 30000));
+  };
+  ws.onerror = ()=>{ try{ ws.close(); }catch(e){} };
+}
+function liveSendRaw(topic, event, payload){
+  if(!liveWs || liveWs.readyState !== 1) return false;
+  liveWs.send(JSON.stringify({topic, event, payload, ref: String(++liveRef)}));
+  return true;
+}
+const liveSend = (event, payload)=> liveSendRaw(liveTopic, event, payload);
+function liveClose(){
+  clearInterval(livePing); clearInterval(liveTimer);
+  const ws = liveWs; liveWs = null;
+  if(ws){ try{ ws.close(); }catch(e){} }
+  peers.clear(); mine = null; paintPeers();
+}
+
+/* this phone has a form open on a room */
+function editing(kind, fi, day){
+  mine = {kind, fi, day};
+  liveAnnounce();
+  clearInterval(liveTimer);
+  liveTimer = setInterval(liveAnnounce, LIVE_HEARTBEAT);
+}
+function editingDone(){
+  if(!mine) return;
+  mine = null; clearInterval(liveTimer);
+  liveSend("broadcast", {type: "broadcast", event: "done", payload: {uid: session && session.uid}});
+}
+function liveAnnounce(){
+  const f = mine && flats[mine.fi]; if(!f) return;
+  liveSend("broadcast", {type: "broadcast", event: "editing", payload: {
+    uid: session && session.uid, who: liveWho(), kind: mine.kind,
+    flat: f.uid || null, code: f.id, day: dayISO(mine.day), t: Date.now() }});
+}
+function liveHear(event, p){
+  if(!p || !p.uid || (session && p.uid === session.uid)) return;
+  if(event === "editing") peers.set(p.uid, Object.assign({}, p, {at: Date.now()}));
+  else if(event === "done") peers.delete(p.uid);
+  else return;
+  paintPeers();
+}
+setInterval(()=>{
+  const now = Date.now(); let changed = false;
+  peers.forEach((v, k)=>{ if(now - v.at > LIVE_STALE){ peers.delete(k); changed = true; } });
+  if(changed) paintPeers();
+}, 5000);
+const peerOn = fi => {
+  const f = flats[fi]; if(!f) return null;
+  for(const v of peers.values()) if((f.uid && v.flat === f.uid) || v.code === f.id) return v;
+  return null;
+};
+/* two forms of the verb: the tile has one short line and "taking a payment
+   on" faded off the end of it; the sheet's banner has a sentence to spend */
+const peerVerb = k => k === "book" ? "booking" : k === "pay" ? "taking a payment on" : "editing";
+const peerWord = k => k === "book" ? "booking" : k === "pay" ? "payment" : "editing";
+
+/* Marks the tiles in place — no repaint of the grid, so nothing under the
+   thumb moves — and puts a line at the top of whichever sheet is open about
+   that flat. Called on every signal, after every render of the room grid, and
+   whenever a sheet opens. */
+function paintPeers(){
+  document.querySelectorAll(".tile").forEach(t=>{
+    const b = t.querySelector("b"), sEl = t.querySelector("s");
+    const fi = b ? flatIndex[b.textContent] : undefined;
+    const v = fi !== undefined ? peerOn(fi) : null;
+    const was = t.classList.contains("busy");
+    if(v && !was){
+      t.classList.add("busy");
+      if(sEl){ sEl.dataset.was = sEl.textContent; sEl.dataset.wasCls = sEl.className;
+               sEl.className = "who busy"; }
+    }
+    if(v && sEl) sEl.textContent = `${v.who} · ${peerWord(v.kind)}`;
+    if(!v && was){
+      t.classList.remove("busy");
+      if(sEl && sEl.dataset.was !== undefined){ sEl.textContent = sEl.dataset.was;
+        sEl.className = sEl.dataset.wasCls || ""; delete sEl.dataset.was; delete sEl.dataset.wasCls; }
+    }
+  });
+  const open = sheet.classList.contains("on") && sheetFlat != null ? peerOn(sheetFlat) : null;
+  let ban = document.getElementById("busyban");
+  if(open){
+    if(!ban){ ban = el("div","busyban"); ban.id = "busyban"; ban.setAttribute("role","status"); sheetB.prepend(ban); }
+    ban.innerHTML = `<b>${esc(open.who)} is ${peerVerb(open.kind)} ${esc(flats[sheetFlat].id)} right now.</b> `
+      + `Check with them before you book it.`;
+  } else if(ban) ban.remove();
+}
+
 /* ══════════════ THE CLEAN BETWEEN TWO GUESTS ════════════════════════════════
    The one part of this business that is neither a booking nor a repair, and
    the part with a deadline measured in minutes. The book could always say a
@@ -7200,14 +7361,16 @@ const myBuildings = ()=> (me && me.buildings) || null;   // null = all of them
 
 async function loadHost(){
   const rows = await rest("GET",
-    "/memberships?select=host_id,role,building_ids,hosts(name,slug)");
+    "/memberships?select=host_id,role,building_ids,display_name,hosts(name,slug)");
   if(!rows || !rows.length){
     const e = new Error("This login is not attached to a property yet.");
     e.status = 403; throw e;
   }
   hostId = rows[0].host_id;
   hostName = (rows[0].hosts && rows[0].hosts.name) || "";
-  me = {role: rows[0].role || "manager", buildings: rows[0].building_ids || null};
+  me = {role: rows[0].role || "manager", buildings: rows[0].building_ids || null,
+        name: rows[0].display_name || null};
+  liveConnect();
 }
 function signOut(silent){
   const tok = session && session.access_token;
@@ -7226,6 +7389,7 @@ function signOut(silent){
      it. What is on the server comes back on the next pull; what is not, was
      somebody's morning. */
   staffBook = null;
+  liveClose();
   sessionWipe(); jdel(CLOUD_KEY);
   if(pending){
     /* kept in memory AND on disk, exactly as they were */
@@ -10051,6 +10215,7 @@ const SVG_DATES = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" st
 
 function openStayDates(r, backTo){
   const fi = r.fi, fl = flats[fi];
+  sheetFlat = fi; editing("dates", fi, Math.max(r.start, 0));
   const inHouse = r.start <= 0;
   sheetWipe();
   const t = el("div");
@@ -10430,12 +10595,20 @@ function renderRooms(){
         `Show the ${c} ${o.key === "turnovers" ? "same-day turnarounds" : o.key} on ${fmtL(d)}`);
     });
 
+    /* "10 Sep → 13 Sep" beside the Demo pill clipped to "10 Sep → 13 …" — a
+       date range with its end cut off, on the line that exists to say the
+       range. Within one month the month is said once: "10–13 Sep". Across a
+       boundary the arrow stays, because "30 Sep–2 Oct" needs both names. */
+    const span = (a, b)=>{ const d1 = dateAt(a), d2 = dateAt(b);
+      return d1.getMonth() === d2.getMonth()
+        ? `${d1.getDate()}\u2013${d2.getDate()} ${MON[d1.getMonth()]}`
+        : `${fmt(a)} \u2192 ${fmt(b)}`; };
     scrSub.textContent = n === 1
       ? `${f} of ${NF} free · ${d===0 ? "tonight" : fmtL(d)}`
-      : `${f} of ${NF} free · ${fmt(d)} → ${fmt(d+n)}`;
+      : `${f} of ${NF} free · ${span(d, d+n)}`;
 
     thLeft.textContent = "Every room";
-    thRight.textContent = n === 1 ? fmtL(d) : `${fmt(d)} → ${fmt(d+n)}`;
+    thRight.textContent = n === 1 ? fmtL(d) : span(d, d+n);
     reset.style.display = d===0 ? "none" : "inline-flex";
 
     tiles.textContent = "";
@@ -14606,6 +14779,7 @@ function receiptText(r, got, method, on){
 
 function openPayment(r, fi, day, back){
   back = back || (()=> openSheet(fi, day));
+  sheetFlat = fi; editing("pay", fi, day);
   sheetWipe();
   const t = el("div");
   /* r.start, not Math.max(r.start, 0). The clamp reads "the part of this stay
@@ -15107,6 +15281,9 @@ function nextFree(fi, from){
    other about a booking just taken: the form said "Leaves 19 Oct", the sheet
    said "in until 18 Oct". fmt() handles any index; the clamp bought nothing. */
 function openSheet(fi, day){
+  /* looking is not editing: coming back to the room from a form ends the
+     signal, and the sheet itself carries the warning if somebody else is on it */
+  sheetFlat = fi; editingDone();
   const fl = flats[fi];
   roomHead(fi);
 
@@ -15552,6 +15729,7 @@ function openSheet(fi, day){
 
   sheet.classList.add("on"); scrim.classList.add("on");
   sheetB.scrollTop = 0;
+  paintPeers();
 }
 
 /* ══════════════ moving a guest ══════════════════════════════════════════════
@@ -17057,6 +17235,7 @@ function openCosts(r){
 
 function openBooking(fi, from, nights){
   const fl = flats[fi];
+  sheetFlat = fi; editing("book", fi, Math.max(0, from | 0));
   roomHead(fi, ()=> openSheet(fi, from));
 
   let day = Math.max(0, Math.min(from|0, DAYS-1));
@@ -18996,6 +19175,8 @@ function closeSheet(){
   sheet.style.transition = ""; sheet.style.transform = "";
   sheet.classList.remove("on"); scrim.classList.remove("on");
   const t = sheetTeardown; sheetTeardown = null; if(t) t();
+  sheetFlat = null; editingDone();
+  if(pendingTag && safeToReload()) setTimeout(()=>{ if(pendingTag && safeToReload()) reloadPage(); }, 600);
 }
 scrim.onclick = closeSheet;
 document.addEventListener("keydown", e=>{ if(e.key==="Escape") closeSheet(); });
@@ -19093,6 +19274,7 @@ function refreshScreen(){
   const top = s.scrollTop;
   SCREENS[curScreen].render();
   s.scrollTop = top;
+  paintPeers();
 }
 
 function switchTo(i, focusInput){
@@ -19451,9 +19633,51 @@ function armMidnight(){
 }
 armMidnight();
 
+/* ══════════════ A PAGE LEFT OPEN FOR DAYS RUNS LAST WEEK'S APP ═══════════════
+   Nobody reloads a phone browser. The tab is opened from the home screen, used,
+   and left; a week later it is still running the build it was opened with,
+   while every fix since has shipped underneath it. The book itself stays fresh
+   — cloudPull runs on every return — so the operator sees today's bookings in
+   last week's app, which is the worst combination: nothing looks stale.
+
+   GitHub Pages sends an ETag with the page. One HEAD request when the app
+   comes back to the front — a few hundred bytes — says whether the file has
+   changed since this copy loaded. If it has and the screen is free, reload; if
+   a sheet is open or a write is on its way up, say so and reload the moment it
+   is. A check at most every five minutes, because a phone toggles visibility
+   constantly and this must never be the reason it is slow. */
+async function pageTag(){
+  try{
+    const r = await fetch(location.pathname || "/", {method: "HEAD", cache: "no-store"});
+    return (r && r.headers && (r.headers.get("etag") || r.headers.get("last-modified"))) || null;
+  }catch(e){ return null; }
+}
+/* A function so a test can stand in for it: location.reload cannot be
+   replaced, and a test that actually reloads the page never reports back. */
+function reloadPage(){ location.reload(); }
+function safeToReload(){
+  const ae = document.activeElement;
+  return !sheet.classList.contains("on") && !queue.length && !inflight
+      && !(ae && ae.matches && ae.matches("input, textarea, [contenteditable]"));
+}
+async function checkForNewBuild(force){
+  if(!force && Date.now() - tagAt < RECHECK_MS) return;
+  tagAt = Date.now();
+  const tag = await pageTag();
+  if(!tag) return;
+  if(bootTag == null){ bootTag = tag; return; }         // the copy we are running
+  if(tag === bootTag) return;
+  pendingTag = tag;
+  if(safeToReload()) reloadPage();
+  else toast("", "<b>A newer version is ready.</b> It will load when this screen is free "
+    + "\u2014 or load it now.", null, {label: "Load it", run: ()=> reloadPage()});
+}
+
 addEventListener("visibilitychange", ()=>{
   if(document.visibilityState === "visible"){
     rolloverCheck();
+    checkForNewBuild();
+    liveConnect();
     /* SEND BEFORE YOU FETCH. These ran in the same tick, so a booking made
        offline was still in the queue when cloudPull() replaced resv with the
        server's copy — which did not have it yet. The booking vanished from the
@@ -19462,6 +19686,7 @@ addEventListener("visibilitychange", ()=>{
     if(MODE === "live") flush().then(cloudPull).then(refreshScreen).catch(()=>{});
   }
 });
+checkForNewBuild(true);           // records the tag this copy loaded with
 
 paintAcct();
 /* Sign-in is the front door. A phone that has never signed in, and whose owner
