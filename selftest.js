@@ -5140,6 +5140,111 @@ export async function run(filter) {
     } finally { window.WebSocket = RealWS; MODE = keep.MODE; hostId = keep.hostId; session = keep.session; me = keep.me; liveWs = keep.ws; applySeat(); }
   });
 
+  /* ══ more than one road to the same server ═══════════════════════════════ */
+
+  /* ACT Fibernet answers every name under supabase.co with its own address,
+     by intercepting plain DNS on the wire — a page cannot fix how a phone
+     resolves names, but it can know a second name for the same server. */
+  await test("when the first road is blocked, api() takes the second and keeps it", async () => {
+    const realFetch = window.fetch, wasIx = apiHostIx, wasLen = API_HOSTS.length;
+    const onlineDesc = Object.getOwnPropertyDescriptor(Navigator.prototype, "onLine");
+    const setOnline = v => Object.defineProperty(navigator, "onLine", {configurable: true, get: () => v});
+    const calls = [];
+    try {
+      API_HOSTS.push("https://second.example.workers.dev");
+      useHost(0); setOnline(true);
+      window.fetch = async (u, o) => {
+        calls.push(String(u));
+        if (String(u).startsWith(SUPA_URL)) throw new TypeError("Failed to fetch");
+        return {ok: true, status: 200, text: async () => JSON.stringify([{road: 2}])};
+      };
+      /* a blocked first road: the call succeeds by the second, once */
+      const out = await api("/rest/v1/ping");
+      eq(JSON.stringify(out), '[{"road":2}]', "the answer did not come from the second road");
+      eq(calls.length, 2, `it took ${calls.length} requests to get through`);
+      eq(apiBase(), "https://second.example.workers.dev", "the working road was not kept");
+      /* the next call goes straight down the road that worked */
+      calls.length = 0;
+      await api("/rest/v1/ping");
+      eq(calls.length, 1, "the next call tried the blocked road again");
+      ok(calls[0].startsWith("https://second.example.workers.dev"), `went to ${calls[0]}`);
+      /* the choice survives a reload of the page within the session */
+      eq(sessionStorage.getItem(HOST_KEY), "1", "the road is not remembered for the session");
+      /* a body is retried intact — it is JSON in hand, not a consumed stream */
+      calls.length = 0; useHost(0);
+      window.fetch = async (u, o) => { calls.push({u: String(u), b: o.body});
+        if (String(u).startsWith(SUPA_URL)) throw new TypeError("Failed to fetch");
+        return {ok: true, status: 200, text: async () => "null"}; };
+      await api("/rest/v1/stays", {method: "POST", body: {guest_name: "Road Test"}});
+      eq(calls[1].b, JSON.stringify({guest_name: "Road Test"}), "the body was lost on the retry");
+      return "blocked → second road, kept, remembered, body intact";
+    } finally {
+      window.fetch = realFetch;
+      while (API_HOSTS.length > wasLen) API_HOSTS.pop();
+      useHost(wasIx);
+      if (onlineDesc) Object.defineProperty(Navigator.prototype, "onLine", onlineDesc);
+      try { delete navigator.onLine; } catch (e) { }
+    }
+  });
+
+  /* The retry is for a blocked road, not for a server that said no and not
+     for a phone with no network at all. */
+  await test("a refusal, or a phone with no network, does not go looking for another road", async () => {
+    const realFetch = window.fetch, wasIx = apiHostIx, wasLen = API_HOSTS.length;
+    const onlineDesc = Object.getOwnPropertyDescriptor(Navigator.prototype, "onLine");
+    const setOnline = v => Object.defineProperty(navigator, "onLine", {configurable: true, get: () => v});
+    let calls = 0;
+    try {
+      API_HOSTS.push("https://second.example.workers.dev"); useHost(0);
+      /* the server answered — a 401 is an answer — so no other road is tried */
+      setOnline(true);
+      window.fetch = async () => { calls++; return {ok: false, status: 401, text: async () => JSON.stringify({message: "no"})}; };
+      let err = null; try { await api("/rest/v1/x"); } catch (e) { err = e; }
+      eq(err && err.status, 401, "a refusal did not come back as a refusal");
+      eq(calls, 1, "a refusal was retried down another road");
+      eq(apiHostIx, 0, "a refusal switched roads");
+      /* genuinely offline: fail fast, do not hunt */
+      setOnline(false); calls = 0;
+      window.fetch = async () => { calls++; throw new TypeError("Failed to fetch"); };
+      err = null; try { await api("/rest/v1/x"); } catch (e) { err = e; }
+      ok(err && err.status === undefined, "an offline failure came back with a status");
+      eq(calls, 1, "an offline phone tried every road");
+      /* and with no second road configured, the original error stands */
+      API_HOSTS.pop(); setOnline(true); calls = 0;
+      err = null; try { await api("/rest/v1/x"); } catch (e) { err = e; }
+      eq(calls, 1, "with one road it still retried");
+      ok(err instanceof TypeError, "the network error was not passed through as itself");
+      return "401 stays a 401, offline fails once, one road is one attempt";
+    } finally {
+      window.fetch = realFetch;
+      while (API_HOSTS.length > wasLen) API_HOSTS.pop();
+      useHost(wasIx);
+      if (onlineDesc) Object.defineProperty(Navigator.prototype, "onLine", onlineDesc);
+      try { delete navigator.onLine; } catch (e) { }
+    }
+  });
+
+  /* The live socket and the sign-out go down whichever road is open, or the
+     editing signal would die on exactly the network that needs the proxy. */
+  await test("the live socket follows the road api() found", () => {
+    const RealWS = window.WebSocket, wasIx = apiHostIx, wasLen = API_HOSTS.length;
+    const keep = {MODE, hostId, session, me, ws: liveWs};
+    let url = null;
+    try {
+      API_HOSTS.push("https://second.example.workers.dev"); useHost(1);
+      window.WebSocket = class { constructor(u){ url = u; this.readyState = 0; } send(){} close(){} };
+      MODE = "live"; hostId = "h1"; me = {role: "owner"}; session = {uid: "u", access_token: "t"}; liveWs = null;
+      liveConnect();
+      ok(url && url.startsWith("wss://second.example.workers.dev/realtime/v1/websocket"),
+        `the socket opened on ${url}`);
+      return "wss on the second road";
+    } finally {
+      window.WebSocket = RealWS; liveClose();
+      while (API_HOSTS.length > wasLen) API_HOSTS.pop(); useHost(wasIx);
+      MODE = keep.MODE; hostId = keep.hostId; session = keep.session; me = keep.me; liveWs = keep.ws; applySeat();
+    }
+  });
+
   await test("no text falls below AA in either theme", async () => {
     const m = await import("./audit.js?t=" + Date.now());
     const out = [];

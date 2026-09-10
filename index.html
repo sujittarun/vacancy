@@ -6492,6 +6492,35 @@ function load(){
 const CLOUD_ENABLED = true;
 
 const SUPA_URL = "https://hwbquljbvanlgggemchg.supabase.co";
+/* ── MORE THAN ONE ROAD TO THE SAME SERVER ────────────────────────────────────
+   ACT Fibernet, the owner's home ISP, answers every name under supabase.co
+   with one of its own addresses — and it does this by intercepting plain DNS
+   on the wire, so a query sent to 8.8.8.8 comes back wrong too. The project
+   is fine; supabase.com is fine; workers.dev is fine. Only that one domain,
+   only on that one ISP's network, and nothing a page can do about how the
+   phone resolves names.
+
+   What a page CAN do is know a second name for the same server. A Cloudflare
+   Worker on a free workers.dev subdomain forwards every request, websocket
+   included, to the project unchanged — see proxy/worker.js — and this list is
+   where its address goes. api() tries the first road; if the request never
+   gets an answer while the phone believes it is online, it tries the next,
+   and the one that works is kept for the rest of the session. Nobody is told
+   unless every road fails. Empty second entry means no proxy has been set up
+   yet, and the app behaves exactly as before. */
+const API_HOSTS = [SUPA_URL /* , "https://<name>.<account>.workers.dev" */].filter(Boolean);
+const HOST_KEY = "vacancy.apihost.v1";
+let apiHostIx = (()=>{ try{ const i = +sessionStorage.getItem(HOST_KEY); return i > 0 && i < API_HOSTS.length ? i : 0; }catch(e){ return 0; } })();
+const apiBase = ()=> API_HOSTS[apiHostIx] || SUPA_URL;
+function useHost(i){
+  apiHostIx = i;
+  try{ if(i) sessionStorage.setItem(HOST_KEY, String(i)); else sessionStorage.removeItem(HOST_KEY); }catch(e){}
+}
+/* A failure the network produced, not the server: fetch rejects with a
+   TypeError and there is no status to read. That, and the phone believing it
+   is online, is the shape of a road that is blocked rather than a server
+   that said no. */
+const roadBlocked = e => e && e.status === undefined && navigator.onLine !== false;
 /* Publishable by design, and safe in a file anyone can read: it grants nothing
    on its own. Every row is gated by row-level security, so an anonymous caller
    holding this key reads zero rows. */
@@ -6604,10 +6633,27 @@ async function api(path, opt){
   const h = {apikey: SUPA_KEY, "Content-Type":"application/json", ...(opt.headers || {})};
   if(opt.auth !== false && session && session.access_token)
     h.Authorization = "Bearer " + session.access_token;
-  const res = await fetch(SUPA_URL + path, {
+  const init = {
     method: opt.method || "GET", headers: h,
     body: opt.body === undefined ? undefined : JSON.stringify(opt.body)
-  });
+  };
+  let res;
+  try{ res = await fetch(apiBase() + path, init); }
+  catch(e){
+    /* the road is blocked: try the others, once each, in order, and keep the
+       one that answers — a body can only be sent once, so a request with one
+       is retried from its JSON, which is still in hand */
+    if(!roadBlocked(e) || API_HOSTS.length < 2) throw e;
+    let last = e, found = -1;
+    for(let i = 0; i < API_HOSTS.length && found < 0; i++){
+      if(i === apiHostIx) continue;
+      try{ res = await fetch(API_HOSTS[i] + path, init); found = i; }
+      catch(e2){ last = e2; }
+    }
+    if(found < 0) throw last;
+    const from = apiHostIx; useHost(found);
+    try{ track("api_failover", {from, to: found}); }catch(e3){}
+  }
   const text = await res.text();
   let data = null; try{ data = text ? JSON.parse(text) : null; }catch(e){ data = text; }
   if(!res.ok){
@@ -6907,7 +6953,7 @@ const liveWho = ()=> (me && me.name)
 
 function liveConnect(){
   if(MODE !== "live" || !hostId || !session || liveWs || myRole() === "staff") return;
-  const url = SUPA_URL.replace(/^http/, "ws") + "/realtime/v1/websocket?apikey="
+  const url = apiBase().replace(/^http/, "ws") + "/realtime/v1/websocket?apikey="
             + encodeURIComponent(SUPA_KEY) + "&vsn=1.0.0";
   let ws; try{ ws = new WebSocket(url); }catch(e){ return; }
   liveWs = ws; liveTopic = "realtime:editing:" + hostId;
@@ -7397,7 +7443,7 @@ function signOut(silent){
     if(!silent) toast("warn", `<b>${pending} change${pending===1?"":"s"} not sent yet.</b> `
       + `They are still here and will go up next time you sign in.`, null);
   }
-  if(tok) fetch(SUPA_URL + "/auth/v1/logout", {method:"POST",
+  if(tok) fetch(apiBase() + "/auth/v1/logout", {method:"POST",
     headers:{apikey:SUPA_KEY, Authorization:"Bearer " + tok}}).catch(()=>{});
 
   /* THE BOOK COMES BACK WHETHER OR NOT ANYBODY IS TOLD. This whole block used
@@ -19569,8 +19615,10 @@ if(location.hostname === "localhost" || location.hostname === "127.0.0.1"){
         ? (navigator.onLine === false
             ? "No connection. Check your signal and try again."
             : "Cannot reach the server \u2014 but this phone is online, so it is "
-              + "not your password. Try mobile data instead of wifi; if that works, "
-              + "the wifi is blocking it.")
+              + "not your password. This wifi's provider is blocking the server's "
+              + "address. Mobile data will work now; to fix the wifi, turn on "
+              + "encrypted DNS on the phone (Android: Private DNS \u2192 one.one.one.one; "
+              + "iPhone: the free 1.1.1.1 app).")
         : e.status === 400 || e.status === 401
           ? "That email and password did not match."
           : e.message);

@@ -620,3 +620,23 @@ Good enough to run a real day on, signed in. Honest limits before you rely on it
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for how the multi-tenant database is put together
 and why it was built as one project rather than one per host.
+
+## If the app cannot reach the server on one wifi
+
+Some ISPs — ACT Fibernet in Hyderabad, for one — answer every name under
+`supabase.co` with their own address, by intercepting plain DNS on the wire.
+The project is up; the phone is online; only that one domain is unreachable,
+and only on that network. Symptoms: sign-in fails with "Cannot reach the
+server", the activity list shows nothing new, and switching to mobile data
+fixes everything.
+
+Two fixes, and they are complementary:
+
+- **Per phone, today:** encrypted DNS. Android: Settings → Network → Private
+  DNS → `one.one.one.one`. iPhone / Mac: the free 1.1.1.1 app. Changing the
+  *router's* DNS does not help — the interception catches that too.
+- **For everyone, once:** a second road to the server. `proxy/worker.js` is a
+  Cloudflare Worker (free tier, no domain needed) that forwards everything to
+  the project; deploy it and put its `*.workers.dev` address into `API_HOSTS`
+  in `index.html`. The app then tries the normal address first and falls back
+  to the worker by itself, and remembers which one worked for the session.
