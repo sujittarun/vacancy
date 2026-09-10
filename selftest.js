@@ -1334,7 +1334,11 @@ export async function run(filter) {
     const all = num(chips[0]);
     eq(chips.slice(1).reduce((a,b)=> a + num(b), 0), all,
       "the building chips do not add up to the All count");
-    const secs = [...document.querySelectorAll(".bsec")];
+    /* Scoped like the chips above, and for the same reason: .bsec is also the
+       Business board's section class, and that screen is in the document
+       whenever the page booted onto it — a hash left in the URL is enough —
+       so a bare ".bsec" counted its two sections among the buildings. */
+    const secs = [...document.querySelectorAll("#scr-rooms .bsec")];
     eq(secs.length, buildingsOf().length, "sections against buildings");
     eq(secs.reduce((a,s)=> a + s.querySelectorAll(".tiles > *").length, 0), NF,
       "tiles across the sections against the portfolio");
@@ -3023,7 +3027,9 @@ export async function run(filter) {
       eq(tiles.length, 3, "tiles on the month card");
       ok(!tiles.some(t => /owed/.test(t.textContent)), "the month card repeats what is owed");
       ok(tiles.every(t => t.tagName === "BUTTON"), "a tile is not a control");
-      eq(tiles.map(t => t.querySelector("s").textContent.split(" ·")[0]).join(","), "taken,spent,nights",
+      /* the word is the label's first text node; the qualifier is a child on
+         its own line now, not a " · " suffix */
+      eq(tiles.map(t => (t.querySelector("s").firstChild || {}).textContent || "").join(","), "taken,spent,nights",
         "the month's three facts");
       /* nothing runs off a 375px phone */
       const wide = [...document.querySelectorAll("#scr-trends .deck *")]
@@ -5301,6 +5307,73 @@ export async function run(filter) {
       resv = keepR; recompute();
       turns = JSON.parse(keepTurns); turnSave();
     }
+  });
+
+  /* Appended straight onto the row, a second pill became a fourth grid child
+     and landed under the room code, doubling the row. Both live in the end
+     cell now, stacked. */
+  await test("a turnover row that owes money keeps both pills in its end cell", async () => {
+    const keepR = resv.slice();
+    const fi = freeFlat(-3, 4), fj = flats.map((f, i) => i).find(i => i !== fi && freeSpan(i, -3, 4) && pastClear(i, -3));
+    ok(fi != null && fj != null, "no two flats for the fixture");
+    resv.push({fi, start: -2, end: 0, nights: 2, guest: "Out Stack", src: "Direct", manual: true, pays: []});
+    resv.push({fi, start: 0, end: 3, nights: 3, guest: "In Stack", src: "Direct", manual: true, amount: 9000, pays: []});
+    resv.push({fi: fj, start: -2, end: 0, nights: 2, guest: "Out Plain", src: "Direct", manual: true, pays: []});
+    recompute();
+    try {
+      openDay(0);
+      await until(() => document.querySelector(".sheet.on .dayrows .row"), "the day view");
+      const rowOf = n => [...document.querySelectorAll(".sheet.on .dayrows .row")].find(x => x.textContent.includes(n));
+      const stack = rowOf("In Stack"), plain = rowOf("Out Plain");
+      ok(stack && plain, "the fixture rows are not on the day view");
+      const end = stack.querySelector(".rowend");
+      ok(end && end.querySelector(".paid.due") && end.querySelector(".pill.turn"),
+        "the money pill and the clean pill do not share the end cell");
+      /* the clean pill sits to the right of the guest line, never under the code */
+      const meta = stack.querySelector(".meta").getBoundingClientRect();
+      const turn = stack.querySelector(".pill.turn").getBoundingClientRect();
+      ok(turn.left > meta.left + 40, `the clean pill is at x=${Math.round(turn.left)}, under the code`);
+      /* and the row is not twice its neighbour */
+      const h1 = stack.getBoundingClientRect().height, h2 = plain.getBoundingClientRect().height;
+      ok(h1 <= h2 * 1.6, `a two-pill row is ${Math.round(h1)}px against ${Math.round(h2)}px for one pill`);
+      return `${Math.round(h1)}px with two pills stacked, ${Math.round(h2)}px with one`;
+    } finally { closeSheet(); resv = keepR; recompute(); }
+  });
+
+  /* "taken · 2 payments" wrapped wherever the tile's width cut it, and the
+     three tiles came out three different heights. */
+  await test("the month's three tiles are the same height, with the qualifier on its own line", async () => {
+    const wasSeg = pulseSeg;
+    try {
+      document.querySelectorAll(".tabbar button")[3].click();
+      await until(() => document.querySelector("#tabseg button"), "the Business segments");
+      const money = [...document.querySelectorAll("#tabseg button")].find(b => /Money/.test(b.textContent));
+      ok(money, "no Money segment"); money.click();
+      await until(() => [...document.querySelectorAll(".tcard, .card")].some(c => /what has actually moved/.test(c.textContent)), "the month card");
+      const cardEl = [...document.querySelectorAll(".tcard, .card")].find(c => /what has actually moved/.test(c.textContent));
+      const tiles = [...cardEl.querySelectorAll(".opp.tap")];
+      eq(tiles.length, 3, "three tiles");
+      const hs = tiles.map(t => Math.round(t.getBoundingClientRect().height));
+      ok(Math.max(...hs) - Math.min(...hs) <= 2, `tile heights ${hs.join("/")}`);
+      tiles.forEach(t => {
+        const s = t.querySelector("s"), i = s.querySelector("i");
+        ok(!/·/.test(s.textContent), `a label still uses the dot: "${s.textContent}"`);
+        if (i) ok(i.getBoundingClientRect().top > s.getBoundingClientRect().top + 6, `the qualifier "${i.textContent}" is not on its own line`);
+        ok(s.scrollWidth <= s.clientWidth + 1, `"${s.textContent}" overflows its tile`);
+        /* the TEXT of the figure, not its box — the <b> carries right padding
+           precisely so its box reaches the chevron while its glyphs do not */
+        const b = t.querySelector("b"), go = t.querySelector(".go");
+        const rng = document.createRange(); rng.selectNodeContents(b);
+        const tb = rng.getBoundingClientRect(), gb = go.getBoundingClientRect();
+        ok(tb.right <= gb.left + 1 || tb.bottom <= gb.top,
+          `the figure "${b.textContent}" (ends ${Math.round(tb.right)}) runs under the chevron (starts ${Math.round(gb.left)})`);
+        /* and the figure fits inside its own tile — the real fault behind the
+           chevron one: a six-character figure at 27px was wider than the tile */
+        const tr = t.getBoundingClientRect();
+        ok(tb.right <= tr.right - 6, `the figure "${b.textContent}" (ends ${Math.round(tb.right)}) runs past its tile (ends ${Math.round(tr.right)})`);
+      });
+      return `heights ${hs.join("/")} · labels on two lines`;
+    } finally { pulseSeg = wasSeg; document.querySelectorAll(".tabbar button")[0].click(); await wait(60); }
   });
 
   await test("no text falls below AA in either theme", async () => {

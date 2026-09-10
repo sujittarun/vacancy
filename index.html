@@ -849,6 +849,10 @@ button{background:none;border:0;padding:0;cursor:pointer;
 .opp:active{transform:scale(.96)}
 .opp b{font-size:27px;font-weight:700;letter-spacing:-.04em;line-height:1}
 .opp s{text-decoration:none;font-size:11px;color:var(--txt-2);line-height:1.3}
+.opp s i{display:block;font-style:normal;color:var(--txt-3);margin-top:1px}
+.opp{min-width:0}
+.opp b{min-width:0}
+.opp b.long{font-size:22px;letter-spacing:-.035em}
 .opp.hot b{color:var(--now)}
 .opp.zero b{color:var(--txt-3)}
 .opp.zero s{color:var(--txt-3)}
@@ -862,8 +866,15 @@ button{background:none;border:0;padding:0;cursor:pointer;
    nothing on it said so. */
 .opps{margin-bottom:12px}
 .opp{position:relative}
-.opp .go{position:absolute;top:9px;right:10px;font-style:normal;font-size:15px;line-height:1;
+/* THE CHEVRON SITS WITH THE QUALIFIER, NOT THE FIGURE. Top-right it shared a
+   line with a 27px number in a tile eighty-two pixels wide, and "₹1.65L" ran
+   under it by twenty. The qualifier line is short and has the room; the tap
+   affordance reads the same at the corner it is now in, and the figure gets
+   the whole width. The label carries right padding so the qualifier itself
+   never reaches it. */
+.opp .go{position:absolute;bottom:11px;right:10px;font-style:normal;font-size:15px;line-height:1;
   color:var(--txt-3)}
+.opp.tap s{padding-right:14px}
 
 /* ── a comparison row you can open ───────────────────────────────────────────
    The rows under the tiles were inert text with a percentage on the end.
@@ -2755,6 +2766,8 @@ button.vbar{background:none;border:none;padding:0;font:inherit;color:inherit}
 .rowx.arm{width:auto;padding:0 11px;background:var(--hot);color:#fff;border-color:transparent;
   font-size:12px;font-weight:650}
 .rowend{display:flex;align-items:center;gap:8px}
+/* two controls in the end cell, one above the other, right-aligned */
+.rowend.stack{flex-direction:column;align-items:flex-end;gap:6px}
 /* the move glyph: same footprint as the cancel, quieter than it */
 .rowmv svg{width:15px;height:15px;display:block}
 .rowmv{color:var(--txt-3)}
@@ -13293,7 +13306,20 @@ function renderTrends(){
     const opps = el("div","opps");
     const tile = (v, lab, sub, run, tone)=>{
       const d = el("button","opp tap" + (tone ? " " + tone : ""));
-      d.append(el("b", null, v), el("s", null, lab + (sub ? " · " + sub : "")), el("em","go","›"));
+      /* "taken · 2 payments" wrapped wherever the tile's width happened to
+         cut it — "taken · 2 / payments", "spent · / none / logged" — and three
+         tiles came out three different heights. The label is a word and a
+         qualifier, so it is set as one: the word, and the qualifier on its
+         own line under it, the same shape in every tile. */
+      const lab2 = el("s", null, lab);
+      if(sub) lab2.append(el("i", null, sub));
+      /* A six-character figure — "₹1.65L", "₹12,600" — is ninety pixels at the
+         tile's 27px, in a tile eighty-two wide: it ran under the chevron and
+         past the edge whatever the chevron did. One size down for those; the
+         short ones keep the weight. Measured, not eyeballed: the test reads
+         the figure's text box against the tile. */
+      const fig = el("b", null, v); if(String(v).length >= 6) fig.classList.add("long");
+      d.append(fig, lab2, el("em","go","›"));
       d.setAttribute("aria-label", `${lab}, ${v}${sub ? ", " + sub : ""}`);
       d.onclick = ()=>{ haptic(9); run(); };
       opps.appendChild(d);
@@ -18347,9 +18373,16 @@ function openDay(d, focus){
       m.innerHTML = `<b>${esc(t2.out.guest)}</b> out → <b>${esc(t2.in.guest)}</b> in`
         + `<em>${esc(fl.type)} · ${esc(fl.bshort)} · ${t2.in.nights} night${t2.in.nights>1?"s":""}`
         + ` · ${esc(t2.in.src || "Direct")}</em>`;
+      /* TWO PILLS, ONE COLUMN. Appended straight onto the row they became a
+         fourth grid child, and the grid put "to clean" on a new line under
+         the room code — a row twice the height of its neighbours with a pill
+         in the wrong corner. Both go into the row's end cell, stacked, money
+         first because it is the one with the amount. */
       row.append(m);
-      if(dueFrom(t2.in) > 0) row.append(collectPill(t2.in));
-      turnPill(t2.fi, row);
+      const end = el("div","rowend stack");
+      if(dueFrom(t2.in) > 0) end.append(collectPill(t2.in));
+      turnPill(t2.fi, end);
+      row.append(end);
     });
     group("departures", "Leaving", "nobody in behind them", outOnly, (m, r, fl, row)=>{
       const due = dueFrom(r);
