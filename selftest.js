@@ -5252,6 +5252,57 @@ export async function run(filter) {
     }
   });
 
+  /* "Clean 2 flats today should also be gone after 2 PM or when the flats are
+     cleaned." The board is things that stop being true if ignored, and this
+     line went on saying it with both rooms marked ready and the guests in. */
+  await test("the board's clean-today line drops rooms marked ready, and goes at check-in time", async () => {
+    const keepR = resv.slice(), keepTurns = JSON.stringify(turns), realClock = pastCheckin;
+    const a = freeFlat(-3, 6), b = flats.map((f, i) => i).find(i => i !== a && freeSpan(i, 0, 6) && pastClear(i, -3));
+    ok(a != null && b != null, "no two flats free for the fixture");
+    for (const fi of [a, b]) {
+      resv.push({fi, start: -2, end: 0, nights: 2, guest: "Out " + flats[fi].id, src: "Direct", manual: true, pays: []});
+      resv.push({fi, start: 0, end: 2, nights: 2, guest: "In " + flats[fi].id, src: "Direct", manual: true, pays: []});
+    }
+    /* and one tomorrow, which the clock must leave alone */
+    const c = flats.map((f, i) => i).find(i => i !== a && i !== b && freeSpan(i, 0, 6) && pastClear(i, -1));
+    ok(c != null, "no third flat for tomorrow's turnover");
+    resv.push({fi: c, start: -1, end: 1, nights: 2, guest: "Out Tmrw", src: "Direct", manual: true, pays: []});
+    resv.push({fi: c, start: 1, end: 3, nights: 2, guest: "In Tmrw", src: "Direct", manual: true, pays: []});
+    recompute();
+    const line = (when) => (todayBoard().todo || []).find(x => new RegExp("^Clean \\d+ flats? " + when + "$").test(x.label));
+    const countOf = (l) => l ? +(/^Clean (\d+) /.exec(l.label) || [])[1] : 0;
+    try {
+      pastCheckin = () => false;
+      /* RELATIVE TO THE BOOK, not to an empty one: the sample already has
+         turnovers today, and the first version of this test assumed two and
+         read "Clean 4 flats today" as a failure of the app. */
+      const base = countOf(line("today")) - 2;
+      ok(base >= 0, "the two fixtures are not both on the board");
+      let today = line("today");
+      eq(countOf(today), base + 2, `the line reads "${today && today.label}" with ${base} already pending`);
+      /* one room marked ready: the count follows */
+      turnSet(a, 0, {state: "ready", ready: new Date().toISOString()});
+      today = line("today");
+      eq(countOf(today), base + 1, `after one is ready the line reads "${today && today.label}"`);
+      /* both ready: back to what the book had — gone, if it had nothing */
+      turnSet(b, 0, {state: "ready", ready: new Date().toISOString()});
+      eq(countOf(line("today")), base, "both rooms ready and the board still counts them");
+      /* neither ready but past check-in: gone anyway */
+      turnSet(a, 0, {state: "waiting", ready: null}); turnSet(b, 0, {state: "waiting", ready: null});
+      pastCheckin = () => true;
+      ok(!line("today"), "after check-in time the board still nudges today's clean");
+      /* tomorrow's line is not the clock's business, either way */
+      ok(line("tomorrow"), "tomorrow's clean line vanished with the clock");
+      pastCheckin = () => false;
+      ok(line("tomorrow"), "tomorrow's clean line is missing before check-in time");
+      return "2 → 1 → gone as rooms go ready; gone at 14:00 regardless; tomorrow untouched";
+    } finally {
+      pastCheckin = realClock;
+      resv = keepR; recompute();
+      turns = JSON.parse(keepTurns); turnSave();
+    }
+  });
+
   await test("no text falls below AA in either theme", async () => {
     const m = await import("./audit.js?t=" + Date.now());
     const out = [];

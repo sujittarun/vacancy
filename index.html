@@ -4993,8 +4993,20 @@ function todayBoard(){
 
   const todo = [];
   for(let d=0; d<=NOW; d++){
-    const turns = dayOps(d).turnovers.map(t=>({fi:t.fi, d,
-      meta:`<b>${esc(t.out.guest)}</b> out, <b>${esc(t.in.guest)}</b> in<em>${fmtL(d)}</em>`, pill:"clean"}));
+    /* "CLEAN 2 FLATS TODAY" SHOULD GO WHEN THE FLATS ARE CLEAN, or when it is
+       too late for the sentence to mean anything. This card is things that
+       stop being true if ignored, and this line kept saying it after both
+       rooms were marked ready and on into the evening with the new guests
+       asleep inside. Two exits: a room whose turnaround is marked ready drops
+       out of the count, and today's line goes at check-in time whatever the
+       count — after 14:00 the arriving guest is in, and an unfinished clean
+       is the day view's and the cleaner's screen's to chase, not a nudge on a
+       board about the day ahead. Tomorrow's line knows nothing of the clock. */
+    if(d === 0 && pastCheckin()) continue;
+    const turns = dayOps(d).turnovers
+      .filter(t => turnProgress(t.fi, d).state !== "ready")
+      .map(t=>({fi:t.fi, d,
+        meta:`<b>${esc(t.out.guest)}</b> out, <b>${esc(t.in.guest)}</b> in<em>${fmtL(d)}</em>`, pill:"clean"}));
     if(turns.length) todo.push({
       label:`Clean ${turns.length} flat${turns.length>1?"s":""} ${d===0?"today":"tomorrow"}`,
       note:"check-out and check-in the same day",
