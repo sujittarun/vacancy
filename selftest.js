@@ -5151,32 +5151,37 @@ export async function run(filter) {
     const setOnline = v => Object.defineProperty(navigator, "onLine", {configurable: true, get: () => v});
     const calls = [];
     try {
-      API_HOSTS.push("https://second.example.workers.dev");
+      /* The fixture road is pushed on the END of whatever roads the app ships
+         with — one today, two now that the worker exists — and every road but
+         the fixture is made to fail, so the test is about the mechanism and
+         not about how many real roads there happen to be. */
+      const FAKE = "https://second.example.workers.dev";
+      API_HOSTS.push(FAKE); const fakeIx = API_HOSTS.length - 1;
       useHost(0); setOnline(true);
       window.fetch = async (u, o) => {
         calls.push(String(u));
-        if (String(u).startsWith(SUPA_URL)) throw new TypeError("Failed to fetch");
+        if (!String(u).startsWith(FAKE)) throw new TypeError("Failed to fetch");
         return {ok: true, status: 200, text: async () => JSON.stringify([{road: 2}])};
       };
-      /* a blocked first road: the call succeeds by the second, once */
+      /* every real road blocked: the call succeeds by the fixture, each road tried once */
       const out = await api("/rest/v1/ping");
-      eq(JSON.stringify(out), '[{"road":2}]', "the answer did not come from the second road");
-      eq(calls.length, 2, `it took ${calls.length} requests to get through`);
-      eq(apiBase(), "https://second.example.workers.dev", "the working road was not kept");
+      eq(JSON.stringify(out), '[{"road":2}]', "the answer did not come from the open road");
+      eq(calls.length, API_HOSTS.length, `it took ${calls.length} requests for ${API_HOSTS.length} roads`);
+      eq(apiBase(), FAKE, "the working road was not kept");
       /* the next call goes straight down the road that worked */
       calls.length = 0;
       await api("/rest/v1/ping");
       eq(calls.length, 1, "the next call tried the blocked road again");
-      ok(calls[0].startsWith("https://second.example.workers.dev"), `went to ${calls[0]}`);
+      ok(calls[0].startsWith(FAKE), `went to ${calls[0]}`);
       /* the choice survives a reload of the page within the session */
-      eq(sessionStorage.getItem(HOST_KEY), "1", "the road is not remembered for the session");
+      eq(sessionStorage.getItem(HOST_KEY), String(fakeIx), "the road is not remembered for the session");
       /* a body is retried intact — it is JSON in hand, not a consumed stream */
       calls.length = 0; useHost(0);
       window.fetch = async (u, o) => { calls.push({u: String(u), b: o.body});
-        if (String(u).startsWith(SUPA_URL)) throw new TypeError("Failed to fetch");
+        if (!String(u).startsWith(FAKE)) throw new TypeError("Failed to fetch");
         return {ok: true, status: 200, text: async () => "null"}; };
       await api("/rest/v1/stays", {method: "POST", body: {guest_name: "Road Test"}});
-      eq(calls[1].b, JSON.stringify({guest_name: "Road Test"}), "the body was lost on the retry");
+      eq(calls[calls.length - 1].b, JSON.stringify({guest_name: "Road Test"}), "the body was lost on the retry");
       return "blocked → second road, kept, remembered, body intact";
     } finally {
       window.fetch = realFetch;
@@ -5209,11 +5214,13 @@ export async function run(filter) {
       err = null; try { await api("/rest/v1/x"); } catch (e) { err = e; }
       ok(err && err.status === undefined, "an offline failure came back with a status");
       eq(calls, 1, "an offline phone tried every road");
-      /* and with no second road configured, the original error stands */
-      API_HOSTS.pop(); setOnline(true); calls = 0;
+      /* and with no second road configured, the original error stands — the
+         app ships with two now, so the others are set aside for this case */
+      API_HOSTS.pop(); const aside = API_HOSTS.splice(1); useHost(0); setOnline(true); calls = 0;
       err = null; try { await api("/rest/v1/x"); } catch (e) { err = e; }
       eq(calls, 1, "with one road it still retried");
       ok(err instanceof TypeError, "the network error was not passed through as itself");
+      API_HOSTS.push(...aside);
       return "401 stays a 401, offline fails once, one road is one attempt";
     } finally {
       window.fetch = realFetch;
@@ -5231,7 +5238,7 @@ export async function run(filter) {
     const keep = {MODE, hostId, session, me, ws: liveWs};
     let url = null;
     try {
-      API_HOSTS.push("https://second.example.workers.dev"); useHost(1);
+      API_HOSTS.push("https://second.example.workers.dev"); useHost(API_HOSTS.length - 1);
       window.WebSocket = class { constructor(u){ url = u; this.readyState = 0; } send(){} close(){} };
       MODE = "live"; hostId = "h1"; me = {role: "owner"}; session = {uid: "u", access_token: "t"}; liveWs = null;
       liveConnect();

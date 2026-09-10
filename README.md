@@ -637,6 +637,7 @@ Two fixes, and they are complementary:
   *router's* DNS does not help — the interception catches that too.
 - **For everyone, once:** a second road to the server. `proxy/worker.js` is a
   Cloudflare Worker (free tier, no domain needed) that forwards everything to
-  the project; deploy it and put its `*.workers.dev` address into `API_HOSTS`
-  in `index.html`. The app then tries the normal address first and falls back
+  the project. It is deployed for Crescent Stays as
+  `delicate-lab-b3b4.edge-board.workers.dev` and listed in `API_HOSTS` in
+  `index.html`; to redeploy it, paste the file into a Worker in the dashboard. The app then tries the normal address first and falls back
   to the worker by itself, and remembers which one worked for the session.

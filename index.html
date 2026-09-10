@@ -6508,7 +6508,13 @@ const SUPA_URL = "https://hwbquljbvanlgggemchg.supabase.co";
    and the one that works is kept for the rest of the session. Nobody is told
    unless every road fails. Empty second entry means no proxy has been set up
    yet, and the app behaves exactly as before. */
-const API_HOSTS = [SUPA_URL /* , "https://<name>.<account>.workers.dev" */].filter(Boolean);
+const API_HOSTS = [SUPA_URL,
+  /* the second road: a Cloudflare Worker in the owner's account forwarding
+     everything to the project unchanged (proxy/worker.js), on a workers.dev
+     name the ISP leaves alone. Verified from the ACT network itself: REST,
+     auth and the Realtime websocket all answer through it. */
+  "https://delicate-lab-b3b4.edge-board.workers.dev",
+].filter(Boolean);
 const HOST_KEY = "vacancy.apihost.v1";
 let apiHostIx = (()=>{ try{ const i = +sessionStorage.getItem(HOST_KEY); return i > 0 && i < API_HOSTS.length ? i : 0; }catch(e){ return 0; } })();
 const apiBase = ()=> API_HOSTS[apiHostIx] || SUPA_URL;
