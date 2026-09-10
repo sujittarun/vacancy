@@ -551,6 +551,22 @@ button{background:none;border:0;padding:0;cursor:pointer;
    share a tile — one lives on free rooms and the other on booked ones */
 .tile .fresh{position:absolute;top:7px;right:7px;width:6px;height:6px;border-radius:50%;
   background:var(--free);box-shadow:0 0 0 2px var(--held)}
+/* the balance a guest arriving today still owes, in the corner the dot would
+   take — the two never share a tile */
+/* THE NUMBER IN THE TILE'S OWN INK, THE MONEY IN A DOT. Amber text on the held
+   fill does not clear AA at this size in light: --now measured 1.21:1 on
+   "₹16.8k" and --now-ink, the accented-word ink tuned for white, 3.59:1 — the
+   held fill is a mid blue-grey and no orange reads on it at 9.5px. So the
+   figure takes --held-ink, the pair the room number beside it already passes
+   with in both themes, and the amber that means money everywhere else sits in
+   front of it as a dot, where contrast is not a text question. */
+.tile em.owed{position:absolute;top:8px;right:8px;font-style:normal;font-size:9.5px;
+  font-weight:700;letter-spacing:0;color:var(--held-ink);font-variant-numeric:tabular-nums;
+  line-height:1;padding-bottom:1px;border-bottom:2px solid var(--now)}
+/* An amber DOT was tried in front of the figure and measured: it cost nine
+   pixels, and beside a six-character room code the tile has six to spare, so
+   "TT-202" and "₹16.8k" overlapped by four. The underline is the same amber
+   at no width at all. */
 /* an orphan night — free, but wedged between two bookings, so hard to sell */
 .tile .flag{position:absolute;top:7px;right:7px;width:6px;height:6px;border-radius:50%;
   /* The ring was 2px of var(--free) — the same fill as the tile underneath it,
@@ -6329,6 +6345,7 @@ function save(){
                               rows that were never drifting. A row's flags are
                               part of the row. */
                            today: r.today ? 1 : undefined,
+                           movedTo: r.movedTo || undefined, movedFrom: r.movedFrom || undefined,
                            bookedOn: typeof r.bookedOn === "number" ? r.bookedOn : undefined }))
     }));
   }catch(e){ /* private browsing or storage full — the session still works */ }
@@ -6389,6 +6406,7 @@ function load(){
                    phone:r.phone, pax:r.pax, amount:r.amount,
                    pays: (r.pays || []).map(p => ({...p, on: (p.on || 0) + shift})),
                    today: r.today ? 1 : undefined,
+                   movedTo: r.movedTo || undefined, movedFrom: r.movedFrom || undefined,
                    bookedOn: typeof r.bookedOn === "number" ? r.bookedOn + shift : undefined })))
       // Blocks linger a week past their end so the app can still ask whether the
       // flat came back into service — and a block that recorded a FAULT is kept
@@ -7414,6 +7432,9 @@ async function cloudPull(){
              phone: s.guest_phone || undefined, pax: s.pax || undefined,
              amount: s.amount != null ? Number(s.amount) : undefined,
              pays: paysBy[s.id] || [],
+             /* stays has no column for it; the segment a move leaves behind
+                says where the guest went in its note, by a fixed form */
+             movedTo: (/^Moved to (\S+) on /.exec(s.note || "") || [])[1] || undefined,
              bookedOn: s.booked_on ? dayOff(s.booked_on) : undefined };
   }).filter(Boolean)
     // same retention rule as the local store: a week for ordinary blocks, the
@@ -7494,6 +7515,7 @@ function cacheSave(){
                          kind:r.kind, reason:r.reason, note:r.note,
                          fault:r.fault, fixer:r.fixer, fixer_phone:r.fixer_phone, cost:r.cost,
                          phone:r.phone, pax:r.pax, amount:r.amount, pays:r.pays,
+                         movedTo: r.movedTo || undefined, movedFrom: r.movedFrom || undefined,
                          bookedOn: typeof r.bookedOn === "number" ? r.bookedOn : undefined }))});
 }
 function cacheLoad(){
@@ -7516,6 +7538,7 @@ function cacheLoad(){
                  fault:r.fault, fixer:r.fixer, fixer_phone:r.fixer_phone, cost:r.cost,
                  phone:r.phone, pax:r.pax, amount:r.amount,
                  pays: (r.pays || []).map(p => ({...p, on: (p.on || 0) + shift})),
+                 movedTo: r.movedTo || undefined, movedFrom: r.movedFrom || undefined,
                  bookedOn: typeof r.bookedOn === "number" ? r.bookedOn + shift : undefined }))
     .filter(keepOnLoad);
   resv = collapseMerged(resv);
@@ -8310,6 +8333,10 @@ function releaseBlock(r, done){
    record quietly updating. */
 function moveBooking(r, toFi){
   if(isBlock(r) || !(toFi >= 0 && toFi < NF) || toFi === r.fi) return false;
+  /* A guest who is IN does not get re-pointed; they get split — see below.
+     Every caller of a move goes through here, so every one of them gets the
+     right kind without knowing there are two. */
+  if(r.start < 0 && r.end > 0 && !r.openEnd) return splitMove(r, toFi);
   const from = Math.max(r.start, 0);
   /* THE REFUSAL IS THE INTERESTING HALF. "I moved a guest and the flat still
      shows open" is either a move that never happened or one that did not stick,
@@ -8337,6 +8364,69 @@ function moveBooking(r, toFi){
                       /* did it actually take, measured after the fact */
                       stuck: occ[toFi] ? !!occ[toFi][Math.max(r.start,0)] : null});
   return {from: wasFi, to: toFi};
+}
+
+/* ── moving a guest who is already in ────────────────────────────────────────
+   "Why does G02's guest have no room swap and TT-302's does?" Because a move
+   re-pointed the WHOLE stay to another flat, and for a guest three nights in
+   that would have rewritten where they slept those three nights, and the
+   payments against them, as if it had all happened in the other room. So the
+   ⇄ refused anyone whose first night had passed — correct, and useless the
+   morning the AC dies.
+
+   The honest operation is a split. The nights already slept stay exactly where
+   they were slept, as a segment that ends this morning on the old flat; the
+   stay itself — its id, its total, every payment, the guest's own row — moves
+   to the new flat from tonight. Money and identity follow the guest, so "what
+   you are owed" stays one number in one place; history stays where it
+   happened, so the old flat's Just left names them and says where they went.
+
+   On the wire it is one PATCH and one INSERT, in that order: the stay's
+   flat_id and starts_on move first, which frees the old nights, and the
+   history segment is then inserted into them. If Postgres refuses the move —
+   somebody took the new flat in the meantime — lostTheChange puts the stay
+   back and the history insert then collides with it and is dropped by
+   lostTheRoom: the book is exactly as it was. The server is the authority;
+   this phone is optimistic. */
+function splitMove(r, toFi){
+  if(isBlock(r) || r.openEnd || !(r.start < 0 && r.end > 0)) return false;
+  if(!(toFi >= 0 && toFi < NF) || toFi === r.fi) return false;
+  if(!freeRange(toFi, 0, r.end)){
+    logAct("refused", `Could not move ${r.guest || "a guest"} to ${flatLabel(toFi)}`
+      + ` — it is not free for ${fmt(0)}–${fmt(r.end)}`, {flat: flatLabel(toFi), guest: r.guest});
+    return false;
+  }
+  const wasFi = r.fi, wasStart = r.start, slept = -r.start;
+  /* the nights already slept, left where they were slept */
+  const hist = { fi: wasFi, start: wasStart, end: 0, nights: slept, guest: r.guest, src: r.src,
+                 manual: true, phone: r.phone, pax: r.pax, pays: [],
+                 movedTo: flats[toFi].id,
+                 note: `Moved to ${flats[toFi].id} on ${fmtL(0)}`,
+                 bookedOn: r.bookedOn };
+  /* the stay itself, from tonight, in the new flat — id, total and payments intact */
+  r.fi = toFi; r.start = 0; r.nights = r.end;
+  r.movedFrom = flats[wasFi].id;
+  if(MODE === "live" && r.sid){
+    enqueue({k:"stay~", id:r.sid,
+             body:{flat_id: flats[toFi].uid, starts_on: dayISO(0)},
+             was:{flat_id: flats[wasFi].uid, starts_on: dayISO(wasStart)}});
+    hist.sid = uuid();
+    enqueue({k:"stay+", id:hist.sid, body:{
+      flat_id: flats[wasFi].uid, kind:"booking",
+      starts_on: dayISO(wasStart), ends_on: dayISO(0),
+      guest_name: hist.guest, source: hist.src,
+      booked_on: dayISO(typeof r.bookedOn === "number" ? r.bookedOn : 0),
+      guest_phone: hist.phone || null, pax: hist.pax || null, amount: null,
+      rate: flats[wasFi].rate || null, note: hist.note,
+      created_by: session && session.uid }});
+  }
+  resv.push(hist);
+  recompute(); save(); cacheSave();
+  logAct("move", `Moved ${r.guest || "a guest"} from ${flatLabel(wasFi)} to ${flatLabel(toFi)}`
+    + ` from tonight · ${slept} night${slept === 1 ? "" : "s"} already stayed in ${flatLabel(wasFi)}`,
+    {flat: flatLabel(toFi), guest: r.guest});
+  track("move_split", {from: wasFi, to: toFi, slept, ahead: r.end, live: MODE === "live"});
+  return {from: wasFi, to: toFi, split: true};
 }
 
 /* ── the guest is staying on ──────────────────────────────────────────────────
@@ -9622,7 +9712,15 @@ function roomTile(fi, day, stay){
      and until now they looked exactly like a guest on night nine. A dot, in
      the corner the orphan flag uses on free tiles, on the held fill. */
   const fresh = showName && who.start === day && day === 0;
-  if(fresh) b.appendChild(el("i","fresh"));
+  /* AND WHAT THEY OWE, if anything. The day somebody arrives is the day the
+     balance is collected, and the tile is what the operator is looking at
+     when they walk in. The tile has one line and the name is on it, but the
+     room-number row has forty empty pixels to its right — so the amount sits
+     there, in the money amber, and the dot stands down. Measured: "₹16.8k"
+     beside "TT-102" at 105px wide, no overlap. */
+  const owed = fresh ? dueFrom(who) : 0;
+  if(owed > 0) b.appendChild(el("em","owed", moneyShort(owed)));
+  else if(fresh) b.appendChild(el("i","fresh"));
   /* the spoken label says what the printed one says — "Free 2+n" announced as
      "free for 2 nights" understates a flat that is free to the end of the book,
      and the two disagreeing is its own small lie */
@@ -9632,7 +9730,7 @@ function roomTile(fi, day, stay){
         : `free for ${run} night${run>1?"s":""} from`)
       : blocked ? "out of service on"
       : partial ? `free for ${partial} of ${nights} nights from`
-      : named ? `booked to ${who.guest.trim()}${fresh ? ", checked in today," : ""} on`
+      : named ? `booked to ${who.guest.trim()}${fresh ? ", checked in today" + (owed > 0 ? ", " + money(owed) + " due" : "") + "," : ""} on`
       : "not available on"} ${fmtL(day)}`);
   b.onclick = ()=>{
     /* honoured only while it could plausibly belong to the gesture that set
@@ -9846,7 +9944,10 @@ function roomMoves(a, b, pool){
    decision an operator makes, and refusing to show it would just be the app
    deciding for them. */
 function whereCouldGo(b){
-  if(!b || isBlock(b) || b.start < 0) return {same:[], smaller:[]};
+  /* b.start < 0 used to be refused here — "in-house guests do not pack". They
+     do now, from tonight: see splitMove. What still cannot move is a stay with
+     no end, because there is nothing to move it for. */
+  if(!b || isBlock(b) || b.openEnd) return {same:[], smaller:[]};
   const from = flats[b.fi], a = Math.max(b.start, 0);
   const same = [], smaller = [];
   for(let j = 0; j < NF; j++){
@@ -9871,7 +9972,7 @@ function openGuestMove(b, backTo){
   sheetWipe();
   const t = el("div");
   t.innerHTML = `<div class="n">Move ${esc(b.guest)}</div>`
-    + `<div class="m">${esc(fmt(Math.max(b.start,0)))}–${esc(fmt(b.end))} · `
+    + `<div class="m">${b.start < 0 ? "from tonight · " : ""}${esc(fmt(Math.max(b.start,0)))}–${esc(fmt(b.end))} · `
     + `${b.nights} night${b.nights>1?"s":""} · in ${esc(from.id)} now</div>`;
   const x = el("button", null, "‹"); x.setAttribute("aria-label","Back to the room");
   x.onclick = backTo;
@@ -10099,11 +10200,13 @@ function openStayDates(r, backTo){
      moveFor and the ⇄ on the row all let a guest arriving TODAY move, because
      the morning a room turns out not to be ready is the commonest reason for
      one. Tied to inHouse, this route vanished for exactly that guest. */
-  if(r.start >= 0){
+  if(!r.openEnd){
     const routes = el("div","roomRoutes stay");
     const mv = el("button");
     mv.append(el("b", null, `Move ${r.guest} to another flat`),
-              el("s", null, "the same nights, a different room"));
+              el("s", null, r.start < 0
+                ? `from tonight · the ${-r.start} night${-r.start === 1 ? "" : "s"} already stayed stay in ${fl.id}`
+                : "the same nights, a different room"));
     mv.onclick = ()=>{ haptic(9); openGuestMove(r, ()=> openStayDates(r, backTo)); };
     routes.appendChild(mv);
     form.append(routes);
@@ -10177,6 +10280,9 @@ const RECENT_BAND = 2;      // recent enough to be offered on the action band
 const justLeft = fi => bookings()
   .filter(r => r.fi === fi && r.end <= 0 && r.end > -RECENT_OUT && !r.openEnd)
   .sort((a, b) => b.end - a.end);
+/* the most recent departure that is actually a departure — a segment left
+   behind by a move is history, not a guest who might stay on */
+const lastGone = fi => justLeft(fi).find(r => !r.movedTo);
 
 function dayOps(d){
   const arrivals = bookings().filter(r => r.start === d).sort((a,b)=> a.fi - b.fi);
@@ -14478,6 +14584,26 @@ function moneyPill(r, fi, day){
    when it was opened from the list of everyone who owes: clearing twelve
    departed guests meant twelve trips back through Business → Money → the
    list, one per payment. The caller says where it came from. */
+/* What the guest is sent after paying. Plain text with WhatsApp's own bold,
+   like the day message: it pastes into a chat and reads correctly on the
+   smallest screen in it. It names what was received, against which stay, and
+   what is left — the three things a guest asks about a payment, in the order
+   they ask them. No phone numbers, no rates: it goes to the guest. */
+function receiptText(r, got, method, on){
+  const f = flats[r.fi] || {};
+  const due = dueFrom(r);
+  return [
+    `*${hostName || "Crescent Stays"} — receipt*`, ``,
+    `${r.guest}`,
+    `${f.id}${f.type ? " · " + f.type : ""}${f.bname ? " · " + f.bname : ""}`,
+    `${fmtL(r.start)} → ${fmtL(r.end)} · ${r.nights} night${r.nights === 1 ? "" : "s"}`, ``,
+    `Received: ${money(got)} · ${method}${on != null ? " · " + fmtL(on) : ""}`,
+    r.amount ? `Total: ${money(r.amount)}` : null,
+    r.amount ? (due > 0 ? `Balance: ${money(due)}` : `Balance: nil — settled`) : null,
+    ``, `Thank you.`,
+  ].filter(x => x !== null).join("\n");
+}
+
 function openPayment(r, fi, day, back){
   back = back || (()=> openSheet(fi, day));
   sheetWipe();
@@ -14541,7 +14667,19 @@ function openPayment(r, fi, day, back){
     /* toAmount already parses "₹1,500.50" correctly. Pre-stripping to digits
        first turned 1500.50 into "150050" — a ₹1,501 payment recorded as
        ₹1,50,050, which then clamps dueFrom to 0 and flips the row to settled. */
-    if(addPayment(r, amt.value, method, "", on)){ haptic(18); back(); }
+    const before = paidOn(r);
+    if(addPayment(r, amt.value, method, "", on)){
+      haptic(18); back();
+      /* THE RECEIPT IS THE NEXT THING THAT HAPPENS. A guest who has just paid
+         is standing there, and what they get is a WhatsApp message typed from
+         memory — amount, dates, what is left. The toast that confirms the
+         payment now carries the message, in the same plain style the day list
+         is sent in, one tap to copy. Nothing is sent by the app. */
+      const got = paidOn(r) - before;
+      toast("", `<b>${money(got)} recorded.</b> ${esc(r.guest)} · ${esc(flats[r.fi].id)} · `
+        + (dueFrom(r) > 0 ? `${money(dueFrom(r))} still due.` : `settled.`), null,
+        {label: "Copy receipt", run: ()=>{ copyText(receiptText(r, got, method, on)); }});
+    }
   };
   form.append(go);
   sheetB.append(form);
@@ -15081,8 +15219,8 @@ function openSheet(fi, day){
     act.append(cl);
   }
 
-  if(canTake && gone.length && gone[0].end > -RECENT_BAND){
-    const g = gone[0];
+  const g = lastGone(fi);
+  if(canTake && g && g.end > -RECENT_BAND){
     const chg = el("div","roomRoutes stay");
     const c = el("button");
     c.append(el("b", null, `Extend ${g.guest}'s stay`),
@@ -15170,10 +15308,12 @@ function openSheet(fi, day){
        fourth control costs the name a second line and not its tail. The
        editor keeps its route as well: a guest reached for their dates may
        turn out to need a room. */
-    if(!isBlock(r) && !r.openEnd && r.start >= 0){
+    if(!isBlock(r) && !r.openEnd){
       const mvb = el("button","rowx rowmv rowsw");
       mvb.innerHTML = SVG_SWAP;
-      mvb.setAttribute("aria-label", `Move ${r.guest} to another flat`);
+      mvb.setAttribute("aria-label", r.start < 0
+        ? `Move ${r.guest} to another flat from tonight`
+        : `Move ${r.guest} to another flat`);
       mvb.onclick = ev=>{ ev.stopPropagation(); haptic(9);
         openGuestMove(r, ()=> openSheet(fi, day)); };
       end.appendChild(mvb);
@@ -15266,7 +15406,8 @@ function openSheet(fi, day){
          one row, and it was pushing the line to four. */
       m.innerHTML = `<b>${esc(r.guest)}</b>`
         + `<em>${esc(fmt(r.start))} → ${esc(fmt(r.end))} · ${r.nights}n`
-        + (r.end === 0 ? " · left this morning" : "") + `</em>`;
+        + (r.movedTo ? ` · moved to ${esc(r.movedTo)}`
+           : r.end === 0 ? " · left this morning" : "") + `</em>`;
       const end = el("div","rowend");
       if(due > 0){
         const pay = el("button","paid due", money(due));
@@ -15275,12 +15416,16 @@ function openSheet(fi, day){
           openPayment(r, fi, day, ()=> openSheet(fi, day)); };
         end.appendChild(pay);
       }
-      const ed = el("button","rowx rowmv rowdt");
-      ed.innerHTML = SVG_DATES;
-      ed.setAttribute("aria-label", `Change ${r.guest}'s dates — they left ${r.end === 0 ? "today" : fmt(r.end)}`);
-      ed.onclick = ev=>{ ev.stopPropagation(); haptic(9);
-        openStayDates(r, ()=> openSheet(fi, day)); };
-      end.appendChild(ed);
+      /* a segment a move left behind is not a stay to be extended: the guest
+         is in another flat, and their dates are edited there */
+      if(!r.movedTo){
+        const ed = el("button","rowx rowmv rowdt");
+        ed.innerHTML = SVG_DATES;
+        ed.setAttribute("aria-label", `Change ${r.guest}'s dates — they left ${r.end === 0 ? "today" : fmt(r.end)}`);
+        ed.onclick = ev=>{ ev.stopPropagation(); haptic(9);
+          openStayDates(r, ()=> openSheet(fi, day)); };
+        end.appendChild(ed);
+      }
       row.append(m, end);
       gl.appendChild(row);
     });
@@ -17938,6 +18083,21 @@ function openDay(d, focus){
         openTurn(fi, d, ()=> openDay(d, focus)); };
       row.append(b);
     };
+    /* THE MONEY IS COLLECTED AT THE DOOR, and this is the screen open at the
+       door. The arriving rows said "₹8,400 on arrival" in grey italics and the
+       amount was a fact to read, not a thing to do — recording it meant the
+       room sheet, the guest's row, the pill, three taps away from the list
+       that said it was owed. The amount is the pill now, amber as everywhere
+       else money is owed, and it opens the payment form for that guest and
+       comes back here. Said once: the sentence no longer repeats it. */
+    const collectPill = (r)=>{
+      const due = dueFrom(r);
+      const b = el("button","paid due", money(due));
+      b.setAttribute("aria-label", `${money(due)} to collect from ${r.guest} on arrival — record it`);
+      b.onclick = ev=>{ ev.stopPropagation(); haptic(9);
+        openPayment(r, r.fi, d, ()=> openDay(d, focus)); };
+      return b;
+    };
     group("turnovers", "Turnaround", "clean in the gap", turnovers, (m, t2, fl, row)=>{
       /* BOTH HALVES ON ONE ROW. This is the whole point of the view: the flat,
          who is out, who is in, and what is coming. */
@@ -17945,6 +18105,7 @@ function openDay(d, focus){
         + `<em>${esc(fl.type)} · ${esc(fl.bshort)} · ${t2.in.nights} night${t2.in.nights>1?"s":""}`
         + ` · ${esc(t2.in.src || "Direct")}</em>`;
       row.append(m);
+      if(dueFrom(t2.in) > 0) row.append(collectPill(t2.in));
       turnPill(t2.fi, row);
     });
     group("departures", "Leaving", "nobody in behind them", outOnly, (m, r, fl, row)=>{
@@ -17958,9 +18119,8 @@ function openDay(d, focus){
     group("arrivals", "Arriving", "into an empty room", inOnly, (m, r, fl, row)=>{
       const due = dueFrom(r);
       m.innerHTML = `<b>${esc(r.guest)}</b> in · ${r.nights} night${r.nights>1?"s":""}`
-        + `<em>${esc(fl.type)} · ${esc(fl.bshort)} · out ${esc(fmt(r.end))} · ${esc(r.src || "Direct")}`
-        + (due > 0 ? ` · <b class="hi-now">${esc(money(due))} on arrival</b>` : "") + `</em>`;
-      row.append(m, el("span","pill", r.src || "Direct"));
+        + `<em>${esc(fl.type)} · ${esc(fl.bshort)} · out ${esc(fmt(r.end))} · ${esc(r.src || "Direct")}</em>`;
+      row.append(m, due > 0 ? collectPill(r) : el("span","pill", r.src || "Direct"));
     });
 
     if(focus && anchors[focus] && focus !== "turnovers")

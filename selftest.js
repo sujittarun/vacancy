@@ -4205,7 +4205,14 @@ export async function run(filter) {
       ok(mv, "the coming-up guest's row has no move glyph");
       eq(mv.getAttribute("aria-label"), "Move Due Later to another flat", "the move glyph's label");
       ok(later.querySelector(".rowdt"), "the dates glyph left the row when the move came back");
-      eq(inRow.querySelector(".rowsw"), null, "a guest already in is offered a move");
+      /* THE RULE CHANGED ON 10 SEP. A guest already in used to have no move at
+         all, because a move re-pointed the whole stay and would have rewritten
+         where they had already slept. They move from tonight now, as a split
+         — see splitMove — so the row carries the ⇄, and its label says which
+         kind of move this is. */
+      const inMv = inRow.querySelector(".rowsw");
+      ok(inMv, "a guest already in has no move glyph — they move from tonight now");
+      eq(inMv.getAttribute("aria-label"), "Move In Already to another flat from tonight", "the in-house move's label");
       /* four controls beside the name, and the line still reads */
       const em = later.querySelector("em");
       ok(em.scrollWidth <= em.clientWidth + 1, `"${em.textContent}" is clipped beside the controls`);
@@ -4223,13 +4230,16 @@ export async function run(filter) {
       const route = [...document.querySelectorAll(".sheet.on .roomRoutes.stay button")]
         .find(b => /Move Arrives Today/.test(b.textContent));
       ok(route, "a guest arriving today has no move route in the editor");
-      /* and a guest already in has none, anywhere */
+      /* and a guest already in has the route too, and it says the nights
+         already slept stay where they were */
       const inAlready = resv.find(x => x.guest === "In Already");
       openStayDates(inAlready, () => {});
       await until(() => /In Already/.test(document.querySelector(".sheet .n").textContent), "the in-house editor");
-      ok(![...document.querySelectorAll(".sheet.on .roomRoutes.stay button")].some(b => /Move In Already/.test(b.textContent)),
-        "a guest already in is offered a move in the editor");
-      return "⇄ on the row for Due Later, none for In Already; Arrives Today locked in place but movable";
+      const inRoute = [...document.querySelectorAll(".sheet.on .roomRoutes.stay button")].find(b => /Move In Already/.test(b.textContent));
+      ok(inRoute, "a guest already in has no move route in the editor");
+      ok(/from tonight/.test(inRoute.textContent) && /already stayed/.test(inRoute.textContent),
+        `the in-house route does not say what kind of move it is: "${inRoute.textContent}"`);
+      return "⇄ on the row for Due Later and for In Already (from tonight); Arrives Today locked in place but movable";
     } finally {
       closeSheet();
       resv = keepR; recompute();
@@ -4741,6 +4751,228 @@ export async function run(filter) {
       eq(bothDots, 0, "a tile carries both the orphan flag and the new-arrival dot");
       return "night nine: name, no dot";
     } finally { pastCheckin = realClock; resv = keepR; recompute(); }
+  });
+
+  /* ══ money at the door, and a guest who moves mid-stay ═══════════════════ */
+
+  /* The arriving rows said "₹8,400 on arrival" in grey italics: a fact to
+     read, three taps from the form that records it. */
+  await test("the day view collects at the door: the amount is the pill, and it opens the payment", async () => {
+    const keepR = resv.slice();
+    const fi = freeFlat(-1, 6), fj = flats.map((f, i) => i).find(i => i !== fi && freeSpan(i, -3, 6) && pastClear(i, -3));
+    ok(fi != null && fj != null, "no two flats free for the fixture");
+    resv.push({fi, start: 0, end: 3, nights: 3, guest: "Owes At Door", src: "Direct", manual: true, amount: 9000, pays: []});
+    resv.push({fi: fj, start: -2, end: 0, nights: 2, guest: "Out First", src: "Direct", manual: true, pays: []});
+    resv.push({fi: fj, start: 0, end: 2, nights: 2, guest: "In Behind", src: "Direct", manual: true, amount: 6000, pays: []});
+    recompute();
+    try {
+      openDay(0);
+      await until(() => document.querySelector(".sheet.on .dayrows .row"), "the day view");
+      const rowOf = n => [...document.querySelectorAll(".sheet.on .dayrows .row")].find(x => x.textContent.includes(n));
+      const arr = rowOf("Owes At Door"), turn = rowOf("In Behind");
+      ok(arr && turn, "the fixture rows are not on the day view");
+      /* the amount is a control, said once */
+      const pill = arr.querySelector(".paid.due");
+      ok(pill, "an arriving guest who owes has no amber pill");
+      eq(pill.textContent, money(9000), "the pill does not say the amount");
+      ok(!/on arrival/.test(arr.querySelector("em").textContent), "the sentence still repeats the amount");
+      /* a turnover row carries both the money and the clean */
+      ok(turn.querySelector(".paid.due"), "the arriving half of a turnover has no collect pill");
+      ok(turn.querySelector(".pill.turn"), "the turnover lost its clean pill");
+      /* and the pill is the door to the payment, for that guest, back to here */
+      pill.click();
+      await until(() => /due$/.test((document.querySelector(".sheet.on .n") || {}).textContent || ""), "the payment form");
+      ok(document.querySelector(".sheet.on .m").textContent.includes("Owes At Door"), "the form opened for somebody else");
+      document.querySelector(".sheet-h button[aria-label='Back']").click();
+      await until(() => document.querySelector(".sheet.on .dayrows"), "back to the day view");
+      return "amount is the pill · opens payment · returns to the day";
+    } finally { closeSheet(); resv = keepR; recompute(); }
+  });
+
+  /* A guest who has just paid is standing there, and what they get is a
+     WhatsApp message typed from memory. */
+  await test("a payment can be copied as a receipt for the guest", async () => {
+    const keepR = resv.slice(), keepAct = activity.slice(), realCopy = window.copyText;
+    const fi = freeFlat(-4, 4);
+    ok(fi != null, "no flat free for the fixture");
+    const r = {fi, start: -2, end: 2, nights: 4, guest: "Receipt Guest", src: "Direct", manual: true, amount: 12000, pays: []};
+    resv.push(r); recompute();
+    let copied = null;
+    try {
+      window.copyText = async t => { copied = t; return true; };
+      openPayment(r, fi, 0, () => closeSheet());
+      await until(() => document.querySelector(".sheet.on .bkgo"), "the payment form");
+      const amt = document.querySelector(".sheet.on input");
+      amt.value = "5000"; amt.dispatchEvent(new Event("input"));
+      document.querySelector(".sheet.on .bkgo").click();
+      await until(() => [...document.querySelectorAll(".toast button")].some(b => /receipt/i.test(b.textContent)), "the receipt button on the toast");
+      const t = [...document.querySelectorAll(".toast")].find(x => /recorded/.test(x.textContent));
+      ok(/5,000 recorded/.test(t.textContent), `the toast says "${t.textContent.slice(0, 60)}"`);
+      ok(/7,000 still due/.test(t.textContent), "the toast does not say what is left");
+      [...t.querySelectorAll("button")].find(b => /receipt/i.test(b.textContent)).click();
+      await until(() => copied != null, "the receipt to be copied");
+      ok(/Receipt Guest/.test(copied), "the receipt does not name the guest");
+      ok(new RegExp(flats[fi].id).test(copied), "the receipt does not name the flat");
+      ok(/Received: ₹5,000 · UPI|Received: ₹5,000 · Cash|Received: ₹5,000/.test(copied), `received line: ${copied}`);
+      ok(/Balance: ₹7,000/.test(copied), "the receipt does not say the balance");
+      ok(!/\d{10}/.test(copied), "a phone number is in a message that goes to the guest");
+      return copied.split("\n")[0] + " … " + copied.split("\n").find(l => /Balance/.test(l));
+    } finally {
+      window.copyText = realCopy;
+      closeSheet(); document.querySelectorAll(".toast").forEach(x => x.remove());
+      resv = keepR; recompute();
+      activity.length = 0; keepAct.forEach(a => activity.push(a)); jset(LOG_STORE, activity);
+    }
+  });
+
+  /* The day somebody arrives is the day the balance is collected, and the
+     tile is what the operator is looking at when they walk in. */
+  await test("a guest arriving today with money owed says so on their tile", async () => {
+    const keepR = resv.slice(), realClock = pastCheckin;
+    const fi = freeFlat(-1, 6), fj = flats.map((f, i) => i).find(i => i !== fi && freeSpan(i, 0, 6) && pastClear(i, -1));
+    ok(fi != null && fj != null, "no two flats free for the fixture");
+    resv.push({fi, start: 0, end: 3, nights: 3, guest: "Owes Tile", src: "Direct", manual: true, amount: 16800, pays: []});
+    resv.push({fi: fj, start: 0, end: 3, nights: 3, guest: "Settled Tile", src: "Direct", manual: true, amount: 9000,
+               pays: [{id: "p1", amount: 9000, method: "UPI", on: 0}]});
+    recompute();
+    try {
+      pastCheckin = () => true;
+      const a = roomTile(fi, 0, 1), b = roomTile(fj, 0, 1);
+      const owed = a.querySelector("em.owed");
+      ok(owed, "the owing arrival's tile carries no amount");
+      eq(owed.textContent, moneyShort(16800), `the corner says "${owed.textContent}"`);
+      ok(!a.querySelector(".fresh"), "the owing tile carries the dot as well as the amount");
+      ok(/16,800 due/.test(a.getAttribute("aria-label")), `aria: ${a.getAttribute("aria-label")}`);
+      ok(b.querySelector(".fresh") && !b.querySelector("em.owed"), "a settled arrival should carry the dot and no amount");
+      /* and the amount does not run into the room number. Measured against
+         the TEXT of the room number, not its box: the <b> is a block the width
+         of the tile, so its right edge is always past the amount and says
+         nothing about whether the glyphs collide. */
+      document.body.appendChild(a); a.style.cssText = "position:fixed;left:-9999px;width:105px";
+      const rng = document.createRange(); rng.selectNodeContents(a.querySelector("b"));
+      const nb = rng.getBoundingClientRect(), no = owed.getBoundingClientRect();
+      ok(no.left >= nb.right + 4, `the amount (${Math.round(no.left)}) runs into the room number's text (ends ${Math.round(nb.right)})`);
+      a.remove();
+      return `${owed.textContent} in the corner, dot on the settled one`;
+    } finally { pastCheckin = realClock; resv = keepR; recompute(); }
+  });
+
+  /* "Why does G02's guest have no room swap and TT-302's does?" Because a
+     move re-pointed the whole stay. A guest already in gets a split now:
+     the nights slept stay where they were slept, the stay moves from tonight
+     with its id, its total and every payment. */
+  await test("a guest already in the flat moves from tonight, and the nights already slept stay put", async () => {
+    const keepR = resv.slice(), keepAct = activity.slice(), keepQ = queue.slice(), keepMode = MODE;
+    const fi = freeFlat(-4, 6);
+    const to = flats.map((f, i) => i).find(i => i !== fi && flats[i].type === flats[fi].type && freeSpan(i, 0, 6));
+    ok(fi != null && to != null, "no two flats free for the fixture");
+    const r = {fi, start: -3, end: 4, nights: 7, guest: "Mid Stay", src: "Direct", manual: true, amount: 21000,
+               pays: [{id: "pm1", amount: 9000, method: "UPI", on: -3}], sid: "sid-mid-stay", phone: "9000000000"};
+    resv.push(r); recompute();
+    try {
+      /* the picker no longer turns them away, and the room's row offers the ⇄ */
+      ok(whereCouldGo(r).same.length + whereCouldGo(r).smaller.length > 0, "an in-house guest is still refused a room to move to");
+      openSheet(fi, 0);
+      await until(() => document.querySelector(".sheet.on .row.bk"), "the room sheet");
+      const row = [...document.querySelectorAll(".sheet.on .row.bk")].find(x => x.textContent.includes("Mid Stay"));
+      const sw = row.querySelector(".rowsw");
+      ok(sw, "a guest already in has no ⇄ on their row");
+      ok(/from tonight/.test(sw.getAttribute("aria-label")), `the ⇄ does not say from tonight: ${sw.getAttribute("aria-label")}`);
+      closeSheet();
+
+      MODE = "live"; queue.length = 0;
+      const res = moveBooking(r, to);
+      ok(res && res.split, "the move did not happen as a split");
+      /* the stay: new flat, from tonight, everything that matters intact */
+      eq(r.fi, to, "the stay did not move");
+      eq(r.start, 0, "the stay does not start tonight");
+      eq(r.nights, 4, "the nights ahead");
+      eq(r.end, 4, "the end moved");
+      eq(r.amount, 21000, "the total did not follow the guest");
+      eq(r.pays.length, 1, "the payment did not follow the guest");
+      eq(dueFrom(r), 12000, "what is owed changed");
+      eq(r.sid, "sid-mid-stay", "the stay lost its id");
+      /* the history: the nights slept, where they were slept, and no money */
+      const hist = resv.find(x => x.fi === fi && x.guest === "Mid Stay" && x.movedTo);
+      ok(hist, "no segment was left on the old flat");
+      eq(hist.start, -3, "the segment's start"); eq(hist.end, 0, "the segment ends this morning");
+      eq(hist.nights, 3, "the nights already slept");
+      eq((hist.pays || []).length, 0, "money was left on the history segment");
+      ok(!hist.amount, "a total was left on the history segment");
+      eq(hist.movedTo, flats[to].id, "the segment does not say where they went");
+      /* the book: old flat free tonight, new flat taken */
+      eq(occ[fi][0], 0, "the old flat is still held tonight");
+      eq(occ[to][0], 1, "the new flat is not held tonight");
+      eq(occ[fi][-1 + 0] === undefined ? 1 : 1, 1);
+      /* on the wire: the stay moves first, then the segment is inserted */
+      const ops = queue.map(o => o.k);
+      eq(ops.indexOf("stay~") >= 0 && ops.indexOf("stay+") > ops.indexOf("stay~"), true, `queued as ${ops.join(",")}`);
+      const patch = queue.find(o => o.k === "stay~");
+      eq(patch.body.flat_id, flats[to].uid, "the PATCH points at the wrong flat");
+      eq(patch.body.starts_on, dayISO(0), "the PATCH does not move the start to tonight");
+      const ins = queue.find(o => o.k === "stay+");
+      eq(ins.body.starts_on, dayISO(-3), "the segment's start on the wire"); eq(ins.body.ends_on, dayISO(0), "the segment's end on the wire");
+      eq(ins.body.amount, null, "the segment carries a total on the wire");
+      ok(/^Moved to /.test(ins.body.note), "the segment's note does not carry where they went, which is how a pull reads it back");
+      ok(/from tonight/.test(activity[0].s), `not logged: ${activity[0].s}`);
+
+      /* the old flat's Just left names them, says where they went, and does
+         not offer to keep them on */
+      openSheet(fi, 0);
+      await until(() => document.querySelector(".sheet.on .justleft"), "the old flat's sheet");
+      const jl = [...document.querySelectorAll(".sheet.on .justleft .row.bk")].find(x => x.textContent.includes("Mid Stay"));
+      ok(jl, "the segment is not in the old flat's Just left");
+      ok(new RegExp("moved to " + flats[to].id).test(jl.textContent), `the row says "${jl.querySelector("em").textContent}"`);
+      ok(!jl.querySelector(".rowdt"), "a history segment is offered a dates editor");
+      ok(!/Extend Mid Stay/.test(document.getElementById("sheetB").textContent), "the band offers to extend a guest who is in another flat");
+      closeSheet();
+      return `${flats[fi].id} keeps 3 nights, ${flats[to].id} takes 4 with ₹12,000 still due`;
+    } finally {
+      closeSheet(); MODE = keepMode; queue.length = 0; keepQ.forEach(o => queue.push(o)); jset(QUEUE_KEY, queue);
+      resv = keepR; recompute();
+      activity.length = 0; keepAct.forEach(a => activity.push(a)); jset(LOG_STORE, activity);
+    }
+  });
+
+  /* A refused split changes nothing at all. */
+  await test("a mid-stay move to a flat that is not free is refused whole", () => {
+    const keepR = resv.slice(), keepAct = activity.slice();
+    const fi = freeFlat(-4, 6);
+    const busy = flats.map((f, i) => i).find(i => i !== fi && resv.some(x => x.fi === i && x.start <= 1 && x.end > 1));
+    ok(fi != null && busy != null, "no busy flat to be refused by");
+    const r = {fi, start: -3, end: 4, nights: 7, guest: "Refused Mover", src: "Direct", manual: true, amount: 7000, pays: []};
+    resv.push(r); recompute();
+    try {
+      const n = resv.length;
+      eq(moveBooking(r, busy), false, "a move into a held flat was accepted");
+      eq(r.fi, fi, "the stay moved anyway"); eq(r.start, -3, "the start changed anyway");
+      eq(resv.length, n, "a segment was left behind by a refused move");
+      ok(/Could not move/.test(activity[0].s), "the refusal is not logged");
+      return "refused, and nothing moved";
+    } finally { resv = keepR; recompute(); activity.length = 0; keepAct.forEach(a => activity.push(a)); jset(LOG_STORE, activity); }
+  });
+
+  /* The two markers have to outlive a reload, or the old flat offers to
+     extend a guest who is in another room the next morning. */
+  await test("a move's history segment is still marked after a reload", () => {
+    const keepR = resv.slice(), stored = localStorage.getItem(STORE), keepDemo = usingDemo;
+    const fi = freeFlat(-4, 6);
+    resv.push({fi, start: -3, end: 0, nights: 3, guest: "Segment Guest", src: "Direct", manual: true, pays: [], movedTo: "ZZ-9"});
+    recompute();
+    try {
+      usingDemo = false; save();
+      const raw = JSON.parse(localStorage.getItem(STORE));
+      const row = raw.rows.find(x => x.guest === "Segment Guest");
+      eq(row && row.movedTo, "ZZ-9", "movedTo is not written to the store");
+      resv = []; recompute();
+      ok(load(), "the store did not load back");
+      const back = resv.find(x => x.guest === "Segment Guest");
+      eq(back && back.movedTo, "ZZ-9", "movedTo did not survive the reload");
+      return "movedTo written and read back";
+    } finally {
+      resv = keepR; recompute(); usingDemo = keepDemo;
+      if (stored != null) localStorage.setItem(STORE, stored); else jdel(STORE);
+    }
   });
 
   await test("no text falls below AA in either theme", async () => {
