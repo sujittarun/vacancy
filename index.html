@@ -553,20 +553,14 @@ button{background:none;border:0;padding:0;cursor:pointer;
   background:var(--free);box-shadow:0 0 0 2px var(--held)}
 /* the balance a guest arriving today still owes, in the corner the dot would
    take — the two never share a tile */
-/* THE NUMBER IN THE TILE'S OWN INK, THE MONEY IN A DOT. Amber text on the held
-   fill does not clear AA at this size in light: --now measured 1.21:1 on
-   "₹16.8k" and --now-ink, the accented-word ink tuned for white, 3.59:1 — the
-   held fill is a mid blue-grey and no orange reads on it at 9.5px. So the
-   figure takes --held-ink, the pair the room number beside it already passes
-   with in both themes, and the amber that means money everywhere else sits in
-   front of it as a dot, where contrast is not a text question. */
-.tile em.owed{position:absolute;top:8px;right:8px;font-style:normal;font-size:9.5px;
-  font-weight:700;letter-spacing:0;color:var(--held-ink);font-variant-numeric:tabular-nums;
-  line-height:1;padding-bottom:1px;border-bottom:2px solid var(--now)}
-/* An amber DOT was tried in front of the figure and measured: it cost nine
-   pixels, and beside a six-character room code the tile has six to spare, so
-   "TT-202" and "₹16.8k" overlapped by four. The underline is the same amber
-   at no width at all. */
+/* THE BALANCE A GUEST ARRIVING TODAY STILL OWES, at the head of the name line.
+   Amber text on the held fill does not clear AA at this size in light — --now
+   measured 1.21:1, --now-ink 3.59:1 — so the figure is the line's own ink at a
+   heavier weight, and the amber that means money everywhere else is the rule
+   under it, where contrast is not a text question. Inline, so nothing can
+   overlap it; first, so the fade never reaches it. */
+.tile s .owe{font-style:normal;font-weight:760;letter-spacing:0;font-variant-numeric:tabular-nums;
+  padding-bottom:1px;border-bottom:2px solid var(--now);white-space:nowrap}
 /* somebody else has this room open on their phone right now. The ring is the
    attention amber and it breathes; the line under the room number says who and
    what, in the tile's own ink — amber text does not clear AA on this fill. */
@@ -10265,8 +10259,6 @@ function roomTile(fi, day, stay){
     : partial ? `Free ${partial} of ${nights}`
     : showName ? who.guest.trim()
     : "Booked";
-  b.append(el("b",null,fl.id), el("s", showName ? "who" : null, note));
-  if(open && run === 1) b.appendChild(el("i","flag"));   // orphan night
   /* WHO IS NEW. A guest whose first night is tonight is the one the operator
      wants to pick out of forty tiles — keys, deposit, the welcome message —
      and until now they looked exactly like a guest on night nine. A dot, in
@@ -10274,13 +10266,24 @@ function roomTile(fi, day, stay){
   const fresh = showName && who.start === day && day === 0;
   /* AND WHAT THEY OWE, if anything. The day somebody arrives is the day the
      balance is collected, and the tile is what the operator is looking at
-     when they walk in. The tile has one line and the name is on it, but the
-     room-number row has forty empty pixels to its right — so the amount sits
-     there, in the money amber, and the dot stands down. Measured: "₹16.8k"
-     beside "TT-102" at 105px wide, no overlap. */
+     when they walk in.
+
+     The first version put the amount in the corner of the room-number row,
+     measured five pixels clear of "TT-102" at 105px — and on the owner's
+     phone, a few pixels narrower, it sat on top of the code. Two texts sharing
+     a row by absolute position overlap somewhere; the only width-proof layout
+     is one line. So the amount LEADS the second line, in the tile's own ink
+     with the money amber under it, and the name follows: the line's fade takes
+     the end of the name, never the figure. The figure is what the day is
+     about; the name is on the day view in full. */
   const owed = fresh ? dueFrom(who) : 0;
-  if(owed > 0) b.appendChild(el("em","owed", moneyShort(owed)));
-  else if(fresh) b.appendChild(el("i","fresh"));
+  const line = el("s", showName ? "who" : null);
+  if(owed > 0){
+    line.append(el("i","owe", moneyShort(owed)), document.createTextNode(" · " + note));
+  } else line.textContent = note;
+  b.append(el("b",null,fl.id), line);
+  if(open && run === 1) b.appendChild(el("i","flag"));   // orphan night
+  if(fresh && !(owed > 0)) b.appendChild(el("i","fresh"));
   /* the spoken label says what the printed one says — "Free 2+n" announced as
      "free for 2 nights" understates a flat that is free to the end of the book,
      and the two disagreeing is its own small lie */

@@ -4862,40 +4862,104 @@ export async function run(filter) {
 
   /* The day somebody arrives is the day the balance is collected, and the
      tile is what the operator is looking at when they walk in. */
-  await test("a guest arriving today with money owed says so on their tile", async () => {
+  /* The owner's phone is a few pixels narrower than the one this was first
+     measured on, and the amount sat on top of the room code. A layout that two
+     texts share by absolute position overlaps SOMEWHERE; the only width-proof
+     one is one line. So this is a matrix, not a measurement: every tile width
+     a phone produces, every shape of amount, short and long names. */
+  await test("a guest arriving today with money owed says so on their tile — at every width, amount and name", async () => {
     const keepR = resv.slice(), realClock = pastCheckin;
-    const fi = freeFlat(-1, 6), fj = flats.map((f, i) => i).find(i => i !== fi && freeSpan(i, 0, 6) && pastClear(i, -1));
-    ok(fi != null && fj != null, "no two flats free for the fixture");
-    resv.push({fi, start: 0, end: 3, nights: 3, guest: "Owes Tile", src: "Direct", manual: true, amount: 16800, pays: []});
-    resv.push({fi: fj, start: 0, end: 3, nights: 3, guest: "Settled Tile", src: "Direct", manual: true, amount: 9000,
-               pays: [{id: "p1", amount: 9000, method: "UPI", on: 0}]});
-    recompute();
+    const fi = freeFlat(-1, 6);
+    ok(fi != null, "no flat free for the fixture");
+    const widths = [84, 90, 97, 105, 118, 132];              // 3-up on 320…414px phones
+    const amounts = [900, 5200, 16800, 125000, 1250000];      // ₹900 … ₹12.5L
+    const names = ["Om", "Satya", "Venkatasubramaniam Iyer"];
+    const codeLong = flats.reduce((a, f) => f.id.length > a.length ? f.id : a, "");
+    const rig = el("div"); rig.style.cssText = "position:fixed;left:-9999px;top:0"; document.body.appendChild(rig);
+    const boxes = t => ({
+      code: (() => { const r = document.createRange(); r.selectNodeContents(t.querySelector("b")); return r.getBoundingClientRect(); })(),
+      line: t.querySelector("s").getBoundingClientRect(),
+      owe: t.querySelector(".owe") && t.querySelector(".owe").getBoundingClientRect(),
+      tile: t.getBoundingClientRect(),
+    });
+    const intersects = (a, b) => a && b && a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5;
+    let checked = 0;
     try {
       pastCheckin = () => true;
-      const a = roomTile(fi, 0, 1), b = roomTile(fj, 0, 1);
-      const owed = a.querySelector("em.owed");
-      ok(owed, "the owing arrival's tile carries no amount");
-      eq(owed.textContent, moneyShort(16800), `the corner says "${owed.textContent}"`);
-      ok(!a.querySelector(".fresh"), "the owing tile carries the dot as well as the amount");
-      ok(/16,800 due/.test(a.getAttribute("aria-label")), `aria: ${a.getAttribute("aria-label")}`);
-      ok(b.querySelector(".fresh") && !b.querySelector("em.owed"), "a settled arrival should carry the dot and no amount");
-      /* and the amount does not run into the room number. Measured against
-         the TEXT of the room number, not its box: the <b> is a block the width
-         of the tile, so its right edge is always past the amount and says
-         nothing about whether the glyphs collide. */
-      document.body.appendChild(a); a.style.cssText = "position:fixed;left:-9999px;width:105px";
-      const rng = document.createRange(); rng.selectNodeContents(a.querySelector("b"));
-      const nb = rng.getBoundingClientRect(), no = owed.getBoundingClientRect();
-      ok(no.left >= nb.right + 4, `the amount (${Math.round(no.left)}) runs into the room number's text (ends ${Math.round(nb.right)})`);
-      a.remove();
-      return `${owed.textContent} in the corner, dot on the settled one`;
-    } finally { pastCheckin = realClock; resv = keepR; recompute(); }
+      for (const amt of amounts) for (const nm of names) {
+        resv = keepR.slice();
+        resv.push({fi, start: 0, end: 3, nights: 3, guest: nm, src: "Direct", manual: true, amount: amt, pays: []});
+        recompute();
+        for (const w of widths) {
+          const t = roomTile(fi, 0, 1); t.style.width = w + "px"; rig.appendChild(t);
+          const B = boxes(t);
+          ok(B.owe, `no amount on the tile at ${w}px for ₹${amt}`);
+          eq(t.querySelector(".owe").textContent, moneyShort(amt), `the figure for ₹${amt}`);
+          ok(!t.querySelector(".fresh"), "an owing arrival carries the dot as well as the amount");
+          /* the code and the line are stacked — never on the same row */
+          ok(!intersects(B.code, B.line), `at ${w}px the room code and the name line overlap`);
+          /* the figure is whole: inside the tile and clear of the fade at the line's end */
+          ok(B.owe.left >= B.tile.left && B.owe.right <= B.tile.right - 16,
+            `at ${w}px "${moneyShort(amt)}" is not fully visible (${Math.round(B.owe.right)} of ${Math.round(B.tile.right)})`);
+          ok(/checked in today, ₹/.test(t.getAttribute("aria-label")), `aria at ${w}px: ${t.getAttribute("aria-label")}`);
+          t.remove(); checked++;
+        }
+      }
+      /* the longest room code in the book, at the narrowest width, still clears */
+      const fl = flatIndex[codeLong]; if (fl != null && fl !== fi) {
+        const t = roomTile(fl, 0, 1); t.style.width = "84px"; rig.appendChild(t);
+        const B = boxes(t); ok(B.code.right <= B.tile.right - 4, `${codeLong} runs out of an 84px tile`); t.remove();
+      }
+      /* settled: the dot and no figure; night nine: neither */
+      resv = keepR.slice();
+      resv.push({fi, start: 0, end: 3, nights: 3, guest: "Settled", src: "Direct", manual: true, amount: 9000, pays: [{id: "p1", amount: 9000, method: "UPI", on: 0}]});
+      recompute();
+      let t = roomTile(fi, 0, 1); rig.appendChild(t);
+      ok(t.querySelector(".fresh") && !t.querySelector(".owe"), "a settled arrival should carry the dot and no amount"); t.remove();
+      resv = keepR.slice();
+      resv.push({fi, start: -8, end: 2, nights: 10, guest: "Night Nine", src: "Direct", manual: true, amount: 30000, pays: []});
+      recompute();
+      t = roomTile(fi, 0, 1); rig.appendChild(t);
+      ok(!t.querySelector(".fresh") && !t.querySelector(".owe"), "a guest on night nine is marked as arriving today"); t.remove();
+      /* a turnaround: nothing before check-in, the figure after */
+      resv = keepR.slice();
+      resv.push({fi, start: -2, end: 0, nights: 2, guest: "Going", src: "Direct", manual: true, pays: []});
+      resv.push({fi, start: 0, end: 3, nights: 3, guest: "Coming", src: "Direct", manual: true, amount: 7000, pays: []});
+      recompute();
+      pastCheckin = () => false; t = roomTile(fi, 0, 1); rig.appendChild(t);
+      eq(t.querySelector("s").textContent, "Turnaround", "before check-in a turnover tile should say Turnaround"); ok(!t.querySelector(".owe"), "…and carry no amount"); t.remove();
+      pastCheckin = () => true; t = roomTile(fi, 0, 1); rig.appendChild(t);
+      ok(t.querySelector(".owe") && /Coming/.test(t.querySelector("s").textContent), "after check-in the arriving guest and their balance should show"); t.remove();
+      return `${checked} width × amount × name cases, none overlapping or clipped`;
+    } finally { rig.remove(); pastCheckin = realClock; resv = keepR; recompute(); }
   });
 
-  /* "Why does G02's guest have no room swap and TT-302's does?" Because a
-     move re-pointed the whole stay. A guest already in gets a split now:
-     the nights slept stay where they were slept, the stay moves from tonight
-     with its id, its total and every payment. */
+  /* And the grid as a whole: nothing inside any tile may sit on anything else.
+     This is the check that would have caught the corner amount on the owner's
+     phone before the owner did. */
+  await test("nothing inside a room tile overlaps anything else in it, at the narrowest phone width", async () => {
+    const realClock = pastCheckin;
+    const rig = el("div"); rig.style.cssText = "position:fixed;left:-9999px;top:0"; document.body.appendChild(rig);
+    const rects = t => [...t.querySelectorAll("b, s, i, em")].map(n => {
+      if (n.tagName === "B" || n.tagName === "S") { const r = document.createRange(); r.selectNodeContents(n); return {n, r: r.getBoundingClientRect()}; }
+      return {n, r: n.getBoundingClientRect()};
+    }).filter(x => x.r.width > 0 && x.r.height > 0 && !x.n.closest("s") || x.n.tagName === "S");
+    const hit = (a, b) => a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5;
+    let tiles = 0, bad = [];
+    try {
+      pastCheckin = () => true;
+      for (let fi = 0; fi < NF; fi++) for (const w of [84, 105]) {
+        const t = roomTile(fi, 0, 1); t.style.width = w + "px"; rig.appendChild(t); tiles++;
+        const R = rects(t);
+        for (let i = 0; i < R.length; i++) for (let j = i + 1; j < R.length; j++)
+          if (hit(R[i].r, R[j].r)) bad.push(`${flats[fi].id}@${w}: ${R[i].n.tagName}.${R[i].n.className} × ${R[j].n.tagName}.${R[j].n.className}`);
+        t.remove();
+      }
+      eq(bad.length, 0, `overlapping parts: ${bad.slice(0, 4).join(" · ")}`);
+      return `${tiles} tiles, two widths, nothing overlapping`;
+    } finally { rig.remove(); pastCheckin = realClock; }
+  });
+
   await test("a guest already in the flat moves from tonight, and the nights already slept stay put", async () => {
     const keepR = resv.slice(), keepAct = activity.slice(), keepQ = queue.slice(), keepMode = MODE;
     const fi = freeFlat(-4, 6);
