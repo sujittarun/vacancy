@@ -1281,13 +1281,15 @@ button{background:none;border:0;padding:0;cursor:pointer;
   letter-spacing:-.015em;color:var(--txt);text-align:left;font-family:var(--ui)}
 .eyelabels .fl em{font-style:normal;font-size:10px;font-weight:500;color:var(--txt-3);white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
-/* the nights — its own stacking context, so its sticky date row slides UNDER the flat column and never over it */
-.eyenights{position:relative;z-index:1;flex:0 0 auto;display:grid;grid-template-columns:repeat(var(--n),var(--cw));
-  grid-auto-rows:auto;transform-origin:0 0}
-.eyenights.pinching{will-change:transform}
-/* while two fingers hold it the pane is scaled, and everything written on it is scaled back by the inverse */
-.eyenights.pinching .dh>*,.eyenights.pinching .bar>*{transform:scaleX(var(--ik,1))}
-.eyenights .dh{position:sticky;top:0;z-index:5;height:var(--hh);background:var(--bg);border-bottom:1px solid var(--line);
+/* the nights — a column of rows as wide as the year. Everything on it is
+   placed by --cw, so a new night width is one property and one layout of
+   absolutely positioned boxes: no grid tracks to re-solve, nothing stretched.
+   Its own stacking context, so its sticky date row slides UNDER the flat
+   column and never over it. */
+.eyenights{position:relative;z-index:1;flex:0 0 auto;display:flex;flex-direction:column;width:calc(var(--n) * var(--cw));
+  background:repeating-linear-gradient(90deg,var(--line) 0 1px,transparent 1px var(--cw))}
+.eyenights .dhrow{position:sticky;top:0;z-index:5;flex:0 0 auto;height:var(--hh);background:var(--bg);border-bottom:1px solid var(--line)}
+.eyenights .dh{position:absolute;top:0;bottom:0;left:calc(var(--i) * var(--cw));width:var(--cw);
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
   font-size:9.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--txt-3);line-height:1.1;
   font-variant-numeric:tabular-nums;overflow:hidden}
@@ -1298,14 +1300,18 @@ button{background:none;border:0;padding:0;cursor:pointer;
 .eyenights .dh.today b{color:var(--now)}
 .eyenights .dh s{text-decoration:none;position:absolute;top:2px;left:4px;font-size:8.5px;font-weight:700;
   color:var(--now-ink);letter-spacing:.06em}
-.eyenights .bhband{grid-column:1 / -1;height:var(--bh);border-bottom:1px solid var(--line);background:var(--bg)}
-/* a flat's nights: hairlines every --cw, and the tap target for an empty one */
-.eyenights .lane{grid-column:1 / -1;height:var(--rh);position:relative;z-index:0;border-bottom:1px solid var(--line);
-  background:repeating-linear-gradient(90deg,var(--line) 0 1px,transparent 1px var(--cw))}
-.eyenights .wecol{z-index:1;pointer-events:none;background:color-mix(in srgb,var(--surface-2) 45%,transparent)}
-.eyenights .todayline{z-index:2;pointer-events:none;border-left:2px solid var(--now);margin-left:-1px;width:0}
-/* a stay */
-.eyenights .bar{z-index:3;margin:7px 2px;border-radius:9px;background:var(--held);color:var(--txt);
+.eyenights .bhband{flex:0 0 auto;height:var(--bh);border-bottom:1px solid var(--line);background:var(--bg)}
+/* a flat's nights: the tap target for an empty one, and its bars; the hairlines are the pane's */
+.eyenights .lane{position:relative;flex:0 0 auto;height:var(--rh);border-bottom:1px solid var(--line)}
+.eyenights .wecols{position:absolute;inset:0;z-index:1;pointer-events:none}
+.eyenights .wecol{position:absolute;top:var(--hh);bottom:0;left:calc(var(--i) * var(--cw));width:var(--cw);
+  background:color-mix(in srgb,var(--surface-2) 45%,transparent)}
+.eyenights .todayline{position:absolute;top:0;bottom:0;left:calc(var(--i) * var(--cw) - 1px);width:0;
+  z-index:2;pointer-events:none;border-left:2px solid var(--now)}
+/* a stay: from its first night to its last, by the same arithmetic as the dates above it */
+.eyenights .bar{position:absolute;top:0;bottom:0;left:calc(var(--i) * var(--cw));
+  right:calc((var(--n) - var(--i) - var(--w)) * var(--cw));
+  z-index:3;margin:7px 2px;border-radius:9px;background:var(--held);color:var(--txt);
   border:1px solid var(--line-2);display:flex;align-items:center;gap:6px;padding:0 8px;min-width:0;
   overflow:hidden;font-family:var(--ui);text-align:left;cursor:pointer;
   transition:transform .3s var(--spring),box-shadow .2s}
@@ -7075,9 +7081,9 @@ function payKey(r, pay){
 const EYE_BACK = 30, EYE_AHEAD = 365, EYE_N = EYE_BACK + EYE_AHEAD + 1;
 const EYE_LEVELS = [28, 44, 72];
 const EYE_CW = [20, 96];                                    // how far a pinch may overshoot the levels
-let eyeCw = 44, eyeCode = null, eyeBuilt = false, eyeSigAt = null, eyeRows = null, eyePinch = null;
+let eyeCw = 44, eyeCode = null, eyeBuilt = false, eyeSigAt = null, eyeLanes = null, eyePinch = null;
 const eyeEl = ()=> document.getElementById("eye");
-const eyeCol = d => d + EYE_BACK + 1;                       // a night's column in the nights pane
+const eyeIx = d => d + EYE_BACK;                            // a night's index across the pane
 const eyeLw = ()=>{ const l = document.getElementById("eyeLabels"); return (l && l.offsetWidth) || 84; };
 const eyeNearest = cw => EYE_LEVELS.reduce((p, c)=> Math.abs(c - cw) < Math.abs(p - cw) ? c : p, EYE_LEVELS[0]);
 
@@ -7098,6 +7104,19 @@ function eyeSig(){
   return h + ":" + resv.length;
 }
 const eyeStale = ()=> eyeSigAt !== eyeSig();
+/* WHAT IS BUILT ONCE AND WHAT SLIDES. The flat column, the lanes and the
+   building bands are built once per book. The dates, the weekend shading and
+   the bars are built for a WINDOW of nights — the ones on screen and a
+   screen's worth either side — and rebuilt when the scroll or the zoom takes
+   the screen near the window's edge. The pane itself is a spacer as wide as
+   the year, so the browser's own scrolling covers the whole book.
+
+   This is what makes the pinch cheap. A year of nights is four hundred date
+   cells with four children each; changing the night width invalidated all
+   of them, and the style pass alone was ten milliseconds on a laptop — forty
+   on a phone, and that before any pixel was painted. A window is a tenth of
+   that, however long the year. */
+let eyeStays = null, eyeFree = null, eyeWin = null;
 function eyeRender(keepScroll){
   if(eyePinch){ eyeSigAt = null; return; }                  // never rebuilt under two fingers; the lift rebuilds
   const grid = document.getElementById("eyeGrid"), wrap = document.getElementById("eyeWrap");
@@ -7114,8 +7133,10 @@ function eyeRender(keepScroll){
   const stays = resv.filter(r => inView.has(r.fi) && r.end > -EYE_BACK && r.start <= EYE_AHEAD);
   stays.forEach(r => { const a = occW.get(r.fi);
     for(let d = Math.max(r.start, -EYE_BACK); d < Math.min(r.end, EYE_AHEAD + 1); d++) a[d + EYE_BACK] = 1; });
-  const freeAt = new Int16Array(EYE_N).fill(view.length);
-  view.forEach(i => { const a = occW.get(i); for(let k = 0; k < EYE_N; k++) if(a[k]) freeAt[k]--; });
+  eyeFree = new Int16Array(EYE_N).fill(view.length);
+  view.forEach(i => { const a = occW.get(i); for(let k = 0; k < EYE_N; k++) if(a[k]) eyeFree[k]--; });
+  eyeStays = new Map(view.map(i => [i, []]));
+  stays.forEach(r => eyeStays.get(r.fi).push(r));
 
   const labels = el("div","eyelabels"), pane = el("div","eyenights");
   labels.id = "eyeLabels"; pane.id = "eyeNights";
@@ -7133,35 +7154,21 @@ function eyeRender(keepScroll){
   const under = f => { const both = f.rate ? `${f.type} ${rateShort(f.rate)}` : f.type;
                        return ctx.measureText(both).width <= room ? both : f.type; };
   const corner = el("div","corner"); corner.style.gridRow = 1; labels.appendChild(corner);
-  for(let d = -EYE_BACK; d <= EYE_AHEAD; d++){
-    const dt = dateAt(d), h = el("div","dh" + (dt.getDay() % 6 === 0 ? " we" : "") + (d === 0 ? " today" : ""));
-    /* row 1 SAID, not left to auto-placement: the today line is placed first,
-       both axes definite, and holds its column in every row — so an auto-placed
-       header for that column was pushed to the row under the whole board, and
-       every date after it followed. Two definite items may overlap; two
-       auto-placed ones may not. */
-    h.style.gridRow = 1; h.style.gridColumn = eyeCol(d);
-    if(dt.getDate() === 1 || d === -EYE_BACK) h.appendChild(el("s", null, MON[dt.getMonth()]));
-    h.append(el("span", null, DOW[dt.getDay()].slice(0, 2)), el("b", null, String(dt.getDate())));
-    const free = freeAt[d + EYE_BACK];
-    h.appendChild(el("i", free ? null : "none", String(free)));
-    h.setAttribute("aria-label", `${fmtL(d)}, ${free} free`);
-    pane.appendChild(h);
-  }
+  pane.appendChild(el("div","dhrow"));
 
-  /* rows: a heading per building, a lane per flat — the same rows in both grids */
-  eyeRows = {};
+  /* rows: a heading per building, a lane per flat — the same rows on both sides */
+  eyeLanes = {};
   let row = 2;
   buildingsOf().filter(bd => !eyeCode || bd.code === eyeCode).forEach(bd => {
     const bh = el("div","bh", bd.name); bh.style.gridRow = row; labels.appendChild(bh);
-    const band = el("div","bhband"); band.style.gridRow = row; pane.appendChild(band); row++;
+    pane.appendChild(el("div","bhband")); row++;
     view.filter(i => flats[i].code === bd.code).forEach(i => {
       const f = flats[i];
       const lab = el("button","fl"); lab.style.gridRow = row;
       lab.append(el("span", null, f.id), el("em", null, under(f)));
       lab.setAttribute("aria-label", `${f.id}, ${f.type} — open the room`);
       lab.onclick = ()=>{ haptic(9); openSheet(i, 0); };
-      const lane = el("div","lane"); lane.style.gridRow = row; lane.dataset.fi = i;
+      const lane = el("div","lane"); lane.dataset.fi = i;
       lane.onclick = ev=>{
         const x = ev.clientX - lane.getBoundingClientRect().left;
         const d = -EYE_BACK + Math.floor(x / eyeCw);
@@ -7171,38 +7178,70 @@ function eyeRender(keepScroll){
         else openSheet(i, Math.max(d, 0));
       };
       labels.appendChild(lab); pane.appendChild(lane);
-      eyeRows[i] = row; row++;
+      eyeLanes[i] = lane; row++;
     });
   });
-
-  /* weekends and today, spanning the rows; then the stays */
-  for(let d = -EYE_BACK; d <= EYE_AHEAD; d++){
-    if(dateAt(d).getDay() % 6 !== 0) continue;
-    const w = el("div","wecol"); w.style.gridColumn = eyeCol(d); w.style.gridRow = `2 / ${row}`; pane.appendChild(w);
-  }
-  const tl = el("div","todayline"); tl.style.gridColumn = eyeCol(0); tl.style.gridRow = `1 / ${row}`; pane.appendChild(tl);
-
-  stays.forEach(r => {
-    const a = Math.max(r.start, -EYE_BACK), b = Math.min(r.end, EYE_AHEAD + 1);
-    if(b <= a || eyeRows[r.fi] == null) return;
-    const bar = el("button","bar" + (isBlock(r) ? " block" : "") + (r.start <= 0 && r.end > 0 ? " now" : "")
-                                  + (r.start < -EYE_BACK ? " cut-l" : "") + (r.end > EYE_AHEAD + 1 ? " cut-r" : ""));
-    bar.style.gridColumn = `${eyeCol(a)} / ${eyeCol(b)}`;
-    bar.style.gridRow = eyeRows[r.fi];
-    const who = isBlock(r) ? (r.reason || "Out of service") : (r.guest || "Guest");
-    bar.appendChild(el("b", null, who));
-    const due = isBlock(r) ? 0 : dueFrom(r);
-    if(due > 0) bar.appendChild(el("em", null, moneyShort(due)));
-    bar.setAttribute("aria-label", `${who} in ${flats[r.fi].id}, ${fmt(r.start)} to ${fmt(r.end)}`
-      + (due > 0 ? `, ${money(due)} due` : "") + " — open the room");
-    bar.onclick = ev=>{ ev.stopPropagation(); haptic(9); openSheet(r.fi, Math.min(Math.max(r.start, 0), DAYS - 1)); };
-    pane.appendChild(bar);
-  });
+  pane.appendChild(el("div","wecols"));
+  const tl = el("div","todayline"); tl.style.setProperty("--i", eyeIx(0)); pane.appendChild(tl);
   grid.append(labels, pane);
   eyeZoomClass();
-  eyeBuilt = true; eyeSigAt = eyeSig();
+  eyeBuilt = true; eyeSigAt = eyeSig(); eyeWin = null;
   if(keepScroll){ wrap.scrollLeft = sl; wrap.scrollTop = st; }
-  eyeMonthLabel();
+  eyeWindow(); eyeMonthLabel();
+}
+/* the nights on screen, from the scroller — with one extra, for the partly shown last column */
+function eyeRange(){
+  const wrap = document.getElementById("eyeWrap");
+  const first = -EYE_BACK + Math.floor(Math.max(0, wrap.scrollLeft) / eyeCw);
+  const n = Math.max(1, Math.ceil(Math.max(0, wrap.clientWidth - eyeLw()) / eyeCw)) + 1;
+  return {first, last: Math.min(EYE_AHEAD, first + n), n};
+}
+/* the window: rebuilt when the screen comes within half a margin of its edge */
+function eyeWindow(force){
+  const pane = document.getElementById("eyeNights");
+  if(!eyeBuilt || !pane || !eyeStays) return;
+  const v = eyeRange();
+  if(!force && eyeWin && v.first >= eyeWin.a + eyeWin.m / 2 && v.last <= eyeWin.b - eyeWin.m / 2) return;
+  const m = v.n, a = Math.max(-EYE_BACK, v.first - m), b = Math.min(EYE_AHEAD, v.last + m);
+  eyeWin = {a, b, m};
+
+  const hf = document.createDocumentFragment(), wf = document.createDocumentFragment();
+  for(let d = a; d <= b; d++){
+    const dt = dateAt(d), we = dt.getDay() % 6 === 0;
+    const h = el("div","dh" + (we ? " we" : "") + (d === 0 ? " today" : ""));
+    h.style.setProperty("--i", eyeIx(d));
+    if(dt.getDate() === 1 || d === -EYE_BACK) h.appendChild(el("s", null, MON[dt.getMonth()]));
+    h.append(el("span", null, DOW[dt.getDay()].slice(0, 2)), el("b", null, String(dt.getDate())));
+    const free = eyeFree[d + EYE_BACK];
+    h.appendChild(el("i", free ? null : "none", String(free)));
+    h.setAttribute("aria-label", `${fmtL(d)}, ${free} free`);
+    hf.appendChild(h);
+    if(we){ const w = el("div","wecol"); w.style.setProperty("--i", eyeIx(d)); wf.appendChild(w); }
+  }
+  const dhrow = pane.querySelector(".dhrow"), wecols = pane.querySelector(".wecols");
+  dhrow.textContent = ""; dhrow.appendChild(hf);
+  wecols.textContent = ""; wecols.appendChild(wf);
+
+  /* the stays that touch the window, each in its flat's lane */
+  for(const [fi, list] of eyeStays){
+    const lane = eyeLanes[fi]; if(!lane) continue;
+    lane.textContent = "";
+    list.forEach(r => {
+      const A = Math.max(r.start, -EYE_BACK), B = Math.min(r.end, EYE_AHEAD + 1);
+      if(B <= A || B <= a || A > b) return;
+      const bar = el("button","bar" + (isBlock(r) ? " block" : "") + (r.start <= 0 && r.end > 0 ? " now" : "")
+                                    + (r.start < -EYE_BACK ? " cut-l" : "") + (r.end > EYE_AHEAD + 1 ? " cut-r" : ""));
+      bar.style.setProperty("--i", eyeIx(A)); bar.style.setProperty("--w", B - A);
+      const who = isBlock(r) ? (r.reason || "Out of service") : (r.guest || "Guest");
+      bar.appendChild(el("b", null, who));
+      const due = isBlock(r) ? 0 : dueFrom(r);
+      if(due > 0) bar.appendChild(el("em", null, moneyShort(due)));
+      bar.setAttribute("aria-label", `${who} in ${flats[r.fi].id}, ${fmt(r.start)} to ${fmt(r.end)}`
+        + (due > 0 ? `, ${money(due)} due` : "") + " — open the room");
+      bar.onclick = ev=>{ ev.stopPropagation(); haptic(9); openSheet(r.fi, Math.min(Math.max(r.start, 0), DAYS - 1)); };
+      lane.appendChild(bar);
+    });
+  }
 }
 /* occ[] is nine weeks long, so a night past it cannot be checked, let alone booked */
 function eyeTooFar(d){
@@ -7214,18 +7253,58 @@ function eyeZoomClass(){
   g.classList.toggle("z-mid", eyeCw >= 36 && eyeCw < 60);
   g.classList.toggle("z-wide", eyeCw >= 60);
 }
-/* the one layout: a new night width, with the night under the anchor staying under the anchor */
-function eyeZoom(cw, anchorX){
+/* ── zooming ─────────────────────────────────────────────────────────────────
+   ONE VARIABLE, ONE LAYOUT, ONCE A FRAME. Everything on the nights pane is
+   placed by --cw — a date at calc(var(--i) * var(--cw)), a bar between its
+   first and last night by the same arithmetic — so a new night width is one
+   property write and one layout of absolutely positioned boxes, with no grid
+   tracks to re-solve. That is cheap enough to do LIVE: the pinch sets it on
+   every animation frame, never more often whatever the touch rate, and the
+   board is correct at every frame — names ellipsise, corners stay round, the
+   hairlines stay a pixel. The version before this scaled the pane with a
+   transform and scaled the words back, which is fast in theory and on the
+   owner's phone was bars stretching like rubber with names spilling out of
+   them, then a pop at the lift when the real layout arrived. The lift now
+   glides the width to the nearest density over 160ms through this same call,
+   so nothing pops.
+
+   The night under the fingers stays under the fingers: dayF is that night as
+   a fraction of a column, and the scroll is set so it lands at ax. */
+function eyeSetView(cw, dayF, ax){
   const wrap = document.getElementById("eyeWrap"), grid = document.getElementById("eyeGrid");
   cw = Math.max(EYE_CW[0], Math.min(EYE_CW[1], cw));
-  const lw = eyeLw();
-  const ax = anchorX == null ? lw + (wrap.clientWidth - lw) / 2 : anchorX;
-  const dayF = (wrap.scrollLeft + ax - lw) / eyeCw;
   eyeCw = cw;
   grid.style.setProperty("--cw", cw + "px");
-  wrap.scrollLeft = dayF * cw - (ax - lw);
-  eyeZoomClass(); eyeMonthLabel();
+  wrap.scrollLeft = dayF * cw - (ax - eyeLw());             // the one layout, here
+  eyeZoomClass(); eyeWindow(); eyeMonthLabel();
 }
+function eyeZoom(cw, anchorX){
+  const wrap = document.getElementById("eyeWrap"), lw = eyeLw();
+  const ax = anchorX == null ? lw + (wrap.clientWidth - lw) / 2 : anchorX;
+  eyeSetView(cw, (wrap.scrollLeft + ax - lw) / eyeCw, ax);
+}
+let eyeGlideOn = null;
+function eyeGlide(to, ax){
+  eyeGlideStop();
+  const wrap = document.getElementById("eyeWrap"), lw = eyeLw();
+  if(ax == null) ax = lw + (wrap.clientWidth - lw) / 2;
+  const dayF = (wrap.scrollLeft + ax - lw) / eyeCw;
+  const still = document.hidden || matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if(still || Math.abs(to - eyeCw) < 0.5){ eyeSetView(to, dayF, ax); return; }
+  const from = eyeCw, t0 = performance.now(), D = 160;
+  const g = eyeGlideOn = {to, dayF, ax, raf: 0, guard: 0};
+  const step = now => {
+    if(eyeGlideOn !== g) return;
+    const t = Math.min(1, (now - t0) / D), e = 1 - Math.pow(1 - t, 3);
+    eyeSetView(from + (to - from) * e, dayF, ax);
+    if(t < 1) g.raf = requestAnimationFrame(step); else { clearTimeout(g.guard); eyeGlideOn = null; }
+  };
+  g.raf = requestAnimationFrame(step);
+  g.guard = setTimeout(()=>{ if(eyeGlideOn === g) eyeSettleNow(); }, D + 300);   // a frame that never comes still lands
+}
+function eyeGlideStop(){ const g = eyeGlideOn; if(!g) return; cancelAnimationFrame(g.raf); clearTimeout(g.guard); eyeGlideOn = null; }
+/* wherever a glide was heading, now — for a pinch that begins mid-glide, a close, and the suite */
+function eyeSettleNow(){ const g = eyeGlideOn; if(!g) return; eyeGlideStop(); eyeSetView(g.to, g.dayF, g.ax); }
 function eyeSnap(){
   const near = eyeNearest(eyeCw);
   if(near !== eyeCw) eyeZoom(near);
@@ -7234,96 +7313,42 @@ function eyeStep(dir){
   const i = EYE_LEVELS.indexOf(eyeCw);
   const next = i < 0 ? (dir > 0 ? EYE_LEVELS.find(l => l > eyeCw) : [...EYE_LEVELS].reverse().find(l => l < eyeCw))
                      : EYE_LEVELS[Math.max(0, Math.min(EYE_LEVELS.length - 1, i + dir))];
-  if(next != null && next !== eyeCw){ haptic(7); eyeZoom(next); }
+  if(next != null && next !== eyeCw){ haptic(7); eyeGlide(next); }
 }
 
 /* ── the pinch ────────────────────────────────────────────────────────────────
-   A TRANSFORM WHILE THE FINGERS ARE DOWN, ONE LAYOUT WHEN THEY LIFT. The first
-   version set --cw on every touchmove, and every touchmove then re-laid-out
-   every column of the board and repainted all of it — a frame or two of work
-   per millimetre of finger on a phone, and it looked exactly like that. Now
-   the nights pane is scaled on the compositor: scaleX about the point between
-   the fingers, plus the drift of that point, and everything written on the
-   pane is scaled back by the inverse so the dates stay dates. Nothing is laid
-   out until the fingers lift. Then the scale glides to the nearest density in
-   160ms and is committed as one --cw write, with the scroll set so the night
-   that was under the fingers is exactly where the transform left it — the
-   picture does not change at the commit, only what is drawing it.
-
-   One-finger panning is the browser's alone. The listener that must cancel
-   the default is attached when the second finger lands and removed when it
-   lifts, so while one finger drags there is no scroll-blocking listener on
-   the path at all. If the browser has already begun a pan when the second
-   finger lands, its touchmoves are not cancelable; the pinch then keeps only
-   the scale and lets the browser keep the pan, and the commit reads the live
-   scroll rather than the one it remembered. */
+   Two fingers set the width through eyeSetView once per animation frame, about
+   the night that was under them when they landed, and the lift glides to the
+   nearest density. One-finger panning is the browser's alone: the listener
+   that must cancel the default is attached when the second finger lands and
+   removed when it lifts, so while one finger drags there is no
+   scroll-blocking listener on the path at all. If the browser has already
+   begun a pan when the second finger arrives its touchmoves are not
+   cancelable; the pinch then composes with the pan — the night under the
+   fingers is read fresh each frame — instead of fighting it. */
 function eyePinchStart(midX){
-  const wrap = document.getElementById("eyeWrap"), pane = document.getElementById("eyeNights");
-  if(!pane) return;
-  eyePinchSettleNow();                                      // a pinch that begins mid-glide takes over from there
-  const lw = eyeLw();
-  eyePinch = { cw: eyeCw, lw, mid0: midX, p: wrap.scrollLeft + midX - lw, W: pane.offsetWidth,
-               vw: wrap.clientWidth, k: 1, dx: 0, raf: 0, own: true, glide: false };
-  pane.classList.add("pinching");
-  pane.style.transformOrigin = eyePinch.p + "px 0";
+  const wrap = document.getElementById("eyeWrap");
+  eyeSettleNow();                                           // a pinch that begins mid-glide takes over from there
+  eyePinch = {cw0: eyeCw, dayF: (wrap.scrollLeft + midX - eyeLw()) / eyeCw, ax: midX, k: 1, raf: 0, own: true};
 }
 function eyePinchMove(k, midX){
-  const g = eyePinch; if(!g || g.glide) return;
-  g.k = Math.max(EYE_CW[0] / g.cw, Math.min(EYE_CW[1] / g.cw, k));
-  g.dx = g.own ? midX - g.mid0 : 0;
-  eyePinchClamp(g);
-  if(!g.raf) g.raf = requestAnimationFrame(eyePinchPaint);
+  const g = eyePinch; if(!g) return;
+  g.k = Math.max(EYE_CW[0] / g.cw0, Math.min(EYE_CW[1] / g.cw0, k));
+  g.ax = midX;
+  if(!g.raf) g.raf = requestAnimationFrame(eyePinchFrame);
 }
-/* the pane's left edge never leaves the flat column and its right edge never
-   leaves the far side — the same bounds the commit's scroll will have, so the
-   commit never has to move anything */
-function eyePinchClamp(g){
-  const sl = document.getElementById("eyeWrap").scrollLeft;
-  const hi = sl - g.p * (1 - g.k);
-  const lo = g.vw - g.lw - g.p - (g.W - g.p) * g.k + sl;
-  g.dx = Math.min(hi, Math.max(Math.min(lo, hi), g.dx));
-}
-function eyePinchPaint(){
+function eyePinchFrame(){
   const g = eyePinch; if(!g) return;
   g.raf = 0;
-  const pane = document.getElementById("eyeNights");
-  pane.style.transform = `translateX(${g.dx}px) scaleX(${g.k})`;
-  pane.style.setProperty("--ik", String(1 / g.k));
+  if(!g.own){ const wrap = document.getElementById("eyeWrap"); g.dayF = (wrap.scrollLeft + g.ax - eyeLw()) / eyeCw; }
+  eyeSetView(g.cw0 * g.k, g.dayF, g.ax);
 }
 function eyePinchEnd(){
-  const g = eyePinch; if(!g || g.glide) return;
-  const kT = eyeNearest(g.cw * g.k) / g.cw;
-  const still = document.hidden || matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if(still || Math.abs(kT - g.k) < 0.002) return eyePinchSettleNow();
-  const k0 = g.k, dx0 = g.dx, t0 = performance.now(), D = 160;
-  g.k = kT; eyePinchClamp(g); const dxT = g.dx; g.k = k0; g.dx = dx0;
-  g.glide = true;
-  const step = now => {
-    if(eyePinch !== g) return;
-    const t = Math.min(1, (now - t0) / D), e = 1 - Math.pow(1 - t, 3);
-    g.k = k0 + (kT - k0) * e; g.dx = dx0 + (dxT - dx0) * e;
-    eyePinchPaint();
-    if(t < 1) g.raf = requestAnimationFrame(step); else eyePinchSettleNow();
-  };
-  if(g.raf) cancelAnimationFrame(g.raf);
-  g.raf = requestAnimationFrame(step);
-  g.guard = setTimeout(()=>{ if(eyePinch === g) eyePinchSettleNow(); }, D + 300);   // a frame that never comes still commits
-}
-/* the commit: --cw to the level, the transform off, the scroll to where the transform had it */
-function eyePinchSettleNow(){
   const g = eyePinch; if(!g) return;
-  if(g.raf) cancelAnimationFrame(g.raf);
-  clearTimeout(g.guard);
+  if(g.raf){ cancelAnimationFrame(g.raf); g.raf = 0; eyePinchFrame(); }
   eyePinch = null;
-  const wrap = document.getElementById("eyeWrap"), grid = document.getElementById("eyeGrid"), pane = document.getElementById("eyeNights");
-  const to = eyeNearest(g.cw * g.k), t = to / g.cw, sl = wrap.scrollLeft;
-  pane.classList.remove("pinching");
-  pane.style.transform = ""; pane.style.transformOrigin = ""; pane.style.removeProperty("--ik");
-  eyeCw = to;
-  grid.style.setProperty("--cw", to + "px");
-  wrap.scrollLeft = g.p * t - (g.p + g.dx - sl);
-  eyeZoomClass(); eyeMonthLabel();
   if(eyeStale()) eyeRender(true);                           // the book moved under the fingers
+  eyeGlide(eyeNearest(eyeCw), g.ax);
 }
 
 let eyeLab = "";
@@ -7346,7 +7371,7 @@ function eyeMonthLabel(){
 function eyeToday(smooth){
   const wrap = document.getElementById("eyeWrap");
   wrap.scrollTo({left: (EYE_BACK - 1) * eyeCw, behavior: smooth ? "smooth" : "auto"});
-  if(!smooth) eyeMonthLabel();
+  if(!smooth){ eyeWindow(); eyeMonthLabel(); }
 }
 function eyeOpen(){
   if(myRole() === "staff") return;
@@ -7358,7 +7383,7 @@ function eyeOpen(){
   track("eye_open", {cw: eyeCw, code: eyeCode || "all"});
 }
 function eyeClose(){
-  eyePinchSettleNow();
+  eyePinch = null; eyeSettleNow();
   const e = eyeEl(); e.classList.remove("on"); e.setAttribute("aria-hidden", "true");
 }
 function eyeFilterChips(){
@@ -7385,7 +7410,8 @@ function eyeFilterChips(){
   document.addEventListener("keydown", ev=>{ if(ev.key === "Escape" && e.classList.contains("on") && !sheet.classList.contains("on")) eyeClose(); });
   const wrap = document.getElementById("eyeWrap");
   let raf = 0;
-  wrap.addEventListener("scroll", ()=>{ if(raf) return; raf = requestAnimationFrame(()=>{ raf = 0; eyeMonthLabel(); }); }, {passive:true});
+  wrap.addEventListener("scroll", ()=>{ if(raf) return; raf = requestAnimationFrame(()=>{ raf = 0; eyeWindow(); eyeMonthLabel(); }); }, {passive:true});
+  addEventListener("resize", ()=>{ if(e.classList.contains("on")){ eyeWindow(true); eyeMonthLabel(); } });
 
   /* two fingers — see the pinch note above */
   const dist = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
@@ -7417,7 +7443,7 @@ function eyeFilterChips(){
     if(!ev.ctrlKey) return;
     ev.preventDefault();
     const x = ev.clientX - wrap.getBoundingClientRect().left;
-    if(!eyePinch || eyePinch.glide) eyePinchStart(x);
+    if(!eyePinch) eyePinchStart(x);
     const dy = ev.deltaMode === 1 ? ev.deltaY * 16 : ev.deltaY;
     eyePinchMove(eyePinch.k * Math.exp(-dy * 0.004), x);
     clearTimeout(wheelT); wheelT = setTimeout(eyePinchEnd, 140);

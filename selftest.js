@@ -5520,7 +5520,11 @@ export async function run(filter) {
       document.getElementById("eyeBtn").click();
       await until(() => document.getElementById("eye").classList.contains("on"), "the board");
       const g = document.getElementById("eyeGrid");
-      eq(g.querySelectorAll(".dh").length, EYE_BACK + EYE_AHEAD + 1, "one header cell per night");
+      /* the dates are a WINDOW — the screen and a margin — over a pane as wide as the year */
+      const v = eyeRange(), ix = [...g.querySelectorAll(".dh")].map(h => +h.style.getPropertyValue("--i") - EYE_BACK);
+      ok(ix.length && ix[0] <= v.first && ix[ix.length - 1] >= v.last, `the dates ${ix[0]}…${ix[ix.length - 1]} do not cover the screen's ${v.first}…${v.last}`);
+      ok(ix.length < EYE_N && ix.every((d, k) => k === 0 || d === ix[k - 1] + 1), "the window is not a run of consecutive nights");
+      ok(Math.abs(document.getElementById("eyeNights").offsetWidth - EYE_N * eyeCw) < 1, "the pane is not as wide as the year");
       eq(g.querySelectorAll(".fl").length, NF, "one label per flat");
       eq(g.querySelectorAll(".lane").length, NF, "one lane per flat");
       eq(g.querySelectorAll(".bh").length, buildingsOf().length, "one heading per building");
@@ -5528,7 +5532,7 @@ export async function run(filter) {
       ok(todayH && todayH.querySelector("b").textContent === String(dateAt(0).getDate()), "today's column is not marked");
       ok(g.querySelector(".todayline"), "no line at today");
       /* the sticky edges */
-      eq(getComputedStyle(g.querySelector(".dh")).position, "sticky", "the date row does not stick");
+      eq(getComputedStyle(g.querySelector(".dhrow")).position, "sticky", "the date row does not stick");
       eq(getComputedStyle(g.querySelector(".eyelabels")).position, "sticky", "the flat column does not stick");
       /* it opens on today, with a night of yesterday's context on the left */
       const wrap = document.getElementById("eyeWrap");
@@ -5537,10 +5541,11 @@ export async function run(filter) {
       ok(/September|October|August|November/.test(document.getElementById("eyeMonth").textContent), `the month reads "${document.getElementById("eyeMonth").textContent}"`);
       /* the free count under each date is the book's */
       for (let d = 0; d <= 5; d++) {
-        const h = g.querySelectorAll(".dh")[d + EYE_BACK];
+        const h = [...g.querySelectorAll(".dh")].find(x => +x.style.getPropertyValue("--i") === eyeIx(d));
+        ok(h, `${fmtL(d)} is not in the window`);
         eq(+h.querySelector("i").textContent, freeCount(d), `free count under ${fmtL(d)}`);
       }
-      return `${NF} rows × ${EYE_BACK + EYE_AHEAD + 1} nights, today at column ${eyeCol(0)}`;
+      return `${NF} rows × ${EYE_N} nights, ${ix.length} of them built, today at index ${eyeIx(0)}`;
     } finally { eyeClose(); }
   });
 
@@ -5553,11 +5558,18 @@ export async function run(filter) {
     try {
       eyeOpen();
       await until(() => document.getElementById("eye").classList.contains("on"), "the board");
+      /* at the mid density, SAID: a bar's margins differ by density, and the
+         board keeps whatever width the last hand — or the last test — left it */
+      eyeZoom(44);
       const g = document.getElementById("eyeGrid");
       const bar = [...g.querySelectorAll(".bar")].find(b => /Bar Guest/.test(b.textContent));
       ok(bar, "the stay has no bar");
-      eq(bar.style.gridColumn.replace(/\s/g, ""), `${eyeCol(2)}/${eyeCol(5)}`, "the bar does not span its nights");
-      eq(+bar.style.gridRow, eyeRows[fi], "the bar is on the wrong flat's row");
+      eq(+bar.style.getPropertyValue("--i"), eyeIx(2), "the bar does not start on its first night");
+      eq(+bar.style.getPropertyValue("--w"), 3, "the bar does not span its nights");
+      ok(bar.parentElement === eyeLanes[fi], "the bar is on the wrong flat's row");
+      const lr = eyeLanes[fi].getBoundingClientRect(), br = bar.getBoundingClientRect();
+      ok(Math.abs((br.left - lr.left) - (eyeIx(2) * eyeCw + 2)) < 1 && Math.abs(br.width - (3 * eyeCw - 4)) < 1,
+        `drawn ${Math.round(br.left - lr.left)}px in and ${Math.round(br.width)}px wide, not at night 2 for 3 nights`);
       /* wide: the balance shows; mid: it does not; tight: nothing but the bar */
       eyeZoom(72); ok(bar.querySelector("em") && getComputedStyle(bar.querySelector("em")).display !== "none", "at wide zoom the balance is hidden");
       eyeZoom(44); eq(getComputedStyle(bar.querySelector("em")).display, "none", "at mid zoom the balance shows");
@@ -5576,7 +5588,7 @@ export async function run(filter) {
       await until(() => sheet.classList.contains("on") && /Book/.test(document.getElementById("sheetB").textContent), "the booking form");
       ok(document.getElementById("sheetH").textContent.includes(flats[fi].id), "the booking form is for the wrong flat");
       closeSheet();
-      return `${flats[fi].id}: bar ${eyeCol(2)}→${eyeCol(5)} · tap → room · empty night → booking`;
+      return `${flats[fi].id}: bar on nights 2→5 · tap → room · empty night → booking`;
     } finally { closeSheet(); eyeClose(); resv = keepR; recompute(); }
   });
 
@@ -5598,58 +5610,67 @@ export async function run(filter) {
       ok(g.classList.contains("z-tight"), "30px is not the tight density");
       eyeSnap(); eq(eyeCw, 28, "30px did not settle on 28");
       eyeZoom(58); eyeSnap(); eq(eyeCw, 44, "58px did not settle on 44");
-      eyeStep(+1); eq(eyeCw, 72, "+ did not step to 72"); eyeStep(+1); eq(eyeCw, 72, "+ stepped past the last level");
-      eyeStep(-1); eyeStep(-1); eq(eyeCw, 28, "− did not step down to 28");
+      eyeStep(+1); eyeSettleNow(); eq(eyeCw, 72, "+ did not step to 72"); eyeStep(+1); eyeSettleNow(); eq(eyeCw, 72, "+ stepped past the last level");
+      eyeStep(-1); eyeSettleNow(); eyeStep(-1); eyeSettleNow(); eq(eyeCw, 28, "− did not step down to 28");
       return "anchored both ways, snapped to 28/44/72, stepped within bounds";
     } finally { eyeZoom(44); eyeClose(); }
   });
 
-  /* The first pinch re-laid-out the whole board on every finger movement, and
-     on a phone it looked like it. Two fingers now move a transform; the layout
-     happens once, when they lift. Measured on what each phase leaves behind. */
-  await test("a pinch is a transform while the fingers hold it, and one layout when they lift", async () => {
+  /* The first pinch re-laid-out the whole board on every finger movement; the
+     second scaled a picture of it and looked like rubber. This one lays the
+     board out once a frame at the fingers' width — correct at every frame —
+     and glides to a density at the lift. Measured on what each phase leaves. */
+  await test("a pinch lays the board out once a frame at the fingers' width, and the lift glides to a density", async () => {
     try {
       eyeOpen();
       await until(() => document.getElementById("eye").classList.contains("on"), "the board");
       const wrap = document.getElementById("eyeWrap"), grid = document.getElementById("eyeGrid"), lw = eyeLw();
+      const pane = document.getElementById("eyeNights");
       eyeZoom(44); wrap.scrollLeft = 12 * 44;
       const anchor = lw + 140;
       const nightUnder = () => (wrap.scrollLeft + anchor - lw) / eyeCw;
-      const before = nightUnder(), p = wrap.scrollLeft + anchor - lw;
+      const before = nightUnder();
       eyePinchStart(anchor);
-      eyePinchMove(1.6, anchor); eyePinchPaint();
-      const pane = document.getElementById("eyeNights");
-      ok(pane.classList.contains("pinching"), "the pane is not marked as held");
-      ok(/scaleX\(1\.6\)/.test(pane.style.transform), `the pane is not scaled: "${pane.style.transform}"`);
-      eq(grid.style.getPropertyValue("--cw"), "44px", "the layout changed under the fingers");
-      ok(Math.abs(parseFloat(pane.style.getPropertyValue("--ik")) - 1 / 1.6) < 1e-6, "the words are not scaled back");
-      ok(Math.abs(parseFloat(pane.style.transformOrigin) - p) < 0.5, `the scale is about ${pane.style.transformOrigin}, not the fingers at ${p}px`);
-      eyePinchEnd(); eyePinchSettleNow();
-      eq(eyeCw, 72, "70px did not settle on 72");
-      eq(pane.style.transform, "", "the transform outlived the fingers");
-      ok(!pane.classList.contains("pinching"), "the pane is still marked as held");
+      eyePinchMove(1.5, anchor); eyePinchMove(1.62, anchor); eyePinchMove(1.6, anchor);
+      eq(grid.style.getPropertyValue("--cw"), "44px", "three moves laid the board out before a frame");
+      ok(eyePinch && eyePinch.raf, "no frame was asked for");
+      eyePinchFrame();
+      ok(Math.abs(parseFloat(grid.style.getPropertyValue("--cw")) - 70.4) < 0.01, `the frame did not lay the board out at the fingers' width: ${grid.style.getPropertyValue("--cw")}`);
+      eq(pane.style.transform, "", "the pane is a stretched picture of itself");
       ok(Math.abs(nightUnder() - before) < 0.05, `the night under the fingers moved from ${before.toFixed(2)} to ${nightUnder().toFixed(2)}`);
+      /* mid-pinch the board is the real board: a bar is drawn at the new width with its corner intact */
+      const bar = pane.querySelector(".bar"); ok(bar, "no bar to measure");
+      ok(Math.abs(parseFloat(getComputedStyle(bar).borderTopLeftRadius) - 9) < 0.5, "a bar's corner is not round mid-pinch");
+      ok(Math.abs(bar.getBoundingClientRect().width - (+bar.style.getPropertyValue("--w") * 70.4 - 4)) < 1, "a bar is not drawn at the fingers' width");
+      eyePinchEnd(); eyeSettleNow();
+      eq(eyeCw, 72, "70px did not settle on 72");
+      ok(!eyePinch, "the pinch outlived the fingers");
+      ok(Math.abs(nightUnder() - before) < 0.05, "the settle moved the anchored night");
       /* and out, past the tight level: the lift lands on it */
-      eyePinchStart(anchor); eyePinchMove(0.3, anchor); eyePinchPaint();
-      eyePinchEnd(); eyePinchSettleNow();
+      eyePinchStart(anchor); eyePinchMove(0.3, anchor); eyePinchFrame();
+      ok(grid.classList.contains("z-tight"), "the tight density did not arrive with the width");
+      eyePinchEnd(); eyeSettleNow();
       eq(eyeCw, 28, "did not settle on the tight level");
       ok(Math.abs(nightUnder() - before) < 0.05, "zooming out moved the anchored night");
-      return "transform under the fingers, one --cw write at the lift, anchored both ways";
-    } finally { eyePinchSettleNow(); eyeZoom(44); eyeClose(); }
+      return "one layout a frame at the fingers' width, real bars throughout, anchored both ways, glided to 72 and 28";
+    } finally { eyePinch = null; eyeSettleNow(); eyeZoom(44); eyeClose(); }
   });
 
   await test("the board runs a year ahead, and a night past the booking horizon says so instead of booking", async () => {
     try {
       eyeOpen();
       await until(() => document.getElementById("eye").classList.contains("on"), "the board");
-      const g = document.getElementById("eyeGrid"), hs = g.querySelectorAll(".dh");
+      const g = document.getElementById("eyeGrid"), wrap = document.getElementById("eyeWrap");
       ok(EYE_AHEAD >= 365, `the board only looks ${EYE_AHEAD} nights ahead`);
-      eq(hs.length, EYE_N, "a header per night");
-      ok(hs[hs.length - 1].getAttribute("aria-label").startsWith(fmtL(EYE_AHEAD)), "the last column is not a year out");
-      eq(getComputedStyle(document.getElementById("eyeWrap")).touchAction, "pan-x pan-y", "one finger is not the browser's to scroll");
-      /* a month is named at its first day, and at the left edge */
-      const firsts = [...Array(EYE_N).keys()].filter(k => k !== 0 && dateAt(k - EYE_BACK).getDate() === 1).length;
-      eq(g.querySelectorAll(".dh s").length, 1 + firsts, "a month name at every first");
+      eq(getComputedStyle(wrap).touchAction, "pan-x pan-y", "one finger is not the browser's to scroll");
+      /* scrolled to the far end, the window follows and the last date is a year out */
+      wrap.scrollLeft = wrap.scrollWidth; eyeWindow();
+      const hs = g.querySelectorAll(".dh");
+      ok(hs[hs.length - 1].getAttribute("aria-label").startsWith(fmtL(EYE_AHEAD)), `the last column is ${hs[hs.length - 1].getAttribute("aria-label")}, not a year out`);
+      /* a month is named at its first day, and at the window's left edge only when that is the year's */
+      const firsts = [...Array(eyeWin.b - eyeWin.a + 1).keys()].map(k => eyeWin.a + k).filter(d => d !== -EYE_BACK && dateAt(d).getDate() === 1).length;
+      eq(g.querySelectorAll(".dh s").length, firsts + (eyeWin.a === -EYE_BACK ? 1 : 0), "a month name at every first");
+      wrap.scrollLeft = (EYE_BACK - 1) * eyeCw; eyeWindow();
       /* a tap far past the horizon: a word, not a booking form */
       const fi = eyeFlats()[0];
       const lane = g.querySelector(`.lane[data-fi="${fi}"]`), r = lane.getBoundingClientRect();
@@ -5657,7 +5678,7 @@ export async function run(filter) {
       lane.dispatchEvent(new MouseEvent("click", {bubbles: true, clientX: r.left + (DAYS + 20 + EYE_BACK) * eyeCw + 5, clientY: r.top + 10}));
       await until(() => [...document.querySelectorAll(".toast")].some(x => /booking horizon/.test(x.textContent)), "the horizon toast");
       ok(!sheet.classList.contains("on"), "a booking form opened for a night the app cannot book");
-      return `${EYE_N} nights, ${EYE_BACK} back · a tap on ${fmtL(DAYS + 20)} is told the horizon`;
+      return `${EYE_N} nights, ${EYE_BACK} back, the window slides to the last · a tap on ${fmtL(DAYS + 20)} is told the horizon`;
     } finally { document.querySelectorAll(".toast").forEach(x => x.remove()); closeSheet(); eyeClose(); }
   });
 
