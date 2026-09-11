@@ -5546,7 +5546,10 @@ export async function run(filter) {
       const wrap = document.getElementById("eyeWrap");
       const first = -EYE_BACK + Math.round(wrap.scrollLeft / eyeCw);
       ok(first === -1 || first === 0, `opened with ${first} as the first night`);
-      ok(/September|October|August|November/.test(document.getElementById("eyeMonth").textContent), `the month reads "${document.getElementById("eyeMonth").textContent}"`);
+      /* the head names the month of the first night on screen — in full on a
+         phone, and as "Sep 10 – Oct 6" when a wide screen spans two months */
+      const m0 = dateAt(eyeRange().first).getMonth(), head = document.getElementById("eyeMonth").textContent;
+      ok(head.includes(MONF[m0]) || head.includes(MON[m0]), `the head reads "${head}", not ${MONF[m0]}`);
       /* the free count under each date is the book's */
       for (let d = 0; d <= 5; d++) {
         const h = [...g.querySelectorAll(".dh")].find(x => +x.style.getPropertyValue("--i") === eyeIx(d));
@@ -5604,6 +5607,12 @@ export async function run(filter) {
       bar.click();
       await until(() => sheet.classList.contains("on"), "the room sheet from the bar");
       eq(document.querySelector(".sheet .n").textContent, flats[fi].id, "the bar opened the wrong room");
+      /* and it is IN FRONT of the board — it opened behind it once, and the
+         owner saw nothing happen until the board closed. A hit-test, because
+         z-indexes in different stacking contexts cannot be compared. */
+      const hit = freeze(() => { const hr = document.getElementById("sheetH").getBoundingClientRect();
+        return document.elementFromPoint(hr.left + hr.width / 2, hr.top + hr.height / 2); });
+      ok(hit && hit.closest(".sheet"), `the room sheet opened behind the board — the tap lands on ${hit && (hit.id || hit.className)}`);
       closeSheet();
       /* an empty night opens a booking for that flat and night */
       const lane = g.querySelector(`.lane[data-fi="${fi}"]`);
@@ -5664,7 +5673,7 @@ export async function run(filter) {
       eq(pane.style.transform, "", "the pane is a stretched picture of itself");
       ok(Math.abs(nightUnder() - before) < 0.05, `the night under the fingers moved from ${before.toFixed(2)} to ${nightUnder().toFixed(2)}`);
       /* mid-pinch the board is the real board: a bar is drawn at the new width with its corner intact */
-      const bar = pane.querySelector(".bar"); ok(bar, "no bar to measure");
+      const bar = pane.querySelector(".bar:not(.cut-l):not(.cut-r)"); ok(bar, "no whole bar to measure");   // a cut edge is square by design
       ok(Math.abs(parseFloat(getComputedStyle(bar).borderTopLeftRadius) - 9) < 0.5, "a bar's corner is not round mid-pinch");
       ok(Math.abs(bar.getBoundingClientRect().width - (+bar.style.getPropertyValue("--w") * 70.4 - 4)) < 1, "a bar is not drawn at the fingers' width");
       eyePinchEnd(); eyeSettleNow();

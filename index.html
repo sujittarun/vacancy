@@ -1250,7 +1250,10 @@ button{background:none;border:0;padding:0;cursor:pointer;
    thing a pinch scales — a transform on this one element, see the pinch note
    in the script. The rows of the two are the same rows because every item
    says its own height and both grids let their rows follow. */
-.eye{position:fixed;inset:0;z-index:40;background:var(--bg);display:none;flex-direction:column}
+/* z 45: over the top bar (30) and the tab bar (40), under the scrim (50) and
+   the sheet (51) — all inside the app's stacking context, so the sheet a bar
+   opens comes up OVER the board, not behind it */
+.eye{position:fixed;inset:0;z-index:45;background:var(--bg);display:none;flex-direction:column}
 .eye.on{display:flex;animation:eyein .26s cubic-bezier(.2,.8,.2,1) both}
 @keyframes eyein{from{transform:translateY(28px);opacity:0}to{transform:none;opacity:1}}
 :root.staffmode #eyeBtn{display:none}
@@ -4287,6 +4290,24 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
          be reached by anybody who is not signed in as staff. -->
     <section class="screen" id="scr-staff"></section>
 
+    <!-- THE BOARD LIVES IN HERE, under the scrim and the sheet in DOM order and
+         in z-order. It sat at the top level with z-index 40 — above the app,
+         and therefore above the room sheet inside it, which opens at 51 inside
+         the app's own stacking context and could never climb out. A tap on a
+         bar opened the room BEHIND the board: nothing appeared to happen, and
+         the sheet was waiting there when the board closed. -->
+    <section class="eye" id="eye" aria-label="Bird's eye" aria-hidden="true">
+      <header class="eyehead">
+        <button class="ghost" id="eyeClose" aria-label="Close the bird's eye">‹</button>
+        <h2 id="eyeMonth">Board<em id="eyeSpan"></em></h2>
+        <button class="ghost" id="eyeToday">Today</button>
+        <button class="ghost" id="eyeOut" aria-label="Zoom out — more nights on screen">−</button>
+        <button class="ghost" id="eyeIn" aria-label="Zoom in — names and amounts">+</button>
+      </header>
+      <div class="eyefilt"><div class="roomfilt" id="eyeFilt"></div></div>
+      <div class="eyewrap" id="eyeWrap"><div class="eyegrid z-mid" id="eyeGrid"></div></div>
+    </section>
+
     <div class="scrim" id="scrim"></div>
     <aside class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Room detail">
       <div class="grab" id="grab"><i></i></div>
@@ -4304,17 +4325,6 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
      stay a bar. The one view every host platform converges on, because the
      empty cells are the money. Built on first open, repainted only when the
      book changes; pinch changes one CSS variable and nothing is redrawn. -->
-<section class="eye" id="eye" aria-label="Bird's eye" aria-hidden="true">
-  <header class="eyehead">
-    <button class="ghost" id="eyeClose" aria-label="Close the bird's eye">‹</button>
-    <h2 id="eyeMonth">Board<em id="eyeSpan"></em></h2>
-    <button class="ghost" id="eyeToday">Today</button>
-    <button class="ghost" id="eyeOut" aria-label="Zoom out — more nights on screen">−</button>
-    <button class="ghost" id="eyeIn" aria-label="Zoom in — names and amounts">+</button>
-  </header>
-  <div class="eyefilt"><div class="roomfilt" id="eyeFilt"></div></div>
-  <div class="eyewrap" id="eyeWrap"><div class="eyegrid z-mid" id="eyeGrid"></div></div>
-</section>
 
 <section class="gate" id="gate" aria-label="Sign in">
   <h2>Crescent Stays</h2>
@@ -20048,7 +20058,8 @@ let pulling = false;
        whatever touched last, so the first drag INSIDE an open sheet was
        measured from the tap that opened it, armed the pull, ate the scroll
        and reloaded the app — taking anything typed into the form with it. */
-    if(sheet.classList.contains("on") || e.touches.length > 1){ y0 = null; scr = null; return; }
+    if(sheet.classList.contains("on") || e.touches.length > 1
+       || (e.target.closest && e.target.closest("#eye"))){ y0 = null; scr = null; return; }   // the board scrolls itself
     scr = document.getElementById("scr-" + SCREENS[curScreen].id);
     /* AT THE TOP OF WHAT, exactly. This asked the SCREEN, which was right while
        every screen was itself the scroller, and wrong while the Month tab was
@@ -20102,7 +20113,7 @@ let pulling = false;
        building filter was added without being listed here, so dragging it
        along flipped to Month — the row moved AND the tab changed, which reads
        as the app losing the gesture rather than sharing it. */
-    if(e.target.closest && e.target.closest(".cal, .nights, .deck, .roomfilt")){ x0=null; return; }
+    if(e.target.closest && e.target.closest(".cal, .nights, .deck, .roomfilt, #eye")){ x0=null; return; }
     x0=e.touches[0].clientX; y0=e.touches[0].clientY;
   },{passive:true});
   document.querySelector(".screens").addEventListener("touchend",e=>{
