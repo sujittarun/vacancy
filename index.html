@@ -1236,6 +1236,93 @@ button{background:none;border:0;padding:0;cursor:pointer;
 .jobwhen{font-size:12px;color:var(--txt-3);font-variant-numeric:tabular-nums}
 .staffend{margin:6px 2px 0;font-size:12px;line-height:1.55;color:var(--txt-3)}
 
+/* ══ THE BIRD'S EYE ═══════════════════════════════════════════════════════════
+   One CSS grid: a label column, then one column per night, sized by --cw. The
+   date row and the flat column are sticky inside a two-axis scroller, so the
+   board pans with the platform's own momentum and the labels never leave.
+   Bars are grid items spanning their nights, which is what makes pinch cheap:
+   changing --cw moves every bar without touching a node.
+
+   Layer 40: above the top bar, below the scrim and the sheet, so a room
+   opened from a bar rises over the board and closes back onto it. */
+/* CLOSED IS display:none, NOT visibility:hidden. Invisible, the board's five
+   hundred nodes were still laid out and still walked by every whole-document
+   scan — the overlap audit checks elements pairwise and skips only display:
+   none — and a suite that took four minutes took nine. A closed overlay is not
+   part of the page. The entrance is a keyframe, which runs on the frame the
+   element appears; a transition cannot start from nothing. */
+.eye{position:fixed;inset:0;z-index:40;background:var(--bg);display:none;flex-direction:column}
+.eye.on{display:flex;animation:eyein .42s var(--out) both}
+@keyframes eyein{from{transform:translateY(100%)}to{transform:none}}
+:root.staffmode #eyeBtn{display:none}
+.eyehead{display:flex;align-items:center;gap:8px;padding:calc(10px + env(safe-area-inset-top,0px)) 14px 8px;
+  background:var(--bar);-webkit-backdrop-filter:var(--blur-1);backdrop-filter:var(--blur-1);
+  border-bottom:1px solid var(--line);flex:0 0 auto}
+.eyehead h2{flex:1 1 auto;min-width:0;margin:0;font-size:17px;font-weight:700;letter-spacing:-.02em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.eyehead h2 em{font-style:normal;font-weight:500;color:var(--txt-3);font-size:12px;margin-left:8px}
+.eyehead .ghost{flex:0 0 auto;min-width:34px;justify-content:center;padding:7px 10px}
+.eyefilt{padding:8px 14px 0;flex:0 0 auto}
+.eyefilt .roomfilt{margin:0 -14px;padding:1px 14px 6px}
+.eyewrap{flex:1 1 auto;min-height:0;overflow:auto;position:relative;overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;touch-action:pan-x pan-y}
+.eyegrid{--cw:44px;--lw:76px;--rh:42px;--hh:46px;
+  display:grid;grid-template-columns:var(--lw) repeat(var(--n),var(--cw));
+  grid-template-rows:var(--hh);grid-auto-rows:var(--rh);width:max-content;position:relative;
+  padding-bottom:calc(24px + env(safe-area-inset-bottom,0px))}
+/* the two sticky edges, and the corner that is both */
+.eyegrid .corner{position:sticky;top:0;left:0;z-index:6;background:var(--bg);border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+.eyegrid .dh{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
+  font-size:9.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--txt-3);line-height:1.1;
+  font-variant-numeric:tabular-nums;overflow:hidden}
+.eyegrid .dh b{font-size:13px;font-weight:700;letter-spacing:-.02em;color:var(--txt);text-transform:none}
+.eyegrid .dh i{font-style:normal;font-size:9px;font-weight:700;letter-spacing:0;text-transform:none;
+  color:var(--txt-2)}
+.eyegrid .dh i.none{color:var(--now-ink)}
+.eyegrid .dh.we{background:color-mix(in srgb,var(--surface-2) 60%,var(--bg))}
+.eyegrid .dh.today b{color:var(--now)}
+.eyegrid .dh s{text-decoration:none;position:absolute;top:2px;left:4px;font-size:8.5px;font-weight:700;
+  color:var(--now-ink);letter-spacing:.06em}
+.eyegrid .fl{position:sticky;left:0;z-index:4;background:var(--bg);border-right:1px solid var(--line);
+  border-bottom:1px solid var(--line);display:flex;flex-direction:column;justify-content:center;
+  padding:0 8px;min-width:0;font-size:12.5px;font-weight:650;letter-spacing:-.015em;color:var(--txt);
+  text-align:left;font-family:var(--ui)}
+.eyegrid .fl em{font-style:normal;font-size:10px;font-weight:500;color:var(--txt-3);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.eyegrid .bh{grid-column:1 / -1;display:flex;align-items:flex-end;padding:0 0 3px 8px;
+  font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--txt-3);
+  border-bottom:1px solid var(--line);background:var(--bg);position:sticky;left:0;z-index:4}
+.eyegrid .bh span{position:sticky;left:8px}
+/* a flat's nights: hairlines every --cw, and the tap target for an empty one */
+.eyegrid .lane{grid-column:2 / -1;position:relative;z-index:0;border-bottom:1px solid var(--line);
+  background:repeating-linear-gradient(90deg,var(--line) 0 1px,transparent 1px var(--cw))}
+.eyegrid .wecol{grid-row:2 / -1;z-index:1;pointer-events:none;
+  background:color-mix(in srgb,var(--surface-2) 45%,transparent)}
+.eyegrid .todayline{grid-row:1 / -1;z-index:2;pointer-events:none;border-left:2px solid var(--now);
+  margin-left:-1px;width:0}
+/* a stay */
+.eyegrid .bar{z-index:3;margin:7px 2px;border-radius:9px;background:var(--held);color:var(--txt);
+  border:1px solid var(--line-2);display:flex;align-items:center;gap:6px;padding:0 8px;min-width:0;
+  overflow:hidden;font-family:var(--ui);text-align:left;cursor:pointer;
+  transition:transform .3s var(--spring),box-shadow .2s}
+.eyegrid .bar:active{transform:scale(.985)}
+.eyegrid .bar b{font-size:11.5px;font-weight:650;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.eyegrid .bar em{font-style:normal;font-size:10px;font-weight:700;color:var(--now-ink);white-space:nowrap;margin-left:auto;flex:0 0 auto}
+.eyegrid .bar.now{border-color:color-mix(in srgb,var(--free) 55%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--free) 25%,transparent)}
+.eyegrid .bar.block{background:repeating-linear-gradient(135deg,var(--surface-3) 0 6px,var(--surface-2) 6px 12px);color:var(--txt-2)}
+.eyegrid .bar.cut-l{border-top-left-radius:3px;border-bottom-left-radius:3px;border-left-style:dashed;margin-left:0}
+.eyegrid .bar.cut-r{border-top-right-radius:3px;border-bottom-right-radius:3px;border-right-style:dashed;margin-right:0}
+/* density: what a bar can say depends on how many nights are on screen */
+.eyegrid.z-tight .bar{padding:0;margin:9px 1px;border-radius:5px}
+.eyegrid.z-tight .bar b,.eyegrid.z-tight .bar em{display:none}
+.eyegrid.z-tight .dh{font-size:8px}
+.eyegrid.z-tight .dh b{font-size:11px}
+.eyegrid.z-tight .dh i{display:none}
+.eyegrid.z-mid .bar em{display:none}
+:root[data-theme="light"] .eyegrid .bar{color:var(--held-ink)}
+@media (prefers-reduced-motion: reduce){.eye.on{animation:none}}
+
 /* ══ THE THREE KINDS OF MOVEMENT ═════════════════════════════════════════════
    A room emptying, a room filling, and a room doing both before three o'clock
    are three different events, and the day view had been drawing them as three
@@ -4146,6 +4233,7 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
   <header class="topbar">
     <div class="topbar-r">
       <h1 id="scrTitle">Rooms<span class="sub" id="scrSub"></span></h1>
+      <button class="ghost" id="eyeBtn" aria-label="Bird's eye — every flat, every night, on one board"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 5.5h15M2.5 10h15M2.5 14.5h15"/><path d="M6 5.5h5M9 10h6M4 14.5h4" stroke-width="3.2"/></svg></button>
       <button class="pill" id="acctBtn" aria-label="Account and sync"><i></i><span id="acctTxt">Demo data</span></button>
       <button class="ghost" id="themeBtn" aria-label="Switch theme"><span id="themeIc">◐</span></button>
     </div>
@@ -4174,6 +4262,22 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
 </div>
 
 <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+
+<!-- THE BIRD'S EYE. Every flat down the side, every night across the top, every
+     stay a bar. The one view every host platform converges on, because the
+     empty cells are the money. Built on first open, repainted only when the
+     book changes; pinch changes one CSS variable and nothing is redrawn. -->
+<section class="eye" id="eye" aria-label="Bird's eye" aria-hidden="true">
+  <header class="eyehead">
+    <button class="ghost" id="eyeClose" aria-label="Close the bird's eye">‹</button>
+    <h2 id="eyeMonth">Board<em id="eyeSpan"></em></h2>
+    <button class="ghost" id="eyeToday">Today</button>
+    <button class="ghost" id="eyeOut" aria-label="Zoom out — more nights on screen">−</button>
+    <button class="ghost" id="eyeIn" aria-label="Zoom in — names and amounts">+</button>
+  </header>
+  <div class="eyefilt"><div class="roomfilt" id="eyeFilt"></div></div>
+  <div class="eyewrap" id="eyeWrap"><div class="eyegrid z-mid" id="eyeGrid"></div></div>
+</section>
 
 <section class="gate" id="gate" aria-label="Sign in">
   <h2>Crescent Stays</h2>
@@ -6943,6 +7047,217 @@ function stayKey(r){
 function payKey(r, pay){
   return stableId(["pay", stayKey(r), pay.amount, pay.method, dayISO(pay.on || 0)]);
 }
+
+/* ══════════════ THE BIRD'S EYE ═══════════════════════════════════════════════
+   Every flat down the side, every night across the top, every stay a bar you
+   can tap. It is the one view every host platform converges on — the owner
+   sent Airbnb's — because the empty cells are the money, and no list shows
+   an empty cell.
+
+   What it deliberately does NOT copy: a rate in every empty cell. That is
+   there on Airbnb because prices are edited there; here a flat has one rate
+   and it is said once, under its code. What it adds that Airbnb does not: the
+   free count under every date, which is the density of the whole book read
+   left to right, and the balance still owed on a bar, in amber, when there is
+   room for it.
+
+   The window is two weeks back and the whole book ahead. Pinch, the − and +,
+   or ctrl-wheel change the night's width — one CSS variable — and the night
+   under the fingers stays under the fingers. Three densities: tight, where a
+   month is on screen and a bar is a bar; mid, names; wide, names and money. */
+const EYE_BACK = 14, EYE_AHEAD = DAYS - 1, EYE_N = EYE_BACK + EYE_AHEAD + 1;
+const EYE_LEVELS = [28, 44, 72];
+let eyeCw = 44, eyeCode = null, eyeBuilt = false, eyeRows = null;
+const eyeEl = ()=> document.getElementById("eye");
+const eyeCol = d => d + EYE_BACK + 2;                     // grid column of a night
+const eyeLw = ()=> parseFloat(getComputedStyle(document.getElementById("eyeGrid")).getPropertyValue("--lw")) || 76;
+
+function eyeFlats(){
+  return flats.map((f, i)=> i).filter(i => !eyeCode || flats[i].code === eyeCode);
+}
+function eyeRender(keepScroll){
+  const grid = document.getElementById("eyeGrid"), wrap = document.getElementById("eyeWrap");
+  const sl = keepScroll ? wrap.scrollLeft : null, st = keepScroll ? wrap.scrollTop : null;
+  grid.textContent = "";
+  grid.style.setProperty("--n", EYE_N);
+  grid.style.setProperty("--cw", eyeCw + "px");
+  const view = eyeFlats();
+  const inView = new Set(view);
+
+  /* who is in on each night of the window, for the free count — from the
+     stays themselves, because occ[] only knows the nights ahead */
+  const occW = new Map(view.map(i => [i, new Uint8Array(EYE_N)]));
+  const stays = resv.filter(r => inView.has(r.fi) && r.end > -EYE_BACK && r.start <= EYE_AHEAD);
+  stays.forEach(r => { const a = occW.get(r.fi);
+    for(let d = Math.max(r.start, -EYE_BACK); d < Math.min(r.end, EYE_AHEAD + 1); d++) a[d + EYE_BACK] = 1; });
+
+  const frag = document.createDocumentFragment();
+  frag.appendChild(el("div","corner"));
+  for(let d = -EYE_BACK; d <= EYE_AHEAD; d++){
+    const dt = dateAt(d), h = el("div","dh" + (dt.getDay() % 6 === 0 ? " we" : "") + (d === 0 ? " today" : ""));
+    h.style.gridColumn = eyeCol(d);
+    if(dt.getDate() === 1 || d === -EYE_BACK) h.appendChild(el("s", null, MON[dt.getMonth()]));
+    h.append(el("span", null, DOW[dt.getDay()].slice(0, 2)), el("b", null, String(dt.getDate())));
+    let free = 0; view.forEach(i => { if(!occW.get(i)[d + EYE_BACK]) free++; });
+    h.appendChild(el("i", free ? null : "none", String(free)));
+    h.setAttribute("aria-label", `${fmtL(d)}, ${free} free`);
+    frag.appendChild(h);
+  }
+
+  /* rows: a heading per building, a lane per flat */
+  eyeRows = {};
+  let row = 2;
+  buildingsOf().filter(bd => !eyeCode || bd.code === eyeCode).forEach(bd => {
+    const bh = el("div","bh"); bh.style.gridRow = row; bh.appendChild(el("span", null, bd.name)); frag.appendChild(bh); row++;
+    view.filter(i => flats[i].code === bd.code).forEach(i => {
+      const f = flats[i];
+      const lab = el("button","fl"); lab.style.gridRow = row;
+      lab.append(el("span", null, f.id), el("em", null, `${f.type}${f.rate ? " · ₹" + f.rate.toLocaleString("en-IN") : ""}`));
+      lab.setAttribute("aria-label", `${f.id}, ${f.type} — open the room`);
+      lab.onclick = ()=>{ haptic(9); openSheet(i, 0); };
+      const lane = el("div","lane"); lane.style.gridRow = row; lane.dataset.fi = i;
+      lane.onclick = ev=>{
+        const x = ev.clientX - lane.getBoundingClientRect().left;
+        const d = -EYE_BACK + Math.floor(x / eyeCw);
+        haptic(9);
+        if(d >= 0 && !occW.get(i)[d + EYE_BACK]) openBooking(i, d, 1);
+        else openSheet(i, Math.max(d, 0));
+      };
+      frag.append(lab, lane);
+      eyeRows[i] = row; row++;
+    });
+  });
+
+  /* weekends and today, spanning the rows; then the stays */
+  for(let d = -EYE_BACK; d <= EYE_AHEAD; d++){
+    if(dateAt(d).getDay() % 6 !== 0) continue;
+    const w = el("div","wecol"); w.style.gridColumn = eyeCol(d); w.style.gridRow = `2 / ${row}`; frag.appendChild(w);
+  }
+  const tl = el("div","todayline"); tl.style.gridColumn = eyeCol(0); tl.style.gridRow = `1 / ${row}`; frag.appendChild(tl);
+
+  stays.forEach(r => {
+    const a = Math.max(r.start, -EYE_BACK), b = Math.min(r.end, EYE_AHEAD + 1);
+    if(b <= a || eyeRows[r.fi] == null) return;
+    const bar = el("button","bar" + (isBlock(r) ? " block" : "") + (r.start <= 0 && r.end > 0 ? " now" : "")
+                                  + (r.start < -EYE_BACK ? " cut-l" : "") + (r.end > EYE_AHEAD + 1 ? " cut-r" : ""));
+    bar.style.gridColumn = `${eyeCol(a)} / ${eyeCol(b)}`;
+    bar.style.gridRow = eyeRows[r.fi];
+    const who = isBlock(r) ? (r.reason || "Out of service") : (r.guest || "Guest");
+    bar.appendChild(el("b", null, who));
+    const due = isBlock(r) ? 0 : dueFrom(r);
+    if(due > 0) bar.appendChild(el("em", null, moneyShort(due)));
+    bar.setAttribute("aria-label", `${who} in ${flats[r.fi].id}, ${fmt(r.start)} to ${fmt(r.end)}`
+      + (due > 0 ? `, ${money(due)} due` : "") + " — open the room");
+    bar.onclick = ev=>{ ev.stopPropagation(); haptic(9); openSheet(r.fi, Math.max(r.start, 0)); };
+    frag.appendChild(bar);
+  });
+  grid.appendChild(frag);
+  eyeZoomClass();
+  eyeBuilt = true;
+  if(keepScroll){ wrap.scrollLeft = sl; wrap.scrollTop = st; }
+  eyeMonthLabel();
+}
+function eyeZoomClass(){
+  const g = document.getElementById("eyeGrid");
+  g.classList.toggle("z-tight", eyeCw < 36);
+  g.classList.toggle("z-mid", eyeCw >= 36 && eyeCw < 60);
+  g.classList.toggle("z-wide", eyeCw >= 60);
+}
+/* the night under the anchor stays under the anchor */
+function eyeZoom(cw, anchorX){
+  const wrap = document.getElementById("eyeWrap"), grid = document.getElementById("eyeGrid");
+  cw = Math.max(22, Math.min(96, cw));
+  const lw = eyeLw();
+  const ax = anchorX == null ? lw + (wrap.clientWidth - lw) / 2 : anchorX;
+  const dayF = (wrap.scrollLeft + ax - lw) / eyeCw;
+  eyeCw = cw;
+  grid.style.setProperty("--cw", cw + "px");
+  wrap.scrollLeft = dayF * cw - (ax - lw);
+  eyeZoomClass(); eyeMonthLabel();
+}
+function eyeSnap(){
+  const near = EYE_LEVELS.reduce((p, c)=> Math.abs(c - eyeCw) < Math.abs(p - eyeCw) ? c : p, EYE_LEVELS[0]);
+  if(near !== eyeCw) eyeZoom(near);
+}
+function eyeStep(dir){
+  const i = EYE_LEVELS.indexOf(eyeCw);
+  const next = i < 0 ? (dir > 0 ? EYE_LEVELS.find(l => l > eyeCw) : [...EYE_LEVELS].reverse().find(l => l < eyeCw))
+                     : EYE_LEVELS[Math.max(0, Math.min(EYE_LEVELS.length - 1, i + dir))];
+  if(next != null && next !== eyeCw){ haptic(7); eyeZoom(next); }
+}
+function eyeMonthLabel(){
+  const wrap = document.getElementById("eyeWrap"), h = document.getElementById("eyeMonth"), sp = document.getElementById("eyeSpan");
+  const first = -EYE_BACK + Math.max(0, Math.floor(wrap.scrollLeft / eyeCw));
+  const cols = Math.max(1, Math.floor((wrap.clientWidth - eyeLw()) / eyeCw));
+  const last = Math.min(EYE_AHEAD, first + cols - 1);
+  const a = dateAt(first), b = dateAt(last);
+  h.firstChild.nodeValue = MONF[a.getMonth()] + " " + a.getFullYear();
+  sp.textContent = a.getMonth() === b.getMonth() ? `${a.getDate()}–${b.getDate()}` : `${fmt(first)} → ${fmt(last)}`;
+}
+function eyeToday(smooth){
+  const wrap = document.getElementById("eyeWrap");
+  wrap.scrollTo({left: (EYE_BACK - 1) * eyeCw, behavior: smooth ? "smooth" : "auto"});
+  /* the scroll event that repaints the label arrives a frame later; on open
+     that frame read "August" over a board already standing on September */
+  if(!smooth) eyeMonthLabel();
+}
+function eyeOpen(){
+  if(myRole() === "staff") return;
+  const e = eyeEl();
+  eyeRender(false);
+  e.classList.add("on"); e.setAttribute("aria-hidden", "false");
+  eyeToday(false);
+  eyeFilterChips();
+  track("eye_open", {cw: eyeCw, code: eyeCode || "all"});
+}
+function eyeClose(){
+  const e = eyeEl(); e.classList.remove("on"); e.setAttribute("aria-hidden", "true");
+}
+function eyeFilterChips(){
+  const host = document.getElementById("eyeFilt"); host.textContent = "";
+  const B = buildingsOf();
+  host.hidden = B.length < 2;
+  const chip = (code, label, n)=>{
+    const b = el("button"); b.dataset.code = code || "";
+    b.append(el("span", null, label), el("i", null, String(n)));
+    b.setAttribute("aria-selected", String(eyeCode === code));
+    b.onclick = ()=>{ haptic(8); eyeCode = code; eyeFilterChips(); eyeRender(true); };
+    host.appendChild(b);
+  };
+  chip(null, "All", flats.length);
+  B.forEach(bd => chip(bd.code, bd.short || bd.name, flats.filter(f => f.code === bd.code).length));
+}
+(function eyeWire(){
+  const e = eyeEl(); if(!e) return;
+  document.getElementById("eyeBtn").onclick = ()=>{ haptic(10); eyeOpen(); };
+  document.getElementById("eyeClose").onclick = ()=>{ haptic(8); eyeClose(); };
+  document.getElementById("eyeToday").onclick = ()=>{ haptic(8); eyeToday(true); };
+  document.getElementById("eyeOut").onclick = ()=> eyeStep(-1);
+  document.getElementById("eyeIn").onclick  = ()=> eyeStep(+1);
+  document.addEventListener("keydown", ev=>{ if(ev.key === "Escape" && e.classList.contains("on") && !sheet.classList.contains("on")) eyeClose(); });
+  const wrap = document.getElementById("eyeWrap");
+  let raf = 0;
+  wrap.addEventListener("scroll", ()=>{ if(raf) return; raf = requestAnimationFrame(()=>{ raf = 0; eyeMonthLabel(); }); }, {passive:true});
+  /* pinch: two fingers scale the night's width around their midpoint; on
+     release it settles on the nearest of the three densities */
+  let pinch = null;
+  const dist = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  const midX = t => (t[0].clientX + t[1].clientX) / 2 - wrap.getBoundingClientRect().left;
+  wrap.addEventListener("touchstart", ev=>{ if(ev.touches.length === 2) pinch = {d: dist(ev.touches), cw: eyeCw, x: midX(ev.touches)}; }, {passive:true});
+  wrap.addEventListener("touchmove", ev=>{
+    if(!pinch || ev.touches.length !== 2) return;
+    ev.preventDefault();
+    eyeZoom(pinch.cw * (dist(ev.touches) / pinch.d), pinch.x);
+  }, {passive:false});
+  wrap.addEventListener("touchend", ()=>{ if(pinch){ pinch = null; eyeSnap(); } }, {passive:true});
+  wrap.addEventListener("touchcancel", ()=>{ pinch = null; }, {passive:true});
+  /* a trackpad: ctrl-wheel is the pinch */
+  wrap.addEventListener("wheel", ev=>{
+    if(!ev.ctrlKey) return;
+    ev.preventDefault();
+    eyeZoom(eyeCw * (ev.deltaY < 0 ? 1.08 : 0.92), ev.clientX - wrap.getBoundingClientRect().left);
+  }, {passive:false});
+})();
 
 /* ══════════════ WHO IS TOUCHING WHAT, RIGHT NOW ══════════════════════════════
    Two managers on a shared spreadsheet can see each other's cursor, and today
@@ -19386,6 +19701,7 @@ function refreshScreen(){
   SCREENS[curScreen].render();
   s.scrollTop = top;
   paintPeers();
+  if(eyeEl() && eyeEl().classList.contains("on")) eyeRender(true);
 }
 
 function switchTo(i, focusInput){

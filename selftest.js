@@ -5444,6 +5444,131 @@ export async function run(filter) {
     } finally { closeSheet(); pulseSeg = wasSeg; document.querySelectorAll(".tabbar button")[0].click(); await wait(60); }
   });
 
+  /* ══ the bird's eye ══════════════════════════════════════════════════════ */
+
+  await test("the bird's eye opens from the header: one row per flat, one column per night, today marked", async () => {
+    try {
+      document.getElementById("eyeBtn").click();
+      await until(() => document.getElementById("eye").classList.contains("on"), "the board");
+      const g = document.getElementById("eyeGrid");
+      eq(g.querySelectorAll(".dh").length, EYE_BACK + EYE_AHEAD + 1, "one header cell per night");
+      eq(g.querySelectorAll(".fl").length, NF, "one label per flat");
+      eq(g.querySelectorAll(".lane").length, NF, "one lane per flat");
+      eq(g.querySelectorAll(".bh").length, buildingsOf().length, "one heading per building");
+      const todayH = g.querySelector(".dh.today");
+      ok(todayH && todayH.querySelector("b").textContent === String(dateAt(0).getDate()), "today's column is not marked");
+      ok(g.querySelector(".todayline"), "no line at today");
+      /* the sticky edges */
+      eq(getComputedStyle(g.querySelector(".dh")).position, "sticky", "the date row does not stick");
+      eq(getComputedStyle(g.querySelector(".fl")).position, "sticky", "the flat column does not stick");
+      /* it opens on today, with a night of yesterday's context on the left */
+      const wrap = document.getElementById("eyeWrap");
+      const first = -EYE_BACK + Math.round(wrap.scrollLeft / eyeCw);
+      ok(first === -1 || first === 0, `opened with ${first} as the first night`);
+      ok(/September|October|August|November/.test(document.getElementById("eyeMonth").textContent), `the month reads "${document.getElementById("eyeMonth").textContent}"`);
+      /* the free count under each date is the book's */
+      for (let d = 0; d <= 5; d++) {
+        const h = g.querySelector(`.dh[style*="grid-column: ${eyeCol(d)}"]`) || [...g.querySelectorAll(".dh")][d + EYE_BACK];
+        eq(+h.querySelector("i").textContent, freeCount(d), `free count under ${fmtL(d)}`);
+      }
+      return `${NF} rows × ${EYE_BACK + EYE_AHEAD + 1} nights, today at column ${eyeCol(0)}`;
+    } finally { eyeClose(); }
+  });
+
+  await test("a stay is a bar across exactly its nights, and a tap opens the room; an empty night opens a booking", async () => {
+    const keepR = resv.slice();
+    const fi = freeFlat(-1, 10);
+    ok(fi != null, "no flat free for the fixture");
+    resv.push({fi, start: 2, end: 5, nights: 3, guest: "Bar Guest", src: "Direct", manual: true, amount: 9000, pays: []});
+    recompute();
+    try {
+      eyeOpen();
+      await until(() => document.getElementById("eye").classList.contains("on"), "the board");
+      const g = document.getElementById("eyeGrid");
+      const bar = [...g.querySelectorAll(".bar")].find(b => /Bar Guest/.test(b.textContent));
+      ok(bar, "the stay has no bar");
+      eq(bar.style.gridColumn.replace(/\s/g, ""), `${eyeCol(2)}/${eyeCol(5)}`, "the bar does not span its nights");
+      eq(+bar.style.gridRow, eyeRows[fi], "the bar is on the wrong flat's row");
+      /* wide: the balance shows; mid: it does not; tight: nothing but the bar */
+      eyeZoom(72); ok(bar.querySelector("em") && getComputedStyle(bar.querySelector("em")).display !== "none", "at wide zoom the balance is hidden");
+      eyeZoom(44); eq(getComputedStyle(bar.querySelector("em")).display, "none", "at mid zoom the balance shows");
+      eyeZoom(28); eq(getComputedStyle(bar.querySelector("b")).display, "none", "at tight zoom the name shows");
+      eyeZoom(44);
+      /* the bar is the door to the room */
+      bar.click();
+      await until(() => sheet.classList.contains("on"), "the room sheet from the bar");
+      eq(document.querySelector(".sheet .n").textContent, flats[fi].id, "the bar opened the wrong room");
+      closeSheet();
+      /* an empty night opens a booking for that flat and night */
+      const lane = g.querySelector(`.lane[data-fi="${fi}"]`);
+      const r = lane.getBoundingClientRect();
+      const x = r.left + (7 + EYE_BACK) * eyeCw + eyeCw / 2;    // night +7, free
+      lane.dispatchEvent(new MouseEvent("click", {bubbles: true, clientX: x, clientY: r.top + r.height / 2}));
+      await until(() => sheet.classList.contains("on") && /Book/.test(document.getElementById("sheetB").textContent), "the booking form");
+      ok(document.getElementById("sheetH").textContent.includes(flats[fi].id), "the booking form is for the wrong flat");
+      closeSheet();
+      return `${flats[fi].id}: bar ${eyeCol(2)}→${eyeCol(5)} · tap → room · empty night → booking`;
+    } finally { closeSheet(); eyeClose(); resv = keepR; recompute(); }
+  });
+
+  await test("pinch keeps the night under the fingers where it was, and settles on a density", async () => {
+    try {
+      eyeOpen();
+      await until(() => document.getElementById("eye").classList.contains("on"), "the board");
+      const wrap = document.getElementById("eyeWrap"), lw = eyeLw();
+      eyeZoom(44); wrap.scrollLeft = 10 * 44;                    // some way in
+      const anchor = lw + 120;                                   // a point on the screen
+      const nightUnder = () => (wrap.scrollLeft + anchor - lw) / eyeCw;
+      const before = nightUnder();
+      eyeZoom(70, anchor);
+      ok(Math.abs(nightUnder() - before) < 0.05, `the night under the anchor moved from ${before.toFixed(2)} to ${nightUnder().toFixed(2)}`);
+      eyeZoom(30, anchor);
+      ok(Math.abs(nightUnder() - before) < 0.05, "zooming out moved the anchored night");
+      /* the classes follow the width */
+      const g = document.getElementById("eyeGrid");
+      ok(g.classList.contains("z-tight"), "30px is not the tight density");
+      eyeSnap(); eq(eyeCw, 28, "30px did not settle on 28");
+      eyeZoom(58); eyeSnap(); eq(eyeCw, 44, "58px did not settle on 44");
+      eyeStep(+1); eq(eyeCw, 72, "+ did not step to 72"); eyeStep(+1); eq(eyeCw, 72, "+ stepped past the last level");
+      eyeStep(-1); eyeStep(-1); eq(eyeCw, 28, "− did not step down to 28");
+      return "anchored both ways, snapped to 28/44/72, stepped within bounds";
+    } finally { eyeZoom(44); eyeClose(); }
+  });
+
+  await test("the board's building chips narrow it to one building, and it follows the book", async () => {
+    const keepR = resv.slice();
+    try {
+      eyeOpen();
+      await until(() => document.querySelector("#eyeFilt button"), "the chips");
+      const B = buildingsOf(); ok(B.length >= 2, "one building only");
+      const chip = [...document.querySelectorAll("#eyeFilt button")].find(b => b.dataset.code === B[1].code);
+      chip.click();
+      await until(() => document.querySelectorAll("#eyeGrid .fl").length === flats.filter(f => f.code === B[1].code).length, "the narrowed board");
+      eq(document.querySelectorAll("#eyeGrid .bh").length, 1, "other buildings' headings remain");
+      /* a booking made while it is open appears on it */
+      const fi = flats.map((f, i) => i).find(i => flats[i].code === B[1].code && freeSpan(i, 3, 6));
+      ok(fi != null, "no free flat in the narrowed building");
+      ok(addBooking(fi, 3, 2, "Live Board Guest", "Direct", {}), "fixture refused");
+      refreshScreen();
+      ok([...document.querySelectorAll("#eyeGrid .bar")].some(b => /Live Board Guest/.test(b.textContent)), "a new booking did not reach the open board");
+      /* back to all */
+      [...document.querySelectorAll("#eyeFilt button")].find(b => b.dataset.code === "").click();
+      await until(() => document.querySelectorAll("#eyeGrid .fl").length === NF, "the whole board again");
+      return `${B[1].short || B[1].name} alone, then all ${NF}`;
+    } finally { eyeCode = null; eyeClose(); resv = keepR; recompute(); }
+  });
+
+  /* A staff seat has no book to look across. */
+  await test("a staff phone has no bird's eye", () => {
+    const keep = {me, MODE};
+    try {
+      me = {role: "staff", buildings: ["b1"]}; MODE = "live"; applySeat();
+      eq(getComputedStyle(document.getElementById("eyeBtn")).display, "none", "the header shows the board to a cleaner");
+      eyeOpen(); ok(!document.getElementById("eye").classList.contains("on"), "the board opened for a cleaner");
+      return "hidden and refused";
+    } finally { me = keep.me; MODE = keep.MODE; applySeat(); eyeClose(); }
+  });
+
   await test("no text falls below AA in either theme", async () => {
     const m = await import("./audit.js?t=" + Date.now());
     const out = [];
