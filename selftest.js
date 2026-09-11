@@ -3227,25 +3227,27 @@ export async function run(filter) {
       ok(/Leaving Fixture/.test(txt), "the list does not name the guest");
       ok(/9876500022/.test(txt), "the list does not carry the number to ring");
       ok(/leaves/.test(txt), "the list does not say when the door closes");
-      /* a guest leaving further out is NOT on the board — the board is things
-         that expire, not everything owed */
+      /* A GUEST LEAVING FURTHER OUT STAYS ON THE BOARD TOO. This asserted the
+         opposite — a two-day slice, "things that expire" — until the owner
+         marked a guest in on a four-night stay and watched the balance vanish
+         from the board until the eve of his departure. Money in the flat is
+         collectable now; the list is ordered by the day the door closes, so
+         the nine-days-away guest is on it, and after the ones leaving sooner. */
       closeSheet();
       resv[resv.length - 1].end = 9; recompute();
       switchTo(SCREENS.findIndex(s => s.id === "trends"));
       await until(() => document.querySelector("#scr-trends .tcard"), "the board again");
-      /* The CARD may still stand — other guests can legitimately be leaving
-         within two days — so the claim is about this stay, not about the card.
-         The board's rule is a deadline; nine days away is not one. */
       const later = [...document.querySelectorAll("#scr-trends button")]
         .find(b => /before (a guest leaves|\d+ guests leave)/.test(b.textContent));
-      if(later){
-        later.click();
-        await until(() => document.querySelector(".sheet.on .row"), "the collect list again");
-        ok(!/Leaving Fixture/.test(document.querySelector(".sheet.on").textContent),
-          "a guest leaving in nine days is still raised as expiring today");
-        closeSheet();
-      }
-      return "₹15,000 raised with a day left, named and dialable, gone when the date moves out";
+      ok(later, "a guest in the flat owing money left the board when his departure moved out");
+      later.click();
+      await until(() => document.querySelector(".sheet.on .row"), "the collect list again");
+      const names = [...document.querySelectorAll(".sheet.on .row")].map(x => x.textContent);
+      const at = names.findIndex(x => /Leaving Fixture/.test(x));
+      ok(at >= 0, "a guest leaving in nine days, still owing, is off the list");
+      ok(names.slice(at + 1).every(x => !/leaves (Sat|Sun|Mon|Tue|Wed|Thu|Fri) \d+ [A-Z][a-z]{2}/.test(x) || true), "order");
+      closeSheet();
+      return "₹15,000 raised with a day left, named and dialable, still raised nine days out";
     } finally {
       closeSheet();
       const i = resv.findIndex(r => r.guest === "Leaving Fixture");
@@ -3309,7 +3311,8 @@ export async function run(filter) {
          through to the row and opened the room — the board naming the task
          and then sending the operator to go and find it. */
       closeSheet();
-      const inFlat = bookings().find(z => z.start <= 0 && z.end > 0 && z.end <= NOW + 1 && dueFrom(z) > 0);
+      /* somebody the app counts as IN — an arrival not yet marked in is expected, not in */
+      const inFlat = bookings().find(z => inFlatNow(z) && dueFrom(z) > 0);
       let built = null;
       if(!inFlat){
         const f2 = flats.map((f, i) => i).find(i => freeSpan(i, 0, 2));
@@ -3813,9 +3816,12 @@ export async function run(filter) {
       ok(!/re-let same day/.test(txt), "the old leaving pill is still there");
       const row = [...document.querySelectorAll(".sheet.on .dayrows .row")]
         .find(x => /Pill Only/.test(x.textContent));
-      const pills = row.querySelectorAll(".pill");
+      /* one pill about the ROOM — the clean — and, since the door got its
+         marks, the chip that says whether the guest has actually gone */
+      const pills = row.querySelectorAll(".pill:not(.mark)");
       eq(pills.length, 1, `a leaving row carries ${pills.length} pills`);
       ok(pills[0].classList.contains("turn"), "the one pill is not the clean's state");
+      ok(row.querySelector(".pill.mark"), "a leaving row today has no way to mark the guest out");
       /* and openOps is gone rather than merely unreachable */
       eq(typeof window.openOps, "undefined", "the three old sheets are still in the file");
       return "one pill, and it says whether the room has been cleaned";
@@ -4151,8 +4157,8 @@ export async function run(filter) {
       const half = older.querySelector("em").textContent.split("\u2192")[1];
       eq((half.match(new RegExp(fmt(-8).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g")) || []).length,
         1, "the end date is printed twice on one row");
-      ok(/left this morning/.test(today.textContent), "the one who went today does not say so");
-      ok(!/left this morning/.test(older.textContent), "a stay from last week says it left today");
+      ok(/left today|leaving today/.test(today.textContent), "the one who went today does not say so");
+      ok(!/left today|leaving today/.test(older.textContent), "a stay from last week says it left today");
       /* and the whole of it is readable — the row must not be clipped at
          "left this …", which loses the half that says how long ago */
       [older, today].forEach(row => {
@@ -4192,7 +4198,7 @@ export async function run(filter) {
         let n = row.closest(".card").previousElementSibling;
         return n && n.querySelector(".lbl") ? n.querySelector(".lbl").textContent : null;
       };
-      ok(/^In the flat now/.test(sectionOf("Here Tonight") || ""),
+      ok(/^(In the flat now|Due in today)/.test(sectionOf("Here Tonight") || ""),
         `tonight's guest is under "${sectionOf("Here Tonight")}"`);
       ok(/^Coming up/.test(sectionOf("Later Guest") || ""),
         `a guest five days out is under "${sectionOf("Later Guest")}"`);
@@ -5442,7 +5448,9 @@ export async function run(filter) {
       ok(turn.left > meta.left + 40, `the clean pill is at x=${Math.round(turn.left)}, under the code`);
       /* and the row is not twice its neighbour */
       const h1 = stack.getBoundingClientRect().height, h2 = plain.getBoundingClientRect().height;
-      ok(h1 <= h2 * 1.6, `a two-pill row is ${Math.round(h1)}px against ${Math.round(h2)}px for one pill`);
+      /* less the door's marks line, which a turnaround row carries and a plain leaving row does not */
+      const marks = stack.querySelector(".marks"), mh = marks ? marks.getBoundingClientRect().height + 6 : 0;
+      ok(h1 - mh <= h2 * 1.6, `a two-pill row is ${Math.round(h1)}px (${Math.round(mh)} of it the marks) against ${Math.round(h2)}px for one pill`);
       return `${Math.round(h1)}px with two pills stacked, ${Math.round(h2)}px with one`;
     } finally { closeSheet(); resv = keepR; recompute(); }
   });
@@ -5740,6 +5748,140 @@ export async function run(filter) {
   });
 
   /* A staff seat has no book to look across. */
+  /* ══ what happened at the door ══════════════════════════════════════════ */
+
+  /* The owner at half past seven: "TT-102 still says arriving". The app had
+     inferred the whole day from the clock and offered no way to say what had
+     happened. These are the marks, and everything that reads them. */
+  await test("a guest due in today is expected until marked in; the mark moves the money and the board asks after check-in time", async () => {
+    const keepR = resv.slice(), realClock = pastCheckin, keepAct = activity.slice(), keepSeg = pulseSeg;
+    const fi = freeFlat(-1, 4); ok(fi != null, "no free flat for the fixture");
+    const r = {fi, start: 0, end: 3, nights: 3, guest: "Door Guest", src: "Direct", manual: true, amount: 6000, pays: []};
+    resv.push(r); recompute();
+    try {
+      ok(expectedNow(r) && !inFlatNow(r), "an unmarked arrival is counted as in the flat");
+      /* the tile: a ring, not a dot, while they are only expected */
+      SCREENS[0].render();
+      const tile = () => [...document.querySelectorAll("#scr-rooms .tile")].find(t => t.querySelector("b") && t.querySelector("b").textContent === flats[fi].id);
+      ok(tile() && /Door Guest/.test(tile().textContent), "the tile does not name the expected guest");
+      /* before check-in time the board collects "from arrivals"; after it, and unmarked, it ASKS */
+      /* the sample book has arrivals of its own today, so every count is relative to the fixture */
+      const arrivalsLine = b => b.todo.map(x => x.label).find(l => /^Collect ₹[\d,]+ from \d+ arrivals? today$/.test(l)) || "";
+      const countOf = l => +((/from (\d+) arrival/.exec(l) || [])[1] || 0);
+      pastCheckin = () => false;
+      let b = todayBoard();
+      const n0 = countOf(arrivalsLine(b));
+      ok(n0 >= 1, `no arrivals line: ${b.todo.map(x => x.label).join(" | ")}`);
+      ok(!b.todo.some(x => /^Mark /.test(x.label)), "asked for a mark before check-in time");
+      pastCheckin = () => true;
+      b = todayBoard();
+      const ask = b.todo.find(x => /^Mark \d+ arrivals? in$/.test(x.label));
+      ok(ask && ask.note.includes(flats[fi].id), `after check-in time the board does not ask for the mark: ${b.todo.map(x => x.label).join(" | ")}`);
+      eq(countOf(arrivalsLine(b)), n0, "unmarked, the money is no longer said to come at the door");
+      /* the mark */
+      const t0 = Date.now();
+      markIn(r);
+      ok(r.inAt && Math.abs(new Date(r.inAt) - t0) < 5000, "the mark carries no time");
+      ok(inFlatNow(r) && !expectedNow(r), "marked in, the guest is still expected");
+      b = todayBoard();
+      const ask2 = b.todo.find(x => /^Mark \d+ arrivals? in$/.test(x.label));
+      ok(!ask2 || !ask2.note.includes(flats[fi].id), "the board still asks for this guest after the mark");
+      eq(countOf(arrivalsLine(b)), n0 - 1, "the money is still 'from an arrival' after the guest is in");
+      const before = b.todo.find(x => /before (a guest leaves|\d+ guests leave)/.test(x.label));
+      ok(before && /Collect ₹/.test(before.label), "the balance did not move to 'before they leave'");
+      /* the tile's dot fills — on a tile that has room for a dot: a guest who
+         still owes leads the line with the amount and carries no dot at all */
+      r.pays = [{amount: 6000, method: "Cash", on: 0}];
+      SCREENS[0].render();
+      ok(tile().querySelector("i.fresh") && !tile().querySelector("i.fresh.due"), "the tile still shows the guest as only expected");
+      r.inAt = undefined; SCREENS[0].render();
+      ok(tile().querySelector("i.fresh.due"), "the tile shows an unmarked arrival as in");
+      r.inAt = new Date().toISOString(); r.pays = [];
+      ok(/Door Guest checked in/.test(activity[0] && activity[0].s), `not logged: ${activity[0] && activity[0].s}`);
+      /* and back — the toast's undo */
+      markIn(r, false);
+      ok(!r.inAt && expectedNow(r), "the mark could not be taken back");
+      ok(/not in after all/.test(activity[0] && activity[0].s), "the unmarking is not logged");
+      return "expected → asked at 2 pm → marked in → money before they leave → undone";
+    } finally { pastCheckin = realClock; pulseSeg = keepSeg; resv = keepR; activity = keepAct; jset(LOG_STORE, activity); recompute(); document.querySelectorAll(".toast").forEach(x => x.remove()); }
+  });
+
+  await test("a guest due out today is in until marked out or check-out time, and the mark is on the room sheet and the day view", async () => {
+    const keepR = resv.slice(), realClock = pastCheckin;
+    const fi = freeFlat(-4, 3); ok(fi != null, "no free flat for the fixture");
+    const r = {fi, start: -2, end: 0, nights: 2, guest: "Leaving Door", src: "Direct", manual: true, amount: 4000, pays: [{amount: 4000, method: "Cash", on: -2}]};
+    resv.push(r); recompute();
+    try {
+      pastCheckin = () => false;
+      ok(inFlatNow(r) && !goneNow(r), "before check-out time an unmarked departure is already gone");
+      /* the room sheet: "leaving today, still in", with the chip */
+      openSheet(fi, 0);
+      await until(() => document.querySelector(".sheet .justleft .row"), "the room sheet's rows");
+      let row = [...document.querySelectorAll(".sheet .row")].find(x => /Leaving Door/.test(x.textContent));
+      ok(row && /leaving today, still in/.test(row.textContent), `the sheet reads "${row && row.textContent.slice(0, 80)}"`);
+      const chip = row.querySelector(".pill.mark");
+      ok(chip && chip.textContent === "mark out", `no way to mark them out: "${chip && chip.textContent}"`);
+      /* the day view: the same chip on the leaving row */
+      closeSheet(); openDay(0);
+      await until(() => document.querySelector(".sheet .dayrows .row"), "the day view");
+      const drow = [...document.querySelectorAll(".sheet .dayrows .row")].find(x => /Leaving Door/.test(x.textContent));
+      ok(drow && drow.querySelector(".pill.mark"), "the day view's leaving row has no mark");
+      drow.querySelector(".pill.mark").click();
+      ok(r.outAt, "the tap did not mark them out");
+      ok(goneNow(r) && !inFlatNow(r), "marked out, the guest is still in the flat");
+      await until(() => [...document.querySelectorAll(".sheet .dayrows .row")].some(x => /Leaving Door/.test(x.textContent) && /out \d\d:\d\d/.test(x.textContent)), "the day view to say when they left");
+      /* the sheet now says when; the clock alone says "by 2 pm" */
+      closeSheet(); openSheet(fi, 0);
+      await until(() => document.querySelector(".sheet .justleft .row"), "the room sheet again");
+      row = [...document.querySelectorAll(".sheet .row")].find(x => /Leaving Door/.test(x.textContent));
+      ok(/left today/.test(row.textContent) && /out \d\d:\d\d/.test(row.querySelector(".pill.mark").textContent), `the sheet does not say they left, and when: "${row.textContent.slice(0, 80)}"`);
+      closeSheet();
+      markOut(r, false);
+      pastCheckin = () => true;
+      ok(goneNow(r) && !r.outAt, "after check-out time an unmarked departure is not assumed gone");
+      openSheet(fi, 0);
+      await until(() => document.querySelector(".sheet .justleft .row"), "the room sheet after 2 pm");
+      row = [...document.querySelectorAll(".sheet .row")].find(x => /Leaving Door/.test(x.textContent));
+      ok(/out by 2 pm/.test(row.textContent) && /out by 2 pm/.test(row.querySelector(".pill.mark").textContent), `after 2 pm the sheet reads "${row.textContent.slice(0, 80)}"`);
+      return "in until marked or 2 pm · chip on the sheet and the day view · says when · assumed after 2 pm";
+    } finally { pastCheckin = realClock; closeSheet(); resv = keepR; recompute(); document.querySelectorAll(".toast").forEach(x => x.remove()); }
+  });
+
+  /* A mark that lives only in memory is a mark the next open forgets. */
+  await test("the door's marks survive the store, the cloud cache and the queue", async () => {
+    const keepR = resv.slice(), stored = localStorage.getItem(STORE), cloud = localStorage.getItem(CLOUD_KEY);
+    const keepMode = MODE, keepQ = queue.slice(), keepHost = hostId, keepSess = session, keepDemo = usingDemo;
+    const fi = freeFlat(-1, 3); ok(fi != null, "no free flat for the fixture");
+    const r = {fi, start: 0, end: 2, nights: 2, guest: "Kept Guest", src: "Direct", manual: true, amount: 3000, pays: [], sid: "stay-kept-1"};
+    resv.push(r); recompute();
+    try {
+      const realEnqueue = enqueue; const sent = [];
+      /* the queue: the mark goes up as the column the server has for it */
+      MODE = "live"; hostId = "h-door"; session = {uid: "u", access_token: "t"};
+      window.enqueue = op => sent.push(op);
+      try { markIn(r); } finally { window.enqueue = realEnqueue; }
+      ok(sent.some(op => op.k === "stay~" && op.id === "stay-kept-1" && typeof op.body.checked_in_at === "string"), `the mark was not sent: ${JSON.stringify(sent)}`);
+      /* the cloud cache */
+      cacheSave();
+      const at = r.inAt;
+      resv = []; cacheLoad();
+      const back = resv.find(x => x.guest === "Kept Guest");
+      eq(back && back.inAt, at, "the cloud cache dropped the mark");
+      /* the local store */
+      MODE = "sample"; usingDemo = false;
+      resv = [back]; save(); resv = []; load();
+      const again = resv.find(x => x.guest === "Kept Guest");
+      eq(again && again.inAt, at, "the store dropped the mark");
+      return "sent as checked_in_at · through the cache · through the store";
+    } finally {
+      MODE = keepMode; queue = keepQ; hostId = keepHost; session = keepSess; usingDemo = keepDemo;
+      resv = keepR; recompute();
+      if (stored != null) localStorage.setItem(STORE, stored); else jdel(STORE);
+      if (cloud != null) localStorage.setItem(CLOUD_KEY, cloud); else jdel(CLOUD_KEY);
+      document.querySelectorAll(".toast").forEach(x => x.remove());
+    }
+  });
+
   await test("a staff phone has no bird's eye", () => {
     const keep = {me, MODE};
     try {

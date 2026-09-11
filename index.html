@@ -551,6 +551,8 @@ button{background:none;border:0;padding:0;cursor:pointer;
    share a tile — one lives on free rooms and the other on booked ones */
 .tile .fresh{position:absolute;top:7px;right:7px;width:6px;height:6px;border-radius:50%;
   background:var(--free);box-shadow:0 0 0 2px var(--held)}
+/* a ring while the guest is only expected; filled once somebody marks them in */
+.tile .fresh.due{background:transparent;box-shadow:inset 0 0 0 1.5px var(--free),0 0 0 2px var(--held)}
 /* the balance a guest arriving today still owes, in the corner the dot would
    take — the two never share a tile */
 /* THE BALANCE A GUEST ARRIVING TODAY STILL OWES, at the head of the name line.
@@ -606,6 +608,11 @@ button{background:none;border:0;padding:0;cursor:pointer;
   border:1px solid var(--line);white-space:nowrap}
 .pill.good{background:color-mix(in srgb,var(--free) 14%,transparent);color:var(--txt);border-color:var(--line-2)}
 .pill.warn{background:color-mix(in srgb,var(--hot) 15%,transparent);color:var(--hot);border-color:transparent}
+/* the door: "mark in" / "mark out", and what the chip becomes once tapped */
+.pill.mark{cursor:pointer;font-variant-numeric:tabular-nums}
+.pill.mark.done{background:color-mix(in srgb,var(--free) 14%,transparent);color:var(--txt);border-color:var(--line-2)}
+.pill.mark.assumed{color:var(--txt-3);border-style:dashed}
+.marks{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 .pill.now{background:color-mix(in srgb,var(--now) 16%,transparent);color:var(--now);border-color:transparent}
 
 /* room list row, shared by Month + Ask + sheet */
@@ -5208,14 +5215,26 @@ function todayBoard(){
     }
   }
 
+  /* AFTER CHECK-IN TIME AN ARRIVAL NOT MARKED IN IS A QUESTION, NOT A FACT.
+     The board used to assume the answer; now it asks, first thing, with the
+     rooms named — because until somebody answers, "arriving" is what every
+     other screen has to say about a guest who may have been in for hours. */
+  if(pastCheckin()){
+    const due = bookings().filter(expectedNow).sort((a, b)=> a.fi - b.fi);
+    if(due.length) todo.push({
+      label:`Mark ${due.length} arrival${due.length>1?"s":""} in`,
+      note:`due since ${CHECKIN_HOUR - 12} pm · ${due.map(r => flats[r.fi].id).join(" · ")}`,
+      open: ()=> openDay(0, "arrivals")});
+  }
+
   /* Money the operator can only collect while the guest is standing there.
-     Arrivals are derived from dates and so are always right — which is exactly
-     why this belongs here instead of behind a check-in button somebody has to
-     remember to press. Platform bookings are deliberately absent: the guest owes
-     nothing, and putting them on a chase list is how the column loses its
-     meaning. */
+     Arrivals are derived from dates and so are always right — and a guest
+     already marked in has moved to the line below, where the money is
+     collected before they leave rather than as they come. Platform bookings
+     are deliberately absent: the guest owes nothing, and putting them on a
+     chase list is how the column loses its meaning. */
   for(let d=0; d<=NOW; d++){
-    const owing = bookings().filter(r => r.start === d && dueFrom(r) > 0);
+    const owing = bookings().filter(r => r.start === d && dueFrom(r) > 0 && !(d === 0 && r.inAt));
     if(!owing.length) continue;
     const total = owing.reduce((s,r)=> s + dueFrom(r), 0);
     /* Worked out fresh on every open, not captured once when the board was
@@ -5224,7 +5243,7 @@ function todayBoard(){
        the money. When the last one is paid there is nothing to come back to,
        so the sheet closes and the board redraws without the card. */
     const openArrivals = ()=>{
-      const left = bookings().filter(r => r.start === d && dueFrom(r) > 0);
+      const left = bookings().filter(r => r.start === d && dueFrom(r) > 0 && !(d === 0 && r.inAt));
       if(!left.length){ closeSheet(); refreshScreen(); return; }
       const sum = left.reduce((a,r)=> a + dueFrom(r), 0);
       openFlatList(`${money(sum)} to collect`, `${fmtL(d)} · arriving with a balance`,
@@ -5251,19 +5270,22 @@ function todayBoard(){
      the whole of it on the board as well is the duplication the owner asked
      not to have. */
   {
-    const going = bookings().filter(r =>
-      r.start <= 0 && r.end > 0 && r.end <= NOW + 1 && dueFrom(r) > 0);
+    /* EVERYONE IN THE FLAT WHO STILL OWES, soonest to leave first. This was the
+       two-day slice only, and the owner marked a guest in on a four-night stay
+       and watched the balance vanish from the board until the day before he
+       left. Money in the flat is collectable now; the door is the deadline,
+       and the row says which day it closes. */
+    const going = bookings().filter(r => inFlatNow(r) && dueFrom(r) > 0).sort((a, b)=> a.end - b.end);
     if(going.length){
       const total = going.reduce((s2, r)=> s2 + dueFrom(r), 0);
       // same rule as the arrivals list above: re-derived on open, so it is
       // also the way back from the payment form
       const openLeaving = ()=>{
-        const left = bookings().filter(r =>
-          r.start <= 0 && r.end > 0 && r.end <= NOW + 1 && dueFrom(r) > 0);
+        const left = bookings().filter(r => inFlatNow(r) && dueFrom(r) > 0).sort((a, b)=> a.end - b.end);
         if(!left.length){ closeSheet(); refreshScreen(); return; }
         const sum = left.reduce((a, r)=> a + dueFrom(r), 0);
         openFlatList(`${money(sum)} to collect`,
-          "in the flat now, leaving within two days",
+          "in the flat now · soonest to leave first",
           left.map(r=>({fi:r.fi, d:0, pay:r,
             meta:`<b>${esc(r.guest)}</b>${r.phone ? " · " + esc(r.phone) : ""}`
                + `<em>${money(dueFrom(r))} of ${money(r.amount)} · leaves ${esc(fmt(r.end))}</em>`,
@@ -5274,7 +5296,7 @@ function todayBoard(){
            verb was left behind. Both move together or neither does. */
         label:`Collect ${money(total)} before `
           + (going.length === 1 ? "a guest leaves" : `${going.length} guests leave`),
-        note:"in the flat now, checking out within two days",
+        note:"in the flat now — collect before they leave",
         open: openLeaving});
     }
   }
@@ -6524,7 +6546,7 @@ function save(){
                            guest:r.guest, src:r.src, manual:!!r.manual,
                            kind:r.kind, reason:r.reason, note:r.note,
                            fault:r.fault, fixer:r.fixer, fixer_phone:r.fixer_phone, cost:r.cost,
-                           phone:r.phone, pax:r.pax, amount:r.amount, pays:r.pays,
+                           phone:r.phone, pax:r.pax, amount:r.amount, pays:r.pays, inAt:r.inAt, outAt:r.outAt,
                            /* THE ONE FLAG THAT SAID "ANCHORED TO THE CLOCK". The
                               eight sample movements are pinned to today rather
                               than to BOOK_ON, and `today` is how the drift
@@ -6594,7 +6616,7 @@ function load(){
                    nights:r.end-r.start, guest:r.guest, src:r.src, manual:r.manual,
                    kind:r.kind, reason:r.reason, note:r.note,
                    fault:r.fault, fixer:r.fixer, fixer_phone:r.fixer_phone, cost:r.cost,
-                   phone:r.phone, pax:r.pax, amount:r.amount,
+                   phone:r.phone, pax:r.pax, amount:r.amount, inAt: r.inAt || undefined, outAt: r.outAt || undefined,
                    pays: (r.pays || []).map(p => ({...p, on: (p.on || 0) + shift})),
                    today: r.today ? 1 : undefined,
                    movedTo: r.movedTo || undefined, movedFrom: r.movedFrom || undefined,
@@ -7708,7 +7730,7 @@ function turnJobs(day){
 function dayMoves(day){
   if(staffBook){
     return (staffBook[dayISO(day)] || []).map(r =>
-      ({fi: r.fi, out: r.out || null, in: r.in || null}));
+      ({fi: r.fi, out: r.out || null, in: r.in || null, leftAt: r.leftAt || null, inAt: r.inAt || null}));
   }
   const ops = dayOps(day);
   const arriving = new Map(ops.arrivals.map(r => [r.fi, r]));
@@ -7851,6 +7873,7 @@ async function adoptLocalBook(localRows){
       reason: r.reason || null, note: r.note || null,
       fault: r.fault || null, fixer: r.fixer || null,
       fixer_phone: r.fixer_phone || null, cost: r.cost || null,
+      checked_in_at: r.inAt || null, checked_out_at: r.outAt || null,
       /* the booking's own date, not today — stamping today on 700 historical
          rows fabricates a lead time for every one of them */
       booked_on: dayISO(typeof r.bookedOn === "number" ? r.bookedOn : r.start),
@@ -8110,7 +8133,8 @@ async function staffPull(){
     staffBook[dayISO(d)] = (byDay[i] || []).map(r => {
       const fi = byUid[r.flat_id];
       return fi === undefined ? null
-           : {fi, out: r.checking_out || null, in: r.checking_in || null};
+           : {fi, out: r.checking_out || null, in: r.checking_in || null,
+              leftAt: r.left_at || null, inAt: r.in_at || null};
     }).filter(Boolean);
   });
 
@@ -8226,6 +8250,7 @@ async function cloudPull(){
              cost: s.cost != null ? Number(s.cost) : undefined,
              phone: s.guest_phone || undefined, pax: s.pax || undefined,
              amount: s.amount != null ? Number(s.amount) : undefined,
+             inAt: s.checked_in_at || undefined, outAt: s.checked_out_at || undefined,
              pays: paysBy[s.id] || [],
              /* stays has no column for it; the segment a move leaves behind
                 says where the guest went in its note, by a fixed form */
@@ -8309,7 +8334,7 @@ function cacheSave(){
                          start:r.start, end:r.end, guest:r.guest, src:r.src,
                          kind:r.kind, reason:r.reason, note:r.note,
                          fault:r.fault, fixer:r.fixer, fixer_phone:r.fixer_phone, cost:r.cost,
-                         phone:r.phone, pax:r.pax, amount:r.amount, pays:r.pays,
+                         phone:r.phone, pax:r.pax, amount:r.amount, pays:r.pays, inAt:r.inAt, outAt:r.outAt,
                          movedTo: r.movedTo || undefined, movedFrom: r.movedFrom || undefined,
                          bookedOn: typeof r.bookedOn === "number" ? r.bookedOn : undefined }))});
 }
@@ -8331,7 +8356,7 @@ function cacheLoad(){
                  nights:r.end - r.start, guest:r.guest, src:r.src, manual:true,
                  kind:r.kind, reason:r.reason, note:r.note,
                  fault:r.fault, fixer:r.fixer, fixer_phone:r.fixer_phone, cost:r.cost,
-                 phone:r.phone, pax:r.pax, amount:r.amount,
+                 phone:r.phone, pax:r.pax, amount:r.amount, inAt: r.inAt || undefined, outAt: r.outAt || undefined,
                  pays: (r.pays || []).map(p => ({...p, on: (p.on || 0) + shift})),
                  movedTo: r.movedTo || undefined, movedFrom: r.movedFrom || undefined,
                  bookedOn: typeof r.bookedOn === "number" ? r.bookedOn + shift : undefined }))
@@ -10117,6 +10142,7 @@ const ACT_ICON = {
   book:"+",      restore:"↩",   cancel:"✕",   move:"⇄",     refused:"⊘",   dates:"↔",
   paid:"₹",      unpaid:"−",    fault:"!",    fixed:"✓",    block:"⌂",
   expense:"₹",   costs:"₹",     revenue:"₹",  flats:"⌗",    export:"↓",
+  in:"→",        out:"←",
 };
 /* Amber is attention, and both of these are things that want a second look:
    a fault nobody has closed, and a move the app would not make. */
@@ -10466,7 +10492,10 @@ function roomTile(fi, day, stay){
      tile reads as the guest who is in, marked as new. Future days keep the
      word, because there it is a plan and not a state. */
   const afterCheckin = day === 0 && pastCheckin();
-  const turn = chg[fi][day] && !open && !afterCheckin;
+  /* and a room whose clean is marked done is not between guests either —
+     "gone after 2 PM or when the flats are cleaned", the owner said */
+  const turn = chg[fi][day] && !open && !afterCheckin
+            && !(day === 0 && turnProgress(fi, 0).state === "ready");
   const run = open ? runFrom(fi, day) : 0;
   const b = el("button","tile" + (open ? " free" : blocked ? " oos" : (turn ? " turn" : "")));
   /* `open` is a verdict on the WHOLE stay the dial is asking about, but the
@@ -10534,7 +10563,8 @@ function roomTile(fi, day, stay){
   } else line.textContent = note;
   b.append(el("b",null,fl.id), line);
   if(open && run === 1) b.appendChild(el("i","flag"));   // orphan night
-  if(fresh && !(owed > 0)) b.appendChild(el("i","fresh"));
+  /* filled once the guest is marked in; a ring while they are only expected */
+  if(fresh && !(owed > 0)) b.appendChild(el("i","fresh" + (who.inAt ? "" : " due")));
   /* the spoken label says what the printed one says — "Free 2+n" announced as
      "free for 2 nights" understates a flat that is free to the end of the book,
      and the two disagreeing is its own small lie */
@@ -11087,6 +11117,78 @@ const CHECKIN_HOUR = 14;
    the clock at ten in the morning and at four in the afternoon on the same
    tile — the two states this rule exists to tell apart. */
 function pastCheckin(){ return new Date().getHours() >= CHECKIN_HOUR; }
+
+/* ══ WHAT ACTUALLY HAPPENED AT THE DOOR ═══════════════════════════════════════
+   Dates say when a guest is DUE in and due out. Until now the clock said the
+   rest — after 14:00 the arriving guest was assumed in and the leaving guest
+   assumed gone — and at half past seven the owner was reading "arriving" on a
+   room whose guest had been in for hours, with no way to say otherwise. A
+   guess dressed as a fact, in both directions.
+
+   So a stay carries two marks a manager sets with a tap: inAt, when the guest
+   was marked in, and outAt, when they were marked out. Nothing is inferred
+   about an ARRIVAL: due in today and not marked is expected, all day, and after
+   check-in time the board asks for the mark rather than pretending. A
+   DEPARTURE is different, because a room is vacated by check-out time whether
+   or not anybody taps — so an unmarked departure is assumed gone at
+   CHECKIN_HOUR, and the tap is for the guest who left at nine, whose room can
+   be cleaned now and whose balance was collected at the door.
+
+   Every reading of in, expected, leaving and gone goes through these, so the
+   tile, the board, the day view, the room sheet and the money cannot disagree
+   with each other. Kept on the stay row itself, in the store, the cache and
+   the server, so the other phone reads the same door. */
+/* clockOf — "3:12 pm" — is the cleaning record's, further down; one clock */
+const dueInToday  = r => !isBlock(r) && r.start === 0;
+const dueOutToday = r => !isBlock(r) && r.end === 0;
+const expectedNow = r => dueInToday(r) && !r.inAt;
+const goneNow     = r => dueOutToday(r) && (!!r.outAt || pastCheckin());
+/* the guest physically in the flat right now — the one money is collected from */
+const inFlatNow   = r => !isBlock(r) && r.start <= 0 && r.end >= 0
+                        && (r.start < 0 || !!r.inAt) && (r.end > 0 || !goneNow(r));
+
+/* THE TAP. Reversible, logged, saved, sent, and every screen redrawn — the
+   toast carries the undo, which is this app's idiom for a change that is
+   easy to make by mistake and easy to put back. */
+function setMark(r, key, on){
+  if(on) r[key] = new Date().toISOString(); else delete r[key];
+  const who = r.guest || "Guest", fl = flats[r.fi], inK = key === "inAt";
+  if(MODE === "live" && r.sid)
+    enqueue({k:"stay~", id:r.sid, body:{[inK ? "checked_in_at" : "checked_out_at"]: r[key] || null}});
+  save(); cacheSave();
+  logAct(inK ? "in" : "out",
+    `${who} ${on ? (inK ? "checked in" : "checked out") : (inK ? "not in after all" : "not out after all")}`
+    + ` · ${fl ? fl.id : ""}`, {flat: fl && fl.id, guest: who});
+  recompute(); refreshScreen();
+  toast("", on
+    ? `<b>${esc(who)} ${inK ? "checked in" : "checked out"}.</b> ${esc(fl ? fl.id : "")} · ${clockOf(r[key])}`
+    : `<b>${esc(who)} unmarked.</b> ${inK ? "Expected again" : "Still in"} · ${esc(fl ? fl.id : "")}`,
+    null, {label: "Undo", run: ()=> setMark(r, key, !on)});
+  return r[key];
+}
+const markIn  = (r, on = true)=> setMark(r, "inAt", on);
+const markOut = (r, on = true)=> setMark(r, "outAt", on);
+
+/* The chip on a guest's row: "mark in" until tapped, then "in 3:12 pm", and a
+   second tap takes it back. A departure the clock has assumed reads "out by
+   2 pm", dashed, and a tap on it records the real time — a late check-out is
+   a fact worth having. */
+function markChip(r, kind, after){
+  const inK = kind === "in", at = inK ? r.inAt : r.outAt;
+  const assumed = !inK && !at && goneNow(r);
+  const b = el("button", "pill mark" + (at ? " done" : assumed ? " assumed" : ""));
+  b.type = "button";
+  b.textContent = at ? `${inK ? "in" : "out"} ${clockOf(at)}`
+                : assumed ? `out by ${CHECKIN_HOUR - 12} pm` : inK ? "mark in" : "mark out";
+  b.setAttribute("aria-label", at
+    ? `${r.guest} marked ${inK ? "in" : "out"} at ${clockOf(at)} — tap to take it back`
+    : assumed ? `${r.guest} assumed gone at ${CHECKIN_HOUR - 12} pm — tap to record when they actually left`
+    : `Mark ${r.guest} ${inK ? "checked in" : "checked out"}`);
+  b.onclick = ev=>{ ev.stopPropagation(); haptic(10);
+    (inK ? markIn : markOut)(r, !at);
+    if(after) after(); };
+  return b;
+}
 const RECENT_OUT = 14;      // still listed on the room sheet, still editable
 const RECENT_BAND = 2;      // recent enough to be offered on the action band
 /* The stays that ended in that window, newest first. Blocks are excluded: an
@@ -16184,6 +16286,7 @@ function openSheet(fi, day){
       end.appendChild(ed);
     }
     end.appendChild(x2);
+    if(here && dueInToday(r)) m.appendChild(markChip(r, "in", ()=> openSheet(fi, day)));
     row.append(m, end);
     into.appendChild(row);
   };
@@ -16191,7 +16294,7 @@ function openSheet(fi, day){
   if(inNow.length){
     const s0 = el("div","sheet-s");
     const last = inNow[inNow.length - 1];
-    s0.append(el("span","lbl", `In the flat now · ${inNow.length}`),
+    s0.append(el("span","lbl", `${inNow.every(expectedNow) ? "Due in today" : "In the flat now"} · ${inNow.length}`),
               el("span","lbl", last.openEnd ? "no end recorded"
                  : last.end === 1 ? "out tomorrow" : `out ${fmt(last.end)}`));
     sheetB.appendChild(s0);
@@ -16264,7 +16367,8 @@ function openSheet(fi, day){
       m.innerHTML = `<b>${esc(r.guest)}</b>`
         + `<em>${esc(fmt(r.start))} → ${esc(fmt(r.end))} · ${r.nights}n`
         + (r.movedTo ? ` · moved to ${esc(r.movedTo)}`
-           : r.end === 0 ? " · left this morning" : "") + `</em>`;
+           : r.end === 0 ? (goneNow(r) ? " · left today" : " · leaving today, still in") : "") + `</em>`;   // the chip says when
+      if(r.end === 0 && !r.movedTo) m.appendChild(markChip(r, "out", ()=> openSheet(fi, day)));
       const end = el("div","rowend");
       if(due > 0){
         const pay = el("button","paid due", money(due));
@@ -18968,6 +19072,8 @@ function openDay(d, focus){
          the room code — a row twice the height of its neighbours with a pill
          in the wrong corner. Both go into the row's end cell, stacked, money
          first because it is the one with the amount. */
+      /* the door, both halves: who has actually gone, who has actually come */
+      if(d === 0){ const marks = el("div","marks"); marks.append(markChip(t2.out, "out", paint), markChip(t2.in, "in", paint)); m.appendChild(marks); }
       row.append(m);
       const end = el("div","rowend stack");
       if(dueFrom(t2.in) > 0) end.append(collectPill(t2.in));
@@ -18980,13 +19086,20 @@ function openDay(d, focus){
         + `<em>${esc(fl.type)} · ${esc(fl.bshort)}`
         + (due > 0 ? ` · <b class="hi-now">${esc(money(due))} still due</b>` : "") + `</em>`;
       row.append(m);
-      turnPill(r.fi, row);
+      const end = el("div","rowend stack");
+      turnPill(r.fi, end);
+      if(d === 0) end.append(markChip(r, "out", paint));
+      row.append(end);
     });
     group("arrivals", "Arriving", "into an empty room", inOnly, (m, r, fl, row)=>{
       const due = dueFrom(r);
       m.innerHTML = `<b>${esc(r.guest)}</b> in · ${r.nights} night${r.nights>1?"s":""}`
         + `<em>${esc(fl.type)} · ${esc(fl.bshort)} · out ${esc(fmt(r.end))} · ${esc(r.src || "Direct")}</em>`;
-      row.append(m, due > 0 ? collectPill(r) : el("span","pill", r.src || "Direct"));
+      row.append(m);
+      const end = el("div","rowend stack");
+      if(due > 0) end.append(collectPill(r));
+      if(d === 0) end.append(markChip(r, "in", paint));
+      row.append(end);
     });
 
     if(focus && anchors[focus] && focus !== "turnovers")
@@ -20323,6 +20436,15 @@ function armMidnight(){
              Math.max(1000, next - Date.now() + 2000));
 }
 armMidnight();
+/* AND CHECK-IN TIME. "Assumed gone at check-out time" is only true on a phone
+   that redraws when the time comes; one left open since the morning kept the
+   morning's board until it was touched. */
+function armCheckin(){
+  const next = new Date(); next.setHours(CHECKIN_HOUR, 0, 5, 0);
+  if(next <= Date.now()) next.setDate(next.getDate() + 1);
+  setTimeout(()=>{ try{ refreshScreen(); }catch(e){} armCheckin(); }, Math.max(1000, next - Date.now()));
+}
+armCheckin();
 
 /* ══════════════ A PAGE LEFT OPEN FOR DAYS RUNS LAST WEEK'S APP ═══════════════
    Nobody reloads a phone browser. The tab is opened from the home screen, used,
