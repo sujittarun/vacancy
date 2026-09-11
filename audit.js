@@ -56,7 +56,22 @@ export const ratio = (a, b) => {
 
 /* ── walking the app ─────────────────────────────────────────────────────── */
 
-const wait = ms => new Promise(r => setTimeout(r, ms));
+/* NOT setTimeout. The pane this runs in hides its tab between calls, and Chrome
+   throttles a hidden tab's chained timers: to one a second at once, and after
+   five minutes hidden to one a MINUTE. setThemeAndSettle takes up to eighty
+   timer waits before it gives up, which at a minute each is longer than a
+   working day — the suite's last test sat on exactly that, looking like a hang
+   while the page answered every question put to it. A MessageChannel message
+   is a task, not a timer, and is never throttled: this yields on each one and
+   reads the clock until the time is up. Same function as selftest.js, for the
+   same reason; it costs CPU while waiting, which an audit can afford. */
+const wait = ms => new Promise(res => {
+  const t0 = performance.now();
+  const mc = new MessageChannel();
+  const tick = () => { if (performance.now() - t0 >= ms) { mc.port1.onmessage = null; return res(); } mc.port2.postMessage(0); };
+  mc.port1.onmessage = tick;
+  tick();
+});
 
 /* The theme transition is 420ms, and measuring inside it is measuring a colour
    that exists for a fifth of a second and belongs to neither theme. Flipping
@@ -73,12 +88,24 @@ export async function setThemeAndSettle(t) {
      40 phantom dark failures at 1.29:1 got reported. Ask the page whether it has
      settled, up to a ceiling, then give up honestly. */
   for (let i = 0; i < 40; i++) {
+    /* SNAP the transition, do not wait it out. A hidden tab does not advance
+       transitions at all, so a theme flip that is only polled for never
+       settles: forty polls, an honest false, and a whole sweep's numbers
+       thrown away for a theme that WAS applied. One forced layout with every
+       transition off lands every colour on its destination value now, and
+       putting the transitions back starts nothing, because nothing changes
+       again — the same move settle() in selftest.js makes for the sheet. */
+    snap();
     await frames();
     if (sanity().settled && document.documentElement.dataset.theme === t) return true;
     await wait(50);
   }
   return false;                            // caller sees settled:false in the result
 }
+
+/* One forced layout with every transition and animation off: the page lands on
+   its final values synchronously, whatever the tab is doing. */
+const snap = () => freeze(() => void document.documentElement.offsetHeight);
 
 /* Two frames, but never a hang: requestAnimationFrame does not fire at all in a
    backgrounded tab, so an audit that awaits it simply never returns — which

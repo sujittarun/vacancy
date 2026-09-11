@@ -24,7 +24,23 @@
  * against the live book.
  */
 
-const wait = ms => new Promise(r => setTimeout(r, ms));
+/* NOT setTimeout. The pane this suite is driven from hides itself between
+   calls, and Chrome throttles a hidden tab's chained timers: to one a second at
+   once, and after five minutes hidden to one a MINUTE. until() ticks every 40ms
+   through this function, so a run that crossed five minutes slowed to a crawl
+   that looked exactly like a hang — twice, for six minutes each, while the
+   page answered every question put to it. A MessageChannel message is a task,
+   not a timer, and is not throttled: the wait yields to the event loop on each
+   message and reads the clock until the time is up. It costs CPU while
+   waiting, which a test run can afford, and it cannot be slowed by the tab's
+   visibility, which a test run cannot afford. */
+const wait = ms => new Promise(res => {
+  const t0 = performance.now();
+  const mc = new MessageChannel();
+  const tick = () => { if (performance.now() - t0 >= ms) { mc.port1.onmessage = null; return res(); } mc.port2.postMessage(0); };
+  mc.port1.onmessage = tick;
+  tick();
+});
 
 /* Wait for a CONDITION, never for a duration. Backgrounded, this tab clamps
    setTimeout to >=1s, so every fixed wait in here either overshoots — a run
@@ -85,6 +101,7 @@ async function settle() {
 }
 
 async function test(name, fn) {
+  try { window.__nowAt = performance.now(); } catch (e) {}
   if (only && !name.includes(only)) return;
   /* Where the run is, published as it goes. A suite that stops answering tells
      you nothing about WHICH test stopped it, and the pane this is driven from
@@ -93,6 +110,7 @@ async function test(name, fn) {
   try { window.__now = name; window.__done = (window.__done || 0) + 0; } catch (e) {}
   const snapR = JSON.stringify(resv);
   const snapF = JSON.stringify(flats);
+  const snapS = localStorage.getItem(STORE), snapC = localStorage.getItem(CLOUD_KEY);
   const attempt = async () => { await settle(); return fn(); };
   try {
     let detail;
@@ -138,6 +156,13 @@ async function test(name, fn) {
       }
       resv = JSON.parse(snapR);
       recompute();
+      /* AND THE DISK. Memory was put back and storage was not, so a test that
+         booked and saved left its fixture on disk under a memory that had
+         forgotten it — harmless until the sign-out test reloaded the book FROM
+         disk and found one booking more than the one it had been told about.
+         A restore that stops at the variables is a restore of half the state. */
+      const putBack = (k, v) => { if (localStorage.getItem(k) !== v) { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } };
+      putBack(STORE, snapS); putBack(CLOUD_KEY, snapC);
       window.closeGate && closeGate();
       closeSheet();
       /* AND CLEAR THE TOASTS. A test that cancels a booking or extends a stay
@@ -163,6 +188,10 @@ const ok = (cond, what) => { if (!cond) throw new Error(what); return true; };
 export async function run(filter) {
   only = filter || null;
   results.length = 0;
+  /* Readable from outside WHILE the run is going — a run this pane throttles
+     can take minutes, and the failures it has already found should not have
+     to wait for the last test to be read. */
+  try { window.__results = results; } catch (e) {}
 
   /* THE SUITE DOES NOT TALK TO THE SERVER ABOUT ITSELF. Every test that books,
      pays, cancels or ticks calls logAct, logAct calls track, and track posts to
@@ -5034,8 +5063,9 @@ export async function run(filter) {
       ok(t, "no word that a newer version is waiting");
       ok([...t.querySelectorAll("button")].some(b => /load it/i.test(b.textContent)), "no way to load it now");
       /* and it goes the moment the screen is free */
-      closeSheet(); await wait(750);
-      eq(reloads, 2, "the deferred reload never happened once the sheet closed");
+      /* the app defers it on a 600ms timer, and a hidden tab rounds a timer
+         up to the next whole second — so wait for the EVENT, not a duration */
+      closeSheet(); await until(() => reloads === 2, "the deferred reload once the sheet closed", 3000);
       /* the throttle: a second look inside five minutes costs no request */
       let heads = 0; window.fetch = async (u, o) => { if (o && o.method === "HEAD") heads++; return {headers: {get: () => served}}; };
       tagAt = Date.now(); await checkForNewBuild(); eq(heads, 0, "it asked the server again inside the throttle");
