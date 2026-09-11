@@ -2157,7 +2157,11 @@ export async function run(filter) {
       const fi = flatIndex[id];
       const stay = resv.find(r => !isBlock(r) && r.fi === fi && 0 >= r.start && 0 < r.end);
       ok(stay, `${id} shows a name but has no stay tonight`);
-      eq(sEl.textContent, (stay.guest || "").trim(), `the name on ${id}`);
+      /* a guest who arrived today with a balance leads the line with the money; the name still follows */
+      const owe = sEl.querySelector(".owe");
+      const shown = owe ? sEl.textContent.replace(owe.textContent, "").replace(/^\s*·\s*/, "") : sEl.textContent;
+      eq(shown, (stay.guest || "").trim(), `the name on ${id}`);
+      if (owe) ok(sEl.firstChild === owe && stay.start === 0 && dueFrom(stay) > 0, `${id} leads with money it is not owed today`);
     });
     /* a name is not a status: no caps, and it does not ellipsise */
     const cs = getComputedStyle(named[0]);
@@ -5525,7 +5529,7 @@ export async function run(filter) {
       ok(g.querySelector(".todayline"), "no line at today");
       /* the sticky edges */
       eq(getComputedStyle(g.querySelector(".dh")).position, "sticky", "the date row does not stick");
-      eq(getComputedStyle(g.querySelector(".fl")).position, "sticky", "the flat column does not stick");
+      eq(getComputedStyle(g.querySelector(".eyelabels")).position, "sticky", "the flat column does not stick");
       /* it opens on today, with a night of yesterday's context on the left */
       const wrap = document.getElementById("eyeWrap");
       const first = -EYE_BACK + Math.round(wrap.scrollLeft / eyeCw);
@@ -5533,7 +5537,7 @@ export async function run(filter) {
       ok(/September|October|August|November/.test(document.getElementById("eyeMonth").textContent), `the month reads "${document.getElementById("eyeMonth").textContent}"`);
       /* the free count under each date is the book's */
       for (let d = 0; d <= 5; d++) {
-        const h = g.querySelector(`.dh[style*="grid-column: ${eyeCol(d)}"]`) || [...g.querySelectorAll(".dh")][d + EYE_BACK];
+        const h = g.querySelectorAll(".dh")[d + EYE_BACK];
         eq(+h.querySelector("i").textContent, freeCount(d), `free count under ${fmtL(d)}`);
       }
       return `${NF} rows × ${EYE_BACK + EYE_AHEAD + 1} nights, today at column ${eyeCol(0)}`;
@@ -5600,6 +5604,63 @@ export async function run(filter) {
     } finally { eyeZoom(44); eyeClose(); }
   });
 
+  /* The first pinch re-laid-out the whole board on every finger movement, and
+     on a phone it looked like it. Two fingers now move a transform; the layout
+     happens once, when they lift. Measured on what each phase leaves behind. */
+  await test("a pinch is a transform while the fingers hold it, and one layout when they lift", async () => {
+    try {
+      eyeOpen();
+      await until(() => document.getElementById("eye").classList.contains("on"), "the board");
+      const wrap = document.getElementById("eyeWrap"), grid = document.getElementById("eyeGrid"), lw = eyeLw();
+      eyeZoom(44); wrap.scrollLeft = 12 * 44;
+      const anchor = lw + 140;
+      const nightUnder = () => (wrap.scrollLeft + anchor - lw) / eyeCw;
+      const before = nightUnder(), p = wrap.scrollLeft + anchor - lw;
+      eyePinchStart(anchor);
+      eyePinchMove(1.6, anchor); eyePinchPaint();
+      const pane = document.getElementById("eyeNights");
+      ok(pane.classList.contains("pinching"), "the pane is not marked as held");
+      ok(/scaleX\(1\.6\)/.test(pane.style.transform), `the pane is not scaled: "${pane.style.transform}"`);
+      eq(grid.style.getPropertyValue("--cw"), "44px", "the layout changed under the fingers");
+      ok(Math.abs(parseFloat(pane.style.getPropertyValue("--ik")) - 1 / 1.6) < 1e-6, "the words are not scaled back");
+      ok(Math.abs(parseFloat(pane.style.transformOrigin) - p) < 0.5, `the scale is about ${pane.style.transformOrigin}, not the fingers at ${p}px`);
+      eyePinchEnd(); eyePinchSettleNow();
+      eq(eyeCw, 72, "70px did not settle on 72");
+      eq(pane.style.transform, "", "the transform outlived the fingers");
+      ok(!pane.classList.contains("pinching"), "the pane is still marked as held");
+      ok(Math.abs(nightUnder() - before) < 0.05, `the night under the fingers moved from ${before.toFixed(2)} to ${nightUnder().toFixed(2)}`);
+      /* and out, past the tight level: the lift lands on it */
+      eyePinchStart(anchor); eyePinchMove(0.3, anchor); eyePinchPaint();
+      eyePinchEnd(); eyePinchSettleNow();
+      eq(eyeCw, 28, "did not settle on the tight level");
+      ok(Math.abs(nightUnder() - before) < 0.05, "zooming out moved the anchored night");
+      return "transform under the fingers, one --cw write at the lift, anchored both ways";
+    } finally { eyePinchSettleNow(); eyeZoom(44); eyeClose(); }
+  });
+
+  await test("the board runs a year ahead, and a night past the booking horizon says so instead of booking", async () => {
+    try {
+      eyeOpen();
+      await until(() => document.getElementById("eye").classList.contains("on"), "the board");
+      const g = document.getElementById("eyeGrid"), hs = g.querySelectorAll(".dh");
+      ok(EYE_AHEAD >= 365, `the board only looks ${EYE_AHEAD} nights ahead`);
+      eq(hs.length, EYE_N, "a header per night");
+      ok(hs[hs.length - 1].getAttribute("aria-label").startsWith(fmtL(EYE_AHEAD)), "the last column is not a year out");
+      eq(getComputedStyle(document.getElementById("eyeWrap")).touchAction, "pan-x pan-y", "one finger is not the browser's to scroll");
+      /* a month is named at its first day, and at the left edge */
+      const firsts = [...Array(EYE_N).keys()].filter(k => k !== 0 && dateAt(k - EYE_BACK).getDate() === 1).length;
+      eq(g.querySelectorAll(".dh s").length, 1 + firsts, "a month name at every first");
+      /* a tap far past the horizon: a word, not a booking form */
+      const fi = eyeFlats()[0];
+      const lane = g.querySelector(`.lane[data-fi="${fi}"]`), r = lane.getBoundingClientRect();
+      document.querySelectorAll(".toast").forEach(x => x.remove());
+      lane.dispatchEvent(new MouseEvent("click", {bubbles: true, clientX: r.left + (DAYS + 20 + EYE_BACK) * eyeCw + 5, clientY: r.top + 10}));
+      await until(() => [...document.querySelectorAll(".toast")].some(x => /booking horizon/.test(x.textContent)), "the horizon toast");
+      ok(!sheet.classList.contains("on"), "a booking form opened for a night the app cannot book");
+      return `${EYE_N} nights, ${EYE_BACK} back · a tap on ${fmtL(DAYS + 20)} is told the horizon`;
+    } finally { document.querySelectorAll(".toast").forEach(x => x.remove()); closeSheet(); eyeClose(); }
+  });
+
   await test("the board's building chips narrow it to one building, and it follows the book", async () => {
     const keepR = resv.slice();
     try {
@@ -5642,7 +5703,7 @@ export async function run(filter) {
       const r = await m.contrast({ sheets: false });
       ok(r.settled, `${t}: theme was not settled, numbers are unreliable`);
       ok(r.failures === 0,
-        `${t}: ${r.failures} below AA, worst ${r.worst[0] && r.worst[0].r}:1 on "${r.worst[0] && r.worst[0].text}"`);
+        `${t}: ${r.failures} below AA — ${r.worst.slice(0, 4).map(w => `${w.where} · ${w.el} "${w.text}" ${w.r}:1`).join("; ")}`);
       out.push(`${t} ${r.checked}`);
     }
     return out.join(" · ") + " nodes clean";

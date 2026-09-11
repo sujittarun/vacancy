@@ -1245,9 +1245,14 @@ button{background:none;border:0;padding:0;cursor:pointer;
    none — and a suite that took four minutes took nine. A closed overlay is not
    part of the page. The entrance is a keyframe, which runs on the frame the
    element appears; a transition cannot start from nothing. */
+/* Two grids side by side in one scroller, not one grid. The flat column on
+   the left is sticky and is never scaled; the nights on the right are the
+   thing a pinch scales — a transform on this one element, see the pinch note
+   in the script. The rows of the two are the same rows because every item
+   says its own height and both grids let their rows follow. */
 .eye{position:fixed;inset:0;z-index:40;background:var(--bg);display:none;flex-direction:column}
-.eye.on{display:flex;animation:eyein .42s var(--out) both}
-@keyframes eyein{from{transform:translateY(100%)}to{transform:none}}
+.eye.on{display:flex;animation:eyein .26s cubic-bezier(.2,.8,.2,1) both}
+@keyframes eyein{from{transform:translateY(28px);opacity:0}to{transform:none;opacity:1}}
 :root.staffmode #eyeBtn{display:none}
 .eyehead{display:flex;align-items:center;gap:8px;padding:calc(10px + env(safe-area-inset-top,0px)) 14px 8px;
   background:var(--bar);-webkit-backdrop-filter:var(--blur-1);backdrop-filter:var(--blur-1);
@@ -1258,55 +1263,59 @@ button{background:none;border:0;padding:0;cursor:pointer;
 .eyehead .ghost{flex:0 0 auto;min-width:34px;justify-content:center;padding:7px 10px}
 .eyefilt{padding:8px 14px 0;flex:0 0 auto}
 .eyefilt .roomfilt{margin:0 -14px;padding:1px 14px 6px}
-.eyewrap{flex:1 1 auto;min-height:0;overflow:auto;position:relative;overscroll-behavior:contain;
-  -webkit-overflow-scrolling:touch;touch-action:pan-x pan-y}
-.eyegrid{--cw:44px;--lw:76px;--rh:42px;--hh:46px;
-  display:grid;grid-template-columns:var(--lw) repeat(var(--n),var(--cw));
-  grid-template-rows:var(--hh);grid-auto-rows:var(--rh);width:max-content;position:relative;
+/* pan-x pan-y: one finger is the browser's to scroll, on the compositor; two
+   fingers are not a browser zoom, so they reach the script, cancelable */
+.eyewrap{flex:1 1 auto;min-height:0;overflow:auto;position:relative;overscroll-behavior:contain;touch-action:pan-x pan-y}
+.eyegrid{--cw:44px;--lw:84px;--rh:42px;--hh:46px;--bh:26px;display:flex;align-items:flex-start;width:max-content;
   padding-bottom:calc(24px + env(safe-area-inset-bottom,0px))}
-/* the two sticky edges, and the corner that is both */
-.eyegrid .corner{position:sticky;top:0;left:0;z-index:6;background:var(--bg);border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
-.eyegrid .dh{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line);
+/* the flat column */
+.eyelabels{position:sticky;left:0;z-index:4;flex:0 0 auto;display:grid;grid-template-columns:var(--lw);
+  grid-auto-rows:auto;background:var(--bg)}
+.eyelabels .corner{position:sticky;top:0;z-index:2;height:var(--hh);background:var(--bg);
+  border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+.eyelabels .bh{height:var(--bh);display:flex;align-items:flex-end;padding:0 0 4px 8px;font-size:10px;font-weight:700;
+  letter-spacing:.09em;text-transform:uppercase;color:var(--txt-3);white-space:nowrap;overflow:hidden;
+  border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+.eyelabels .fl{height:var(--rh);background:var(--bg);border-right:1px solid var(--line);border-bottom:1px solid var(--line);
+  display:flex;flex-direction:column;justify-content:center;padding:0 8px;min-width:0;font-size:12.5px;font-weight:650;
+  letter-spacing:-.015em;color:var(--txt);text-align:left;font-family:var(--ui)}
+.eyelabels .fl em{font-style:normal;font-size:10px;font-weight:500;color:var(--txt-3);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+/* the nights — its own stacking context, so its sticky date row slides UNDER the flat column and never over it */
+.eyenights{position:relative;z-index:1;flex:0 0 auto;display:grid;grid-template-columns:repeat(var(--n),var(--cw));
+  grid-auto-rows:auto;transform-origin:0 0}
+.eyenights.pinching{will-change:transform}
+/* while two fingers hold it the pane is scaled, and everything written on it is scaled back by the inverse */
+.eyenights.pinching .dh>*,.eyenights.pinching .bar>*{transform:scaleX(var(--ik,1))}
+.eyenights .dh{position:sticky;top:0;z-index:5;height:var(--hh);background:var(--bg);border-bottom:1px solid var(--line);
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
   font-size:9.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--txt-3);line-height:1.1;
   font-variant-numeric:tabular-nums;overflow:hidden}
-.eyegrid .dh b{font-size:13px;font-weight:700;letter-spacing:-.02em;color:var(--txt);text-transform:none}
-.eyegrid .dh i{font-style:normal;font-size:9px;font-weight:700;letter-spacing:0;text-transform:none;
-  color:var(--txt-2)}
-.eyegrid .dh i.none{color:var(--now-ink)}
-.eyegrid .dh.we{background:color-mix(in srgb,var(--surface-2) 60%,var(--bg))}
-.eyegrid .dh.today b{color:var(--now)}
-.eyegrid .dh s{text-decoration:none;position:absolute;top:2px;left:4px;font-size:8.5px;font-weight:700;
+.eyenights .dh b{font-size:13px;font-weight:700;letter-spacing:-.02em;color:var(--txt);text-transform:none}
+.eyenights .dh i{font-style:normal;font-size:9px;font-weight:700;letter-spacing:0;text-transform:none;color:var(--txt-2)}
+.eyenights .dh i.none{color:var(--now-ink)}
+.eyenights .dh.we{background:color-mix(in srgb,var(--surface-2) 60%,var(--bg))}
+.eyenights .dh.today b{color:var(--now)}
+.eyenights .dh s{text-decoration:none;position:absolute;top:2px;left:4px;font-size:8.5px;font-weight:700;
   color:var(--now-ink);letter-spacing:.06em}
-.eyegrid .fl{position:sticky;left:0;z-index:4;background:var(--bg);border-right:1px solid var(--line);
-  border-bottom:1px solid var(--line);display:flex;flex-direction:column;justify-content:center;
-  padding:0 8px;min-width:0;font-size:12.5px;font-weight:650;letter-spacing:-.015em;color:var(--txt);
-  text-align:left;font-family:var(--ui)}
-.eyegrid .fl em{font-style:normal;font-size:10px;font-weight:500;color:var(--txt-3);white-space:nowrap;
-  overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
-.eyegrid .bh{grid-column:1 / -1;display:flex;align-items:flex-end;padding:0 0 3px 8px;
-  font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--txt-3);
-  border-bottom:1px solid var(--line);background:var(--bg);position:sticky;left:0;z-index:4}
-.eyegrid .bh span{position:sticky;left:8px}
+.eyenights .bhband{grid-column:1 / -1;height:var(--bh);border-bottom:1px solid var(--line);background:var(--bg)}
 /* a flat's nights: hairlines every --cw, and the tap target for an empty one */
-.eyegrid .lane{grid-column:2 / -1;position:relative;z-index:0;border-bottom:1px solid var(--line);
+.eyenights .lane{grid-column:1 / -1;height:var(--rh);position:relative;z-index:0;border-bottom:1px solid var(--line);
   background:repeating-linear-gradient(90deg,var(--line) 0 1px,transparent 1px var(--cw))}
-.eyegrid .wecol{grid-row:2 / -1;z-index:1;pointer-events:none;
-  background:color-mix(in srgb,var(--surface-2) 45%,transparent)}
-.eyegrid .todayline{grid-row:1 / -1;z-index:2;pointer-events:none;border-left:2px solid var(--now);
-  margin-left:-1px;width:0}
+.eyenights .wecol{z-index:1;pointer-events:none;background:color-mix(in srgb,var(--surface-2) 45%,transparent)}
+.eyenights .todayline{z-index:2;pointer-events:none;border-left:2px solid var(--now);margin-left:-1px;width:0}
 /* a stay */
-.eyegrid .bar{z-index:3;margin:7px 2px;border-radius:9px;background:var(--held);color:var(--txt);
+.eyenights .bar{z-index:3;margin:7px 2px;border-radius:9px;background:var(--held);color:var(--txt);
   border:1px solid var(--line-2);display:flex;align-items:center;gap:6px;padding:0 8px;min-width:0;
   overflow:hidden;font-family:var(--ui);text-align:left;cursor:pointer;
   transition:transform .3s var(--spring),box-shadow .2s}
-.eyegrid .bar:active{transform:scale(.985)}
-.eyegrid .bar b{font-size:11.5px;font-weight:650;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.eyegrid .bar em{font-style:normal;font-size:10px;font-weight:700;color:var(--now-ink);white-space:nowrap;margin-left:auto;flex:0 0 auto}
-.eyegrid .bar.now{border-color:color-mix(in srgb,var(--free) 55%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--free) 25%,transparent)}
-.eyegrid .bar.block{background:repeating-linear-gradient(135deg,var(--surface-3) 0 6px,var(--surface-2) 6px 12px);color:var(--txt-2)}
-.eyegrid .bar.cut-l{border-top-left-radius:3px;border-bottom-left-radius:3px;border-left-style:dashed;margin-left:0}
-.eyegrid .bar.cut-r{border-top-right-radius:3px;border-bottom-right-radius:3px;border-right-style:dashed;margin-right:0}
+.eyenights .bar:active{transform:scale(.985)}
+.eyenights .bar b{font-size:11.5px;font-weight:650;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.eyenights .bar em{font-style:normal;font-size:10px;font-weight:700;color:var(--now-ink);white-space:nowrap;margin-left:auto;flex:0 0 auto}
+.eyenights .bar.now{border-color:color-mix(in srgb,var(--free) 55%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--free) 25%,transparent)}
+.eyenights .bar.block{background:repeating-linear-gradient(135deg,var(--surface-3) 0 6px,var(--surface-2) 6px 12px);color:var(--txt-2)}
+.eyenights .bar.cut-l{border-top-left-radius:3px;border-bottom-left-radius:3px;border-left-style:dashed;margin-left:0}
+.eyenights .bar.cut-r{border-top-right-radius:3px;border-bottom-right-radius:3px;border-right-style:dashed;margin-right:0}
 /* density: what a bar can say depends on how many nights are on screen */
 .eyegrid.z-tight .bar{padding:0;margin:9px 1px;border-radius:5px}
 .eyegrid.z-tight .bar b,.eyegrid.z-tight .bar em{display:none}
@@ -1314,7 +1323,7 @@ button{background:none;border:0;padding:0;cursor:pointer;
 .eyegrid.z-tight .dh b{font-size:11px}
 .eyegrid.z-tight .dh i{display:none}
 .eyegrid.z-mid .bar em{display:none}
-:root[data-theme="light"] .eyegrid .bar{color:var(--held-ink)}
+:root[data-theme="light"] .eyenights .bar{color:var(--held-ink)}
 @media (prefers-reduced-motion: reduce){.eye.on{animation:none}}
 
 /* ══ THE THREE KINDS OF MOVEMENT ═════════════════════════════════════════════
@@ -7055,21 +7064,42 @@ function payKey(r, pay){
    left to right, and the balance still owed on a bar, in amber, when there is
    room for it.
 
-   The window is two weeks back and the whole book ahead. Pinch, the − and +,
-   or ctrl-wheel change the night's width — one CSS variable — and the night
-   under the fingers stays under the fingers. Three densities: tight, where a
-   month is on screen and a bar is a bar; mid, names; wide, names and money. */
-const EYE_BACK = 14, EYE_AHEAD = DAYS - 1, EYE_N = EYE_BACK + EYE_AHEAD + 1;
+   The window is a month back and a year ahead — "there are no future dates"
+   was the owner's first note on the nine-week version, and a board is for
+   seeing further than the screens can book. Past the booking horizon a night
+   can be looked at but not booked, and a tap there says so.
+
+   Three densities: tight, where a month is on screen and a bar is a bar; mid,
+   names; wide, names and money. Pinch, the − and +, or ctrl-wheel move
+   between them, and the night under the fingers stays under the fingers. */
+const EYE_BACK = 30, EYE_AHEAD = 365, EYE_N = EYE_BACK + EYE_AHEAD + 1;
 const EYE_LEVELS = [28, 44, 72];
-let eyeCw = 44, eyeCode = null, eyeBuilt = false, eyeRows = null;
+const EYE_CW = [20, 96];                                    // how far a pinch may overshoot the levels
+let eyeCw = 44, eyeCode = null, eyeBuilt = false, eyeSigAt = null, eyeRows = null, eyePinch = null;
 const eyeEl = ()=> document.getElementById("eye");
-const eyeCol = d => d + EYE_BACK + 2;                     // grid column of a night
-const eyeLw = ()=> parseFloat(getComputedStyle(document.getElementById("eyeGrid")).getPropertyValue("--lw")) || 76;
+const eyeCol = d => d + EYE_BACK + 1;                       // a night's column in the nights pane
+const eyeLw = ()=>{ const l = document.getElementById("eyeLabels"); return (l && l.offsetWidth) || 84; };
+const eyeNearest = cw => EYE_LEVELS.reduce((p, c)=> Math.abs(c - cw) < Math.abs(p - cw) ? c : p, EYE_LEVELS[0]);
 
 function eyeFlats(){
   return flats.map((f, i)=> i).filter(i => !eyeCode || flats[i].code === eyeCode);
 }
+/* What the board was drawn from, as one number — cheaper to work out than a
+   redraw, and cheaper still than a redraw that was not needed: recompute()
+   runs on every paint, so "has anything changed" cannot be asked of it. */
+function eyeSig(){
+  let h = flats.length * 131 + (eyeCode ? eyeCode.length : 0);
+  for(const r of resv){
+    const t = String(r.guest || r.reason || "");
+    h = (h * 31 + r.fi * 7 + r.start * 3 + r.end + (r.kind ? 17 : 0) + Math.round(r.amount || 0)) | 0;
+    for(let i = 0; i < t.length; i++) h = (h * 33 + t.charCodeAt(i)) | 0;
+    for(const pay of (r.pays || [])) h = (h * 29 + Math.round(pay.amount || 0)) | 0;
+  }
+  return h + ":" + resv.length;
+}
+const eyeStale = ()=> eyeSigAt !== eyeSig();
 function eyeRender(keepScroll){
+  if(eyePinch){ eyeSigAt = null; return; }                  // never rebuilt under two fingers; the lift rebuilds
   const grid = document.getElementById("eyeGrid"), wrap = document.getElementById("eyeWrap");
   const sl = keepScroll ? wrap.scrollLeft : null, st = keepScroll ? wrap.scrollTop : null;
   grid.textContent = "";
@@ -7079,34 +7109,56 @@ function eyeRender(keepScroll){
   const inView = new Set(view);
 
   /* who is in on each night of the window, for the free count — from the
-     stays themselves, because occ[] only knows the nights ahead */
+     stays themselves, because occ[] only knows the nine weeks ahead */
   const occW = new Map(view.map(i => [i, new Uint8Array(EYE_N)]));
   const stays = resv.filter(r => inView.has(r.fi) && r.end > -EYE_BACK && r.start <= EYE_AHEAD);
   stays.forEach(r => { const a = occW.get(r.fi);
     for(let d = Math.max(r.start, -EYE_BACK); d < Math.min(r.end, EYE_AHEAD + 1); d++) a[d + EYE_BACK] = 1; });
+  const freeAt = new Int16Array(EYE_N).fill(view.length);
+  view.forEach(i => { const a = occW.get(i); for(let k = 0; k < EYE_N; k++) if(a[k]) freeAt[k]--; });
 
-  const frag = document.createDocumentFragment();
-  frag.appendChild(el("div","corner"));
+  const labels = el("div","eyelabels"), pane = el("div","eyenights");
+  labels.id = "eyeLabels"; pane.id = "eyeNights";
+  /* The line under a code: type and rate when both fit the column, the type
+     alone when they do not. "1 BHK · ₹…" — the rate cut to an ellipsis — was
+     the owner's second note, and an ellipsis on a board is a word that should
+     not have been started. Measured on a canvas, not in the DOM: thirty-eight
+     forced layouts per render is a phone's whole frame. */
+  const ctx = eyeRender.ctx || (eyeRender.ctx = document.createElement("canvas").getContext("2d"));
+  ctx.font = "500 10px " + getComputedStyle(document.documentElement).getPropertyValue("--ui").trim();
+  const room = (parseFloat(getComputedStyle(grid).getPropertyValue("--lw")) || 84) - 18;
+  /* the rate in the board's shorthand — ₹3.5k, ₹6k — because "3 BHK ₹3,500" does
+     not fit beside its code and "3 BHK ₹3.5k" does */
+  const rateShort = r => r >= 1000 ? "₹" + (r % 1000 ? (r / 1000).toFixed(1) : r / 1000) + "k" : "₹" + r;
+  const under = f => { const both = f.rate ? `${f.type} ${rateShort(f.rate)}` : f.type;
+                       return ctx.measureText(both).width <= room ? both : f.type; };
+  const corner = el("div","corner"); corner.style.gridRow = 1; labels.appendChild(corner);
   for(let d = -EYE_BACK; d <= EYE_AHEAD; d++){
     const dt = dateAt(d), h = el("div","dh" + (dt.getDay() % 6 === 0 ? " we" : "") + (d === 0 ? " today" : ""));
-    h.style.gridColumn = eyeCol(d);
+    /* row 1 SAID, not left to auto-placement: the today line is placed first,
+       both axes definite, and holds its column in every row — so an auto-placed
+       header for that column was pushed to the row under the whole board, and
+       every date after it followed. Two definite items may overlap; two
+       auto-placed ones may not. */
+    h.style.gridRow = 1; h.style.gridColumn = eyeCol(d);
     if(dt.getDate() === 1 || d === -EYE_BACK) h.appendChild(el("s", null, MON[dt.getMonth()]));
     h.append(el("span", null, DOW[dt.getDay()].slice(0, 2)), el("b", null, String(dt.getDate())));
-    let free = 0; view.forEach(i => { if(!occW.get(i)[d + EYE_BACK]) free++; });
+    const free = freeAt[d + EYE_BACK];
     h.appendChild(el("i", free ? null : "none", String(free)));
     h.setAttribute("aria-label", `${fmtL(d)}, ${free} free`);
-    frag.appendChild(h);
+    pane.appendChild(h);
   }
 
-  /* rows: a heading per building, a lane per flat */
+  /* rows: a heading per building, a lane per flat — the same rows in both grids */
   eyeRows = {};
   let row = 2;
   buildingsOf().filter(bd => !eyeCode || bd.code === eyeCode).forEach(bd => {
-    const bh = el("div","bh"); bh.style.gridRow = row; bh.appendChild(el("span", null, bd.name)); frag.appendChild(bh); row++;
+    const bh = el("div","bh", bd.name); bh.style.gridRow = row; labels.appendChild(bh);
+    const band = el("div","bhband"); band.style.gridRow = row; pane.appendChild(band); row++;
     view.filter(i => flats[i].code === bd.code).forEach(i => {
       const f = flats[i];
       const lab = el("button","fl"); lab.style.gridRow = row;
-      lab.append(el("span", null, f.id), el("em", null, `${f.type}${f.rate ? " · ₹" + f.rate.toLocaleString("en-IN") : ""}`));
+      lab.append(el("span", null, f.id), el("em", null, under(f)));
       lab.setAttribute("aria-label", `${f.id}, ${f.type} — open the room`);
       lab.onclick = ()=>{ haptic(9); openSheet(i, 0); };
       const lane = el("div","lane"); lane.style.gridRow = row; lane.dataset.fi = i;
@@ -7114,10 +7166,11 @@ function eyeRender(keepScroll){
         const x = ev.clientX - lane.getBoundingClientRect().left;
         const d = -EYE_BACK + Math.floor(x / eyeCw);
         haptic(9);
+        if(d >= DAYS) return eyeTooFar(d);
         if(d >= 0 && !occW.get(i)[d + EYE_BACK]) openBooking(i, d, 1);
         else openSheet(i, Math.max(d, 0));
       };
-      frag.append(lab, lane);
+      labels.appendChild(lab); pane.appendChild(lane);
       eyeRows[i] = row; row++;
     });
   });
@@ -7125,9 +7178,9 @@ function eyeRender(keepScroll){
   /* weekends and today, spanning the rows; then the stays */
   for(let d = -EYE_BACK; d <= EYE_AHEAD; d++){
     if(dateAt(d).getDay() % 6 !== 0) continue;
-    const w = el("div","wecol"); w.style.gridColumn = eyeCol(d); w.style.gridRow = `2 / ${row}`; frag.appendChild(w);
+    const w = el("div","wecol"); w.style.gridColumn = eyeCol(d); w.style.gridRow = `2 / ${row}`; pane.appendChild(w);
   }
-  const tl = el("div","todayline"); tl.style.gridColumn = eyeCol(0); tl.style.gridRow = `1 / ${row}`; frag.appendChild(tl);
+  const tl = el("div","todayline"); tl.style.gridColumn = eyeCol(0); tl.style.gridRow = `1 / ${row}`; pane.appendChild(tl);
 
   stays.forEach(r => {
     const a = Math.max(r.start, -EYE_BACK), b = Math.min(r.end, EYE_AHEAD + 1);
@@ -7142,14 +7195,18 @@ function eyeRender(keepScroll){
     if(due > 0) bar.appendChild(el("em", null, moneyShort(due)));
     bar.setAttribute("aria-label", `${who} in ${flats[r.fi].id}, ${fmt(r.start)} to ${fmt(r.end)}`
       + (due > 0 ? `, ${money(due)} due` : "") + " — open the room");
-    bar.onclick = ev=>{ ev.stopPropagation(); haptic(9); openSheet(r.fi, Math.max(r.start, 0)); };
-    frag.appendChild(bar);
+    bar.onclick = ev=>{ ev.stopPropagation(); haptic(9); openSheet(r.fi, Math.min(Math.max(r.start, 0), DAYS - 1)); };
+    pane.appendChild(bar);
   });
-  grid.appendChild(frag);
+  grid.append(labels, pane);
   eyeZoomClass();
-  eyeBuilt = true;
+  eyeBuilt = true; eyeSigAt = eyeSig();
   if(keepScroll){ wrap.scrollLeft = sl; wrap.scrollTop = st; }
   eyeMonthLabel();
+}
+/* occ[] is nine weeks long, so a night past it cannot be checked, let alone booked */
+function eyeTooFar(d){
+  toast("", `<b>${fmtL(d)} is past the booking horizon.</b> A stay can be booked up to nine weeks ahead — until ${fmtL(DAYS - 1)}.`, null);
 }
 function eyeZoomClass(){
   const g = document.getElementById("eyeGrid");
@@ -7157,10 +7214,10 @@ function eyeZoomClass(){
   g.classList.toggle("z-mid", eyeCw >= 36 && eyeCw < 60);
   g.classList.toggle("z-wide", eyeCw >= 60);
 }
-/* the night under the anchor stays under the anchor */
+/* the one layout: a new night width, with the night under the anchor staying under the anchor */
 function eyeZoom(cw, anchorX){
   const wrap = document.getElementById("eyeWrap"), grid = document.getElementById("eyeGrid");
-  cw = Math.max(22, Math.min(96, cw));
+  cw = Math.max(EYE_CW[0], Math.min(EYE_CW[1], cw));
   const lw = eyeLw();
   const ax = anchorX == null ? lw + (wrap.clientWidth - lw) / 2 : anchorX;
   const dayF = (wrap.scrollLeft + ax - lw) / eyeCw;
@@ -7170,7 +7227,7 @@ function eyeZoom(cw, anchorX){
   eyeZoomClass(); eyeMonthLabel();
 }
 function eyeSnap(){
-  const near = EYE_LEVELS.reduce((p, c)=> Math.abs(c - eyeCw) < Math.abs(p - eyeCw) ? c : p, EYE_LEVELS[0]);
+  const near = eyeNearest(eyeCw);
   if(near !== eyeCw) eyeZoom(near);
 }
 function eyeStep(dir){
@@ -7179,32 +7236,129 @@ function eyeStep(dir){
                      : EYE_LEVELS[Math.max(0, Math.min(EYE_LEVELS.length - 1, i + dir))];
   if(next != null && next !== eyeCw){ haptic(7); eyeZoom(next); }
 }
+
+/* ── the pinch ────────────────────────────────────────────────────────────────
+   A TRANSFORM WHILE THE FINGERS ARE DOWN, ONE LAYOUT WHEN THEY LIFT. The first
+   version set --cw on every touchmove, and every touchmove then re-laid-out
+   every column of the board and repainted all of it — a frame or two of work
+   per millimetre of finger on a phone, and it looked exactly like that. Now
+   the nights pane is scaled on the compositor: scaleX about the point between
+   the fingers, plus the drift of that point, and everything written on the
+   pane is scaled back by the inverse so the dates stay dates. Nothing is laid
+   out until the fingers lift. Then the scale glides to the nearest density in
+   160ms and is committed as one --cw write, with the scroll set so the night
+   that was under the fingers is exactly where the transform left it — the
+   picture does not change at the commit, only what is drawing it.
+
+   One-finger panning is the browser's alone. The listener that must cancel
+   the default is attached when the second finger lands and removed when it
+   lifts, so while one finger drags there is no scroll-blocking listener on
+   the path at all. If the browser has already begun a pan when the second
+   finger lands, its touchmoves are not cancelable; the pinch then keeps only
+   the scale and lets the browser keep the pan, and the commit reads the live
+   scroll rather than the one it remembered. */
+function eyePinchStart(midX){
+  const wrap = document.getElementById("eyeWrap"), pane = document.getElementById("eyeNights");
+  if(!pane) return;
+  eyePinchSettleNow();                                      // a pinch that begins mid-glide takes over from there
+  const lw = eyeLw();
+  eyePinch = { cw: eyeCw, lw, mid0: midX, p: wrap.scrollLeft + midX - lw, W: pane.offsetWidth,
+               vw: wrap.clientWidth, k: 1, dx: 0, raf: 0, own: true, glide: false };
+  pane.classList.add("pinching");
+  pane.style.transformOrigin = eyePinch.p + "px 0";
+}
+function eyePinchMove(k, midX){
+  const g = eyePinch; if(!g || g.glide) return;
+  g.k = Math.max(EYE_CW[0] / g.cw, Math.min(EYE_CW[1] / g.cw, k));
+  g.dx = g.own ? midX - g.mid0 : 0;
+  eyePinchClamp(g);
+  if(!g.raf) g.raf = requestAnimationFrame(eyePinchPaint);
+}
+/* the pane's left edge never leaves the flat column and its right edge never
+   leaves the far side — the same bounds the commit's scroll will have, so the
+   commit never has to move anything */
+function eyePinchClamp(g){
+  const sl = document.getElementById("eyeWrap").scrollLeft;
+  const hi = sl - g.p * (1 - g.k);
+  const lo = g.vw - g.lw - g.p - (g.W - g.p) * g.k + sl;
+  g.dx = Math.min(hi, Math.max(Math.min(lo, hi), g.dx));
+}
+function eyePinchPaint(){
+  const g = eyePinch; if(!g) return;
+  g.raf = 0;
+  const pane = document.getElementById("eyeNights");
+  pane.style.transform = `translateX(${g.dx}px) scaleX(${g.k})`;
+  pane.style.setProperty("--ik", String(1 / g.k));
+}
+function eyePinchEnd(){
+  const g = eyePinch; if(!g || g.glide) return;
+  const kT = eyeNearest(g.cw * g.k) / g.cw;
+  const still = document.hidden || matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if(still || Math.abs(kT - g.k) < 0.002) return eyePinchSettleNow();
+  const k0 = g.k, dx0 = g.dx, t0 = performance.now(), D = 160;
+  g.k = kT; eyePinchClamp(g); const dxT = g.dx; g.k = k0; g.dx = dx0;
+  g.glide = true;
+  const step = now => {
+    if(eyePinch !== g) return;
+    const t = Math.min(1, (now - t0) / D), e = 1 - Math.pow(1 - t, 3);
+    g.k = k0 + (kT - k0) * e; g.dx = dx0 + (dxT - dx0) * e;
+    eyePinchPaint();
+    if(t < 1) g.raf = requestAnimationFrame(step); else eyePinchSettleNow();
+  };
+  if(g.raf) cancelAnimationFrame(g.raf);
+  g.raf = requestAnimationFrame(step);
+  g.guard = setTimeout(()=>{ if(eyePinch === g) eyePinchSettleNow(); }, D + 300);   // a frame that never comes still commits
+}
+/* the commit: --cw to the level, the transform off, the scroll to where the transform had it */
+function eyePinchSettleNow(){
+  const g = eyePinch; if(!g) return;
+  if(g.raf) cancelAnimationFrame(g.raf);
+  clearTimeout(g.guard);
+  eyePinch = null;
+  const wrap = document.getElementById("eyeWrap"), grid = document.getElementById("eyeGrid"), pane = document.getElementById("eyeNights");
+  const to = eyeNearest(g.cw * g.k), t = to / g.cw, sl = wrap.scrollLeft;
+  pane.classList.remove("pinching");
+  pane.style.transform = ""; pane.style.transformOrigin = ""; pane.style.removeProperty("--ik");
+  eyeCw = to;
+  grid.style.setProperty("--cw", to + "px");
+  wrap.scrollLeft = g.p * t - (g.p + g.dx - sl);
+  eyeZoomClass(); eyeMonthLabel();
+  if(eyeStale()) eyeRender(true);                           // the book moved under the fingers
+}
+
+let eyeLab = "";
 function eyeMonthLabel(){
-  const wrap = document.getElementById("eyeWrap"), h = document.getElementById("eyeMonth"), sp = document.getElementById("eyeSpan");
+  const wrap = document.getElementById("eyeWrap");
   const first = -EYE_BACK + Math.max(0, Math.floor(wrap.scrollLeft / eyeCw));
   const cols = Math.max(1, Math.floor((wrap.clientWidth - eyeLw()) / eyeCw));
   const last = Math.min(EYE_AHEAD, first + cols - 1);
-  const a = dateAt(first), b = dateAt(last);
-  h.firstChild.nodeValue = MONF[a.getMonth()] + " " + a.getFullYear();
-  sp.textContent = a.getMonth() === b.getMonth() ? `${a.getDate()}–${b.getDate()}` : `${fmt(first)} → ${fmt(last)}`;
+  const key = first + ":" + last;
+  if(key === eyeLab) return;                                // most scroll frames change nothing here
+  eyeLab = key;
+  const a = dateAt(first), b = dateAt(last), yr = a.getFullYear() !== dateAt(0).getFullYear() ? " " + a.getFullYear() : "";
+  /* "September 2026 · 10–16" did not fit a phone beside Today, − and +, and
+     the ellipsis took the days — the part that changes as you scroll */
+  const same = a.getMonth() === b.getMonth();
+  document.getElementById("eyeMonth").firstChild.nodeValue = same ? MONF[a.getMonth()] + yr
+    : `${MON[a.getMonth()]} ${a.getDate()} – ${MON[b.getMonth()]} ${b.getDate()}${yr}`;
+  document.getElementById("eyeSpan").textContent = same ? `${a.getDate()}–${b.getDate()}` : "";
 }
 function eyeToday(smooth){
   const wrap = document.getElementById("eyeWrap");
   wrap.scrollTo({left: (EYE_BACK - 1) * eyeCw, behavior: smooth ? "smooth" : "auto"});
-  /* the scroll event that repaints the label arrives a frame later; on open
-     that frame read "August" over a board already standing on September */
   if(!smooth) eyeMonthLabel();
 }
 function eyeOpen(){
   if(myRole() === "staff") return;
   const e = eyeEl();
-  eyeRender(false);
+  if(!eyeBuilt || eyeStale()) eyeRender(false);
   e.classList.add("on"); e.setAttribute("aria-hidden", "false");
   eyeToday(false);
   eyeFilterChips();
   track("eye_open", {cw: eyeCw, code: eyeCode || "all"});
 }
 function eyeClose(){
+  eyePinchSettleNow();
   const e = eyeEl(); e.classList.remove("on"); e.setAttribute("aria-hidden", "true");
 }
 function eyeFilterChips(){
@@ -7232,25 +7386,46 @@ function eyeFilterChips(){
   const wrap = document.getElementById("eyeWrap");
   let raf = 0;
   wrap.addEventListener("scroll", ()=>{ if(raf) return; raf = requestAnimationFrame(()=>{ raf = 0; eyeMonthLabel(); }); }, {passive:true});
-  /* pinch: two fingers scale the night's width around their midpoint; on
-     release it settles on the nearest of the three densities */
-  let pinch = null;
+
+  /* two fingers — see the pinch note above */
   const dist = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
-  const midX = t => (t[0].clientX + t[1].clientX) / 2 - wrap.getBoundingClientRect().left;
-  wrap.addEventListener("touchstart", ev=>{ if(ev.touches.length === 2) pinch = {d: dist(ev.touches), cw: eyeCw, x: midX(ev.touches)}; }, {passive:true});
-  wrap.addEventListener("touchmove", ev=>{
-    if(!pinch || ev.touches.length !== 2) return;
-    ev.preventDefault();
-    eyeZoom(pinch.cw * (dist(ev.touches) / pinch.d), pinch.x);
-  }, {passive:false});
-  wrap.addEventListener("touchend", ()=>{ if(pinch){ pinch = null; eyeSnap(); } }, {passive:true});
-  wrap.addEventListener("touchcancel", ()=>{ pinch = null; }, {passive:true});
-  /* a trackpad: ctrl-wheel is the pinch */
+  let two = null;
+  const midX = t => (t[0].clientX + t[1].clientX) / 2 - two.left;
+  const onMove = ev=>{
+    if(!two || ev.touches.length < 2) return;
+    if(ev.cancelable) ev.preventDefault(); else if(eyePinch) eyePinch.own = false;
+    eyePinchMove(dist(ev.touches) / two.d, midX(ev.touches));
+  };
+  const onEnd = ev=>{
+    if(ev.touches.length >= 2) return;
+    wrap.removeEventListener("touchmove", onMove);
+    wrap.removeEventListener("touchend", onEnd); wrap.removeEventListener("touchcancel", onEnd);
+    two = null; eyePinchEnd();
+  };
+  wrap.addEventListener("touchstart", ev=>{
+    if(two || ev.touches.length !== 2) return;
+    two = {d: dist(ev.touches), left: wrap.getBoundingClientRect().left};
+    eyePinchStart(midX(ev.touches));
+    wrap.addEventListener("touchmove", onMove, {passive:false});
+    wrap.addEventListener("touchend", onEnd, {passive:true});
+    wrap.addEventListener("touchcancel", onEnd, {passive:true});
+  }, {passive:true});
+
+  /* a trackpad: ctrl-wheel is the pinch, and a pause is the lift */
+  let wheelT = 0;
   wrap.addEventListener("wheel", ev=>{
     if(!ev.ctrlKey) return;
     ev.preventDefault();
-    eyeZoom(eyeCw * (ev.deltaY < 0 ? 1.08 : 0.92), ev.clientX - wrap.getBoundingClientRect().left);
+    const x = ev.clientX - wrap.getBoundingClientRect().left;
+    if(!eyePinch || eyePinch.glide) eyePinchStart(x);
+    const dy = ev.deltaMode === 1 ? ev.deltaY * 16 : ev.deltaY;
+    eyePinchMove(eyePinch.k * Math.exp(-dy * 0.004), x);
+    clearTimeout(wheelT); wheelT = setTimeout(eyePinchEnd, 140);
   }, {passive:false});
+
+  /* built once the phone is idle, so the first open is a slide and not a wait */
+  const warm = ()=>{ if(!eyeBuilt && myRole() !== "staff") { try{ eyeRender(false); }catch(e){} } };
+  if("requestIdleCallback" in window) requestIdleCallback(warm, {timeout: 4000}); else setTimeout(warm, 1500);
 })();
 
 /* ══════════════ WHO IS TOUCHING WHAT, RIGHT NOW ══════════════════════════════
@@ -7302,6 +7477,8 @@ function liveConnect(){
   let ws; try{ ws = new WebSocket(url); }catch(e){ return; }
   liveWs = ws; liveTopic = "realtime:editing:" + hostId;
   ws.onopen = ()=>{
+    /* a sign-out can land between connect and open; the socket is then nobody's */
+    if(!session || ws !== liveWs){ try{ ws.close(); }catch(e){} return; }
     liveBackoff = 800;
     liveSend("phx_join", {config: {broadcast: {self: false, ack: false}}, access_token: session.access_token});
     clearInterval(livePing);
@@ -19721,7 +19898,7 @@ function refreshScreen(){
   SCREENS[curScreen].render();
   s.scrollTop = top;
   paintPeers();
-  if(eyeEl() && eyeEl().classList.contains("on")) eyeRender(true);
+  if(eyeEl() && eyeEl().classList.contains("on") && eyeStale()) eyeRender(true);
 }
 
 function switchTo(i, focusInput){
