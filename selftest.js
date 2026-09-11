@@ -1149,10 +1149,18 @@ export async function run(filter) {
       /* stuck, the nights control says which nights, because the head has gone */
       ok(/Sep|Oct|Nov|Aug/.test(bar.querySelector(".pn b").textContent),
         `the pinned bar does not carry the dates: ${bar.querySelector(".pn b").textContent}`);
-      /* tapping it goes back to the calendar — a smooth scroll, so it takes
-         frames; given the pane paints, it is there well inside the wait */
-      bar.querySelector(".pn b").click();
-      await until(() => scr.scrollTop < 5, "the tap to scroll back to the top", 8000);
+      /* tapping it goes back to the calendar — a smooth scroll, which takes
+         FRAMES, and a hidden tab paints none: the position never moved and the
+         wait ran out, whenever the pane happened to be hidden at this moment.
+         So the scroll is caught on the way out and landed at once; the test is
+         that the tap ASKS for the top, and that the page then is there. */
+      const asked = [], realScrollTo = scr.scrollTo;
+      scr.scrollTo = function(o){ asked.push(o); return realScrollTo.call(this, typeof o === "object" ? {...o, behavior: "auto"} : o); };
+      try {
+        bar.querySelector(".pn b").click();
+        ok(asked.some(o => o && o.top === 0), "the tap did not ask for the top of the page");
+        await until(() => scr.scrollTop < 5, "the tap to scroll back to the top", 4000);
+      } finally { scr.scrollTo = realScrollTo; }
       stuckMark && stuckMark();
       ok(!bar.classList.contains("stuck"), "the bar stayed stuck at the top of the page");
       eq(bar.querySelector(".pn b").textContent, "1 night", "the nights label back at rest");
@@ -5554,6 +5562,8 @@ export async function run(filter) {
     const fi = freeFlat(-1, 10);
     ok(fi != null, "no flat free for the fixture");
     resv.push({fi, start: 2, end: 5, nights: 3, guest: "Bar Guest", src: "Direct", manual: true, amount: 9000, pays: []});
+    /* one night, owing: the case that read "S… ₹5,200" on the owner's phone */
+    resv.push({fi, start: 8, end: 9, nights: 1, guest: "Ana", src: "Direct", manual: true, amount: 5200, pays: []});
     recompute();
     try {
       eyeOpen();
@@ -5572,6 +5582,21 @@ export async function run(filter) {
         `drawn ${Math.round(br.left - lr.left)}px in and ${Math.round(br.width)}px wide, not at night 2 for 3 nights`);
       /* wide: the balance shows; mid: it does not; tight: nothing but the bar */
       eyeZoom(72); ok(bar.querySelector("em") && getComputedStyle(bar.querySelector("em")).display !== "none", "at wide zoom the balance is hidden");
+      /* a one-night bar owing money: the NAME, whole, and an amber dot — the amount only where both fit */
+      const one = [...g.querySelectorAll(".bar")].find(b => /Ana/.test(b.textContent)), nm = one.querySelector("b");
+      ok(one.classList.contains("due"), "a bar owing money is not marked due");
+      eq(getComputedStyle(one.querySelector("em")).display, "none", "a one-night bar spells out the amount and loses the name");
+      eq(getComputedStyle(one, "::after").display, "block", "no dot stands in for the amount");
+      ok(nm.scrollWidth <= nm.clientWidth + 0.5, "the name is cut on a one-night bar");
+      eq(getComputedStyle(bar, "::after").display, "none", "a three-night bar shows the dot beside the spelled-out amount");
+      /* a bar longer than the screen keeps its name at the screen's edge */
+      const wrap = document.getElementById("eyeWrap");
+      wrap.scrollLeft = (eyeIx(2) + 1) * 72; eyeWindow();          // one of its three nights under the column
+      const bar2 = [...g.querySelectorAll(".bar")].find(b => /Bar Guest/.test(b.textContent)), b2 = bar2.querySelector("b");
+      ok(bar2.getBoundingClientRect().left < wrap.getBoundingClientRect().left + eyeLw(), "the fixture bar is not under the flat column yet");
+      ok(Math.abs(b2.getBoundingClientRect().left - (wrap.getBoundingClientRect().left + eyeLw() + 10)) < 1.5,
+        `the name of a bar scrolled under the flat column is at ${Math.round(b2.getBoundingClientRect().left - wrap.getBoundingClientRect().left)}px, not stuck at the edge`);
+      wrap.scrollLeft = (EYE_BACK - 1) * 72; eyeWindow();
       eyeZoom(44); eq(getComputedStyle(bar.querySelector("em")).display, "none", "at mid zoom the balance shows");
       eyeZoom(28); eq(getComputedStyle(bar.querySelector("b")).display, "none", "at tight zoom the name shows");
       eyeZoom(44);
@@ -5588,7 +5613,7 @@ export async function run(filter) {
       await until(() => sheet.classList.contains("on") && /Book/.test(document.getElementById("sheetB").textContent), "the booking form");
       ok(document.getElementById("sheetH").textContent.includes(flats[fi].id), "the booking form is for the wrong flat");
       closeSheet();
-      return `${flats[fi].id}: bar on nights 2→5 · tap → room · empty night → booking`;
+      return `${flats[fi].id}: bar on nights 2→5 · one night owing says the name and a dot · a long bar's name sticks · tap → room · empty night → booking`;
     } finally { closeSheet(); eyeClose(); resv = keepR; recompute(); }
   });
 

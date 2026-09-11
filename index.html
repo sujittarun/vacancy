@@ -1313,11 +1313,39 @@ button{background:none;border:0;padding:0;cursor:pointer;
   right:calc((var(--n) - var(--i) - var(--w)) * var(--cw));
   z-index:3;margin:7px 2px;border-radius:9px;background:var(--held);color:var(--txt);
   border:1px solid var(--line-2);display:flex;align-items:center;gap:6px;padding:0 8px;min-width:0;
-  overflow:hidden;font-family:var(--ui);text-align:left;cursor:pointer;
+  overflow:clip;font-family:var(--ui);text-align:left;cursor:pointer;
   transition:transform .3s var(--spring),box-shadow .2s}
 .eyenights .bar:active{transform:scale(.985)}
-.eyenights .bar b{font-size:11.5px;font-weight:650;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* THE NAME STICKS to the screen's left edge inside a bar that began before
+   it, so a stay that started days ago still says who it is. Two things make
+   that work. The bar clips with overflow:clip, not hidden — hidden makes the
+   bar a scroll container, and the name then sticks to the bar instead, 94px
+   in, which put "Aravind" in the middle of his own bar. And the name lives in
+   its own clipped slot, .txt, which ends where the amount begins: a sticky
+   element cannot leave its containing block, so the name can never be pushed
+   into the amount — it read "Nithy₹12k" on a bar with a night of it showing
+   when the whole bar was the block. The amount is not sticky: at the right
+   edge it would have been pushed into the name the same way. */
+.eyenights .bar .txt{flex:1 1 auto;min-width:0;align-self:stretch;display:flex;align-items:center;overflow:clip}
+.eyenights .bar b{position:sticky;left:calc(var(--lw) + 10px);max-width:100%;font-size:11.5px;font-weight:650;
+  letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .eyenights .bar em{font-style:normal;font-size:10px;font-weight:700;color:var(--now-ink);white-space:nowrap;margin-left:auto;flex:0 0 auto}
+/* WHAT A BAR CAN SAY DEPENDS ON ITS OWN WIDTH. A one-night bar at the wide
+   density read "S… ₹5,200": the amount, fixed-width, won the room and the
+   name lost it, which is the wrong fact to keep. The bar is a container that
+   asks its own width — the name first, the amount spelled out only when there
+   is room for both, and an amber dot for money owed whenever it is not. */
+.eyenights .bar{container-type:inline-size}
+.eyenights .bar.due::after{content:"";position:absolute;right:5px;top:50%;width:6px;height:6px;margin-top:-3px;
+  border-radius:50%;background:var(--now)}
+.eyenights .bar.due .txt{padding-right:8px}
+.eyegrid.z-wide .bar.due::after{display:none}
+.eyegrid.z-wide .bar.due .txt{padding-right:0}
+@container (max-width:139px){
+  .eyegrid.z-wide .bar em{display:none}
+  .eyegrid.z-wide .bar.due::after{display:block}
+  .eyegrid.z-wide .bar.due .txt{padding-right:8px}
+}
 .eyenights .bar.now{border-color:color-mix(in srgb,var(--free) 55%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--free) 25%,transparent)}
 .eyenights .bar.block{background:repeating-linear-gradient(135deg,var(--surface-3) 0 6px,var(--surface-2) 6px 12px);color:var(--txt-2)}
 .eyenights .bar.cut-l{border-top-left-radius:3px;border-bottom-left-radius:3px;border-left-style:dashed;margin-left:0}
@@ -7229,12 +7257,12 @@ function eyeWindow(force){
     list.forEach(r => {
       const A = Math.max(r.start, -EYE_BACK), B = Math.min(r.end, EYE_AHEAD + 1);
       if(B <= A || B <= a || A > b) return;
-      const bar = el("button","bar" + (isBlock(r) ? " block" : "") + (r.start <= 0 && r.end > 0 ? " now" : "")
+      const due = isBlock(r) ? 0 : dueFrom(r);
+      const bar = el("button","bar" + (isBlock(r) ? " block" : "") + (r.start <= 0 && r.end > 0 ? " now" : "") + (due > 0 ? " due" : "")
                                     + (r.start < -EYE_BACK ? " cut-l" : "") + (r.end > EYE_AHEAD + 1 ? " cut-r" : ""));
       bar.style.setProperty("--i", eyeIx(A)); bar.style.setProperty("--w", B - A);
       const who = isBlock(r) ? (r.reason || "Out of service") : (r.guest || "Guest");
-      bar.appendChild(el("b", null, who));
-      const due = isBlock(r) ? 0 : dueFrom(r);
+      const txt = el("span","txt"); txt.appendChild(el("b", null, who)); bar.appendChild(txt);
       if(due > 0) bar.appendChild(el("em", null, moneyShort(due)));
       bar.setAttribute("aria-label", `${who} in ${flats[r.fi].id}, ${fmt(r.start)} to ${fmt(r.end)}`
         + (due > 0 ? `, ${money(due)} due` : "") + " — open the room");
