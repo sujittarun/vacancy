@@ -4228,7 +4228,7 @@ button.tclose:active{transform:scale(.94);transition-duration:.085s}
     <div class="topbar-r">
       <h1 id="scrTitle">Rooms<span class="sub" id="scrSub"></span></h1>
       <button class="ghost" id="eyeBtn" aria-label="Bird's eye — every flat, every night, on one board"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 5.5h15M2.5 10h15M2.5 14.5h15"/><path d="M6 5.5h5M9 10h6M4 14.5h4" stroke-width="3.2"/></svg></button>
-      <button class="pill" id="acctBtn" aria-label="Account and sync"><i></i><span id="acctTxt">Demo data</span></button>
+      <button class="pill" id="acctBtn" aria-label="Account and sync"><i></i><span id="acctTxt">Sign in</span></button>
       <button class="ghost" id="themeBtn" aria-label="Switch theme"><span id="themeIc">◐</span></button>
     </div>
     <div class="tabseg" id="tabseg" hidden role="tablist" aria-label="Pulse sections"></div>
@@ -9204,8 +9204,10 @@ function paintAcct(){
     txt.textContent = "Data";
     btn.setAttribute("aria-label", "Your data — export it, or clear the test bookings");
   }else if(MODE !== "live"){
-    txt.textContent = "Demo data";
-    btn.setAttribute("aria-label", "These bookings are made up — tap to sign in and see your own");
+    /* "Demo data" said what the numbers were and not what the button did; a
+       signed-out app offers the way in, and the sheet behind it says the rest */
+    txt.textContent = "Sign in";
+    btn.setAttribute("aria-label", "Not signed in — the bookings on screen are a sample. Tap to sign in and see your own");
   }else if(!online){
     btn.classList.add("off");
     txt.textContent = queue.length ? queue.length + " to send" : "Offline";
@@ -9768,7 +9770,7 @@ function openAccount(){
   t.innerHTML = live
     ? `<div class="n">${esc(hostName || "Signed in")}</div>`
       + `<div class="m">${esc((session && session.email) || "")}</div>`
-    : `<div class="n">Demo data</div><div class="m">nothing here is real</div>`;
+    : `<div class="n">Not signed in</div><div class="m">the bookings on screen are a sample — nothing here is real</div>`;
   const x = el("button", null, "✕"); x.setAttribute("aria-label","Close");
   x.onclick = ()=> closeSheet();
   sheetH.append(t, x);
@@ -9843,7 +9845,7 @@ function openAccount(){
       if(queue.length && !confirm(queue.length + " change" + (queue.length>1?"s have":" has")
           + " not reached the server yet. Signing out will lose " + (queue.length>1?"them":"it") + ". Sign out anyway?")) return;
       haptic(18); closeSheet(); signOut(false);
-      toast("", "<b>Signed out.</b> You are back on the demo book.", null);
+      toast("", "<b>Signed out.</b> You are back on the sample book.", null);
     };
     row.append(out);
   }
@@ -20028,7 +20030,7 @@ if(location.hostname === "localhost" || location.hostname === "127.0.0.1"){
   document.getElementById("gateSkip").onclick = ()=>{
     haptic(9); jset(BROWSE_KEY, 1); closeGate();
     toast("", "<b>These bookings are invented.</b> Nothing here is Crescent Stays' real book — "
-            + "tap <b>Demo data</b> at the top to sign in to that.", null);
+            + "tap <b>Sign in</b> at the top to see that.", null);
   };
 })();
 

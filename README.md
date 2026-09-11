@@ -45,12 +45,12 @@ see *Editing the inventory* below. This table is only the starting point.
 
 ## Using it for real
 
-It opens with **demo bookings** and three flats out of service — one due back tomorrow, so
+It opens with **sample bookings** and three flats out of service — one due back tomorrow, so
 you can see the maintenance question in action. To use it properly:
 
 1. Scroll to the bottom of **Rooms** and tap **Inventory**. Check the flats are right —
    add, renumber, retype or remove any of them, and add a building if one is missing.
-   At the bottom of that sheet, **Clear all bookings** wipes the demo ones.
+   At the bottom of that sheet, **Clear all bookings** wipes the sample ones.
 2. Tap any flat. It opens a **room card** — what it is, its nine weeks, and the one thing
    you probably came for. Booking, logging a fault and taking it out of service are each
    their own screen from there. See *Opening a room* below.
