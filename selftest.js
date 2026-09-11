@@ -5088,7 +5088,8 @@ export async function run(filter) {
       ok(seg, "no 3-night control to press");
       seg.click(); await wait(120);
       const sub = document.getElementById("scrSub");
-      ok(/\d+ of \d+ free · \d+–\d+ [A-Z][a-z]{2}$/.test(sub.textContent),
+      /* "of 38" is allowed to go when the line is short — the RANGE is not */
+      ok(/^\d+ (of \d+ )?free · \d+–\d+ [A-Z][a-z]{2}$/.test(sub.textContent),
         `the subtitle reads "${sub.textContent}"`);
       ok(sub.scrollWidth <= sub.clientWidth + 1, `the subtitle still clips: "${sub.textContent}"`);
       return sub.textContent;

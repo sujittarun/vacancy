@@ -390,7 +390,7 @@ button{background:none;border:0;padding:0;cursor:pointer;
   border-bottom:1px solid var(--line);
   display:flex;flex-direction:column;align-items:stretch;gap:0;
 }
-.topbar-r{display:flex;align-items:center;gap:12px}
+.topbar-r{display:flex;align-items:center;gap:10px}
 /* large title condenses on scroll — transform/opacity only, never layout */
 .topbar h1{margin:0;font-size:19px;font-weight:650;letter-spacing:-.022em;flex:1;min-width:0;
   transform-origin:left center;transition:transform .2s var(--out);will-change:transform}
@@ -9177,6 +9177,14 @@ function armConfirm(btn, opts){
    the script that runs, and parsed later. */
 const BOOT_HASH = String(location.hash || "");
 const el = (t,c,x)=>{const n=document.createElement(t); if(c)n.className=c; if(x!=null)n.textContent=x; return n;};
+/* The first wording that fits on the element's one line — or the last one,
+   cut, if none does. A layout per attempt, which is nothing for a line that
+   changes on a tap. For lines that would otherwise be ellipsised in the middle
+   of the one fact they exist to say. */
+function fitText(el, options){
+  for(const t of options){ el.textContent = t; if(el.scrollWidth <= el.clientWidth) return t; }
+  return options[options.length - 1];
+}
 const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const ordinalSuffix = n => (n % 100 >= 11 && n % 100 <= 13) ? "th"
   : ["th","st","nd","rd"][n % 10] || "th";
@@ -10998,13 +11006,20 @@ function renderRooms(){
        date range with its end cut off, on the line that exists to say the
        range. Within one month the month is said once: "10–13 Sep". Across a
        boundary the arrow stays, because "30 Sep–2 Oct" needs both names. */
-    const span = (a, b)=>{ const d1 = dateAt(a), d2 = dateAt(b);
+    const span = (a, b, tight)=>{ const d1 = dateAt(a), d2 = dateAt(b);
       return d1.getMonth() === d2.getMonth()
         ? `${d1.getDate()}\u2013${d2.getDate()} ${MON[d1.getMonth()]}`
-        : `${fmt(a)} \u2192 ${fmt(b)}`; };
-    scrSub.textContent = n === 1
-      ? `${f} of ${NF} free · ${d===0 ? "tonight" : fmtL(d)}`
-      : `${f} of ${NF} free · ${span(d, d+n)}`;
+        : `${fmt(a)}${tight ? "\u2013" : " \u2192 "}${fmt(b)}`; };
+    /* AND THE LINE FITS ITSELF. Beside the board button, the account pill and
+       the theme, a 360px phone leaves it about 125px, and "19 of 38 free ·
+       11–14 Sep" wants 148 — so the ellipsis cut the range, the one thing the
+       line is for. It is said the longest way that fits: the total goes first
+       ("19 free" tells an operator with 38 flats the same thing), then across
+       a month boundary the arrow gives way to a dash. Nothing is cut before
+       both have given way. */
+    const when = n === 1 ? (d===0 ? "tonight" : fmtL(d)) : span(d, d+n);
+    fitText(scrSub, [`${f} of ${NF} free · ${when}`, `${f} free · ${when}`,
+                     `${f} free · ${n === 1 ? when : span(d, d+n, true)}`]);
 
     thLeft.textContent = "Every room";
     thRight.textContent = n === 1 ? fmtL(d) : span(d, d+n);
