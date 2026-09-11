@@ -612,7 +612,9 @@ button{background:none;border:0;padding:0;cursor:pointer;
 .pill.mark{cursor:pointer;font-variant-numeric:tabular-nums}
 .pill.mark.done{background:color-mix(in srgb,var(--free) 14%,transparent);color:var(--txt);border-color:var(--line-2)}
 .pill.mark.assumed{color:var(--txt-3);border-style:dashed}
-.marks{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.row .meta .who{display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px}
+.row .meta .who + .who{margin-top:4px}
+.row .meta > .pill.mark{margin-left:8px;vertical-align:middle}
 .pill.now{background:color-mix(in srgb,var(--now) 16%,transparent);color:var(--now);border-color:transparent}
 
 /* room list row, shared by Month + Ask + sheet */
@@ -5222,8 +5224,8 @@ function todayBoard(){
   if(pastCheckin()){
     const due = bookings().filter(expectedNow).sort((a, b)=> a.fi - b.fi);
     if(due.length) todo.push({
-      label:`Mark ${due.length} arrival${due.length>1?"s":""} in`,
-      note:`due since ${CHECKIN_HOUR - 12} pm · ${due.map(r => flats[r.fi].id).join(" · ")}`,
+      label: due.length === 1 ? `Has ${due[0].guest} arrived?` : `Have ${due.length} guests arrived?`,
+      note:`due since ${CHECKIN_HOUR - 12} pm · ${due.map(r => flats[r.fi].id).join(" · ")} · tap to answer`,
       open: ()=> openDay(0, "arrivals")});
   }
 
@@ -11157,33 +11159,36 @@ function setMark(r, key, on){
     enqueue({k:"stay~", id:r.sid, body:{[inK ? "checked_in_at" : "checked_out_at"]: r[key] || null}});
   save(); cacheSave();
   logAct(inK ? "in" : "out",
-    `${who} ${on ? (inK ? "checked in" : "checked out") : (inK ? "not in after all" : "not out after all")}`
+    `${who} ${on ? (inK ? "arrived" : "left") : (inK ? "not arrived after all" : "not left after all")}`
     + ` · ${fl ? fl.id : ""}`, {flat: fl && fl.id, guest: who});
   recompute(); refreshScreen();
   toast("", on
-    ? `<b>${esc(who)} ${inK ? "checked in" : "checked out"}.</b> ${esc(fl ? fl.id : "")} · ${clockOf(r[key])}`
-    : `<b>${esc(who)} unmarked.</b> ${inK ? "Expected again" : "Still in"} · ${esc(fl ? fl.id : "")}`,
+    ? `<b>${esc(who)} ${inK ? "arrived" : "left"}.</b> ${esc(fl ? fl.id : "")} · ${clockOf(r[key])}`
+    : `<b>${esc(who)} ${inK ? "not arrived after all" : "not left after all"}.</b> ${esc(fl ? fl.id : "")}`,
     null, {label: "Undo", run: ()=> setMark(r, key, !on)});
   return r[key];
 }
 const markIn  = (r, on = true)=> setMark(r, "inAt", on);
 const markOut = (r, on = true)=> setMark(r, "outAt", on);
 
-/* The chip on a guest's row: "mark in" until tapped, then "in 3:12 pm", and a
-   second tap takes it back. A departure the clock has assumed reads "out by
-   2 pm", dashed, and a tap on it records the real time — a late check-out is
-   a fact worth having. */
+/* The chip on a guest's row, in the words a person would use: "mark arrived"
+   until tapped, then "✓ arrived 15:12", and a second tap takes it back. It
+   shipped for an hour as "mark in" / "out 19:59" under a line naming two
+   people, and the owner asked what all of it was — a chip that does not say
+   who or what is a puzzle, not a control. A departure the clock has assumed
+   reads "left by 2 pm", dashed, and a tap on it records the real time: a late
+   check-out is a fact worth having. */
 function markChip(r, kind, after){
   const inK = kind === "in", at = inK ? r.inAt : r.outAt;
   const assumed = !inK && !at && goneNow(r);
   const b = el("button", "pill mark" + (at ? " done" : assumed ? " assumed" : ""));
   b.type = "button";
-  b.textContent = at ? `${inK ? "in" : "out"} ${clockOf(at)}`
-                : assumed ? `out by ${CHECKIN_HOUR - 12} pm` : inK ? "mark in" : "mark out";
+  b.textContent = at ? `\u2713 ${inK ? "arrived" : "left"} ${clockOf(at)}`
+                : assumed ? `left by ${CHECKIN_HOUR - 12} pm` : inK ? "mark arrived" : "mark left";
   b.setAttribute("aria-label", at
-    ? `${r.guest} marked ${inK ? "in" : "out"} at ${clockOf(at)} — tap to take it back`
-    : assumed ? `${r.guest} assumed gone at ${CHECKIN_HOUR - 12} pm — tap to record when they actually left`
-    : `Mark ${r.guest} ${inK ? "checked in" : "checked out"}`);
+    ? `${r.guest} ${inK ? "arrived" : "left"} at ${clockOf(at)} — tap to take it back`
+    : assumed ? `${r.guest} assumed to have left by ${CHECKIN_HOUR - 12} pm — tap to record when they actually left`
+    : `Mark ${r.guest} as ${inK ? "arrived" : "left"}`);
   b.onclick = ev=>{ ev.stopPropagation(); haptic(10);
     (inK ? markIn : markOut)(r, !at);
     if(after) after(); };
@@ -16286,7 +16291,7 @@ function openSheet(fi, day){
       end.appendChild(ed);
     }
     end.appendChild(x2);
-    if(here && dueInToday(r)) m.appendChild(markChip(r, "in", ()=> openSheet(fi, day)));
+    if(here && dueInToday(r)) m.insertBefore(markChip(r, "in", ()=> openSheet(fi, day)), m.querySelector("em"));
     row.append(m, end);
     into.appendChild(row);
   };
@@ -16368,7 +16373,7 @@ function openSheet(fi, day){
         + `<em>${esc(fmt(r.start))} → ${esc(fmt(r.end))} · ${r.nights}n`
         + (r.movedTo ? ` · moved to ${esc(r.movedTo)}`
            : r.end === 0 ? (goneNow(r) ? " · left today" : " · leaving today, still in") : "") + `</em>`;   // the chip says when
-      if(r.end === 0 && !r.movedTo) m.appendChild(markChip(r, "out", ()=> openSheet(fi, day)));
+      if(r.end === 0 && !r.movedTo) m.insertBefore(markChip(r, "out", ()=> openSheet(fi, day)), m.querySelector("em"));
       const end = el("div","rowend");
       if(due > 0){
         const pay = el("button","paid due", money(due));
@@ -19064,16 +19069,19 @@ function openDay(d, focus){
     group("turnovers", "Turnaround", "clean in the gap", turnovers, (m, t2, fl, row)=>{
       /* BOTH HALVES ON ONE ROW. This is the whole point of the view: the flat,
          who is out, who is in, and what is coming. */
-      m.innerHTML = `<b>${esc(t2.out.guest)}</b> out → <b>${esc(t2.in.guest)}</b> in`
-        + `<em>${esc(fl.type)} · ${esc(fl.bshort)} · ${t2.in.nights} night${t2.in.nights>1?"s":""}`
-        + ` · ${esc(t2.in.src || "Direct")}</em>`;
+      /* ONE LINE PER PERSON, each with its own state beside its own name.
+         "Nithya out → Aravind in" with two unlabelled chips underneath was
+         the version the owner circled and asked what it all was. */
+      const who = (r, word)=>{ const l = el("div","who"); l.innerHTML = `<b>${esc(r.guest)}</b> ${word}`;
+        if(d === 0) l.appendChild(markChip(r, word === "out" ? "out" : "in", paint)); return l; };
+      m.append(who(t2.out, "out"), who(t2.in, "in"));
+      const em = el("em"); em.textContent = `${fl.type} · ${fl.bshort} · ${t2.in.nights} night${t2.in.nights>1?"s":""} · ${t2.in.src || "Direct"}`;
+      m.appendChild(em);
       /* TWO PILLS, ONE COLUMN. Appended straight onto the row they became a
          fourth grid child, and the grid put "to clean" on a new line under
          the room code — a row twice the height of its neighbours with a pill
          in the wrong corner. Both go into the row's end cell, stacked, money
          first because it is the one with the amount. */
-      /* the door, both halves: who has actually gone, who has actually come */
-      if(d === 0){ const marks = el("div","marks"); marks.append(markChip(t2.out, "out", paint), markChip(t2.in, "in", paint)); m.appendChild(marks); }
       row.append(m);
       const end = el("div","rowend stack");
       if(dueFrom(t2.in) > 0) end.append(collectPill(t2.in));
@@ -19082,24 +19090,22 @@ function openDay(d, focus){
     });
     group("departures", "Leaving", "nobody in behind them", outOnly, (m, r, fl, row)=>{
       const due = dueFrom(r);
-      m.innerHTML = `<b>${esc(r.guest)}</b> out · stayed ${r.nights} night${r.nights>1?"s":""}`
-        + `<em>${esc(fl.type)} · ${esc(fl.bshort)}`
-        + (due > 0 ? ` · <b class="hi-now">${esc(money(due))} still due</b>` : "") + `</em>`;
+      const l = el("div","who"); l.innerHTML = `<b>${esc(r.guest)}</b> out · stayed ${r.nights} night${r.nights>1?"s":""}`;
+      if(d === 0) l.appendChild(markChip(r, "out", paint));
+      const em = el("em"); em.innerHTML = `${esc(fl.type)} · ${esc(fl.bshort)}`
+        + (due > 0 ? ` · <b class="hi-now">${esc(money(due))} still due</b>` : "");
+      m.append(l, em);
       row.append(m);
-      const end = el("div","rowend stack");
-      turnPill(r.fi, end);
-      if(d === 0) end.append(markChip(r, "out", paint));
-      row.append(end);
+      turnPill(r.fi, row);
     });
     group("arrivals", "Arriving", "into an empty room", inOnly, (m, r, fl, row)=>{
       const due = dueFrom(r);
-      m.innerHTML = `<b>${esc(r.guest)}</b> in · ${r.nights} night${r.nights>1?"s":""}`
-        + `<em>${esc(fl.type)} · ${esc(fl.bshort)} · out ${esc(fmt(r.end))} · ${esc(r.src || "Direct")}</em>`;
-      row.append(m);
-      const end = el("div","rowend stack");
-      if(due > 0) end.append(collectPill(r));
-      if(d === 0) end.append(markChip(r, "in", paint));
-      row.append(end);
+      const l = el("div","who"); l.innerHTML = `<b>${esc(r.guest)}</b> in · ${r.nights} night${r.nights>1?"s":""}`;
+      if(d === 0) l.appendChild(markChip(r, "in", paint));
+      const em = el("em"); em.textContent = `${fl.type} · ${fl.bshort} · out ${fmt(r.end)} · ${r.src || "Direct"}`;
+      m.append(l, em);
+      /* money if any is due; nothing otherwise — the source is on the line already */
+      row.append(m); if(due > 0) row.append(collectPill(r));
     });
 
     if(focus && anchors[focus] && focus !== "turnovers")

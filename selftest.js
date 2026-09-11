@@ -1384,13 +1384,15 @@ export async function run(filter) {
     const pick = chips[chips.length - 1];
     const want = num(pick);
     pick.click();
-    await until(() => document.querySelectorAll(".bsec").length === 1, "the filtered grid");
+    /* the ROOMS screen's sections — a bare ".bsec" also counted the board's,
+       which is rendered on a hidden screen once another test has visited it */
+    await until(() => document.querySelectorAll("#scr-rooms .bsec").length === 1, "the filtered grid");
     eq(document.querySelectorAll(".bsec-h").length, 0, "headers while one building is picked");
     const shown = document.querySelectorAll(".bsec .tiles > *").length;
     const b = buildingsOf()[buildingsOf().length - 1];
     eq(shown, flats.filter(f => f.code === b.code).length, `tiles shown for ${b.name}`);
     chips[0].click();
-    await until(() => document.querySelectorAll(".bsec").length > 1, "the unfiltered grid");
+    await until(() => document.querySelectorAll("#scr-rooms .bsec").length > 1, "the unfiltered grid");
     return `${all} free across ${secs.length} buildings, and the filter shows ${want} free of ${shown}`;
   });
 
@@ -5448,8 +5450,8 @@ export async function run(filter) {
       ok(turn.left > meta.left + 40, `the clean pill is at x=${Math.round(turn.left)}, under the code`);
       /* and the row is not twice its neighbour */
       const h1 = stack.getBoundingClientRect().height, h2 = plain.getBoundingClientRect().height;
-      /* less the door's marks line, which a turnaround row carries and a plain leaving row does not */
-      const marks = stack.querySelector(".marks"), mh = marks ? marks.getBoundingClientRect().height + 6 : 0;
+      /* less the second person's line, which a turnaround row carries and a plain leaving row does not */
+      const whos = stack.querySelectorAll(".who"), mh = whos.length > 1 ? whos[1].getBoundingClientRect().height + 4 : 0;
       ok(h1 - mh <= h2 * 1.6, `a two-pill row is ${Math.round(h1)}px (${Math.round(mh)} of it the marks) against ${Math.round(h2)}px for one pill`);
       return `${Math.round(h1)}px with two pills stacked, ${Math.round(h2)}px with one`;
     } finally { closeSheet(); resv = keepR; recompute(); }
@@ -5772,10 +5774,10 @@ export async function run(filter) {
       let b = todayBoard();
       const n0 = countOf(arrivalsLine(b));
       ok(n0 >= 1, `no arrivals line: ${b.todo.map(x => x.label).join(" | ")}`);
-      ok(!b.todo.some(x => /^Mark /.test(x.label)), "asked for a mark before check-in time");
+      ok(!b.todo.some(x => /arrived\?$/.test(x.label)), "asked before check-in time");
       pastCheckin = () => true;
       b = todayBoard();
-      const ask = b.todo.find(x => /^Mark \d+ arrivals? in$/.test(x.label));
+      const ask = b.todo.find(x => /^(Has|Have) .+ arrived\?$/.test(x.label));
       ok(ask && ask.note.includes(flats[fi].id), `after check-in time the board does not ask for the mark: ${b.todo.map(x => x.label).join(" | ")}`);
       eq(countOf(arrivalsLine(b)), n0, "unmarked, the money is no longer said to come at the door");
       /* the mark */
@@ -5784,7 +5786,7 @@ export async function run(filter) {
       ok(r.inAt && Math.abs(new Date(r.inAt) - t0) < 5000, "the mark carries no time");
       ok(inFlatNow(r) && !expectedNow(r), "marked in, the guest is still expected");
       b = todayBoard();
-      const ask2 = b.todo.find(x => /^Mark \d+ arrivals? in$/.test(x.label));
+      const ask2 = b.todo.find(x => /^(Has|Have) .+ arrived\?$/.test(x.label));
       ok(!ask2 || !ask2.note.includes(flats[fi].id), "the board still asks for this guest after the mark");
       eq(countOf(arrivalsLine(b)), n0 - 1, "the money is still 'from an arrival' after the guest is in");
       const before = b.todo.find(x => /before (a guest leaves|\d+ guests leave)/.test(x.label));
@@ -5797,11 +5799,11 @@ export async function run(filter) {
       r.inAt = undefined; SCREENS[0].render();
       ok(tile().querySelector("i.fresh.due"), "the tile shows an unmarked arrival as in");
       r.inAt = new Date().toISOString(); r.pays = [];
-      ok(/Door Guest checked in/.test(activity[0] && activity[0].s), `not logged: ${activity[0] && activity[0].s}`);
+      ok(/Door Guest arrived/.test(activity[0] && activity[0].s), `not logged: ${activity[0] && activity[0].s}`);
       /* and back — the toast's undo */
       markIn(r, false);
       ok(!r.inAt && expectedNow(r), "the mark could not be taken back");
-      ok(/not in after all/.test(activity[0] && activity[0].s), "the unmarking is not logged");
+      ok(/not arrived after all/.test(activity[0] && activity[0].s), "the unmarking is not logged");
       return "expected → asked at 2 pm → marked in → money before they leave → undone";
     } finally { pastCheckin = realClock; pulseSeg = keepSeg; resv = keepR; activity = keepAct; jset(LOG_STORE, activity); recompute(); document.querySelectorAll(".toast").forEach(x => x.remove()); }
   });
@@ -5820,7 +5822,7 @@ export async function run(filter) {
       let row = [...document.querySelectorAll(".sheet .row")].find(x => /Leaving Door/.test(x.textContent));
       ok(row && /leaving today, still in/.test(row.textContent), `the sheet reads "${row && row.textContent.slice(0, 80)}"`);
       const chip = row.querySelector(".pill.mark");
-      ok(chip && chip.textContent === "mark out", `no way to mark them out: "${chip && chip.textContent}"`);
+      ok(chip && chip.textContent === "mark left", `no way to mark them out: "${chip && chip.textContent}"`);
       /* the day view: the same chip on the leaving row */
       closeSheet(); openDay(0);
       await until(() => document.querySelector(".sheet .dayrows .row"), "the day view");
@@ -5829,12 +5831,12 @@ export async function run(filter) {
       drow.querySelector(".pill.mark").click();
       ok(r.outAt, "the tap did not mark them out");
       ok(goneNow(r) && !inFlatNow(r), "marked out, the guest is still in the flat");
-      await until(() => [...document.querySelectorAll(".sheet .dayrows .row")].some(x => /Leaving Door/.test(x.textContent) && /out \d\d:\d\d/.test(x.textContent)), "the day view to say when they left");
+      await until(() => [...document.querySelectorAll(".sheet .dayrows .row")].some(x => /Leaving Door/.test(x.textContent) && /left \d\d:\d\d/.test(x.textContent)), "the day view to say when they left");
       /* the sheet now says when; the clock alone says "by 2 pm" */
       closeSheet(); openSheet(fi, 0);
       await until(() => document.querySelector(".sheet .justleft .row"), "the room sheet again");
       row = [...document.querySelectorAll(".sheet .row")].find(x => /Leaving Door/.test(x.textContent));
-      ok(/left today/.test(row.textContent) && /out \d\d:\d\d/.test(row.querySelector(".pill.mark").textContent), `the sheet does not say they left, and when: "${row.textContent.slice(0, 80)}"`);
+      ok(/left today/.test(row.textContent) && /left \d\d:\d\d/.test(row.querySelector(".pill.mark").textContent), `the sheet does not say they left, and when: "${row.textContent.slice(0, 80)}"`);
       closeSheet();
       markOut(r, false);
       pastCheckin = () => true;
@@ -5842,7 +5844,7 @@ export async function run(filter) {
       openSheet(fi, 0);
       await until(() => document.querySelector(".sheet .justleft .row"), "the room sheet after 2 pm");
       row = [...document.querySelectorAll(".sheet .row")].find(x => /Leaving Door/.test(x.textContent));
-      ok(/out by 2 pm/.test(row.textContent) && /out by 2 pm/.test(row.querySelector(".pill.mark").textContent), `after 2 pm the sheet reads "${row.textContent.slice(0, 80)}"`);
+      ok(/left by 2 pm/.test(row.querySelector(".pill.mark").textContent), `after 2 pm the sheet reads "${row.textContent.slice(0, 80)}"`);
       return "in until marked or 2 pm · chip on the sheet and the day view · says when · assumed after 2 pm";
     } finally { pastCheckin = realClock; closeSheet(); resv = keepR; recompute(); document.querySelectorAll(".toast").forEach(x => x.remove()); }
   });
